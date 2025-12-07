@@ -28,6 +28,35 @@
     text-align: right;
 }
 
+/* إصلاح مشكلة القوائم المنسدلة في النماذج - RTL */
+[dir="rtl"] .form-select {
+    padding-right: 0.75rem;
+    padding-left: 2.5rem;
+    text-align: right;
+    direction: rtl;
+}
+
+[dir="rtl"] .form-select option {
+    padding-right: 0.75rem;
+    padding-left: 0.5rem;
+    text-align: right;
+    direction: rtl;
+}
+
+/* إصلاح مشكلة القطع في القوائم المنسدلة */
+[dir="rtl"] select.form-select {
+    overflow: visible !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+[dir="rtl"] select.form-select option {
+    padding: 0.5rem 0.75rem;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
 [dir="rtl"] .stat-card-header {
     flex-direction: row-reverse;
 }

@@ -1184,11 +1184,55 @@ h5 {
 .scrollable-modal-body {
     max-height: calc(100vh - 220px);
     overflow-y: auto;
+    overflow-x: visible;
+    position: relative;
 }
 
 @media (max-width: 576px) {
     .scrollable-modal-body {
         max-height: calc(100vh - 160px);
     }
+}
+
+/* إصلاح مشكلة ظهور القوائم المنسدلة في النماذج */
+.modal-body .form-select,
+.scrollable-modal-body .form-select {
+    position: relative;
+    z-index: 1;
+}
+
+.modal-body select.form-select:focus,
+.scrollable-modal-body select.form-select:focus {
+    z-index: 1056;
+    position: relative;
+}
+
+/* إصلاح مشكلة القطع في القوائم المنسدلة - RTL */
+[dir="rtl"] .modal-body .form-select,
+[dir="rtl"] .scrollable-modal-body .form-select {
+    padding-right: 0.75rem;
+    padding-left: 2.5rem;
+    text-align: right;
+    direction: rtl;
+    overflow: visible !important;
+}
+
+[dir="rtl"] .modal-body .form-select option,
+[dir="rtl"] .scrollable-modal-body .form-select option {
+    padding-right: 0.75rem;
+    padding-left: 0.5rem;
+    text-align: right;
+    direction: rtl;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+/* إصلاح z-index للقوائم المنسدلة في النماذج */
+.modal.show select.form-select {
+    z-index: 1056;
+}
+
+.modal.show .form-select:focus {
+    z-index: 1057;
 }
 

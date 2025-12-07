@@ -159,3 +159,90 @@ body.login-page {
     border-left: 1px solid #e0e0e0;
 }
 
+/* ===== إصلاح مشكلة ظهور القوائم المنسدلة في النماذج ===== */
+
+/* إصلاح overflow في modal-body للسماح بعرض القوائم المنسدلة */
+.modal-body,
+.scrollable-modal-body {
+    overflow-x: visible !important;
+    overflow-y: auto;
+}
+
+/* إصلاح z-index للقوائم المنسدلة في النماذج */
+.modal.show .form-select {
+    position: relative;
+    z-index: 1;
+}
+
+.modal.show .form-select:focus {
+    z-index: 1057 !important;
+    position: relative;
+}
+
+/* إصلاح مشكلة القطع في القوائم المنسدلة - RTL */
+[dir="rtl"] .modal .form-select,
+[dir="rtl"] .modal-body .form-select,
+[dir="rtl"] .scrollable-modal-body .form-select {
+    padding-right: 0.75rem !important;
+    padding-left: 2.5rem !important;
+    text-align: right !important;
+    direction: rtl !important;
+    overflow: visible !important;
+}
+
+[dir="rtl"] .modal .form-select option,
+[dir="rtl"] .modal-body .form-select option,
+[dir="rtl"] .scrollable-modal-body .form-select option {
+    padding-right: 0.75rem !important;
+    padding-left: 0.5rem !important;
+    text-align: right !important;
+    direction: rtl !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+}
+
+/* إصلاح عرض القوائم المنسدلة في جميع النماذج */
+#createTemplateModal .form-select,
+#editTemplateModal .form-select,
+#createMixedNutsModal .form-select {
+    position: relative;
+    z-index: 1;
+}
+
+#createTemplateModal .form-select:focus,
+#editTemplateModal .form-select:focus,
+#createMixedNutsModal .form-select:focus {
+    z-index: 1057 !important;
+    position: relative;
+}
+
+/* إصلاح overflow في modal-content */
+.modal-content {
+    overflow: visible !important;
+}
+
+.modal-dialog {
+    overflow: visible !important;
+}
+
+/* إصلاح مشكلة القطع في RTL */
+[dir="rtl"] select.form-select {
+    background-position: left 0.75rem center !important;
+    padding-right: 0.75rem !important;
+    padding-left: 2.5rem !important;
+}
+
+/* ضمان ظهور القوائم المنسدلة بشكل كامل */
+select.form-select {
+    min-width: 100%;
+    width: 100%;
+}
+
+select.form-select option {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
