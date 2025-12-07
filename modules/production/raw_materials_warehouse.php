@@ -3130,22 +3130,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'tahini_stock_id' => $tahiniStockId
                     ]);
                     
-                    // تسجيل في سجل الإنتاج
-                    $supplierRow = $db->queryOne("SELECT name FROM suppliers WHERE id = ? LIMIT 1", [$supplierId]);
-                    $supplierName = $supplierRow['name'] ?? null;
-                    
-                    recordProductionSupplyLog([
-                        'material_category' => 'tahini',
-                        'material_label' => 'طحينة',
-                        'stock_source' => 'tahini_stock',
-                        'stock_id' => $tahiniStockId,
-                        'supplier_id' => $supplierId,
-                        'supplier_name' => $supplierName,
-                        'quantity' => $tahiniQuantity,
-                        'unit' => 'كجم',
-                        'details' => $conversionNotes,
-                        'recorded_by' => $currentUser['id'] ?? null,
-                    ]);
+                    // لا يتم تسجيل الطحينة في سجل توريدات المورد لأنها عملية تحويل وليست إضافة
+                    // The tahini is not recorded in supplier supply logs because it's a conversion, not a new supply
                     
                     $db->commit();
                     
