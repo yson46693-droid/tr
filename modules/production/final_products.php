@@ -2250,7 +2250,9 @@ if ($isProductionRole) {
             style="background: #0c2c80; color: white; padding: 12px 24px; border-radius: 8px; border: none; font-weight: bold; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;<?php echo $canCreateTransfers ? '' : ' opacity: 0.5; cursor: not-allowed;'; ?>"
             data-bs-toggle="modal"
             data-bs-target="#requestTransferModal"
-            <?php echo $canCreateTransfers ? '' : 'disabled'; ?>
+            <?php if (!$canCreateTransfers): ?>
+            onclick="event.preventDefault(); return false;"
+            <?php endif; ?>
             title="<?php echo $canCreateTransfers ? '' : 'يرجى التأكد من وجود مخازن وجهة نشطة.'; ?>"
         >
             <i class="bi bi-arrow-left-right"></i>
@@ -3335,7 +3337,7 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-primary" <?php echo $canCreateTransfers ? '' : 'disabled'; ?>>
+                    <button type="submit" class="btn btn-primary" id="submitTransferBtn" <?php echo $canCreateTransfers ? '' : 'disabled'; ?>>
                         إرسال الطلب
                     </button>
                 </div>
