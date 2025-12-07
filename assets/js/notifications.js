@@ -480,8 +480,10 @@ async function updateNotificationList(notifications) {
                 markNotificationAsRead(notificationId);
             }
             
-                if (notifications.find(n => (n.id == notificationId || String(n.id) === String(notificationId)) && n.link)) {
-                    const notification = notifications.find(n => (n.id == notificationId || String(n.id) === String(notificationId)));
+            // التحقق من وجود رابط قبل التحويل
+            // إذا كان الإشعار من نوع "تنبيه: تأخير في الحضور"، لا يتم التحويل
+            const notification = notifications.find(n => (n.id == notificationId || String(n.id) === String(notificationId)));
+            if (notification && notification.link && notification.title !== 'تنبيه: تأخير في الحضور') {
                 window.location.href = notification.link;
             }
         });

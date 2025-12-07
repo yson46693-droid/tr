@@ -727,7 +727,7 @@ function recordAttendanceCheckIn($userId, $photoBase64 = null) {
             'تنبيه: تأخير في الحضور',
             $delayMessage,
             'warning',
-            getAttendanceReminderLink($role),
+            null, // لا نضيف رابط للإشعار - فقط إشعار بدون تحويل
             false // لا نرسل عبر Telegram هنا لأن هناك إشعار Telegram منفصل للحضور
         );
         
