@@ -3962,8 +3962,19 @@ if (!window.transferFormInitialized) {
         if (data.honey_supplier_name) {
             summaryRows.push(['مورد العسل', data.honey_supplier_name]);
         }
-        if (data.packaging_supplier_name) {
-            summaryRows.push(['مورد التعبئة', data.packaging_supplier_name]);
+        
+        // عرض موردين أدوات التعبئة - دعم أكثر من مورد
+        let packagingSuppliersDisplay = '—';
+        if (data.packaging_suppliers_list && Array.isArray(data.packaging_suppliers_list) && data.packaging_suppliers_list.length > 0) {
+            // استخدام قائمة الموردين من packaging_materials
+            packagingSuppliersDisplay = data.packaging_suppliers_list.join('، ');
+        } else if (data.packaging_supplier_name) {
+            // استخدام المورد الافتراضي إذا لم تكن هناك قائمة
+            packagingSuppliersDisplay = data.packaging_supplier_name;
+        }
+        
+        if (packagingSuppliersDisplay !== '—') {
+            summaryRows.push(['مورد أدوات التعبئة', packagingSuppliersDisplay]);
         }
         if (data.notes) {
             summaryRows.push(['ملاحظات', data.notes]);

@@ -646,6 +646,12 @@ try {
     $honeySupplierName = $lookupSupplierName($honeySupplierId);
     $packagingSupplierName = $lookupSupplierName($packagingSupplierId);
 
+    // جمع جميع موردين أدوات التعبئة من packaging_materials
+    $packagingSuppliersList = [];
+    if ($packagingSupplierId && $packagingSupplierName && $packagingSupplierName !== 'مورد #' . $packagingSupplierId) {
+        $packagingSuppliersList[$packagingSupplierId] = $packagingSupplierName;
+    }
+
     $packagingRows = [];
     if ($batchId > 0) {
         try {
@@ -661,9 +667,18 @@ try {
         }
     }
 
-    $packagingFormatted = array_map(static function (array $row) use ($supplierNameMap) {
+    $packagingFormatted = array_map(static function (array $row) use ($supplierNameMap, &$packagingSuppliersList) {
         $supplierId = isset($row['supplier_id']) ? (int)$row['supplier_id'] : null;
         $quantity = isset($row['quantity_used']) ? (float)$row['quantity_used'] : null;
+        $supplierName = ($supplierId && isset($supplierNameMap[$supplierId]))
+            ? $supplierNameMap[$supplierId]
+            : ($supplierId ? 'مورد #' . $supplierId : null);
+        
+        // إضافة المورد إلى قائمة موردين أدوات التعبئة إذا كان موجوداً وصالحاً
+        if ($supplierId && $supplierName && $supplierName !== 'مورد #' . $supplierId) {
+            $packagingSuppliersList[$supplierId] = $supplierName;
+        }
+        
         return [
             'id' => $row['id'] ?? null,
             'packaging_material_id' => isset($row['packaging_material_id']) ? (int)$row['packaging_material_id'] : null,
@@ -671,11 +686,12 @@ try {
             'unit' => $row['unit'] ?? null,
             'quantity_used' => $quantity,
             'supplier_id' => $supplierId,
-            'supplier_name' => ($supplierId && isset($supplierNameMap[$supplierId]))
-                ? $supplierNameMap[$supplierId]
-                : ($supplierId ? 'مورد #' . $supplierId : null),
+            'supplier_name' => $supplierName,
         ];
     }, $packagingRows);
+    
+    // تحويل قائمة موردين أدوات التعبئة إلى مصفوفة فريدة (إزالة التكرارات)
+    $packagingSuppliersList = array_values(array_unique($packagingSuppliersList, SORT_REGULAR));
 
     $rawRows = [];
     if ($batchId > 0) {
@@ -805,6 +821,7 @@ try {
         'honey_supplier_id' => $honeySupplierId,
         'packaging_supplier_name' => $packagingSupplierName,
         'packaging_supplier_id' => $packagingSupplierId,
+        'packaging_suppliers_list' => $packagingSuppliersList, // قائمة بجميع موردين أدوات التعبئة
         'extra_suppliers' => $extraSuppliersNames,
         'extra_suppliers_ids' => $extraSupplierIds,
         'notes' => $notes,
