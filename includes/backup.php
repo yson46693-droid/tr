@@ -13,11 +13,10 @@ require_once __DIR__ . '/db.php';
 
 /**
  * إنشاء نسخة احتياطية لقاعدة البيانات
+ * يستخدم bk.php لإنشاء النسخة الاحتياطية (يشمل كل جداول قاعدة البيانات)
  */
 function createDatabaseBackup($backupType = 'daily', $userId = null) {
     set_time_limit(0);
-
-    $chunkSize = 500;
 
     try {
         if (!defined('BASE_PATH')) {
@@ -25,9 +24,6 @@ function createDatabaseBackup($backupType = 'daily', $userId = null) {
         }
 
         $db = db();
-        $connection = getDB();
-        $connection->set_charset('utf8mb4');
-
         $backupDir = BASE_PATH . '/backups/';
 
         if (!file_exists($backupDir)) {
@@ -58,140 +54,31 @@ function createDatabaseBackup($backupType = 'daily', $userId = null) {
             }
         }
 
-        $timestamp = date('Y-m-d_H-i-s');
-        $filename = 'backup_' . DB_NAME . '_' . $timestamp . '.sql';
-        $filePath = $backupDir . $filename;
-
-        $handle = @fopen($filePath, 'wb');
-        if (!$handle) {
-            throw new Exception("فشل فتح ملف النسخة الاحتياطية للكتابة: " . $filePath);
+        // استخدام bk.php لإنشاء النسخة الاحتياطية (يشمل كل جداول قاعدة البيانات)
+        $bkScriptPath = BASE_PATH . '/bk.php';
+        if (!file_exists($bkScriptPath)) {
+            throw new Exception("ملف bk.php غير موجود: " . $bkScriptPath);
         }
 
-        $write = static function (string $content) use ($handle, $filePath) {
-            if (fwrite($handle, $content) === false) {
-                throw new Exception("فشل كتابة البيانات إلى ملف النسخة الاحتياطية: " . $filePath);
-            }
-        };
+        // تحميل bk.php للحصول على دالة createBackupUsingBkScript
+        require_once $bkScriptPath;
 
-        $write("-- نسخة احتياطية لقاعدة البيانات\n");
-        $write("-- التاريخ: " . date('Y-m-d H:i:s') . "\n");
-        $write("-- نوع النسخة: " . $backupType . "\n");
-        $write("-- قاعدة البيانات: " . DB_NAME . "\n\n");
-        $write("SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';\n");
-        $write("SET AUTOCOMMIT=0;\n");
-        $write("SET time_zone='+00:00';\n");
-        $write("SET NAMES utf8mb4;\n");
-        $write("SET FOREIGN_KEY_CHECKS=0;\n\n");
-
-        $tablesResult = $connection->query('SHOW FULL TABLES');
-        if (!$tablesResult) {
-            throw new Exception('تعذر الحصول على قائمة الجداول: ' . ($connection->error ?? ''));
+        if (!function_exists('createBackupUsingBkScript')) {
+            throw new Exception("دالة createBackupUsingBkScript غير موجودة في bk.php");
         }
 
-        $tableNames = [];
-        $viewNames = [];
-        while ($row = $tablesResult->fetch_array(MYSQLI_NUM)) {
-            $name = $row[0];
-            $type = strtoupper($row[1] ?? 'BASE TABLE');
-            if ($type === 'VIEW') {
-                $viewNames[] = $name;
-            } else {
-                $tableNames[] = $name;
-            }
-        }
-        $tablesResult->free();
+        // استدعاء دالة النسخ الاحتياطي من bk.php
+        $backupResult = createBackupUsingBkScript($backupDir, false, true);
 
-        if (empty($tableNames) && empty($viewNames)) {
-            throw new Exception('لا توجد كائنات في قاعدة البيانات لنسخها احتياطياً');
+        if (!$backupResult || !$backupResult['success']) {
+            $errorMessage = $backupResult['message'] ?? 'فشل إنشاء النسخة الاحتياطية';
+            throw new Exception($errorMessage);
         }
 
-        foreach ($tableNames as $tableName) {
-            $write("-- هيكل الجدول `$tableName`\n");
-            $write("DROP TABLE IF EXISTS `$tableName`;\n");
+        $filePath = $backupResult['file_path'];
+        $filename = $backupResult['filename'];
 
-            $createTableResult = $connection->query("SHOW CREATE TABLE `$tableName`");
-            if (!$createTableResult || $createTableResult->num_rows === 0) {
-                throw new Exception('تعذر الحصول على هيكل الجدول: ' . $tableName);
-            }
-
-            $createRow = $createTableResult->fetch_assoc();
-            $write($createRow['Create Table'] . ";\n\n");
-            $createTableResult->free();
-
-            $write("-- بيانات الجدول `$tableName`\n");
-            $result = $connection->query("SELECT * FROM `$tableName`");
-            if (!$result) {
-                throw new Exception('تعذر الحصول على بيانات الجدول: ' . $tableName . ' - ' . ($connection->error ?? ''));
-            }
-
-            if ($result->num_rows === 0) {
-                $write("-- لا توجد بيانات في الجدول `$tableName`\n\n");
-                $result->free();
-                continue;
-            }
-
-            $fields = $result->fetch_fields();
-            $columns = array_map(static function ($field) {
-                return $field->name;
-            }, $fields);
-            $columnList = '`' . implode('`, `', $columns) . '`';
-
-            $batch = [];
-            while ($row = $result->fetch_assoc()) {
-                $batch[] = formatInsertRow($connection, $columns, $row);
-                if (count($batch) === $chunkSize) {
-                    $write("INSERT INTO `$tableName` ($columnList) VALUES\n" . implode(",\n", $batch) . ";\n");
-                    $batch = [];
-                }
-            }
-            if (!empty($batch)) {
-                $write("INSERT INTO `$tableName` ($columnList) VALUES\n" . implode(",\n", $batch) . ";\n");
-            }
-            $write("\n");
-            $result->free();
-        }
-
-        if (!empty($viewNames)) {
-            $write("-- العروض (Views)\n");
-            foreach ($viewNames as $viewName) {
-                $write("DROP VIEW IF EXISTS `$viewName`;\n");
-                $viewResult = $connection->query("SHOW CREATE VIEW `$viewName`");
-                if ($viewResult && $viewResult->num_rows > 0) {
-                    $viewRow = $viewResult->fetch_assoc();
-                    $write($viewRow['Create View'] . ";\n\n");
-                    $viewResult->free();
-                } else {
-                    $write("-- تعذر استخراج العرض `$viewName`\n\n");
-                }
-            }
-        }
-
-        $write("COMMIT;\n");
-        $write("SET FOREIGN_KEY_CHECKS=1;\n");
-        $write("SET AUTOCOMMIT=1;\n");
-
-        fclose($handle);
-
-        $compressedPath = null;
-        try {
-            $compressedPath = compressBackup($filePath);
-            if ($compressedPath && file_exists($compressedPath)) {
-                $compressedSize = filesize($compressedPath);
-                if ($compressedSize > 0) {
-                    @unlink($filePath);
-                    $filePath = $compressedPath;
-                    $filename = basename($compressedPath);
-                } else {
-                    @unlink($compressedPath);
-                    $compressedPath = null;
-                }
-            }
-        } catch (Exception $compressionError) {
-            error_log('Compression failed: ' . $compressionError->getMessage());
-            if ($compressedPath && file_exists($compressedPath)) {
-                @unlink($compressedPath);
-            }
-        }
+        // الملف تم إنشاؤه بواسطة bk.php (مضغوط بالفعل بصيغة .gz)
 
         if (!file_exists($filePath)) {
             throw new Exception('ملف النسخة الاحتياطية غير موجود بعد الحفظ: ' . $filePath);
@@ -220,10 +107,7 @@ function createDatabaseBackup($backupType = 'daily', $userId = null) {
             'message' => 'تم إنشاء النسخة الاحتياطية بنجاح'
         ];
     } catch (Exception $e) {
-        if (isset($handle) && is_resource($handle)) {
-            fclose($handle);
-        }
-
+        // حذف الملف في حالة الخطأ
         if (isset($filePath) && file_exists($filePath)) {
             @unlink($filePath);
         }
