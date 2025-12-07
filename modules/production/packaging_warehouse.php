@@ -336,8 +336,8 @@ if (!function_exists('buildPackagingReportHtmlDocument')) {
             
             $typeBreakdown = $filteredTypeBreakdown;
         } else {
-            // في العرض العادي، نعرض فقط أعلى 8 أدوات من حيث الكمية
-            $topItems = array_slice($topItems, 0, 8);
+            // في العرض العادي، نعرض جميع الأدوات الموجودة في المخزن
+            // لا نحد من عدد الأدوات - نعرض كل شيء
         }
 
         ob_start();
@@ -538,9 +538,9 @@ if (!function_exists('buildPackagingReportHtmlDocument')) {
 
 
     <section class="table-section">
-        <h2><?php echo $lowStockOnly ? 'الأدوات ذات المخزون القليل أو المعدوم' : 'أعلى الأدوات من حيث الكمية'; ?></h2>
+        <h2><?php echo $lowStockOnly ? 'الأدوات ذات المخزون القليل أو المعدوم' : 'جميع الأدوات في المخزن'; ?></h2>
         <?php if (empty($topItems)): ?>
-            <div class="empty-state"><?php echo $lowStockOnly ? 'لا توجد أدوات بمخزون قليل أو معدوم حالياً.' : 'لا توجد بيانات لعرض أفضل الأدوات حالياً.'; ?></div>
+            <div class="empty-state"><?php echo $lowStockOnly ? 'لا توجد أدوات بمخزون قليل أو معدوم حالياً.' : 'لا توجد أدوات في المخزن حالياً.'; ?></div>
         <?php else: ?>
             <table>
                 <thead>
