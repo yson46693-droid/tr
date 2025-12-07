@@ -8156,9 +8156,9 @@ function showBarcodeModal(batchNumber, productName, defaultQuantity) {
         quantityText.textContent = quantity;
     }
 
-    const quantityInput = document.getElementById('barcode_print_quantity');
-    if (quantityInput) {
-        quantityInput.value = quantity;
+    const barcodeQtyInput = document.getElementById('barcode_print_quantity');
+    if (barcodeQtyInput) {
+        barcodeQtyInput.value = quantity;
     }
 
     const batchListContainer = document.getElementById('batch_numbers_list');
@@ -9436,8 +9436,8 @@ function printBarcodes() {
         return;
     }
 
-    const quantityInput = document.getElementById('barcode_print_quantity');
-    const printQuantity = parseInt(quantityInput && quantityInput.value ? quantityInput.value : '1', 10) || 1;
+    const barcodeQtyInput = document.getElementById('barcode_print_quantity');
+    const printQuantity = parseInt(barcodeQtyInput && barcodeQtyInput.value ? barcodeQtyInput.value : '1', 10) || 1;
     const batchNumber = batchNumbers[0];
     const printUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${printQuantity}&print=1`;
 
