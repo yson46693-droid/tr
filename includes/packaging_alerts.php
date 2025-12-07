@@ -95,13 +95,14 @@ function packagingAlertSaveStatus(array $data): void {
  * معالجة التنبيه اليومي لأدوات التعبئة منخفضة الكمية
  */
 function processDailyPackagingAlert(): void {
-    static $processed = false;
-
-    if ($processed) {
+    // لا يتم التنفيذ في سطر الأوامر أو في حالة تعطيله صراحةً
+    if (PHP_SAPI === 'cli' || defined('SKIP_PACKAGING_ALERT')) {
         return;
     }
 
-    if (!function_exists('isLoggedIn') || !isLoggedIn()) {
+    static $processed = false;
+
+    if ($processed) {
         return;
     }
 
