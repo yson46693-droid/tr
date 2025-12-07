@@ -9802,7 +9802,7 @@ if (isset($_GET['show_barcode_modal']) && isset($_SESSION['created_batch_numbers
 
         const productNameInput = document.getElementById('barcode_product_name');
         const quantityText = document.getElementById('barcode_quantity');
-        const quantityInput = document.getElementById('barcode_print_quantity');
+        const barcodeQuantityInput = document.getElementById('barcode_print_quantity');
         const batchListContainer = document.getElementById('batch_numbers_list');
         const modalElement = document.getElementById('printBarcodesModal');
 
@@ -9814,8 +9814,8 @@ if (isset($_GET['show_barcode_modal']) && isset($_SESSION['created_batch_numbers
             quantityText.textContent = barcodeQuantity;
         }
 
-        if (quantityInput) {
-            quantityInput.value = barcodeQuantity;
+        if (barcodeQuantityInput) {
+            barcodeQuantityInput.value = barcodeQuantity;
         }
 
         if (batchListContainer) {
