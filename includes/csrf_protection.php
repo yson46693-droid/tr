@@ -15,6 +15,11 @@ if (!defined('ACCESS_ALLOWED')) {
  * تستخدم نفس النظام الموجود في auth.php
  */
 function verifyCSRFTokenEnhanced($token = null) {
+    // التأكد من أن الجلسة نشطة
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return false;
+    }
+    
     if (!isset($_SESSION)) {
         return false;
     }
@@ -24,23 +29,59 @@ function verifyCSRFTokenEnhanced($token = null) {
         $token = $_POST['csrf_token'] ?? $_GET['csrf_token'] ?? null;
     }
     
-    // استخدام الدالة الموجودة في auth.php إذا كانت متاحة
-    if (function_exists('verifyCSRFToken')) {
-        return verifyCSRFToken($token);
-    }
-    
-    // Fallback: التحقق المباشر
-    if ($token === null || !isset($_SESSION['csrf_token'])) {
+    // إذا لم يكن هناك token في الطلب، فشل التحقق
+    if ($token === null || $token === '') {
+        error_log("CSRF: Token missing in request. POST: " . (isset($_POST['csrf_token']) ? 'exists' : 'missing') . ", GET: " . (isset($_GET['csrf_token']) ? 'exists' : 'missing'));
         return false;
     }
     
-    return hash_equals($_SESSION['csrf_token'], $token);
+    // إذا لم يكن هناك token في الجلسة، إنشاء واحد جديد (للمحاولة الأولى)
+    if (!isset($_SESSION['csrf_token']) || empty($_SESSION['csrf_token'])) {
+        error_log("CSRF: No token in session, generating new one");
+        if (function_exists('generateCSRFToken')) {
+            generateCSRFToken(true);
+        } else {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+        // في المحاولة الأولى، نسمح بالمرور فقط إذا كان token فارغاً (للمستخدمين الجدد)
+        // لكن إذا كان هناك token في الطلب، يجب أن يطابق token الجلسة الجديد
+        if ($token !== null && $token !== '') {
+            // إذا كان هناك token في الطلب، يجب أن يطابق token الجلسة الجديد
+            return hash_equals($_SESSION['csrf_token'], $token);
+        }
+        return true;
+    }
+    
+    // استخدام الدالة الموجودة في auth.php إذا كانت متاحة
+    if (function_exists('verifyCSRFToken')) {
+        $result = verifyCSRFToken($token);
+        if (!$result) {
+            error_log("CSRF: Token verification failed. Session token exists: " . (isset($_SESSION['csrf_token']) ? 'yes' : 'no'));
+        }
+        return $result;
+    }
+    
+    // Fallback: التحقق المباشر
+    $result = hash_equals($_SESSION['csrf_token'], $token);
+    if (!$result) {
+        error_log("CSRF: Token mismatch. Session token length: " . strlen($_SESSION['csrf_token'] ?? '') . ", Request token length: " . strlen($token ?? ''));
+    }
+    return $result;
 }
 
 /**
  * الحصول على CSRF Token - متوافق مع النظام الحالي
  */
 function getCSRFToken() {
+    // التأكد من أن الجلسة نشطة
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        if (!headers_sent()) {
+            session_start();
+        } else {
+            return '';
+        }
+    }
+    
     if (!isset($_SESSION)) {
         return '';
     }
@@ -51,7 +92,7 @@ function getCSRFToken() {
     }
     
     // Fallback: إنشاء token جديد
-    if (!isset($_SESSION['csrf_token'])) {
+    if (!isset($_SESSION['csrf_token']) || empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
     
@@ -80,8 +121,38 @@ function protectFormFromCSRF() {
             return true;
         }
         
+        // التحقق من أن الجلسة نشطة
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            error_log("CSRF: Session not active");
+            // محاولة بدء الجلسة
+            if (!headers_sent()) {
+                session_start();
+            }
+        }
+        
+        // التأكد من وجود CSRF token في الجلسة قبل التحقق
+        if (!isset($_SESSION['csrf_token']) || empty($_SESSION['csrf_token'])) {
+            // إنشاء token جديد إذا لم يكن موجوداً
+            if (function_exists('generateCSRFToken')) {
+                generateCSRFToken(true);
+            } else {
+                $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+            }
+            error_log("CSRF: Generated new token for session");
+        }
+        
         // التحقق من CSRF Token
-        if (!verifyCSRFTokenEnhanced()) {
+        $isValid = verifyCSRFTokenEnhanced();
+        
+        if (!$isValid) {
+            // تسجيل معلومات إضافية للمساعدة في التشخيص
+            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
+            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+            $hasTokenInPost = isset($_POST['csrf_token']) && !empty($_POST['csrf_token']);
+            $hasTokenInSession = isset($_SESSION['csrf_token']) && !empty($_SESSION['csrf_token']);
+            
+            error_log("CSRF Validation Failed - IP: {$ipAddress}, UserAgent: {$userAgent}, HasTokenInPost: " . ($hasTokenInPost ? 'yes' : 'no') . ", HasTokenInSession: " . ($hasTokenInSession ? 'yes' : 'no'));
+            
             http_response_code(403);
             die('خطأ في التحقق الأمني. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
         }

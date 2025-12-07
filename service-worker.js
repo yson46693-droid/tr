@@ -1,4 +1,4 @@
-const CACHE_VERSION = '1.0.0';
+const CACHE_VERSION = '1.0.1'; // Updated to fix redirect error
 const CACHE_NAME = 'company-management-v' + CACHE_VERSION;
 const BASE = '/v1/';
 
@@ -82,13 +82,56 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then(cachedResponse => {
-      if (cachedResponse) return cachedResponse;
+  // CRITICAL FIX: Don't intercept navigation requests or requests that might result in redirects
+  // This prevents "Response served by service worker has redirections" error
+  // Navigation requests (document requests) often involve redirects and must be handled by browser
+  const isNavigationRequest = event.request.mode === 'navigate' || 
+                               event.request.destination === 'document' ||
+                               event.request.headers.get('accept')?.includes('text/html');
 
-      return fetch(event.request)
+  // Skip interception for PHP files, root paths, and dynamic URLs that might redirect
+  const skipInterception = 
+    isNavigationRequest ||
+    url.pathname.endsWith('.php') || 
+    url.pathname === '/' || 
+    url.pathname === BASE || 
+    url.pathname === BASE.slice(0, -1) ||
+    (!url.pathname.includes('.') && !url.pathname.endsWith('/')) ||
+    url.search.length > 0; // Skip URLs with query parameters (often dynamic/redirects)
+
+  if (skipInterception) {
+    // Let browser handle these requests directly - no service worker interception
+    // This prevents redirect errors completely
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request).then(async cachedResponse => {
+      // CRITICAL FIX: Check if cached response is a redirect and don't serve it
+      if (cachedResponse) {
+        // Never serve cached redirects - let browser fetch fresh
+        if (cachedResponse.status >= 300 && cachedResponse.status < 400) {
+          // Delete the cached redirect and fetch fresh
+          const cache = await caches.open(CACHE_NAME);
+          await cache.delete(event.request);
+          // Continue to fetch fresh
+        } else {
+          // Only serve non-redirect cached responses
+          return cachedResponse;
+        }
+      }
+
+      return fetch(event.request, {
+        redirect: 'follow' // Let browser handle redirects
+      })
         .then(async response => {
-          if (!response || response.status !== 200 || response.type !== 'basic') return response;
+          // CRITICAL FIX: Never cache redirect responses
+          if (!response || response.status >= 300 && response.status < 400) {
+            // Don't cache redirects - return as-is and let browser handle
+            return response;
+          }
+
+          if (response.status !== 200 || response.type !== 'basic') return response;
 
           // Cache static assets only from same origin
           if (/\.(css|js|png|jpg|jpeg|svg|gif|woff2?)$/i.test(url.pathname)) {

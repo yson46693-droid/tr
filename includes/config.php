@@ -62,13 +62,15 @@ $isHttps = (
     (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
 );
 
+// تحسين إعدادات session cookie للعمل بشكل أفضل على الهواتف
 $sessionCookieOptions = [
     'lifetime' => SESSION_LIFETIME,
     'path' => '/',
     'domain' => '',
     'secure' => $isHttps,
     'httponly' => true,
-    'samesite' => 'Lax',
+    // استخدام 'None' على HTTPS للسماح بالعمل على جميع المتصفحات، أو 'Lax' كبديل آمن
+    'samesite' => $isHttps ? 'None' : 'Lax',
 ];
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
@@ -83,7 +85,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
             'domain' => '',
             'secure' => $isHttps,
             'httponly' => true,
-            'samesite' => 'Lax',
+            'samesite' => $isHttps ? 'None' : 'Lax',
         ]);
     }
 }

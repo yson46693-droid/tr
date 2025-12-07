@@ -1107,61 +1107,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         try {
                             ensureWarehouseTransferBatchColumns();
                             
-                            foreach ($transferItems as $item) {
-                                $productId = isset($item['product_id']) ? (int)$item['product_id'] : null;
-                                $quantity = (float)($item['quantity'] ?? 0);
-                                $batchIdValue = isset($item['batch_id']) ? (int)$item['batch_id'] : null;
-
-                                if ($quantity <= 0) {
-                                    continue;
-                                }
-
-                                if ($productId) {
-                                    $db->execute(
-                                        "UPDATE products SET quantity = GREATEST(quantity - ?, 0) WHERE id = ?",
-                                        [$quantity, $productId]
-                                    );
-                                }
-
-                                if ($batchIdValue) {
-                                    $finishedProd = $db->queryOne(
-                                        "SELECT quantity_produced FROM finished_products WHERE id = ? LIMIT 1",
-                                        [$batchIdValue]
-                                    );
-                                    $currentRemaining = $finishedProd ? (float)$finishedProd['quantity_produced'] : null;
-                                    if ($currentRemaining !== null) {
-                                        $newRemaining = max($currentRemaining - $quantity, 0);
-                                        $db->execute(
-                                            "UPDATE finished_products SET quantity_produced = ? WHERE id = ?",
-                                            [$newRemaining, $batchIdValue]
-                                        );
-                                    }
-                                }
-
-                                $transferItemParams = [
-                                    $transferId,
-                                    $productId,
-                                    $batchIdValue ?: null,
-                                    $item['batch_number'] ?? null,
-                                    $quantity,
-                                    $item['notes'] ?? null,
-                                ];
-
-                                $db->execute(
-                                    "INSERT INTO warehouse_transfer_items (transfer_id, product_id, batch_id, batch_number, quantity, notes)
-                                     VALUES (?, ?, ?, ?, ?, ?)",
-                                    $transferItemParams
-                                );
-                            }
-
+                            // لا نخصم الكمية هنا - سيتم الخصم عند تنفيذ النقل في executeWarehouseTransferDirectly
+                            // فقط نغير الحالة إلى 'approved' وليس 'completed' حتى يتم تنفيذ النقل بشكل صحيح
                             $db->execute(
                                 "UPDATE warehouse_transfers
-                                 SET status = 'completed',
+                                 SET status = 'approved',
                                      approved_by = ?,
                                      approved_at = NOW(),
                                      notes = CONCAT(IFNULL(notes, ''), '\\n(الموافقة من نفس المدير المُنشئ)')
                                  WHERE id = ?",
                                 [$currentUser['id'] ?? null, $transferId]
+                            );
+                            
+                            // تنفيذ النقل مباشرة بعد الموافقة
+                            require_once __DIR__ . '/../../includes/vehicle_inventory.php';
+                            $transferResult = executeWarehouseTransferDirectly($transferId, $currentUser['id'] ?? null);
+                            
+                            if (empty($transferResult['success'])) {
+                                throw new Exception($transferResult['message'] ?? 'فشل تنفيذ النقل');
+                            }
+                            
+                            // تغيير الحالة إلى 'completed' بعد تنفيذ النقل بنجاح
+                            $db->execute(
+                                "UPDATE warehouse_transfers SET status = 'completed' WHERE id = ?",
+                                [$transferId]
                             );
 
                             if (!empty($currentUser['id'])) {
