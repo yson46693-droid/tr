@@ -120,11 +120,37 @@ if (!function_exists('createBackupUsingBkScript')) {
         
         // طريقة PDO (تصدير عبر PHP)
         try {
+            // استخدام TCP/IP للاتصال (مهم لـ InfinityFree)
             $dsn = "mysql:host=$dbHost;port=$dbPort;dbname=$dbName;charset=utf8mb4";
-            $pdo = new PDO($dsn, $dbUser, $dbPass, [
+            // إضافة خيارات إضافية لضمان الاتصال عبر TCP/IP
+            $options = [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
-            ]);
+                PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4",
+                PDO::ATTR_TIMEOUT => 30,
+                PDO::ATTR_PERSISTENT => false
+            ];
+            
+            $pdo = new PDO($dsn, $dbUser, $dbPass, $options);
+            
+            // اختبار الاتصال
+            $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+        } catch (PDOException $e) {
+            $errorMsg = $e->getMessage();
+            // محاولة إصلاح خطأ socket
+            if (strpos($errorMsg, 'No such file or directory') !== false || strpos($errorMsg, '2002') !== false) {
+                // إعادة المحاولة مع إجبار TCP/IP
+                try {
+                    $dsn = "mysql:host=$dbHost;port=$dbPort;dbname=$dbName;charset=utf8mb4";
+                    $pdo = new PDO($dsn, $dbUser, $dbPass, [
+                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
+                    ]);
+                } catch (PDOException $e2) {
+                    return ['success' => false, 'message' => "فشل الاتصال بقاعدة البيانات: " . $e2->getMessage() . " (Host: $dbHost, Port: $dbPort)"];
+                }
+            } else {
+                return ['success' => false, 'message' => "فشل الاتصال بقاعدة البيانات: " . $errorMsg];
+            }
         } catch (Exception $e) {
             return ['success' => false, 'message' => "فشل الاتصال بقاعدة البيانات: " . $e->getMessage()];
         }
@@ -162,7 +188,11 @@ if (!function_exists('createBackupUsingBkScript')) {
             $cr = $pdo->query("SHOW CREATE TABLE `{$table}`")->fetch(PDO::FETCH_ASSOC);
             $createSql = $cr['Create Table'] ?? $cr['Create View'] ?? null;
             if ($createSql) {
-              
+                fwrite($fh, "-- --------------------------------------------------------\n");
+                fwrite($fh, "-- Table structure for table `{$table}`\n");
+                fwrite($fh, "-- --------------------------------------------------------\n\n");
+                fwrite($fh, "DROP TABLE IF EXISTS `{$table}`;\n");
+                fwrite($fh, $createSql . ";\n\n");
             }
             
             if (!$exportStructureOnly) {
@@ -302,205 +332,3 @@ if (php_sapi_name() === 'cli' || !function_exists('createDatabaseBackup')) {
         exit(1);
     }
 }
-
-// ---------- محاولة mysqldump أولاً ----------
-if ($useMysqldumpIfAvailable && function_exists('exec')) {
-    // نبحث عن mysqldump في المسار
-    $whichCmd = (stripos(PHP_OS, 'WIN') === 0) ? 'where mysqldump' : 'which mysqldump';
-    @exec($whichCmd, $out, $ret);
-    $mysqldumpPath = ($ret === 0 && !empty($out)) ? trim($out[0]) : null;
-
-    if ($mysqldumpPath) {
-        echo "استخدام mysqldump الموجود عند: $mysqldumpPath\n";
-
-        // بناء أمر mysqldump
-        $structureOnlyFlag = $exportStructureOnly ? '--no-data' : '';
-        // نضمن شاملة الإجراءات، التريجرات، الإعدادات
-        $cmd = escapeshellcmd($mysqldumpPath)
-            . " --host=" . escapeshellarg($dbHost)
-            . " --port=" . escapeshellarg($dbPort)
-            . " --user=" . escapeshellarg($dbUser)
-            . " --password=" . escapeshellarg($dbPass)
-            . " --routines --triggers --events --single-transaction --quick --hex-blob "
-            . " $structureOnlyFlag "
-            . " " . escapeshellarg($dbName)
-            . " 2>&1";
-
-        // نجري التفريغ إلى ملف مؤقت غير مضغوط ثم نضغطه
-        $tmpSql = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $filenameSql;
-        $cmdOut = $cmd . " > " . escapeshellarg($tmpSql);
-
-        exec($cmdOut, $dumpOut, $dumpRet);
-        if ($dumpRet === 0 && file_exists($tmpSql)) {
-            // ضغط الملف
-            $fpIn = fopen($tmpSql, 'rb');
-            if ($fpIn === false) {
-                die("فشل في فتح الملف المؤقت للتصدير.\n");
-            }
-            $fpOut = gzopen($fullPathGz, 'wb9');
-            if ($fpOut === false) {
-                fclose($fpIn);
-                die("فشل في إنشاء الملف المضغوط: $fullPathGz\n");
-            }
-            while (!feof($fpIn)) {
-                $chunk = fread($fpIn, 1024 * 512);
-                gzwrite($fpOut, $chunk);
-            }
-            fclose($fpIn);
-            gzclose($fpOut);
-            unlink($tmpSql);
-            echo "النسخة الاحتياطية (بـ mysqldump) حفظت: $fullPathGz\n";
-            exit(0);
-        } else {
-            echo "فشل mysqldump أو لم يعد 0. سيتم المحاولة بطريقة PHP. مخرجات mysqldump:\n";
-            echo implode("\n", $dumpOut) . "\n";
-        }
-    } else {
-        echo "mysqldump غير متوفر على السيرفر — سيتم استخدام طريقة PDO (PHP) للتصدير.\n";
-    }
-}
-
-// ---------- طريقة PDO (تصدير عبر PHP) ----------
-echo "استخدام طريقة PHP (PDO) للتصدير...\n";
-
-try {
-    $dsn = "mysql:host=$dbHost;port=$dbPort;dbname=$dbName;charset=utf8mb4";
-    $pdo = new PDO($dsn, $dbUser, $dbPass, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
-    ]);
-} catch (Exception $e) {
-    die("فشل الاتصال بقاعدة البيانات: " . $e->getMessage() . "\n");
-}
-
-// ملف مؤقت نصي
-$tmpSql = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $filenameSql;
-$fh = fopen($tmpSql, 'w');
-if (!$fh) {
-    die("فشل في إنشاء الملف المؤقت: $tmpSql\n");
-}
-
-// رأس الملف
-fwrite($fh, "-- Backup created by db_backup.php\n");
-fwrite($fh, "-- Database: {$dbName}\n");
-fwrite($fh, "-- Generated: " . date('Y-m-d H:i:s') . " (Africa/Cairo)\n\n");
-fwrite($fh, "SET NAMES utf8mb4;\n");
-fwrite($fh, "SET FOREIGN_KEY_CHECKS=0;\n\n");
-
-// جلب قائمة الجداول
-$tables = [];
-$stmt = $pdo->query("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'");
-while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
-    $tables[] = $row[0];
-}
-
-// أيضاً جلب views
-$views = [];
-$stmt = $pdo->query("SHOW FULL TABLES WHERE Table_type = 'VIEW'");
-while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
-    $views[] = $row[0];
-}
-
-// تصدير كل جدول (CREATE + بيانات)
-foreach ($tables as $table) {
-    echo "تصدير هيكل الجدول: $table\n";
-    $cr = $pdo->query("SHOW CREATE TABLE `{$table}`")->fetch(PDO::FETCH_ASSOC);
-    $createSql = $cr['Create Table'] ?? $cr['Create View'] ?? null;
-    if ($createSql) {
-        fwrite($fh, "-- --------------------------------------------------------\n");
-        fwrite($fh, "-- Table structure for table `{$table}`\n");
-        fwrite($fh, "-- --------------------------------------------------------\n\n");
-        fwrite($fh, "DROP TABLE IF EXISTS `{$table}`;\n");
-        fwrite($fh, $createSql . ";\n\n");
-    }
-
-    if (!$exportStructureOnly) {
-        // تصدير البيانات (INSERTs) — نحاول دفعات لتحسين الأداء
-        echo "تصدير بيانات الجدول: $table\n";
-        $colStmt = $pdo->query("DESCRIBE `{$table}`");
-        $cols = [];
-        while ($c = $colStmt->fetch(PDO::FETCH_ASSOC)) {
-            $cols[] = "`" . $c['Field'] . "`";
-        }
-        $colList = implode(', ', $cols);
-
-        $rowCountStmt = $pdo->query("SELECT COUNT(*) AS c FROM `{$table}`");
-        $rowCount = (int)$rowCountStmt->fetch(PDO::FETCH_ASSOC)['c'];
-        if ($rowCount === 0) {
-            fwrite($fh, "-- Empty table `{$table}`\n\n");
-            continue;
-        }
-
-        $batchSize = 500; // عدد الصفوف في كل INSERT
-        $offset = 0;
-        $select = $pdo->prepare("SELECT * FROM `{$table}` LIMIT :lim OFFSET :off");
-        while ($offset < $rowCount) {
-            $select->bindValue(':lim', (int)$batchSize, PDO::PARAM_INT);
-            $select->bindValue(':off', (int)$offset, PDO::PARAM_INT);
-            $select->execute();
-            $rows = $select->fetchAll(PDO::FETCH_ASSOC);
-            if (!$rows) break;
-
-            $values = [];
-            foreach ($rows as $r) {
-                $escaped = [];
-                foreach ($r as $v) {
-                    if ($v === null) {
-                        $escaped[] = "NULL";
-                    } else {
-                        // استعمل PDO->quote لحماية النصوص
-                        $escaped[] = $pdo->quote($v);
-                    }
-                }
-                $values[] = "(" . implode(", ", $escaped) . ")";
-            }
-
-            fwrite($fh, "LOCK TABLES `{$table}` WRITE;\n");
-            fwrite($fh, "/*!40000 ALTER TABLE `{$table}` DISABLE KEYS */;\n");
-            fwrite($fh, "INSERT INTO `{$table}` ({$colList}) VALUES\n");
-            fwrite($fh, implode(",\n", $values) . ";\n");
-            fwrite($fh, "/*!40000 ALTER TABLE `{$table}` ENABLE KEYS */;\n");
-            fwrite($fh, "UNLOCK TABLES;\n\n");
-
-            $offset += $batchSize;
-            // تفريغ الذاكرة إن احتاج
-        }
-    }
-}
-
-// تصدير الـ views
-foreach ($views as $view) {
-    echo "تصدير view: $view\n";
-    $cr = $pdo->query("SHOW CREATE VIEW `{$view}`")->fetch(PDO::FETCH_ASSOC);
-    if (!empty($cr['Create View'])) {
-        fwrite($fh, "-- --------------------------------------------------------\n");
-        fwrite($fh, "-- View structure for view `{$view}`\n");
-        fwrite($fh, "-- --------------------------------------------------------\n\n");
-        fwrite($fh, "DROP VIEW IF EXISTS `{$view}`;\n");
-        fwrite($fh, $cr['Create View'] . ";\n\n");
-    }
-}
-
-fwrite($fh, "SET FOREIGN_KEY_CHECKS=1;\n");
-fclose($fh);
-
-// ضغط الملف المؤقت إلى gzip النهائي
-$fpIn = fopen($tmpSql, 'rb');
-$fpOut = gzopen($fullPathGz, 'wb9');
-if ($fpIn && $fpOut) {
-    while (!feof($fpIn)) {
-        gzwrite($fpOut, fread($fpIn, 1024 * 512));
-    }
-    fclose($fpIn);
-    gzclose($fpOut);
-    // حذف المؤقت
-    @unlink($tmpSql);
-    echo "النسخة الاحتياطية (بـ PHP) حفظت: $fullPathGz\n";
-} else {
-    echo "فشل أثناء ضغط الملف إلى gzip.\n";
-    if ($fpIn) fclose($fpIn);
-    if ($fpOut) gzclose($fpOut);
-    exit(1);
-}
-
-exit(0);

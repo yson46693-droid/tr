@@ -24,7 +24,8 @@ function createDatabaseBackup($backupType = 'daily', $userId = null) {
         }
 
         $db = db();
-        $backupDir = BASE_PATH . '/backups/';
+        // إزالة الشرطة المائلة الأخيرة من المسار
+        $backupDir = rtrim(BASE_PATH . '/backups', '/\\');
 
         if (!file_exists($backupDir)) {
             if (!@mkdir($backupDir, 0777, true)) {
@@ -68,6 +69,7 @@ function createDatabaseBackup($backupType = 'daily', $userId = null) {
         }
 
         // استدعاء دالة النسخ الاحتياطي من bk.php
+        // استخدام false للتصدير الكامل (هيكل + بيانات) و true لاستخدام mysqldump إن كان متاحاً
         $backupResult = createBackupUsingBkScript($backupDir, false, true);
 
         if (!$backupResult || !$backupResult['success']) {
