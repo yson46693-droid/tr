@@ -727,79 +727,64 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                 $hasBonusColumn = !empty($bonusColumnCheck);
                 $bonusColumnName = $hasBonusColumn ? $bonusColumnCheck['Field'] : null;
                 
+                // التحقق من وجود عمود updated_at
+                $columns = $db->query("SHOW COLUMNS FROM salaries") ?? [];
+                $hasUpdatedAtColumn = false;
+                $hasTotalHoursColumn = false;
+                foreach ($columns as $column) {
+                    $fieldName = $column['Field'] ?? '';
+                    if ($fieldName === 'updated_at' || $fieldName === 'modified_at' || $fieldName === 'last_updated') {
+                        $hasUpdatedAtColumn = true;
+                    }
+                    if ($fieldName === 'total_hours') {
+                        $hasTotalHoursColumn = true;
+                    }
+                }
+                
                 // تحديث الراتب مع تحديث base_amount و total_hours لضمان التطابق مع الساعات الفعلية
                 if ($hasBonusColumn && $bonusColumnName) {
-                    // التحقق من وجود عمود total_hours
-                    $columns = $db->query("SHOW COLUMNS FROM salaries") ?? [];
-                    $hasTotalHoursColumn = false;
-                    foreach ($columns as $column) {
-                        if (($column['Field'] ?? '') === 'total_hours') {
-                            $hasTotalHoursColumn = true;
-                            break;
-                        }
-                    }
+                    $updateFields = [
+                        'base_amount = ?',
+                        "{$bonusColumnName} = ?",
+                        'deductions = ?',
+                        'total_amount = ?',
+                        'notes = ?'
+                    ];
+                    $updateParams = [$baseAmount, $bonus, $deductions, $newTotal, ($cleanedNotes ? $cleanedNotes . "\n" : '') . $modificationNote];
                     
                     if ($hasTotalHoursColumn) {
-                        $db->execute(
-                            "UPDATE salaries SET 
-                                base_amount = ?,
-                                total_hours = ?,
-                                {$bonusColumnName} = ?,
-                                deductions = ?,
-                                total_amount = ?,
-                                notes = ?,
-                                updated_at = NOW()
-                             WHERE id = ?",
-                            [$baseAmount, $actualHours, $bonus, $deductions, $newTotal, ($cleanedNotes ? $cleanedNotes . "\n" : '') . $modificationNote, $salaryId]
-                        );
-                    } else {
-                        $db->execute(
-                            "UPDATE salaries SET 
-                                base_amount = ?,
-                                {$bonusColumnName} = ?,
-                                deductions = ?,
-                                total_amount = ?,
-                                notes = ?,
-                                updated_at = NOW()
-                             WHERE id = ?",
-                            [$baseAmount, $bonus, $deductions, $newTotal, ($cleanedNotes ? $cleanedNotes . "\n" : '') . $modificationNote, $salaryId]
-                        );
+                        array_splice($updateFields, 1, 0, 'total_hours = ?');
+                        array_splice($updateParams, 1, 0, $actualHours);
                     }
+                    
+                    if ($hasUpdatedAtColumn) {
+                        $updateFields[] = 'updated_at = NOW()';
+                    }
+                    
+                    $updateParams[] = $salaryId;
+                    $sql = "UPDATE salaries SET " . implode(', ', $updateFields) . " WHERE id = ?";
+                    $db->execute($sql, $updateParams);
                 } else {
-                    // التحقق من وجود عمود total_hours
-                    $columns = $db->query("SHOW COLUMNS FROM salaries") ?? [];
-                    $hasTotalHoursColumn = false;
-                    foreach ($columns as $column) {
-                        if (($column['Field'] ?? '') === 'total_hours') {
-                            $hasTotalHoursColumn = true;
-                            break;
-                        }
-                    }
+                    $updateFields = [
+                        'base_amount = ?',
+                        'deductions = ?',
+                        'total_amount = ?',
+                        'notes = ?'
+                    ];
+                    $updateParams = [$baseAmount, $deductions, $newTotal, ($cleanedNotes ? $cleanedNotes . "\n" : '') . $modificationNote];
                     
                     if ($hasTotalHoursColumn) {
-                        $db->execute(
-                            "UPDATE salaries SET 
-                                base_amount = ?,
-                                total_hours = ?,
-                                deductions = ?,
-                                total_amount = ?,
-                                notes = ?,
-                                updated_at = NOW()
-                             WHERE id = ?",
-                            [$baseAmount, $actualHours, $deductions, $newTotal, ($cleanedNotes ? $cleanedNotes . "\n" : '') . $modificationNote, $salaryId]
-                        );
-                    } else {
-                        $db->execute(
-                            "UPDATE salaries SET 
-                                base_amount = ?,
-                                deductions = ?,
-                                total_amount = ?,
-                                notes = ?,
-                                updated_at = NOW()
-                             WHERE id = ?",
-                            [$baseAmount, $deductions, $newTotal, ($cleanedNotes ? $cleanedNotes . "\n" : '') . $modificationNote, $salaryId]
-                        );
+                        array_splice($updateFields, 1, 0, 'total_hours = ?');
+                        array_splice($updateParams, 1, 0, $actualHours);
                     }
+                    
+                    if ($hasUpdatedAtColumn) {
+                        $updateFields[] = 'updated_at = NOW()';
+                    }
+                    
+                    $updateParams[] = $salaryId;
+                    $sql = "UPDATE salaries SET " . implode(', ', $updateFields) . " WHERE id = ?";
+                    $db->execute($sql, $updateParams);
                 }
                 
                 // إرسال إشعار للمستخدم
