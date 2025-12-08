@@ -401,7 +401,12 @@ function handleSubmitReturn(): void
                 );
                 if ($batchRow && !empty($batchRow['batch_number_id'])) {
                     $batchNumberId = (int)$batchRow['batch_number_id'];
+                    error_log("invoice_returns: Found batch_number_id from invoice_item_id - invoice_item_id: {$item['invoice_item_id']}, batch_number_id: $batchNumberId");
+                } else {
+                    error_log("invoice_returns: WARNING - No batch_number_id found in sales_batch_numbers for invoice_item_id: {$item['invoice_item_id']}");
                 }
+            } else {
+                error_log("invoice_returns: WARNING - hasBatchNumberId: " . ($hasBatchNumberId ? 'true' : 'false') . ", invoice_item_id: " . (isset($item['invoice_item_id']) ? $item['invoice_item_id'] : 'NULL'));
             }
 
             // بناء قائمة الأعمدة والقيم بشكل ديناميكي
@@ -553,10 +558,12 @@ function handleSubmitReturn(): void
                         [$newQuantityProduced, $finishedProductId]
                     );
                     
-                    error_log("invoice_returns: Updated finished_products.quantity_produced directly - finished_product_id: $finishedProductId, batch_number_id: $batchNumberId, current: $currentQuantityProduced, added: {$item['quantity']}, new: $newQuantityProduced");
+                    error_log("invoice_returns: Updated finished_products.quantity_produced directly - finished_product_id: $finishedProductId, batch_number_id: " . ($batchNumberId ?? 'NULL') . ", current: $currentQuantityProduced, added: {$item['quantity']}, new: $newQuantityProduced");
                 } else {
-                    error_log("invoice_returns: WARNING - finished_products not found for id: $finishedProductId when returning product");
+                    error_log("invoice_returns: WARNING - finished_products not found for id: $finishedProductId when returning product (product_id: {$item['product_id']}, batch_number_id: " . ($batchNumberId ?? 'NULL') . ")");
                 }
+            } else {
+                error_log("invoice_returns: WARNING - finishedProductId is NULL - product_id: {$item['product_id']}, batch_number_id: " . ($batchNumberId ?? 'NULL') . ", invoice_item_id: " . (isset($item['invoice_item_id']) ? $item['invoice_item_id'] : 'NULL'));
             }
 
             // تمرير finishedProductId (id من finished_products) إلى recordInventoryMovement
