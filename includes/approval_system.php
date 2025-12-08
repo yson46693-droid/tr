@@ -179,7 +179,7 @@ function requestApproval($type, $entityId, $requestedBy, $notes = null) {
                             $month = intval($salary['month'] ?? date('n'));
                             $year = intval($salary['year'] ?? date('Y'));
                             
-                            // تحديد اسم عمود المكافآت الصحيح (bonus أو bonuses) - نفس كود صفحة الرواتب
+                            // التحقق من وجود عمود bonus أو bonuses
                             $bonusColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field IN ('bonus', 'bonuses')");
                             $bonusColumnName = $bonusColumnCheck ? $bonusColumnCheck['Field'] : 'bonus';
                             
@@ -743,6 +743,24 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                 $year = intval($salary['year'] ?? date('Y'));
                 $hourlyRate = cleanFinancialValue($salary['hourly_rate'] ?? $salary['current_hourly_rate'] ?? 0);
                 
+                // التحقق من وجود عمود bonus أو bonuses
+                $bonusColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field IN ('bonus', 'bonuses')");
+                $hasBonusColumn = !empty($bonusColumnCheck);
+                $bonusColumnName = $hasBonusColumn ? $bonusColumnCheck['Field'] : null;
+                
+                // الحصول على المكافآت والخصومات الحالية من الراتب (نفس منطق صفحة المحاسب)
+                $currentBonus = 0;
+                if ($hasBonusColumn && $bonusColumnName) {
+                    $currentBonus = cleanFinancialValue($salary[$bonusColumnName] ?? 0);
+                }
+                $currentDeductions = cleanFinancialValue($salary['deductions'] ?? 0);
+                
+                // حساب المكافآت والخصومات النهائية (نفس منطق صفحة المحاسب)
+                // المكافآت النهائية = المكافآت الحالية + المكافآت الجديدة المضافة
+                $finalBonus = $currentBonus + $bonus;
+                // الخصومات النهائية = الخصومات الحالية + الخصومات الجديدة المضافة
+                $finalDeductions = $currentDeductions + $deductions;
+                
                 // حساب نسبة التحصيلات الحالية (للمندوبين)
                 $currentSalaryCalc = calculateTotalSalaryWithCollections($salary, $userId, $month, $year, $userRole);
                 $collectionsBonus = $currentSalaryCalc['collections_bonus'];
@@ -755,8 +773,9 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                 $baseAmount = round($completedHours * $hourlyRate, 2);
                 $actualHours = $completedHours;
                 
-                // حساب الراتب الجديد بنفس طريقة الحساب في بطاقة الموظف
-                $newTotal = round($baseAmount + $bonus + $collectionsBonus - $deductions, 2);
+                // حساب الراتب الجديد: الراتب الأساسي + المكافآت (الحالية + الجديدة) + نسبة التحصيلات - الخصومات (الحالية + الجديدة)
+                // نفس منطق صفحة المحاسب
+                $newTotal = round($baseAmount + $finalBonus + $collectionsBonus - $finalDeductions, 2);
                 $newTotal = max(0, $newTotal);
                 
                 // تحديث الراتب مع إزالة التعديل المعلق من notes
@@ -769,11 +788,6 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                 if ($notes) {
                     $modificationNote .= ' - ' . $notes;
                 }
-                
-                // التحقق من وجود عمود bonus أو bonuses
-                $bonusColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field IN ('bonus', 'bonuses')");
-                $hasBonusColumn = !empty($bonusColumnCheck);
-                $bonusColumnName = $hasBonusColumn ? $bonusColumnCheck['Field'] : null;
                 
                 // التحقق من وجود عمود updated_at
                 $columns = $db->query("SHOW COLUMNS FROM salaries") ?? [];
@@ -798,7 +812,7 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                         'total_amount = ?',
                         'notes = ?'
                     ];
-                    $updateParams = [$baseAmount, $bonus, $deductions, $newTotal, ($cleanedNotes ? $cleanedNotes . "\n" : '') . $modificationNote];
+                    $updateParams = [$baseAmount, $finalBonus, $finalDeductions, $newTotal, ($cleanedNotes ? $cleanedNotes . "\n" : '') . $modificationNote];
                     
                     if ($hasTotalHoursColumn) {
                         array_splice($updateFields, 1, 0, 'total_hours = ?');
@@ -819,7 +833,7 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                         'total_amount = ?',
                         'notes = ?'
                     ];
-                    $updateParams = [$baseAmount, $deductions, $newTotal, ($cleanedNotes ? $cleanedNotes . "\n" : '') . $modificationNote];
+                    $updateParams = [$baseAmount, $finalDeductions, $newTotal, ($cleanedNotes ? $cleanedNotes . "\n" : '') . $modificationNote];
                     
                     if ($hasTotalHoursColumn) {
                         array_splice($updateFields, 1, 0, 'total_hours = ?');
@@ -834,7 +848,7 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                     $sql = "UPDATE salaries SET " . implode(', ', $updateFields) . " WHERE id = ?";
                     $db->execute($sql, $updateParams);
                 }
-                
+
                 // إرسال إشعار للمستخدم
                 try {
                     require_once __DIR__ . '/notifications.php';
