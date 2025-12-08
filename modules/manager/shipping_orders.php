@@ -1466,6 +1466,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 error_log("shipping_orders: WARNING - invoice_id is empty for order_id=$orderId when completing delivery");
             }
 
+            // تحديد customer_id للاستخدام في جدول sales والمزامنة (يجب أن يكون متاحاً خارج try-catch)
+            $salesCustomerId = null;
+            
             // إضافة المنتجات إلى جدول sales (سجل مشتريات العميل)
             try {
                 // جلب منتجات الطلب
@@ -1921,13 +1924,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             // مزامنة كاملة لسجل المشتريات للتأكد من تحديث جميع البيانات (يتم استدعاؤها دائماً)
+            // يجب استخدام customer_id من جدول customers وليس local_customers
             try {
-                customerHistorySyncForCustomer($order['customer_id']);
-                error_log(sprintf(
-                    'shipping_orders: Synced purchase history for customer_id=%d after completing order_id=%d',
-                    $order['customer_id'],
-                    $orderId
-                ));
+                // تحديد customer_id الصحيح للاستخدام في المزامنة
+                $syncCustomerId = $order['customer_id'];
+                $foundCustomerIdFromInvoice = false;
+                
+                // إذا كان هناك invoice_id، نستخدم customer_id من الفاتورة (من جدول customers)
+                if (!empty($order['invoice_id'])) {
+                    $invoiceDataForSync = $db->queryOne(
+                        "SELECT customer_id FROM invoices WHERE id = ?",
+                        [$order['invoice_id']]
+                    );
+                    if ($invoiceDataForSync && !empty($invoiceDataForSync['customer_id'])) {
+                        $syncCustomerId = (int)$invoiceDataForSync['customer_id'];
+                        $foundCustomerIdFromInvoice = true;
+                    }
+                }
+                
+                // إذا كان العميل من local_customers ولم نجد customer_id من الفاتورة، نحاول استخدام salesCustomerId
+                // أو البحث عن/إنشاء عميل مؤقت في customers
+                if ($customerTable === 'local_customers' && !$foundCustomerIdFromInvoice) {
+                    // البحث عن أو إنشاء عميل مؤقت في customers (مثل ما تم في كود sales)
+                    $customerName = $customer['name'] ?? '';
+                    $customerPhone = $customer['phone'] ?? null;
+                    $customerAddress = $customer['address'] ?? null;
+                    
+                    $existingCustomerInCustomers = $db->queryOne(
+                        "SELECT id FROM customers WHERE name = ? AND created_by_admin = 1 LIMIT 1",
+                        [$customerName]
+                    );
+                    
+                    if ($existingCustomerInCustomers) {
+                        $syncCustomerId = (int)$existingCustomerInCustomers['id'];
+                    } elseif ($salesCustomerId && !empty($salesCustomerId)) {
+                        // استخدام salesCustomerId إذا كان موجوداً
+                        $customerInCustomers = $db->queryOne(
+                            "SELECT id FROM customers WHERE id = ?",
+                            [$salesCustomerId]
+                        );
+                        if ($customerInCustomers) {
+                            $syncCustomerId = $salesCustomerId;
+                        }
+                    }
+                } elseif ($customerTable === 'local_customers' && isset($salesCustomerId) && !empty($salesCustomerId)) {
+                    // التحقق من أن salesCustomerId موجود في جدول customers
+                    $customerInCustomers = $db->queryOne(
+                        "SELECT id FROM customers WHERE id = ?",
+                        [$salesCustomerId]
+                    );
+                    if ($customerInCustomers) {
+                        $syncCustomerId = $salesCustomerId;
+                    }
+                }
+                
+                // استدعاء دالة المزامنة فقط إذا كان customer_id من جدول customers
+                $customerInCustomersCheck = $db->queryOne(
+                    "SELECT id FROM customers WHERE id = ?",
+                    [$syncCustomerId]
+                );
+                
+                if ($customerInCustomersCheck) {
+                    customerHistorySyncForCustomer($syncCustomerId);
+                    error_log(sprintf(
+                        'shipping_orders: Synced purchase history for customer_id=%d (from %s table) after completing order_id=%d',
+                        $syncCustomerId,
+                        $customerTable === 'local_customers' ? 'customers (mapped from local)' : 'customers',
+                        $orderId
+                    ));
+                } else {
+                    error_log(sprintf(
+                        'shipping_orders: Skipped syncing purchase history - customer_id=%d is not in customers table (from %s table)',
+                        $syncCustomerId,
+                        $customerTable
+                    ));
+                }
             } catch (Throwable $syncError) {
                 error_log('shipping_orders: failed syncing customer purchase history -> ' . $syncError->getMessage());
                 error_log('shipping_orders: sync error trace -> ' . $syncError->getTraceAsString());

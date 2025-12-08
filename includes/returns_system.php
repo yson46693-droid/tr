@@ -863,6 +863,275 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
     }
 }
 
+/**
+ * إرجاع المنتجات إلى مخزن الشركة الرئيسي
+ * Return products to main company warehouse
+ * 
+ * @param int $returnId معرف المرتجع
+ * @param int|null $approvedBy معرف المستخدم الذي وافق على المرتجع
+ * @return array
+ */
+function returnProductsToMainWarehouse(int $returnId, ?int $approvedBy = null): array
+{
+    error_log(">>> returnProductsToMainWarehouse START - Return ID: {$returnId}");
+    
+    try {
+        $db = db();
+        
+        // جلب بيانات المرتجع
+        $return = $db->queryOne(
+            "SELECT r.*, c.name as customer_name
+             FROM returns r
+             LEFT JOIN customers c ON r.customer_id = c.id
+             WHERE r.id = ?",
+            [$returnId]
+        );
+        
+        if (!$return) {
+            return ['success' => false, 'message' => 'المرتجع غير موجود'];
+        }
+        
+        // الحصول على مخزن الشركة الرئيسي
+        $mainWarehouse = $db->queryOne(
+            "SELECT id, name FROM warehouses WHERE warehouse_type = 'main' AND status = 'active' ORDER BY id ASC LIMIT 1"
+        );
+        
+        if (!$mainWarehouse) {
+            // إنشاء المخزن الرئيسي إذا لم يكن موجوداً
+            $db->execute(
+                "INSERT INTO warehouses (name, warehouse_type, status, location, description) 
+                 VALUES (?, 'main', 'active', ?, ?)",
+                ['المخزن الرئيسي', 'الموقع الرئيسي للشركة', 'تم إنشاء هذا المخزن تلقائياً']
+            );
+            $mainWarehouseId = $db->getLastInsertId();
+            $mainWarehouse = $db->queryOne(
+                "SELECT id, name FROM warehouses WHERE id = ?",
+                [$mainWarehouseId]
+            );
+        }
+        
+        if (!$mainWarehouse) {
+            return ['success' => false, 'message' => 'تعذر تحديد مخزن الشركة الرئيسي'];
+        }
+        
+        $warehouseId = (int)$mainWarehouse['id'];
+        
+        // جلب عناصر المرتجع (استثناء التالف)
+        $hasIsDamaged = false;
+        try {
+            $columnCheck = $db->queryOne("SHOW COLUMNS FROM return_items LIKE 'is_damaged'");
+            $hasIsDamaged = !empty($columnCheck);
+        } catch (Throwable $e) {
+            $hasIsDamaged = false;
+        }
+        
+        if ($hasIsDamaged) {
+            $returnItems = $db->query(
+                "SELECT ri.*, p.name as product_name, p.unit
+                 FROM return_items ri
+                 LEFT JOIN products p ON ri.product_id = p.id
+                 WHERE ri.return_id = ? AND (ri.is_damaged = 0 OR ri.is_damaged IS NULL)
+                 ORDER BY ri.id",
+                [$returnId]
+            );
+        } else {
+            $returnItems = $db->query(
+                "SELECT ri.*, p.name as product_name, p.unit
+                 FROM return_items ri
+                 LEFT JOIN products p ON ri.product_id = p.id
+                 WHERE ri.return_id = ?
+                 ORDER BY ri.id",
+                [$returnId]
+            );
+        }
+        
+        if (empty($returnItems)) {
+            return ['success' => true, 'message' => 'لا توجد منتجات سليمة للإرجاع للمخزون'];
+        }
+        
+        if ($approvedBy === null) {
+            $currentUser = getCurrentUser();
+            $approvedBy = $currentUser ? (int)$currentUser['id'] : null;
+        }
+        
+        // التحقق من وجود transaction
+        $transactionStarted = false;
+        if (!$db->inTransaction()) {
+            $db->beginTransaction();
+            $transactionStarted = true;
+        }
+        
+        try {
+            foreach ($returnItems as $item) {
+                $productId = (int)$item['product_id'];
+                $quantity = (float)$item['quantity'];
+                $batchNumberId = isset($item['batch_number_id']) && $item['batch_number_id'] ? (int)$item['batch_number_id'] : null;
+                $batchNumber = $item['batch_number'] ?? null;
+                $invoiceItemId = isset($item['invoice_item_id']) && $item['invoice_item_id'] ? (int)$item['invoice_item_id'] : null;
+                
+                // Fallback: إذا لم يكن batch_number_id موجوداً، نحاول جلبه من invoice_item_id
+                if (!$batchNumberId && $invoiceItemId) {
+                    $batchRow = $db->queryOne(
+                        "SELECT batch_number_id FROM sales_batch_numbers 
+                         WHERE invoice_item_id = ? 
+                         ORDER BY id ASC LIMIT 1",
+                        [$invoiceItemId]
+                    );
+                    if ($batchRow && !empty($batchRow['batch_number_id'])) {
+                        $batchNumberId = (int)$batchRow['batch_number_id'];
+                    }
+                }
+                
+                // البحث عن finished_products.id من batch_number_id
+                $finishedProductId = null;
+                $batchNumberForSearch = $batchNumber;
+                if ($batchNumberId) {
+                    $finishedProduct = $db->queryOne(
+                        "SELECT id, batch_number FROM finished_products WHERE batch_id = ? FOR UPDATE",
+                        [$batchNumberId]
+                    );
+                    
+                    if ($finishedProduct) {
+                        $finishedProductId = (int)$finishedProduct['id'];
+                        $batchNumberForSearch = $finishedProduct['batch_number'] ?? $batchNumber;
+                    } else {
+                        if ($batchNumber) {
+                            $finishedProduct = $db->queryOne(
+                                "SELECT id FROM finished_products WHERE batch_number = ? FOR UPDATE",
+                                [$batchNumber]
+                            );
+                            if ($finishedProduct) {
+                                $finishedProductId = (int)$finishedProduct['id'];
+                            }
+                        }
+                        
+                        if (!$finishedProductId) {
+                            $batchInfo = $db->queryOne(
+                                "SELECT bn.batch_number FROM batch_numbers bn WHERE bn.id = ?",
+                                [$batchNumberId]
+                            );
+                            if ($batchInfo && !empty($batchInfo['batch_number'])) {
+                                $batchNumberForSearch = $batchInfo['batch_number'];
+                                $finishedProduct = $db->queryOne(
+                                    "SELECT id FROM finished_products WHERE batch_number = ? FOR UPDATE",
+                                    [$batchNumberForSearch]
+                                );
+                                if ($finishedProduct) {
+                                    $finishedProductId = (int)$finishedProduct['id'];
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // الحصول على المنتج من جدول products
+                $product = $db->queryOne(
+                    "SELECT id, quantity, warehouse_id FROM products WHERE id = ? FOR UPDATE",
+                    [$productId]
+                );
+                
+                if (!$product) {
+                    error_log("returnProductsToMainWarehouse: Product not found - product_id: $productId");
+                    continue;
+                }
+                
+                // تحديث الكمية في جدول products
+                $currentQuantity = (float)($product['quantity'] ?? 0);
+                $newQuantity = round($currentQuantity + $quantity, 3);
+                
+                // تحديث المنتج مع التأكد من ربطه بالمخزن الرئيسي
+                $updateSql = "UPDATE products SET quantity = ?, updated_at = NOW()";
+                $updateParams = [$newQuantity];
+                
+                // إذا لم يكن المنتج مرتبطاً بمخزن أو مرتبط بمخزن آخر، نربطه بالمخزن الرئيسي
+                $currentWarehouseId = isset($product['warehouse_id']) ? (int)$product['warehouse_id'] : 0;
+                if ($currentWarehouseId <= 0 || $currentWarehouseId !== $warehouseId) {
+                    $updateSql .= ", warehouse_id = ?";
+                    $updateParams[] = $warehouseId;
+                }
+                
+                $updateSql .= " WHERE id = ?";
+                $updateParams[] = $productId;
+                
+                $db->execute($updateSql, $updateParams);
+                
+                // تحديث finished_products.quantity_produced إذا كان المنتج له رقم تشغيلة
+                if ($finishedProductId) {
+                    $currentFinishedProduct = $db->queryOne(
+                        "SELECT quantity_produced FROM finished_products WHERE id = ? FOR UPDATE",
+                        [$finishedProductId]
+                    );
+                    
+                    if ($currentFinishedProduct) {
+                        $currentQuantityProduced = (float)($currentFinishedProduct['quantity_produced'] ?? 0);
+                        $newQuantityProduced = round($currentQuantityProduced + $quantity, 3);
+                        
+                        $db->execute(
+                            "UPDATE finished_products SET quantity_produced = ? WHERE id = ?",
+                            [$newQuantityProduced, $finishedProductId]
+                        );
+                        
+                        error_log("returnProductsToMainWarehouse: Updated finished_products.quantity_produced - finished_product_id: $finishedProductId, current: $currentQuantityProduced, added: $quantity, new: $newQuantityProduced");
+                    }
+                }
+                
+                // تسجيل حركة المخزون
+                if (function_exists('recordInventoryMovement')) {
+                    recordInventoryMovement(
+                        $productId,
+                        $warehouseId,
+                        'in',
+                        $quantity,
+                        'return',
+                        $returnId,
+                        "إرجاع منتج من مرتجع رقم: {$return['return_number']} إلى المخزن الرئيسي",
+                        $approvedBy,
+                        $finishedProductId
+                    );
+                }
+            }
+            
+            // تسجيل في audit_logs
+            logAudit($approvedBy, 'return_to_inventory', 'returns', $returnId, null, [
+                'return_number' => $return['return_number'],
+                'items_count' => count($returnItems),
+                'warehouse_id' => $warehouseId,
+                'warehouse_type' => 'main',
+                'customer_id' => $return['customer_id'] ?? null,
+                'action' => 'returned_products_to_main_warehouse',
+                'details' => 'تم إرجاع جميع المنتجات المرتجعة إلى مخزن الشركة الرئيسي'
+            ]);
+            
+            if ($transactionStarted) {
+                $db->commit();
+            }
+            
+            return [
+                'success' => true,
+                'message' => 'تم إرجاع المنتجات إلى مخزن الشركة الرئيسي بنجاح',
+                'items_count' => count($returnItems)
+            ];
+            
+        } catch (Throwable $e) {
+            if ($transactionStarted) {
+                $db->rollback();
+            }
+            error_log("returnProductsToMainWarehouse error: " . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => 'حدث خطأ أثناء إرجاع المنتجات للمخزون: ' . $e->getMessage()
+            ];
+        }
+        
+    } catch (Throwable $e) {
+        error_log("returnProductsToMainWarehouse fatal error: " . $e->getMessage());
+        return [
+            'success' => false,
+            'message' => 'حدث خطأ غير متوقع: ' . $e->getMessage()
+        ];
+    }
+}
+
 // ============================================================================
 // 5. وظائف خصم مرتب المندوب
 // ============================================================================
@@ -1459,13 +1728,24 @@ function approveReturn(int $returnId, ?int $approvedBy = null, ?string $notes = 
     try {
         $db = db();
         
+        // الحصول على المستخدم الحالي للتحقق من دوره
+        $currentUser = getCurrentUser();
         if ($approvedBy === null) {
-            $currentUser = getCurrentUser();
             if (!$currentUser) {
                 return ['success' => false, 'message' => 'يجب تسجيل الدخول'];
             }
             $approvedBy = (int)$currentUser['id'];
+        } else {
+            // إذا تم تمرير approvedBy، نحتاج لجلب بيانات المستخدم للتحقق من دوره
+            $currentUser = $db->queryOne(
+                "SELECT id, role FROM users WHERE id = ?",
+                [$approvedBy]
+            );
         }
+        
+        // تحديد نوع المخزن بناءً على دور المستخدم
+        $userRole = strtolower($currentUser['role'] ?? '');
+        $isManager = ($userRole === 'manager');
         
         // جلب بيانات المرتجع
         $return = $db->queryOne(
@@ -1575,7 +1855,14 @@ function approveReturn(int $returnId, ?int $approvedBy = null, ?string $notes = 
             }
             
             // 3. إرجاع المنتجات للمخزون
-            $inventoryResult = returnProductsToVehicleInventory($returnId, $approvedBy);
+            // إذا كان المستخدم مديراً، إرجاع المنتجات إلى المخزن الرئيسي
+            // وإلا، إرجاعها إلى مخزن سيارة المندوب
+            if ($isManager) {
+                $inventoryResult = returnProductsToMainWarehouse($returnId, $approvedBy);
+            } else {
+                $inventoryResult = returnProductsToVehicleInventory($returnId, $approvedBy);
+            }
+            
             if (!$inventoryResult['success']) {
                 throw new RuntimeException('فشل إرجاع المنتجات للمخزون: ' . ($inventoryResult['message'] ?? 'خطأ غير معروف'));
             }
