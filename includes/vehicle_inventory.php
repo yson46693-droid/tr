@@ -2058,19 +2058,9 @@ function executeWarehouseTransferDirectly($transferId, $executedBy = null) {
                     throw new Exception($message);
                 }
             } else if ($batchId && ($fromWarehouse['warehouse_type'] ?? '') !== 'vehicle') {
-                $finishedProd = $db->queryOne(
-                    "SELECT quantity_produced FROM finished_products WHERE id = ?",
-                    [$batchId]
-                );
-                
-                if ($finishedProd) {
-                    $currentRemaining = (float)($finishedProd['quantity_produced'] ?? 0);
-                    $newRemaining = max(0.0, $currentRemaining - $requestedQuantity);
-                    $db->execute(
-                        "UPDATE finished_products SET quantity_produced = ? WHERE id = ?",
-                        [$newRemaining, $batchId]
-                    );
-                }
+                // لا نخصم الكمية هنا - تم الخصم بالفعل في recordInventoryMovement (السطر 2008)
+                // recordInventoryMovement يقوم بتحديث quantity_produced تلقائياً عند تسجيل حركة 'out'
+                // لذلك لا حاجة لخصم الكمية مرة أخرى هنا
             }
             
             // دخول إلى المخزن الوجهة
@@ -2672,20 +2662,9 @@ function approveWarehouseTransfer($transferId, $approvedBy = null) {
                     throw new Exception($message);
                 }
             } else if ($batchId && ($fromWarehouse['warehouse_type'] ?? '') !== 'vehicle') {
-                // إذا كان المخزن المصدر رئيسي (ليس سيارة) وهناك batch_id، خصم من quantity_produced
-                $finishedProd = $db->queryOne(
-                    "SELECT quantity_produced FROM finished_products WHERE id = ?",
-                    [$batchId]
-                );
-                
-                if ($finishedProd) {
-                    $currentRemaining = (float)($finishedProd['quantity_produced'] ?? 0);
-                    $newRemaining = max(0.0, $currentRemaining - $requestedQuantity);
-                    $db->execute(
-                        "UPDATE finished_products SET quantity_produced = ? WHERE id = ?",
-                        [$newRemaining, $batchId]
-                    );
-                }
+                // لا نخصم الكمية هنا - تم الخصم بالفعل في recordInventoryMovement (السطر 2546)
+                // recordInventoryMovement يقوم بتحديث quantity_produced تلقائياً عند تسجيل حركة 'out'
+                // لذلك لا حاجة لخصم الكمية مرة أخرى هنا
             }
             
             // دخول إلى المخزن الوجهة
