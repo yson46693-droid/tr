@@ -171,15 +171,18 @@ try {
 function handleGetHistory($currentUser): void
 {
     try {
-    $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
+        $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
         $customerType = isset($_GET['type']) ? trim($_GET['type']) : 'normal';
-    $isLocalCustomer = ($customerType === 'local');
-    
-    if ($customerId <= 0) {
+        $isLocalCustomer = ($customerType === 'local');
+        
+        // تسجيل للتشخيص
+        error_log("handleGetHistory: customer_id=$customerId, type=$customerType, isLocal=" . ($isLocalCustomer ? 'true' : 'false'));
+        
+        if ($customerId <= 0) {
             returnJsonResponse(['success' => false, 'message' => 'معرف العميل غير صالح'], 422);
-    }
-    
-    $db = db();
+        }
+        
+        $db = db();
     
     // Verify customer exists
     if ($isLocalCustomer) {
@@ -283,28 +286,48 @@ function getLocalCustomerPurchaseHistory($db, $customerId): array
             $batchSelect = "COALESCE(NULLIF(TRIM(ii.batch_number), ''), '') as batch_numbers, '' as batch_number_ids";
         }
         
+        // تسجيل للتشخيص
+        error_log("getLocalCustomerPurchaseHistory: Fetching history for customer_id=$customerId");
+        
+        // أولاً: التحقق من عدد الفواتير الموجودة لهذا العميل
+        $invoiceCount = $db->queryOne(
+            "SELECT COUNT(*) as cnt FROM local_invoices WHERE customer_id = ?",
+            [$customerId]
+        );
+        error_log("getLocalCustomerPurchaseHistory: Invoice count for customer_id=$customerId is " . ($invoiceCount['cnt'] ?? 0));
+        
+        // إذا لم تكن هناك فواتير، أرجع مصفوفة فارغة مباشرة
+        if (empty($invoiceCount) || (int)($invoiceCount['cnt'] ?? 0) === 0) {
+            error_log("getLocalCustomerPurchaseHistory: No invoices found for customer_id=$customerId, returning empty array");
+            return [];
+        }
+        
         $query = "SELECT 
-                    i.id as invoice_id,
-                    i.invoice_number,
-                    i.date as invoice_date,
-                    i.total_amount,
-                    i.paid_amount,
-                    i.status as invoice_status,
-                    ii.id as invoice_item_id,
-                    ii.product_id,
+            i.id as invoice_id,
+            i.invoice_number,
+            i.date as invoice_date,
+            i.total_amount,
+            i.paid_amount,
+            i.status as invoice_status,
+            ii.id as invoice_item_id,
+            ii.product_id,
             $productSelect,
             COALESCE(p.unit, 'قطعة') as unit,
-                    ii.quantity,
-                    ii.unit_price,
-                    ii.total_price,
+            ii.quantity,
+            ii.unit_price,
+            ii.total_price,
             $batchSelect
-                FROM local_invoices i
-                INNER JOIN local_invoice_items ii ON i.id = ii.invoice_id
-                LEFT JOIN products p ON ii.product_id = p.id
-                WHERE i.customer_id = ?
+        FROM local_invoices i
+        INNER JOIN local_invoice_items ii ON i.id = ii.invoice_id
+        LEFT JOIN products p ON ii.product_id = p.id
+        WHERE i.customer_id = ?
         ORDER BY i.date DESC, i.id DESC, ii.id ASC";
         
-        return $db->query($query, [$customerId]) ?: [];
+        $results = $db->query($query, [$customerId]) ?: [];
+        
+        error_log("getLocalCustomerPurchaseHistory: Found " . count($results) . " items for customer_id=$customerId");
+        
+        return $results;
         
     } catch (Throwable $e) {
         error_log('getLocalCustomerPurchaseHistory error: ' . $e->getMessage());
