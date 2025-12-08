@@ -447,84 +447,20 @@ $lang = isset($translations) ? $translations : [];
                                 </td>
                                 <td>
                                     <button type="button" 
-                                            class="btn btn-sm btn-success" 
+                                            class="btn btn-sm btn-success settle-credit-btn" 
                                             data-bs-toggle="modal" 
-                                            data-bs-target="#settleCreditModal<?php echo $customerType; ?>_<?php echo $customer['id']; ?>"
+                                            data-bs-target="#settleCreditModal"
+                                            data-customer-id="<?php echo $customer['id']; ?>"
+                                            data-customer-name="<?php echo htmlspecialchars($customer['name'] ?? ''); ?>"
+                                            data-customer-type="<?php echo htmlspecialchars($customerType); ?>"
+                                            data-customer-type-label="<?php echo htmlspecialchars($customerTypeLabel); ?>"
+                                            data-credit-amount="<?php echo $creditAmount; ?>"
+                                            data-credit-formatted="<?php echo formatCurrency($creditAmount); ?>"
                                             title="تسوية الرصيد الدائن">
                                         <i class="bi bi-cash-coin me-1"></i>تسوية الرصيد
                                     </button>
                                 </td>
                             </tr>
-                            
-                            <!-- Modal تسوية الرصيد -->
-                            <div class="modal fade" id="settleCreditModal<?php echo $customerType; ?>_<?php echo $customer['id']; ?>" tabindex="-1" aria-labelledby="settleCreditModalLabel<?php echo $customerType; ?>_<?php echo $customer['id']; ?>" aria-hidden="true">
-                                <div class="modal-dialog modal-dialog-scrollable">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title" id="settleCreditModalLabel<?php echo $customerType; ?>_<?php echo $customer['id']; ?>">
-                                                <i class="bi bi-cash-coin me-2"></i>تسوية رصيد دائن
-                                            </h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                        </div>
-                                        <form method="POST" id="settleCreditForm<?php echo $customerType; ?>_<?php echo $customer['id']; ?>">
-                                            <input type="hidden" name="action" value="settle_credit_balance">
-                                            <input type="hidden" name="customer_id" value="<?php echo $customer['id']; ?>">
-                                            <input type="hidden" name="customer_type" value="<?php echo htmlspecialchars($customerType); ?>">
-                                            <div class="modal-body">
-                                                <div class="mb-3">
-                                                    <label class="form-label">اسم العميل</label>
-                                                    <input type="text" class="form-control" value="<?php echo htmlspecialchars($customer['name'] ?? ''); ?>" readonly style="background-color: #f8f9fa;">
-                                                </div>
-                                                <div class="mb-3">
-                                                    <label class="form-label">الرصيد الدائن الحالي</label>
-                                                    <input type="text" class="form-control" value="<?php echo formatCurrency($creditAmount); ?>" readonly style="background-color: #f8f9fa; font-weight: bold; color: #0d6efd;">
-                                                </div>
-                                                <div class="mb-3">
-                                                    <label class="form-label">نوع العميل</label>
-                                                    <input type="text" class="form-control" value="<?php echo htmlspecialchars($customerTypeLabel); ?>" readonly style="background-color: #f8f9fa;">
-                                                </div>
-                                                <div class="mb-3">
-                                                    <label for="settlementAmount<?php echo $customerType; ?>_<?php echo $customer['id']; ?>" class="form-label">
-                                                        مبلغ التسوية <span class="text-danger">*</span>
-                                                    </label>
-                                                    <div class="input-group">
-                                                        <span class="input-group-text">ج.م</span>
-                                                        <input type="number" 
-                                                               step="0.01" 
-                                                               min="0.01" 
-                                                               max="<?php echo $creditAmount; ?>"
-                                                               class="form-control" 
-                                                               id="settlementAmount<?php echo $customerType; ?>_<?php echo $customer['id']; ?>" 
-                                                               name="settlement_amount" 
-                                                               required 
-                                                               value="<?php echo $creditAmount; ?>"
-                                                               placeholder="أدخل مبلغ التسوية">
-                                                    </div>
-                                                    <small class="text-muted">الحد الأقصى: <?php echo formatCurrency($creditAmount); ?></small>
-                                                </div>
-                                                <div class="mb-3">
-                                                    <label for="settlementNotes<?php echo $customerType; ?>_<?php echo $customer['id']; ?>" class="form-label">ملاحظات (اختياري)</label>
-                                                    <textarea class="form-control" 
-                                                              id="settlementNotes<?php echo $customerType; ?>_<?php echo $customer['id']; ?>" 
-                                                              name="notes" 
-                                                              rows="3" 
-                                                              placeholder="أدخل أي ملاحظات إضافية..."></textarea>
-                                                </div>
-                                                <div class="alert alert-info">
-                                                    <i class="bi bi-info-circle me-2"></i>
-                                                    <strong>ملاحظة:</strong> سيتم خصم مبلغ التسوية من خزنة الشركة.
-                                                </div>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                                                <button type="submit" class="btn btn-success">
-                                                    <i class="bi bi-check-circle me-1"></i>تأكيد التسوية
-                                                </button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
@@ -533,23 +469,72 @@ $lang = isset($translations) ? $translations : [];
     </div>
 <?php endif; ?>
 
+<!-- Modal تسوية الرصيد - نموذج موحد -->
+<div class="modal fade" id="settleCreditModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-cash-coin me-2"></i>تسوية رصيد دائن
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="settleCreditForm">
+                <input type="hidden" name="action" value="settle_credit_balance">
+                <input type="hidden" name="customer_id" id="settleCustomerId">
+                <input type="hidden" name="customer_type" id="settleCustomerType">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم العميل</label>
+                        <input type="text" class="form-control" id="settleCustomerName" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">نوع العميل</label>
+                        <input type="text" class="form-control" id="settleCustomerTypeLabel" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الرصيد الدائن الحالي</label>
+                        <input type="text" class="form-control fw-bold text-primary" id="settleCreditDisplay" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">مبلغ التسوية <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">ج.م</span>
+                            <input type="number" step="0.01" min="0.01" class="form-control" 
+                                   id="settleAmount" name="settlement_amount" required>
+                        </div>
+                        <small class="text-muted" id="settleMaxHint"></small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">ملاحظات (اختياري)</label>
+                        <textarea class="form-control" name="notes" rows="2" id="settleNotes"></textarea>
+                    </div>
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>ملاحظة:</strong> سيتم خصم مبلغ التسوية من خزنة الشركة.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle me-1"></i>تأكيد التسوية
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // ========== وظيفة البحث في الجدول ==========
-    const searchInput = document.getElementById('customerSearchInput');
-    const clearSearchBtn = document.getElementById('clearSearchBtn');
-    const customersTable = document.getElementById('customersTable');
-    const customersTableBody = document.getElementById('customersTableBody');
-    const visibleCountBadge = document.getElementById('visibleCountBadge');
-    const totalCountBadge = document.getElementById('totalCountBadge');
+    var searchInput = document.getElementById('customerSearchInput');
+    var clearSearchBtn = document.getElementById('clearSearchBtn');
+    var customersTableBody = document.getElementById('customersTableBody');
+    var visibleCountBadge = document.getElementById('visibleCountBadge');
     
     if (searchInput && customersTableBody) {
-        // البحث عند الكتابة
-        searchInput.addEventListener('input', function() {
-            filterTable();
-        });
-        
-        // البحث عند الضغط على Enter
+        searchInput.addEventListener('input', filterTable);
         searchInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -557,7 +542,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // زر مسح البحث
         if (clearSearchBtn) {
             clearSearchBtn.addEventListener('click', function() {
                 searchInput.value = '';
@@ -567,23 +551,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         function filterTable() {
-            const searchTerm = searchInput.value.trim().toLowerCase();
-            const rows = customersTableBody.querySelectorAll('tr');
-            let visibleCount = 0;
+            var searchTerm = searchInput.value.trim().toLowerCase();
+            var rows = customersTableBody.querySelectorAll('tr:not(.no-results-row)');
+            var visibleCount = 0;
             
             rows.forEach(function(row) {
-                // جلب النص من جميع الخلايا في الصف (باستثناء أزرار الإجراءات)
-                const cells = row.querySelectorAll('td');
-                let rowText = '';
-                
+                var cells = row.querySelectorAll('td');
+                var rowText = '';
                 cells.forEach(function(cell, index) {
-                    // تخطي عمود الإجراءات (آخر عمود)
                     if (index < cells.length - 1) {
-                        rowText += ' ' + (cell.textContent || cell.innerText || '').toLowerCase();
+                        rowText += ' ' + (cell.textContent || '').toLowerCase();
                     }
                 });
                 
-                // البحث في النص
                 if (searchTerm === '' || rowText.includes(searchTerm)) {
                     row.style.display = '';
                     visibleCount++;
@@ -592,60 +572,69 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
             
-            // تحديث العداد
             if (visibleCountBadge) {
-                visibleCountBadge.textContent = visibleCount.toLocaleString('ar-EG');
+                visibleCountBadge.textContent = visibleCount;
             }
             
-            // إظهار/إخفاء زر المسح
             if (clearSearchBtn) {
-                if (searchTerm.length > 0) {
-                    clearSearchBtn.style.display = 'block';
-                } else {
-                    clearSearchBtn.style.display = 'none';
-                }
-            }
-            
-            // إظهار رسالة إذا لم توجد نتائج
-            let noResultsRow = customersTableBody.querySelector('tr.no-results-row');
-            if (visibleCount === 0 && searchTerm.length > 0) {
-                if (!noResultsRow) {
-                    noResultsRow = document.createElement('tr');
-                    noResultsRow.className = 'no-results-row';
-                    noResultsRow.innerHTML = `
-                        <td colspan="9" class="text-center py-5">
-                            <i class="bi bi-search text-muted" style="font-size: 3rem;"></i>
-                            <p class="text-muted mt-3 mb-0">لم يتم العثور على نتائج للبحث: "<strong>${searchTerm}</strong>"</p>
-                            <small class="text-muted">جرب البحث بكلمات مختلفة</small>
-                        </td>
-                    `;
-                    customersTableBody.appendChild(noResultsRow);
-                }
-            } else if (noResultsRow) {
-                noResultsRow.remove();
+                clearSearchBtn.style.display = searchTerm.length > 0 ? 'block' : 'none';
             }
         }
     }
     
-    // ========== التحقق من مبلغ التسوية قبل الإرسال ==========
-    const settleForms = document.querySelectorAll('[id^="settleCreditForm"]');
-    settleForms.forEach(function(form) {
-        form.addEventListener('submit', function(e) {
-            const formId = form.id;
-            // استخراج المعرف من formId (مثل: settleCreditFormrep_123 أو settleCreditFormlocal_456)
-            const parts = formId.replace('settleCreditForm', '').split('_');
-            const customerId = parts.length > 1 ? parts[1] : parts[0];
-            const customerType = parts.length > 1 ? parts[0] : 'rep';
-            const amountInputId = 'settlementAmount' + customerType + '_' + customerId;
-            const amountInput = document.getElementById(amountInputId);
+    // ========== معالج نموذج التسوية الموحد ==========
+    var settleCreditModal = document.getElementById('settleCreditModal');
+    var currentMaxAmount = 0;
+    
+    if (settleCreditModal) {
+        // ملء بيانات النموذج عند فتحه
+        settleCreditModal.addEventListener('show.bs.modal', function(event) {
+            var button = event.relatedTarget;
+            if (!button) return;
             
-            if (!amountInput) {
-                console.error('Amount input not found:', amountInputId);
-                return;
-            }
+            var customerId = button.getAttribute('data-customer-id');
+            var customerName = button.getAttribute('data-customer-name');
+            var customerType = button.getAttribute('data-customer-type');
+            var customerTypeLabel = button.getAttribute('data-customer-type-label');
+            var creditAmount = parseFloat(button.getAttribute('data-credit-amount')) || 0;
+            var creditFormatted = button.getAttribute('data-credit-formatted');
             
-            const maxAmount = parseFloat(amountInput.getAttribute('max'));
-            const amount = parseFloat(amountInput.value);
+            currentMaxAmount = creditAmount;
+            
+            // ملء الحقول
+            document.getElementById('settleCustomerId').value = customerId;
+            document.getElementById('settleCustomerType').value = customerType;
+            document.getElementById('settleCustomerName').value = customerName;
+            document.getElementById('settleCustomerTypeLabel').value = customerTypeLabel;
+            document.getElementById('settleCreditDisplay').value = creditFormatted;
+            
+            var amountInput = document.getElementById('settleAmount');
+            amountInput.value = creditAmount.toFixed(2);
+            amountInput.max = creditAmount;
+            
+            document.getElementById('settleMaxHint').textContent = 'الحد الأقصى: ' + creditFormatted;
+            document.getElementById('settleNotes').value = '';
+        });
+        
+        // تنظيف عند الإغلاق
+        settleCreditModal.addEventListener('hidden.bs.modal', function() {
+            document.getElementById('settleCustomerId').value = '';
+            document.getElementById('settleCustomerType').value = '';
+            document.getElementById('settleCustomerName').value = '';
+            document.getElementById('settleCustomerTypeLabel').value = '';
+            document.getElementById('settleCreditDisplay').value = '';
+            document.getElementById('settleAmount').value = '';
+            document.getElementById('settleNotes').value = '';
+            currentMaxAmount = 0;
+        });
+    }
+    
+    // ========== التحقق من النموذج قبل الإرسال ==========
+    var settleForm = document.getElementById('settleCreditForm');
+    if (settleForm) {
+        settleForm.addEventListener('submit', function(e) {
+            var amountInput = document.getElementById('settleAmount');
+            var amount = parseFloat(amountInput.value) || 0;
             
             if (amount <= 0) {
                 e.preventDefault();
@@ -654,108 +643,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
             
-            if (amount > maxAmount) {
+            if (amount > currentMaxAmount) {
                 e.preventDefault();
-                alert('مبلغ التسوية (' + amount.toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م) يتجاوز الرصيد الدائن المتاح (' + maxAmount.toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م).');
+                alert('مبلغ التسوية يتجاوز الرصيد الدائن المتاح.');
                 amountInput.focus();
                 return false;
             }
             
-            // تأكيد قبل الإرسال
-            if (!confirm('هل أنت متأكد من تسوية الرصيد الدائن؟ سيتم خصم المبلغ من خزنة الشركة.')) {
+            if (!confirm('هل أنت متأكد من تسوية الرصيد الدائن؟\nسيتم خصم المبلغ من خزنة الشركة.')) {
                 e.preventDefault();
                 return false;
             }
         });
-    });
-    
-    // ========== إصلاح جذري للنموذج على الموبايل ==========
-    const settleModals = document.querySelectorAll('[id^="settleCreditModal"]');
-    settleModals.forEach(function(modal) {
-        // عند فتح النموذج
-        modal.addEventListener('show.bs.modal', function() {
-            if (window.innerWidth <= 576) {
-                // على الموبايل: ضبط البنية بشكل صحيح
-                const modalDialog = modal.querySelector('.modal-dialog');
-                const modalContent = modal.querySelector('.modal-content');
-                const modalBody = modal.querySelector('.modal-body');
-                const modalFooter = modal.querySelector('.modal-footer');
-                
-                if (modalDialog) {
-                    modalDialog.style.maxHeight = 'calc(100vh - 1rem)';
-                    modalDialog.style.margin = '0.5rem auto';
-                }
-                
-                if (modalContent) {
-                    modalContent.style.maxHeight = 'calc(100vh - 1rem)';
-                    modalContent.style.display = 'flex';
-                    modalContent.style.flexDirection = 'column';
-                    modalContent.style.height = 'auto';
-                }
-                
-                if (modalBody) {
-                    modalBody.style.overflowY = 'auto';
-                    modalBody.style.overflowX = 'hidden';
-                    modalBody.style.flex = '1 1 auto';
-                    modalBody.style.minHeight = '0';
-                    modalBody.style.webkitOverflowScrolling = 'touch';
-                }
-                
-                if (modalFooter) {
-                    modalFooter.style.flexShrink = '0';
-                    modalFooter.style.marginTop = 'auto';
-                }
-            }
-        });
-        
-        // بعد فتح النموذج بالكامل
-        modal.addEventListener('shown.bs.modal', function() {
-            if (window.innerWidth <= 576) {
-                // التأكد من أن النموذج في الموضع الصحيح
-                const modalDialog = modal.querySelector('.modal-dialog');
-                if (modalDialog) {
-                    modalDialog.style.transform = 'none';
-                }
-                
-                // التأكد من أن الأزرار مرئية - تمرير إلى الأسفل إذا لزم الأمر
-                setTimeout(function() {
-                    const modalFooter = modal.querySelector('.modal-footer');
-                    if (modalFooter) {
-                        const rect = modalFooter.getBoundingClientRect();
-                        const isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
-                        if (!isVisible) {
-                            modalFooter.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                        }
-                    }
-                }, 100);
-            }
-        });
-        
-        // عند إغلاق النموذج - تنظيف
-        modal.addEventListener('hidden.bs.modal', function() {
-            const modalDialog = modal.querySelector('.modal-dialog');
-            const modalContent = modal.querySelector('.modal-content');
-            const modalBody = modal.querySelector('.modal-body');
-            const modalFooter = modal.querySelector('.modal-footer');
-            
-            if (modalDialog) modalDialog.style.cssText = '';
-            if (modalContent) modalContent.style.cssText = '';
-            if (modalBody) modalBody.style.cssText = '';
-            if (modalFooter) modalFooter.style.cssText = '';
-        });
-    });
-    
-    // ========== تحسينات إضافية ==========
-    // إضافة تأثير hover على صفوف الجدول
-    const tableRows = document.querySelectorAll('#customersTableBody tr');
-    tableRows.forEach(function(row) {
-        row.addEventListener('mouseenter', function() {
-            this.style.backgroundColor = '#f8f9fa';
-        });
-        row.addEventListener('mouseleave', function() {
-            this.style.backgroundColor = '';
-        });
-    });
+    }
 });
 </script>
 
@@ -793,79 +693,11 @@ document.addEventListener('DOMContentLoaded', function() {
     background-color: #fff3cd !important;
 }
 
-/* إصلاح مشكلة النموذج على الموبايل - حل جذري */
+/* تحسين النموذج على الموبايل */
 @media (max-width: 576px) {
-    /* ضبط النموذج على الموبايل */
-    [id^="settleCreditModal"] .modal-dialog {
-        margin: 0.5rem auto !important;
-        max-width: calc(100% - 1rem) !important;
-        height: auto !important;
-        min-height: auto !important;
-        max-height: calc(100vh - 1rem) !important;
-        display: flex !important;
-        flex-direction: column !important;
-        position: relative !important;
-    }
-    
-    /* جعل المحتوى قابل للتمرير */
-    [id^="settleCreditModal"] .modal-content {
-        border-radius: 0.5rem;
-        max-height: calc(100vh - 1rem) !important;
-        height: auto !important;
-        display: flex !important;
-        flex-direction: column !important;
-        overflow: hidden !important;
-        position: relative !important;
-    }
-    
-    /* جعل modal-body قابل للتمرير - هذا هو المفتاح */
-    [id^="settleCreditModal"] .modal-body {
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        flex: 1 1 auto !important;
-        min-height: 0 !important;
-        -webkit-overflow-scrolling: touch !important;
-        padding: 1rem !important;
-    }
-    
-    /* التأكد من أن modal-footer مرئي وثابت في الأسفل */
-    [id^="settleCreditModal"] .modal-footer {
-        flex-shrink: 0 !important;
-        flex-grow: 0 !important;
-        border-top: 1px solid #dee2e6 !important;
-        padding: 0.75rem 1rem !important;
-        background-color: #fff !important;
-        margin-top: auto !important;
-        position: relative !important;
-        z-index: 10 !important;
-    }
-    
-    /* التأكد من أن modal-header ثابت في الأعلى */
-    [id^="settleCreditModal"] .modal-header {
-        flex-shrink: 0 !important;
-        flex-grow: 0 !important;
-        padding: 1rem !important;
-        border-bottom: 1px solid #dee2e6 !important;
-    }
-    
-    /* إصلاح موضع النموذج */
-    [id^="settleCreditModal"].show {
-        display: block !important;
-        padding-left: 0 !important;
-        padding-right: 0 !important;
-    }
-    
-    [id^="settleCreditModal"].show .modal-dialog {
-        transform: none !important;
-        margin-top: 0.5rem !important;
-        margin-bottom: 0.5rem !important;
-    }
-}
-
-/* تحسينات للشاشات الكبيرة */
-@media (min-width: 577px) {
-    [id^="settleCreditModal"] .modal-dialog {
-        max-width: 500px;
+    #settleCreditModal .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
     }
 }
 </style>
