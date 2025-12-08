@@ -1799,38 +1799,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                             
                             $quantityProduced = (float)($factoryProduct['quantity_produced'] ?? 0);
+                            $batchNumber = $factoryProduct['batch_number'] ?? '';
                             
-                            // حساب الكمية المباعة
-                            $soldQuantity = $db->queryOne(
-                                "SELECT COALESCE(SUM(si.quantity), 0) AS sold_qty
-                                 FROM sale_items si
-                                 INNER JOIN sales s ON si.sale_id = s.id
-                                 WHERE si.batch_id = ? AND s.status IN ('approved', 'completed')",
-                                [$batchId]
-                            );
-                            $soldQty = (float)($soldQuantity['sold_qty'] ?? 0);
+                            // حساب الكمية المتاحة (نفس منطق صفحة منتجات الشركة)
+                            // ملاحظة: quantity_produced يتم تحديثه تلقائياً عند المبيعات وطلبات الشحن
+                            // (يتم خصم الكمية منه عبر recordInventoryMovement)
+                            // لذلك quantity_produced يحتوي بالفعل على الكمية المتبقية بعد خصم المبيعات وطلبات الشحن
+                            // نحتاج فقط خصم طلبات العملاء المعلقة (pendingQty)
+                            $pendingQty = 0;
                             
-                            // حساب الكمية المحجوزة في طلبات النقل
-                            $pendingTransfers = $db->queryOne(
-                                "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
-                                 FROM warehouse_transfer_items wti
-                                 INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
-                                 WHERE wti.batch_id = ? AND wt.status = 'pending'",
-                                [$batchId]
-                            );
-                            $pendingQty = (float)($pendingTransfers['pending_quantity'] ?? 0);
+                            if (!empty($batchNumber)) {
+                                try {
+                                    // حساب الكمية المحجوزة في طلبات العملاء المعلقة (نفس منطق company_products.php)
+                                    $pending = $db->queryOne(
+                                        "SELECT COALESCE(SUM(oi.quantity), 0) AS pending_quantity
+                                         FROM customer_order_items oi
+                                         INNER JOIN customer_orders co ON oi.order_id = co.id
+                                         INNER JOIN finished_products fp2 ON fp2.product_id = oi.product_id AND fp2.batch_number = ?
+                                         WHERE co.status = 'pending'",
+                                        [$batchNumber]
+                                    );
+                                    $pendingQty = (float)($pending['pending_quantity'] ?? 0);
+                                } catch (Throwable $calcError) {
+                                    error_log('pos: error calculating pending quantity for batch ' . $batchNumber . ': ' . $calcError->getMessage());
+                                }
+                            }
                             
-                            // حساب الكمية المحجوزة في طلبات الشحن المعلقة
-                            $pendingShipping = $db->queryOne(
-                                "SELECT COALESCE(SUM(soi.quantity), 0) AS pending_quantity
-                                 FROM shipping_company_order_items soi
-                                 INNER JOIN shipping_company_orders sco ON soi.order_id = sco.id
-                                 WHERE soi.batch_id = ? AND sco.status IN ('assigned', 'in_transit')",
-                                [$batchId]
-                            );
-                            $pendingShippingQty = (float)($pendingShipping['pending_quantity'] ?? 0);
-                            
-                            $availableQuantity = max(0, $quantityProduced - $soldQty - $pendingQty - $pendingShippingQty);
+                            // حساب الكمية المتاحة (نفس منطق company_products.php)
+                            // quantity_produced يتم تحديثه تلقائياً عند المبيعات وطلبات الشحن
+                            // لذلك نحتاج فقط خصم طلبات العملاء المعلقة (pendingQty)
+                            $availableQuantity = max(0, $quantityProduced - $pendingQty);
                             
                             if ($availableQuantity < $requestedQuantity) {
                                 $productName = $factoryProduct['name'] ?? 'غير محدد';

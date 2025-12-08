@@ -1389,6 +1389,12 @@ foreach ($users as $user) {
         }
         
         // فقط إذا لم يكن هناك راتب موجود، أنشئ واحداً جديداً
+        // التحقق من صحة الشهر والسنة قبل الإنشاء - حماية من التواريخ الصفرية
+        if ($selectedMonth < 1 || $selectedMonth > 12 || $selectedYear < 2000 || $selectedYear > 2100) {
+            error_log("Skipping salary creation for user {$userId}: Invalid month ({$selectedMonth}) or year ({$selectedYear})");
+            continue; // تخطي إنشاء سجل بتاريخ خاطئ
+        }
+        
         $hourlyRate = cleanFinancialValue($user['hourly_rate'] ?? 0);
         // حساب الساعات المكتملة فقط (التي تم تسجيل الانصراف لها)
         require_once __DIR__ . '/../../includes/salary_calculator.php';
@@ -1416,65 +1422,46 @@ foreach ($users as $user) {
             $hasCollectionsBonusColumn = !empty($db->queryOne("SHOW COLUMNS FROM salaries LIKE 'collections_bonus'"));
             $hasCreatedByColumn = !empty($db->queryOne("SHOW COLUMNS FROM salaries LIKE 'created_by'"));
             
-            if ($hasYearColumn) {
-                if ($hasBonusColumn && $hasCollectionsBonusColumn) {
-                    if ($hasCreatedByColumn) {
-                        $db->execute(
-                            "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, {$bonusColumnName}, collections_bonus, deductions, total_amount, status, created_by) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'calculated', ?)",
-                            [$userId, $selectedMonth, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $collectionsBonus, 0, $totalAmount, $currentUser['id']]
-                        );
-                    } else {
-                        $db->execute(
-                            "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, {$bonusColumnName}, collections_bonus, deductions, total_amount, status) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'calculated')",
-                            [$userId, $selectedMonth, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $collectionsBonus, 0, $totalAmount]
-                        );
-                    }
+            // إذا لم يكن عمود year موجوداً، أضفه تلقائياً
+            if (!$hasYearColumn) {
+                try {
+                    $db->execute("ALTER TABLE salaries ADD COLUMN year INT(4) DEFAULT NULL AFTER month");
+                    $hasYearColumn = true;
+                    error_log("Added missing 'year' column to salaries table");
+                } catch (Exception $alterEx) {
+                    // إذا فشل إضافة العمود، سجل الخطأ واستمر
+                    error_log("Could not add year column: " . $alterEx->getMessage());
+                }
+            }
+            
+            // دائماً استخدم الإدراج مع year لضمان صحة البيانات
+            if ($hasBonusColumn && $hasCollectionsBonusColumn) {
+                if ($hasCreatedByColumn) {
+                    $db->execute(
+                        "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, {$bonusColumnName}, collections_bonus, deductions, total_amount, status, created_by) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'calculated', ?)",
+                        [$userId, $selectedMonth, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $collectionsBonus, 0, $totalAmount, $currentUser['id']]
+                    );
                 } else {
-                    if ($hasCreatedByColumn) {
-                        $db->execute(
-                            "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, status, created_by) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'calculated', ?)",
-                            [$userId, $selectedMonth, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $totalAmount, $currentUser['id']]
-                        );
-                    } else {
-                        $db->execute(
-                            "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, status) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'calculated')",
-                            [$userId, $selectedMonth, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $totalAmount]
-                        );
-                    }
+                    $db->execute(
+                        "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, {$bonusColumnName}, collections_bonus, deductions, total_amount, status) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'calculated')",
+                        [$userId, $selectedMonth, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $collectionsBonus, 0, $totalAmount]
+                    );
                 }
             } else {
-                if ($hasBonusColumn && $hasCollectionsBonusColumn) {
-                    if ($hasCreatedByColumn) {
-                        $db->execute(
-                            "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, {$bonusColumnName}, collections_bonus, deductions, total_amount, status, created_by) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'calculated', ?)",
-                            [$userId, $selectedMonth, $hourlyRate, $monthHours, $baseAmount, 0, $collectionsBonus, 0, $totalAmount, $currentUser['id']]
-                        );
-                    } else {
-                        $db->execute(
-                            "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, {$bonusColumnName}, collections_bonus, deductions, total_amount, status) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'calculated')",
-                            [$userId, $selectedMonth, $hourlyRate, $monthHours, $baseAmount, 0, $collectionsBonus, 0, $totalAmount]
-                        );
-                    }
+                if ($hasCreatedByColumn) {
+                    $db->execute(
+                        "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, status, created_by) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'calculated', ?)",
+                        [$userId, $selectedMonth, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $totalAmount, $currentUser['id']]
+                    );
                 } else {
-                    if ($hasCreatedByColumn) {
-                        $db->execute(
-                            "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, deductions, total_amount, status, created_by) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, 'calculated', ?)",
-                            [$userId, $selectedMonth, $hourlyRate, $monthHours, $baseAmount, 0, $totalAmount, $currentUser['id']]
-                        );
-                    } else {
-                        $db->execute(
-                            "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, deductions, total_amount, status) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, 'calculated')",
-                            [$userId, $selectedMonth, $hourlyRate, $monthHours, $baseAmount, 0, $totalAmount]
-                        );
-                    }
+                    $db->execute(
+                        "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, status) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'calculated')",
+                        [$userId, $selectedMonth, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $totalAmount]
+                    );
                 }
             }
             

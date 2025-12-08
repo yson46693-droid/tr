@@ -1107,6 +1107,15 @@ function applyReturnSalaryDeduction(int $returnId, ?int $salesRepId = null, ?int
             $salaryId = (int)$existingSalary['id'];
             error_log("Found existing salary record with ID: {$salaryId}");
         } else {
+                // التحقق من صحة الشهر والسنة قبل الإنشاء - حماية من التواريخ الصفرية
+                if ($month < 1 || $month > 12 || $year < 2000 || $year > 2100) {
+                    error_log("Skipping salary creation for sales rep {$salesRepId}: Invalid month ({$month}) or year ({$year})");
+                    return [
+                        'success' => false,
+                        'message' => 'تاريخ الراتب غير صالح. الشهر: ' . $month . ', السنة: ' . $year
+                    ];
+                }
+                
                 // إنشاء سجل راتب جديد مع قيم افتراضية
                 $totalHours = 0;
                 $baseAmount = 0;
@@ -1114,74 +1123,45 @@ function applyReturnSalaryDeduction(int $returnId, ?int $salesRepId = null, ?int
                 $deductions = 0;
                 $totalAmount = 0;
                 
-                if ($hasYearColumn) {
-                    if ($hasBonusColumn) {
-                        if ($hasCreatedByColumn) {
-                            $db->execute(
-                                "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, created_by, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                                [$salesRepId, $month, $year, $hourlyRate, $totalHours, $baseAmount, $bonus, $deductions, $totalAmount, $createdBy]
-                            );
-                        } else {
-                            $db->execute(
-                                "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                                [$salesRepId, $month, $year, $hourlyRate, $totalHours, $baseAmount, $bonus, $deductions, $totalAmount]
-                            );
-                        }
+                // إذا لم يكن عمود year موجوداً، أضفه تلقائياً
+                if (!$hasYearColumn) {
+                    try {
+                        $db->execute("ALTER TABLE salaries ADD COLUMN year INT(4) DEFAULT NULL AFTER month");
+                        $hasYearColumn = true;
+                        error_log("Added missing 'year' column to salaries table");
+                    } catch (Exception $alterEx) {
+                        error_log("Could not add year column: " . $alterEx->getMessage());
+                    }
+                }
+                
+                // دائماً استخدم الإدراج مع year لضمان صحة البيانات
+                if ($hasBonusColumn) {
+                    if ($hasCreatedByColumn) {
+                        $db->execute(
+                            "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, created_by, status) 
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                            [$salesRepId, $month, $year, $hourlyRate, $totalHours, $baseAmount, $bonus, $deductions, $totalAmount, $createdBy]
+                        );
                     } else {
-                        if ($hasCreatedByColumn) {
-                            $db->execute(
-                                "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, created_by, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                                [$salesRepId, $month, $year, $hourlyRate, $totalHours, $baseAmount, $deductions, $totalAmount, $createdBy]
-                            );
-                        } else {
-                            $db->execute(
-                                "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                                [$salesRepId, $month, $year, $hourlyRate, $totalHours, $baseAmount, $deductions, $totalAmount]
-                            );
-                        }
+                        $db->execute(
+                            "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, status) 
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                            [$salesRepId, $month, $year, $hourlyRate, $totalHours, $baseAmount, $bonus, $deductions, $totalAmount]
+                        );
                     }
                 } else {
-                    $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'month'");
-                    $monthType = $monthColumnCheck['Type'] ?? '';
-                    if (stripos($monthType, 'date') !== false) {
-                        $targetDate = sprintf('%04d-%02d-01', $year, $month);
-                        $monthValue = $targetDate;
+                    if ($hasCreatedByColumn) {
+                        $db->execute(
+                            "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, created_by, status) 
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                            [$salesRepId, $month, $year, $hourlyRate, $totalHours, $baseAmount, $deductions, $totalAmount, $createdBy]
+                        );
                     } else {
-                        $monthValue = $month;
-                    }
-                    
-                    if ($hasBonusColumn) {
-                        if ($hasCreatedByColumn) {
-                            $db->execute(
-                                "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, created_by, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                                [$salesRepId, $monthValue, $hourlyRate, $totalHours, $baseAmount, $bonus, $deductions, $totalAmount, $createdBy]
-                            );
-                        } else {
-                            $db->execute(
-                                "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                                [$salesRepId, $monthValue, $hourlyRate, $totalHours, $baseAmount, $bonus, $deductions, $totalAmount]
-                            );
-                        }
-                    } else {
-                        if ($hasCreatedByColumn) {
-                            $db->execute(
-                                "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, deductions, total_amount, created_by, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                                [$salesRepId, $monthValue, $hourlyRate, $totalHours, $baseAmount, $deductions, $totalAmount, $createdBy]
-                            );
-                        } else {
-                            $db->execute(
-                                "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, deductions, total_amount, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')",
-                                [$salesRepId, $monthValue, $hourlyRate, $totalHours, $baseAmount, $deductions, $totalAmount]
-                            );
-                        }
+                        $db->execute(
+                            "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, status) 
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                            [$salesRepId, $month, $year, $hourlyRate, $totalHours, $baseAmount, $deductions, $totalAmount]
+                        );
                     }
                 }
                 
