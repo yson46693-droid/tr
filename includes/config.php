@@ -136,7 +136,7 @@ define('CSRF_TOKEN_NAME', 'csrf_token');
 define('REQUEST_USAGE_MONITOR_ENABLED', true);
 define('REQUEST_USAGE_THRESHOLD_PER_USER', 4000); // الحد اليومي لكل مستخدم قبل إنشاء تنبيه
 define('REQUEST_USAGE_THRESHOLD_PER_IP', 30000);    // الحد اليومي لكل عنوان IP قبل إنشاء تنبيه
-define('REQUEST_USAGE_ALERT_WINDOW_MINUTES', 1440); // فترة المراقبة بالدقائق (افتراضياً يوم كامل)
+define('REQUEST_USAGE_ALERT_WINDOW_MINUTES', 720); // فترة المراقبة بالدقائق (افتراضياً نص يوم كامل)
 
 // إعدادات المسارات
 define('BASE_PATH', dirname(__DIR__));
@@ -323,39 +323,7 @@ function getCurrentLanguage() {
     return $_SESSION['language'] ?? DEFAULT_LANGUAGE;
 }
 
-// دالة مساعدة للحصول على رمز العملة بعد تنظيفه من 262145
-function getCurrencySymbol() {
-    $symbol = defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'ج.م';
-    // تنظيف رمز العملة من 262145
-    $symbol = str_replace('262145', '', $symbol);
-    $symbol = preg_replace('/262145\s*/', '', $symbol);
-    $symbol = preg_replace('/\s*262145/', '', $symbol);
-    $symbol = trim($symbol);
-    // إذا أصبح فارغاً بعد التنظيف، استخدم القيمة الافتراضية
-    if (empty($symbol)) {
-        $symbol = 'ج.م';
-    }
-    return $symbol;
-}
 
-// دالة مساعدة لتنسيق الأرقام
-function formatCurrency($amount, $allowNegative = true) {
-    // تنظيف القيمة باستخدام cleanFinancialValue
-    // السماح بالقيم السالبة افتراضياً لأنها تستخدم للرصيد الدائن للعملاء
-    $amount = cleanFinancialValue($amount, $allowNegative);
-    
-    // استخدام getCurrencySymbol للحصول على رمز العملة المنظف
-    $currencySymbol = function_exists('getCurrencySymbol') ? getCurrencySymbol() : (defined('CURRENCY_SYMBOL') ? CURRENCY_SYMBOL : 'ج.م');
-    
-    $formatted = number_format($amount, 2, '.', ',') . ' ' . $currencySymbol;
-    
-    // حذف أي آثار لـ 262145 من النص النهائي (حماية إضافية)
-    $formatted = str_replace('262145', '', $formatted);
-    $formatted = str_replace('262,145', '', $formatted);
-    $formatted = preg_replace('/\s+/', ' ', $formatted);
-    
-    return trim($formatted);
-}
 
 /**
  * دالة لتنظيف القيم المالية وضمان صحتها
@@ -613,7 +581,7 @@ if (!defined('ENABLE_DAILY_PACKAGING_ALERT')) {
     define('ENABLE_DAILY_PACKAGING_ALERT', true);
 }
 if (!defined('ENABLE_DAILY_CONSUMPTION_REPORT')) {
-    define('ENABLE_DAILY_CONSUMPTION_REPORT', false);
+    define('ENABLE_DAILY_CONSUMPTION_REPORT', true);
 }
 if (!defined('ENABLE_PAGE_LOADER')) {
     define('ENABLE_PAGE_LOADER', false);
