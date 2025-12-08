@@ -60,27 +60,77 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='جدول العملاء المحليين (منفصل عن عملاء المندوبين)'";
         
         try {
-            $db->connection->query($createTableSql);
-            error_log('Table local_customers created successfully');
+            // استخدام execute بدلاً من query مباشرة لمعالجة أفضل للأخطاء
+            $result = $db->connection->query($createTableSql);
+            
+            if ($result === false) {
+                $errorMsg = $db->connection->error ?: 'Unknown error';
+                throw new Exception('Table creation query failed: ' . $errorMsg);
+            }
+            
+            error_log('Table local_customers creation query executed');
+            
+            // التحقق من أن الجدول تم إنشاؤه فعلياً
+            $verifyTable = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+            if (empty($verifyTable)) {
+                // محاولة مرة أخرى بعد انتظار قصير
+                usleep(100000); // 0.1 ثانية
+                $verifyTable = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+                if (empty($verifyTable)) {
+                    throw new Exception('Table creation failed - table not found after creation. Database error: ' . ($db->connection->error ?: 'Unknown'));
+                }
+            }
+            
+            error_log('Table local_customers verified successfully');
             
             // محاولة إضافة foreign key constraint إذا كان جدول users موجوداً
             try {
                 $usersTableExists = $db->queryOne("SHOW TABLES LIKE 'users'");
                 if (!empty($usersTableExists)) {
                     // التحقق من وجود constraint مسبقاً
-                    $fkCheck = $db->queryOne("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'local_customers' AND CONSTRAINT_NAME = 'local_customers_ibfk_1'");
-                    if (empty($fkCheck)) {
-                        $db->connection->query("ALTER TABLE `local_customers` ADD CONSTRAINT `local_customers_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE");
-                        error_log('Foreign key constraint added to local_customers');
+                    try {
+                        $fkCheck = $db->queryOne("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'local_customers' AND CONSTRAINT_NAME = 'local_customers_ibfk_1'");
+                        if (empty($fkCheck)) {
+                            $fkResult = $db->connection->query("ALTER TABLE `local_customers` ADD CONSTRAINT `local_customers_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE");
+                            if ($fkResult) {
+                                error_log('Foreign key constraint added to local_customers');
+                            } else {
+                                error_log('Failed to add foreign key constraint: ' . $db->connection->error);
+                            }
+                        }
+                    } catch (Throwable $fkError) {
+                        error_log('Could not add foreign key constraint: ' . $fkError->getMessage());
+                        // لا نوقف العملية، الجدول موجود بدون constraint
                     }
                 }
             } catch (Throwable $fkError) {
-                error_log('Could not add foreign key constraint: ' . $fkError->getMessage());
-                // لا نوقف العملية، الجدول موجود بدون constraint
+                error_log('Error checking users table for FK: ' . $fkError->getMessage());
+                // لا نوقف العملية
             }
         } catch (Throwable $e) {
             error_log('Error creating local_customers table: ' . $e->getMessage());
+            error_log('SQL Error: ' . ($db->connection->error ?? 'No error message'));
+            error_log('SQL Error Number: ' . ($db->connection->errno ?? 'Unknown'));
+            // إظهار رسالة خطأ واضحة للمستخدم
+            die('<div class="alert alert-danger">
+                <h5>خطأ في إنشاء جدول العملاء المحليين</h5>
+                <p>يرجى التحقق من:</p>
+                <ul>
+                    <li>صلاحيات قاعدة البيانات (CREATE TABLE)</li>
+                    <li>اتصال قاعدة البيانات</li>
+                    <li>سجلات الأخطاء في الخادم</li>
+                </ul>
+                <p><strong>تفاصيل الخطأ:</strong> ' . htmlspecialchars($e->getMessage()) . '</p>
+                <p><strong>خطأ قاعدة البيانات:</strong> ' . htmlspecialchars($db->connection->error ?? 'غير متاح') . '</p>
+            </div>');
         }
+    }
+    
+    // التحقق النهائي من وجود الجدول قبل المتابعة
+    $finalCheck = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+    if (empty($finalCheck)) {
+        error_log('CRITICAL: local_customers table does not exist after creation attempt');
+        die('<div class="alert alert-danger">خطأ: جدول العملاء المحليين غير موجود. يرجى التحقق من قاعدة البيانات أو الاتصال بالدعم الفني.</div>');
     }
     
     // إنشاء جدول local_collections إذا لم يكن موجوداً
@@ -665,9 +715,48 @@ if ($search) {
     $statsParams[] = $searchParam;
 }
 
-$totalResult = $db->queryOne($countSql, $countParams);
-$totalCustomers = $totalResult['total'] ?? 0;
-$totalPages = ceil($totalCustomers / $perPage);
+// التحقق النهائي من وجود الجدول قبل تنفيذ الاستعلامات
+$tableCheck = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+if (empty($tableCheck)) {
+    error_log('CRITICAL: local_customers table does not exist before query execution');
+    die('<div class="alert alert-danger">خطأ: جدول العملاء المحليين غير موجود. يرجى التحقق من قاعدة البيانات أو الاتصال بالدعم الفني.</div>');
+}
+
+try {
+    $totalResult = $db->queryOne($countSql, $countParams);
+    $totalCustomers = $totalResult['total'] ?? 0;
+    $totalPages = ceil($totalCustomers / $perPage);
+} catch (Exception $e) {
+    error_log('Error executing count query: ' . $e->getMessage());
+    // محاولة إنشاء الجدول مرة أخرى
+    try {
+        $createTableSql = "CREATE TABLE IF NOT EXISTS `local_customers` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `name` varchar(100) NOT NULL,
+            `phone` varchar(20) DEFAULT NULL,
+            `address` text DEFAULT NULL,
+            `balance` decimal(15,2) DEFAULT 0.00 COMMENT 'رصيد العميل (موجب = دين، سالب = رصيد دائن)',
+            `status` enum('active','inactive') DEFAULT 'active',
+            `created_by` int(11) NOT NULL COMMENT 'المستخدم الذي أضاف العميل',
+            `latitude` decimal(10,8) DEFAULT NULL COMMENT 'خط العرض',
+            `longitude` decimal(11,8) DEFAULT NULL COMMENT 'خط الطول',
+            `location_captured_at` datetime DEFAULT NULL COMMENT 'تاريخ تحديد الموقع',
+            `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `created_by` (`created_by`),
+            KEY `name` (`name`),
+            KEY `status` (`status`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='جدول العملاء المحليين (منفصل عن عملاء المندوبين)'";
+        $db->connection->query($createTableSql);
+        // إعادة المحاولة
+        $totalResult = $db->queryOne($countSql, $countParams);
+        $totalCustomers = $totalResult['total'] ?? 0;
+        $totalPages = ceil($totalCustomers / $perPage);
+    } catch (Exception $createError) {
+        die('<div class="alert alert-danger">خطأ في إنشاء جدول العملاء المحليين. يرجى التحقق من صلاحيات قاعدة البيانات.<br>تفاصيل الخطأ: ' . htmlspecialchars($createError->getMessage()) . '</div>');
+    }
+}
 
 $sql .= " ORDER BY c.name ASC LIMIT ? OFFSET ?";
 $params[] = $perPage;
