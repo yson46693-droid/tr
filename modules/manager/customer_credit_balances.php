@@ -458,7 +458,7 @@ $lang = isset($translations) ? $translations : [];
                             
                             <!-- Modal تسوية الرصيد -->
                             <div class="modal fade" id="settleCreditModal<?php echo $customerType; ?>_<?php echo $customer['id']; ?>" tabindex="-1" aria-labelledby="settleCreditModalLabel<?php echo $customerType; ?>_<?php echo $customer['id']; ?>" aria-hidden="true">
-                                <div class="modal-dialog">
+                                <div class="modal-dialog modal-dialog-scrollable">
                                     <div class="modal-content">
                                         <div class="modal-header">
                                             <h5 class="modal-title" id="settleCreditModalLabel<?php echo $customerType; ?>_<?php echo $customer['id']; ?>">
@@ -669,6 +669,66 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // ========== إصلاح جذري للنموذج على الموبايل ==========
+    const settleModals = document.querySelectorAll('[id^="settleCreditModal"]');
+    settleModals.forEach(function(modal) {
+        // عند فتح النموذج
+        modal.addEventListener('show.bs.modal', function() {
+            // التأكد من إزالة أي styles قد تسبب مشاكل
+            const modalDialog = modal.querySelector('.modal-dialog');
+            const modalContent = modal.querySelector('.modal-content');
+            const modalBody = modal.querySelector('.modal-body');
+            
+            if (window.innerWidth <= 576) {
+                // على الموبايل: ضبط الارتفاع والتمرير
+                if (modalDialog) {
+                    modalDialog.style.maxHeight = 'calc(100vh - 1rem)';
+                }
+                if (modalContent) {
+                    modalContent.style.maxHeight = 'calc(100vh - 1rem)';
+                    modalContent.style.display = 'flex';
+                    modalContent.style.flexDirection = 'column';
+                }
+                if (modalBody) {
+                    modalBody.style.overflowY = 'auto';
+                    modalBody.style.flex = '1 1 auto';
+                    modalBody.style.maxHeight = 'calc(100vh - 200px)';
+                    modalBody.style.webkitOverflowScrolling = 'touch';
+                }
+            }
+        });
+        
+        // بعد فتح النموذج بالكامل
+        modal.addEventListener('shown.bs.modal', function() {
+            if (window.innerWidth <= 576) {
+                // التأكد من أن الأزرار مرئية
+                const modalFooter = modal.querySelector('.modal-footer');
+                if (modalFooter) {
+                    modalFooter.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+                
+                // التأكد من أن النموذج في الموضع الصحيح
+                const modalDialog = modal.querySelector('.modal-dialog');
+                if (modalDialog) {
+                    modalDialog.style.transform = 'none';
+                    modalDialog.style.marginTop = '0.5rem';
+                    modalDialog.style.marginBottom = '0.5rem';
+                }
+            }
+        });
+        
+        // عند إغلاق النموذج - تنظيف
+        modal.addEventListener('hidden.bs.modal', function() {
+            const modalDialog = modal.querySelector('.modal-dialog');
+            const modalContent = modal.querySelector('.modal-content');
+            const modalBody = modal.querySelector('.modal-body');
+            
+            if (modalDialog) modalDialog.style.cssText = '';
+            if (modalContent) modalContent.style.cssText = '';
+            if (modalBody) modalBody.style.cssText = '';
+        });
+    });
+    
     // ========== تحسينات إضافية ==========
     // إضافة تأثير hover على صفوف الجدول
     const tableRows = document.querySelectorAll('#customersTableBody tr');
@@ -717,15 +777,65 @@ document.addEventListener('DOMContentLoaded', function() {
     background-color: #fff3cd !important;
 }
 
-/* إصلاح مشكلة النموذج على الموبايل - نفس نمط نموذج التحصيل */
+/* إصلاح مشكلة النموذج على الموبايل - حل جذري */
 @media (max-width: 576px) {
+    /* ضبط النموذج على الموبايل */
     [id^="settleCreditModal"] .modal-dialog {
-        margin: 0.5rem;
-        max-width: calc(100% - 1rem);
+        margin: 0.5rem !important;
+        max-width: calc(100% - 1rem) !important;
+        max-height: calc(100vh - 1rem) !important;
+        display: flex !important;
+        flex-direction: column !important;
     }
     
+    /* جعل المحتوى قابل للتمرير */
     [id^="settleCreditModal"] .modal-content {
         border-radius: 0.5rem;
+        max-height: calc(100vh - 1rem) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+    
+    /* جعل modal-body قابل للتمرير */
+    [id^="settleCreditModal"] .modal-body {
+        overflow-y: auto !important;
+        flex: 1 1 auto !important;
+        max-height: calc(100vh - 200px) !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    
+    /* التأكد من أن modal-footer مرئي وثابت */
+    [id^="settleCreditModal"] .modal-footer {
+        flex-shrink: 0 !important;
+        border-top: 1px solid #dee2e6;
+        padding: 0.75rem !important;
+        background-color: #fff;
+    }
+    
+    /* التأكد من أن modal-header ثابت */
+    [id^="settleCreditModal"] .modal-header {
+        flex-shrink: 0 !important;
+    }
+    
+    /* إصلاح موضع النموذج */
+    [id^="settleCreditModal"].show {
+        display: block !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+    
+    [id^="settleCreditModal"].show .modal-dialog {
+        transform: none !important;
+        margin-top: 0.5rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+}
+
+/* تحسينات للشاشات الكبيرة */
+@media (min-width: 577px) {
+    [id^="settleCreditModal"] .modal-dialog {
+        max-width: 500px;
     }
 }
 </style>
