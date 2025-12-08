@@ -426,23 +426,19 @@ function handleCreateLocalReturn(): void
                 }
             }
             
-            // تحديث quantity_produced في finished_products
-            // ملاحظة: recordInventoryMovement() لا يقوم بتحديث finished_products.quantity_produced 
-            // في حالة type='in'، لذلك يجب تحديثه يدوياً هنا
+            // ملاحظة: recordInventoryMovement() يقوم بتحديث finished_products.quantity_produced 
+            // تلقائياً عند type='in' و referenceType !== 'return'
+            // لذلك لا نحتاج لتحديثه يدوياً هنا - تم إزالة التحديث اليدوي لمنع التحديث المزدوج
+            
+            // البحث عن finished_products.id من batch_id (batch_numbers.id)
+            $finishedProductId = null;
             if ($batchId) {
                 $finishedProduct = $db->queryOne(
-                    "SELECT id, quantity_produced FROM finished_products WHERE batch_id = ? LIMIT 1",
+                    "SELECT id FROM finished_products WHERE batch_id = ? LIMIT 1",
                     [$batchId]
                 );
-                
                 if ($finishedProduct) {
-                    $currentProduced = (float)($finishedProduct['quantity_produced'] ?? 0);
-                    $newProduced = round($currentProduced + $quantity, 3);
-                    
-                    $db->execute(
-                        "UPDATE finished_products SET quantity_produced = ? WHERE id = ?",
-                        [$newProduced, (int)$finishedProduct['id']]
-                    );
+                    $finishedProductId = (int)$finishedProduct['id'];
                 }
             }
             
@@ -453,6 +449,8 @@ function handleCreateLocalReturn(): void
                     $movementNotes .= ' - رقم التشغيلة: ' . $batchNumber;
                 }
                 
+                // استخدام finishedProductId (finished_products.id) وليس batchId (batch_numbers.id)
+                // لأن recordInventoryMovement يتوقع finished_products.id
                 $movementResult = recordInventoryMovement(
                     $productId,
                     $warehouseId,
@@ -462,7 +460,7 @@ function handleCreateLocalReturn(): void
                     $returnId,
                     $movementNotes,
                     $currentUser['id'],
-                    $batchId
+                    $finishedProductId // استخدام finished_products.id
                 );
                 
                 if (empty($movementResult['success'])) {
