@@ -2319,6 +2319,79 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
 <?php endif; ?>
 
 <style>
+/* إصلاح مشكلة عرض القوائم المنسدلة بشكل نصف واضح في النماذج */
+.modal {
+    overflow: visible !important;
+}
+
+.modal-dialog {
+    overflow: visible !important;
+}
+
+.modal-content {
+    overflow: visible !important;
+}
+
+/* السماح للقوائم المنسدلة بالظهور خارج modal-body */
+.modal-body {
+    position: relative;
+    overflow-y: auto;
+    overflow-x: visible;
+}
+
+/* ضمان ظهور القوائم المنسدلة بشكل كامل */
+.modal-body select.form-select,
+.modal-body select {
+    position: relative;
+    z-index: 1055;
+}
+
+/* عند فتح القائمة المنسدلة */
+.modal-body select.form-select:focus,
+.modal-body select:focus {
+    z-index: 1060;
+    position: relative;
+}
+
+/* إصلاح خاص للقوائم المنسدلة في النماذج */
+.modal.show .modal-body {
+    overflow-y: auto;
+    overflow-x: visible;
+}
+
+/* ضمان أن القائمة المنسدلة تظهر فوق كل شيء */
+.modal.show select.form-select:focus,
+.modal.show select:focus {
+    z-index: 1065 !important;
+}
+
+/* إصلاح خاص للنماذج الكبيرة */
+.modal-body[style*="max-height"] {
+    overflow-y: auto !important;
+    overflow-x: visible !important;
+}
+
+/* عند فتح select، نسمح للقائمة بالظهور */
+.modal-body select.form-select option,
+.modal-body select option {
+    padding: 0.5rem;
+    white-space: normal;
+}
+
+/* تحسين عرض القائمة المنسدلة على الهواتف */
+@media (max-width: 767.98px) {
+    .modal-body {
+        max-height: calc(100vh - 200px) !important;
+        overflow-y: auto !important;
+        overflow-x: visible !important;
+    }
+    
+    .modal-body select.form-select,
+    .modal-body select {
+        font-size: 1rem !important; /* منع التكبير التلقائي على iOS */
+        padding: 0.5rem !important;
+    }
+}
     body {
         font-family: 'Cairo', sans-serif;
     }
@@ -2429,6 +2502,80 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     .barcode-container svg {
         max-width: 100%;
         height: auto;
+    }
+
+    /* إصلاح مشكلة عرض القوائم المنسدلة بشكل نصف واضح في النماذج */
+    .modal {
+        overflow: visible !important;
+    }
+
+    .modal-dialog {
+        overflow: visible !important;
+    }
+
+    .modal-content {
+        overflow: visible !important;
+    }
+
+    /* السماح للقوائم المنسدلة بالظهور خارج modal-body */
+    .modal-body {
+        position: relative;
+        overflow-y: auto;
+        overflow-x: visible;
+    }
+
+    /* ضمان ظهور القوائم المنسدلة بشكل كامل */
+    .modal-body select.form-select,
+    .modal-body select {
+        position: relative;
+        z-index: 1055;
+    }
+
+    /* عند فتح القائمة المنسدلة */
+    .modal-body select.form-select:focus,
+    .modal-body select:focus {
+        z-index: 1060;
+        position: relative;
+    }
+
+    /* إصلاح خاص للقوائم المنسدلة في النماذج */
+    .modal.show .modal-body {
+        overflow-y: auto;
+        overflow-x: visible;
+    }
+
+    /* ضمان أن القائمة المنسدلة تظهر فوق كل شيء */
+    .modal.show select.form-select:focus,
+    .modal.show select:focus {
+        z-index: 1065 !important;
+    }
+
+    /* إصلاح خاص للنماذج الكبيرة */
+    .modal-body[style*="max-height"] {
+        overflow-y: auto !important;
+        overflow-x: visible !important;
+    }
+
+    /* عند فتح select، نسمح للقائمة بالظهور */
+    .modal-body select.form-select option,
+    .modal-body select option {
+        padding: 0.5rem;
+        white-space: normal;
+    }
+
+    /* تحسين عرض القائمة المنسدلة على الهواتف */
+    @media (max-width: 767.98px) {
+        .modal-body {
+            max-height: calc(100vh - 200px) !important;
+            overflow-y: auto !important;
+            overflow-x: visible !important;
+        }
+        
+        .modal-body select.form-select,
+        .modal-body select {
+            font-size: 1rem !important; /* منع التكبير التلقائي على iOS */
+            padding: 0.5rem !important;
+        }
     }
 </style>
 
@@ -4777,6 +4924,77 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 3000);
     }
 })();
+</script>
+
+<!-- إصلاح مشكلة عرض القوائم المنسدلة بشكل نصف واضح -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modals = document.querySelectorAll('.modal');
+    
+    modals.forEach(modal => {
+        modal.addEventListener('shown.bs.modal', function() {
+            const modalBody = this.querySelector('.modal-body');
+            const modalContent = this.querySelector('.modal-content');
+            const modalDialog = this.querySelector('.modal-dialog');
+            
+            if (!modalBody) return;
+            
+            if (modalContent) {
+                modalContent.style.overflow = 'visible';
+            }
+            if (modalDialog) {
+                modalDialog.style.overflow = 'visible';
+            }
+            
+            const selects = modalBody.querySelectorAll('select.form-select, select');
+            
+            selects.forEach(select => {
+                select.addEventListener('mousedown', function(e) {
+                    const bodyStyle = window.getComputedStyle(modalBody);
+                    
+                    if (bodyStyle.overflowY === 'auto' || bodyStyle.overflowY === 'scroll') {
+                        const selectRect = this.getBoundingClientRect();
+                        const bodyRect = modalBody.getBoundingClientRect();
+                        const distanceFromBottom = bodyRect.bottom - selectRect.bottom;
+                        
+                        if (distanceFromBottom < 200) {
+                            setTimeout(() => {
+                                this.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            }, 10);
+                        }
+                        
+                        this.style.position = 'relative';
+                        this.style.zIndex = '1065';
+                    }
+                });
+                
+                select.addEventListener('focus', function() {
+                    const bodyStyle = window.getComputedStyle(modalBody);
+                    if (bodyStyle.overflowY === 'auto' || bodyStyle.overflowY === 'scroll') {
+                        this.style.position = 'relative';
+                        this.style.zIndex = '1065';
+                    }
+                    
+                    setTimeout(() => {
+                        this.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                    }, 100);
+                });
+                
+                select.addEventListener('change', function() {
+                    this.style.zIndex = '1055';
+                });
+            });
+        });
+        
+        modal.addEventListener('hidden.bs.modal', function() {
+            const selects = this.querySelectorAll('select.form-select, select');
+            selects.forEach(select => {
+                select.style.zIndex = '';
+                select.style.position = '';
+            });
+        });
+    });
+});
 </script>
 
 

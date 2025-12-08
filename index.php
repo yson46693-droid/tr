@@ -570,12 +570,28 @@ $lang = $translations;
             // استخدام localStorage فقط (بدون API calls) للأداء السريع
             const SPLASH_KEY = 'pwaSplashLastShown';
             const SPLASH_COOLDOWN = 1500; // 1.5 ثانية فقط بين إظهارات splash screen (محسّن للموبايل)
-            const MAX_SPLASH_TIME = 500; // أقصى وقت لإظهار splash screen (500ms - محسّن للموبايل)
+            const MIN_SPLASH_TIME = 2000; // الحد الأدنى لوقت إظهار splash screen (2 ثانية)
+            const MAX_SPLASH_TIME = 3000; // أقصى وقت لإظهار splash screen (3 ثواني)
+            
+            // متغير لتخزين وقت بدء إظهار الشاشة
+            let splashStartTime = null;
             
             function hideSplashScreen() {
                 if (!splashScreen) return;
                 
-                // إخفاء فوري بدون تأخير
+                // التحقق من أن الحد الأدنى من الوقت قد مر
+                if (splashStartTime) {
+                    const elapsedTime = Date.now() - splashStartTime;
+                    const remainingTime = MIN_SPLASH_TIME - elapsedTime;
+                    
+                    if (remainingTime > 0) {
+                        // انتظر حتى يمر الحد الأدنى من الوقت
+                        setTimeout(hideSplashScreen, remainingTime);
+                        return;
+                    }
+                }
+                
+                // إخفاء مع انتقال سلس
                 splashScreen.classList.add('hidden');
                 setTimeout(function() {
                     splashScreen.style.display = 'none';
@@ -616,6 +632,7 @@ $lang = $translations;
                 // التحقق من الوقت المناسب لإظهار splash screen
                 if (shouldShowSplash()) {
                     markSplashShown();
+                    splashStartTime = Date.now();
                     
                     splashScreen.classList.remove('hidden');
                     splashScreen.style.display = 'flex';
@@ -624,12 +641,18 @@ $lang = $translations;
                     const hideTimeout = setTimeout(hideSplashScreen, MAX_SPLASH_TIME);
                     
                     if (document.readyState === 'complete') {
-                        clearTimeout(hideTimeout);
-                        hideSplashScreen();
-                    } else {
-                        window.addEventListener('load', function() {
+                        // حتى لو تم تحميل الصفحة، انتظر الحد الأدنى من الوقت
+                        setTimeout(function() {
                             clearTimeout(hideTimeout);
                             hideSplashScreen();
+                        }, MIN_SPLASH_TIME);
+                    } else {
+                        window.addEventListener('load', function() {
+                            // انتظر الحد الأدنى من الوقت حتى بعد تحميل الصفحة
+                            setTimeout(function() {
+                                clearTimeout(hideTimeout);
+                                hideSplashScreen();
+                            }, MIN_SPLASH_TIME);
                         }, { once: true });
                     }
                 } else {
@@ -647,6 +670,7 @@ $lang = $translations;
             
             if (shouldShowSplash()) {
                 markSplashShown();
+                splashStartTime = Date.now();
                 
                 splashScreen.classList.remove('hidden');
                 splashScreen.style.display = 'flex';
@@ -658,20 +682,29 @@ $lang = $translations;
                 }, MAX_SPLASH_TIME);
                 
                 if (document.readyState === 'complete') {
-                    clearTimeout(splashCheckTimeout);
-                    clearTimeout(hideTimeout);
-                    hideSplashScreen();
-                } else if (document.readyState === 'interactive') {
-                    clearTimeout(splashCheckTimeout);
-                    window.addEventListener('load', function() {
-                        clearTimeout(hideTimeout);
-                        hideSplashScreen();
-                    }, { once: true });
-                } else {
-                    window.addEventListener('load', function() {
+                    // حتى لو تم تحميل الصفحة، انتظر الحد الأدنى من الوقت
+                    setTimeout(function() {
                         clearTimeout(splashCheckTimeout);
                         clearTimeout(hideTimeout);
                         hideSplashScreen();
+                    }, MIN_SPLASH_TIME);
+                } else if (document.readyState === 'interactive') {
+                    clearTimeout(splashCheckTimeout);
+                    window.addEventListener('load', function() {
+                        // انتظر الحد الأدنى من الوقت حتى بعد تحميل الصفحة
+                        setTimeout(function() {
+                            clearTimeout(hideTimeout);
+                            hideSplashScreen();
+                        }, MIN_SPLASH_TIME);
+                    }, { once: true });
+                } else {
+                    window.addEventListener('load', function() {
+                        // انتظر الحد الأدنى من الوقت حتى بعد تحميل الصفحة
+                        setTimeout(function() {
+                            clearTimeout(splashCheckTimeout);
+                            clearTimeout(hideTimeout);
+                            hideSplashScreen();
+                        }, MIN_SPLASH_TIME);
                     }, { once: true });
                 }
             } else {

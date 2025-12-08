@@ -391,10 +391,12 @@ renderCustomerListSection([
         padding: 0.2rem 0.4rem;
     }
     
-    /* إخفاء عمود العنوان على الشاشات الصغيرة جداً */
+    /* عمود العنوان يبقى ظاهراً - مهم جداً */
     .dashboard-table thead th:nth-child(4),
     .dashboard-table tbody td:nth-child(4) {
-        display: none;
+        display: table-cell !important;
+        max-width: 100px;
+        font-size: 0.65rem !important;
     }
     
     #repDetailsModal .table {
