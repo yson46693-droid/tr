@@ -156,6 +156,90 @@ function ensureAccountantTransactionsTable() {
 // التأكد من وجود الجدول
 ensureAccountantTransactionsTable();
 
+// معالجة AJAX لجلب عملاء المندوب من صفحة orders
+if ($page === 'orders' && isset($_GET['ajax']) && $_GET['ajax'] === 'get_customers' && isset($_GET['sales_rep_id'])) {
+    // تنظيف أي output buffer قبل أي شيء
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    // إيقاف عرض الأخطاء على الشاشة
+    $oldErrorReporting = error_reporting(E_ALL);
+    $oldDisplayErrors = ini_set('display_errors', '0');
+    
+    try {
+        // تحميل الملفات الأساسية فقط
+        require_once __DIR__ . '/../includes/config.php';
+        require_once __DIR__ . '/../includes/db.php';
+        require_once __DIR__ . '/../includes/auth.php';
+        require_once __DIR__ . '/../includes/path_helper.php';
+        
+        // التحقق من الصلاحيات بدون إخراج HTML
+        $currentUser = getCurrentUser();
+        if (!$currentUser) {
+            throw new Exception('غير مصرح بالوصول');
+        }
+        
+        $allowedRoles = ['manager', 'accountant', 'sales'];
+        if (!in_array(strtolower($currentUser['role'] ?? ''), $allowedRoles, true)) {
+            throw new Exception('غير مصرح بالوصول');
+        }
+        
+        // تنظيف أي output buffer مرة أخرى بعد تحميل الملفات
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        
+        // تعيين header JSON
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-cache, must-revalidate');
+        
+        $salesRepId = intval($_GET['sales_rep_id']);
+        
+        if ($salesRepId > 0) {
+            $db = db();
+            $customers = $db->query(
+                "SELECT id, name FROM customers WHERE (created_by = ? OR rep_id = ?) AND status = 'active' ORDER BY name ASC",
+                [$salesRepId, $salesRepId]
+            );
+            
+            $response = [
+                'success' => true,
+                'customers' => $customers
+            ];
+        } else {
+            $response = [
+                'success' => false,
+                'message' => 'معرف المندوب غير صحيح'
+            ];
+        }
+        
+        echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        
+    } catch (Throwable $e) {
+        // تنظيف أي output buffer في حالة الخطأ
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => false,
+            'message' => 'حدث خطأ: ' . $e->getMessage()
+        ], JSON_UNESCAPED_UNICODE);
+    } finally {
+        // استعادة إعدادات الأخطاء
+        if (isset($oldErrorReporting)) {
+            error_reporting($oldErrorReporting);
+        }
+        if (isset($oldDisplayErrors)) {
+            ini_set('display_errors', $oldDisplayErrors);
+        }
+    }
+    
+    exit;
+}
+
 // معالجة AJAX لجلب رصيد المندوب - يجب أن يكون في البداية قبل أي output
 if ($page === 'financial' && isset($_GET['ajax']) && $_GET['ajax'] === 'get_sales_rep_balance') {
     // تعطيل عرض الأخطاء في المتصفح
