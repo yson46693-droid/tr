@@ -680,6 +680,36 @@ renderRepresentativeCards($representatives, [
     font-size: 1.1rem;
     font-weight: 600;
 }
+
+/* ضمان ظهور زر الطباعة على الهاتف */
+#repDetailsModal .modal-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#repDetailsModal .modal-footer #repPrintStatementBtn {
+    flex: 1;
+    min-width: 150px;
+    white-space: nowrap;
+}
+
+@media (max-width: 576px) {
+    #repDetailsModal .modal-footer {
+        flex-direction: column;
+    }
+    
+    #repDetailsModal .modal-footer #repPrintStatementBtn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+    
+    #repDetailsModal .modal-footer .btn-secondary {
+        width: 100%;
+    }
+}
 </style>
 
 <!-- Modal تفاصيل المندوب -->
