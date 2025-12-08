@@ -289,12 +289,33 @@ function getLocalCustomerPurchaseHistory($db, $customerId): array
         // تسجيل للتشخيص
         error_log("getLocalCustomerPurchaseHistory: Fetching history for customer_id=$customerId");
         
-        // أولاً: التحقق من عدد الفواتير الموجودة لهذا العميل
+        // التحقق من وجود العميل أولاً
+        $customerExists = $db->queryOne(
+            "SELECT id, name FROM local_customers WHERE id = ?",
+            [$customerId]
+        );
+        
+        if (empty($customerExists)) {
+            error_log("getLocalCustomerPurchaseHistory: Customer with id=$customerId does not exist, returning empty array");
+            return [];
+        }
+        
+        error_log("getLocalCustomerPurchaseHistory: Customer exists - ID: {$customerExists['id']}, Name: {$customerExists['name']}");
+        
+        // التحقق من عدد الفواتير الموجودة لهذا العميل
         $invoiceCount = $db->queryOne(
-            "SELECT COUNT(*) as cnt FROM local_invoices WHERE customer_id = ?",
+            "SELECT COUNT(*) as cnt FROM local_invoices WHERE customer_id = ? AND customer_id IS NOT NULL AND customer_id > 0",
             [$customerId]
         );
         error_log("getLocalCustomerPurchaseHistory: Invoice count for customer_id=$customerId is " . ($invoiceCount['cnt'] ?? 0));
+        
+        // التحقق من وجود فواتير بدون customer_id صحيح (للتشخيص)
+        $orphanedInvoices = $db->queryOne(
+            "SELECT COUNT(*) as cnt FROM local_invoices WHERE (customer_id IS NULL OR customer_id = 0 OR customer_id NOT IN (SELECT id FROM local_customers))"
+        );
+        if (!empty($orphanedInvoices) && (int)($orphanedInvoices['cnt'] ?? 0) > 0) {
+            error_log("getLocalCustomerPurchaseHistory: WARNING - Found " . ($orphanedInvoices['cnt'] ?? 0) . " orphaned invoices (without valid customer_id)");
+        }
         
         // إذا لم تكن هناك فواتير، أرجع مصفوفة فارغة مباشرة
         if (empty($invoiceCount) || (int)($invoiceCount['cnt'] ?? 0) === 0) {
@@ -309,6 +330,7 @@ function getLocalCustomerPurchaseHistory($db, $customerId): array
             i.total_amount,
             i.paid_amount,
             i.status as invoice_status,
+            i.customer_id as invoice_customer_id,
             ii.id as invoice_item_id,
             ii.product_id,
             $productSelect,
@@ -320,14 +342,27 @@ function getLocalCustomerPurchaseHistory($db, $customerId): array
         FROM local_invoices i
         INNER JOIN local_invoice_items ii ON i.id = ii.invoice_id
         LEFT JOIN products p ON ii.product_id = p.id
-        WHERE i.customer_id = ?
+        WHERE i.customer_id = ? AND i.customer_id IS NOT NULL AND i.customer_id > 0
         ORDER BY i.date DESC, i.id DESC, ii.id ASC";
         
         $results = $db->query($query, [$customerId]) ?: [];
         
-        error_log("getLocalCustomerPurchaseHistory: Found " . count($results) . " items for customer_id=$customerId");
+        // فحص إضافي: التأكد من أن جميع الفواتير تنتمي للعميل المطلوب
+        $filteredResults = [];
+        foreach ($results as $row) {
+            $rowCustomerId = (int)($row['invoice_customer_id'] ?? 0);
+            if ($rowCustomerId === $customerId) {
+                // إزالة invoice_customer_id من النتائج النهائية
+                unset($row['invoice_customer_id']);
+                $filteredResults[] = $row;
+            } else {
+                error_log("getLocalCustomerPurchaseHistory: WARNING - Found invoice with wrong customer_id. Invoice ID: " . ($row['invoice_id'] ?? 'N/A') . ", Expected customer_id: $customerId, Found customer_id: $rowCustomerId");
+            }
+        }
         
-        return $results;
+        error_log("getLocalCustomerPurchaseHistory: Found " . count($results) . " items, filtered to " . count($filteredResults) . " items for customer_id=$customerId");
+        
+        return $filteredResults;
         
     } catch (Throwable $e) {
         error_log('getLocalCustomerPurchaseHistory error: ' . $e->getMessage());

@@ -2298,8 +2298,22 @@ function loadLocalCustomerPurchaseHistory() {
         errorElement.textContent = '';
     }
     
+    // التأكد من أن currentLocalCustomerId رقم صحيح
+    if (!currentLocalCustomerId || isNaN(currentLocalCustomerId) || currentLocalCustomerId <= 0) {
+        console.error('Invalid customer ID:', currentLocalCustomerId);
+        if (errorElement) {
+            errorElement.textContent = 'خطأ: معرف العميل غير صالح';
+            errorElement.classList.remove('d-none');
+        }
+        if (loadingElement) loadingElement.classList.add('d-none');
+        return;
+    }
+    
     // جلب البيانات من API (سنستخدم نفس API مع تحديد نوع العميل)
-    fetch(basePath + '/api/customer_purchase_history.php?action=get_history&customer_id=' + currentLocalCustomerId + '&type=local', {
+    const apiUrl = basePath + '/api/customer_purchase_history.php?action=get_history&customer_id=' + encodeURIComponent(currentLocalCustomerId) + '&type=local';
+    console.log('Loading purchase history for customer ID:', currentLocalCustomerId, 'URL:', apiUrl);
+    
+    fetch(apiUrl, {
         credentials: 'same-origin',
         headers: {
             'Accept': 'application/json'
@@ -2477,7 +2491,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!customerId) return;
         
-        currentLocalCustomerId = customerId;
+        // تحويل customerId إلى رقم للتأكد من صحته
+        const customerIdNum = parseInt(customerId, 10);
+        if (isNaN(customerIdNum) || customerIdNum <= 0) {
+            console.error('Invalid customer ID:', customerId);
+            return;
+        }
+        
+        currentLocalCustomerId = customerIdNum;
         currentLocalCustomerName = customerName;
         
         // تعيين معلومات العميل في الـ modal
