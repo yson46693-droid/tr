@@ -7,7 +7,20 @@
 define('ACCESS_ALLOWED', true);
 define('IS_API_REQUEST', true);
 
+// تنظيف أي output قبل البدء
+while (ob_get_level() > 0) {
+    ob_end_clean();
+}
+
+// تعطيل عرض الأخطاء على الشاشة
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
+
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-cache, must-revalidate');
+header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
+
+// بدء output buffering
 ob_start();
 
 require_once __DIR__ . '/../includes/config.php';
@@ -16,7 +29,10 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/path_helper.php';
 require_once __DIR__ . '/../includes/product_name_helper.php';
 
-ob_clean();
+// تنظيف أي output بعد تحميل الملفات
+while (ob_get_level() > 0) {
+    ob_end_clean();
+}
 
 $action = $_GET['action'] ?? $_POST['action'] ?? null;
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -61,14 +77,17 @@ try {
     }
 } catch (Throwable $e) {
     error_log('customer_purchase_history API error: ' . $e->getMessage());
-    returnJson(['success' => false, 'message' => 'حدث خطأ غير متوقع: ' . $e->getMessage()], 500);
+    error_log('Stack trace: ' . $e->getTraceAsString());
+    returnJson(['success' => false, 'message' => 'حدث خطأ غير متوقع أثناء جلب البيانات'], 500);
 }
 
 function returnJson(array $data, int $status = 200): void
 {
-    if (ob_get_level() > 0) {
-        ob_clean();
+    // تنظيف أي output قبل إرسال JSON
+    while (ob_get_level() > 0) {
+        ob_end_clean();
     }
+    
     http_response_code($status);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
@@ -348,33 +367,39 @@ function handleGetHistory(): void
                 ) as product_name";
             }
             
-            $purchaseHistory = $db->query(
-                "SELECT 
-                    i.id as invoice_id,
-                    i.invoice_number,
-                    i.date as invoice_date,
-                    i.total_amount,
-                    i.paid_amount,
-                    i.status as invoice_status,
-                    ii.id as invoice_item_id,
-                    ii.product_id,
-                    $productNameSelect,
-                    p.unit,
-                    ii.quantity,
-                    ii.unit_price,
-                    ii.total_price,
-                    $batchSelect" . 
-                    ($hasBatchNumber ? ", ii.batch_number as raw_batch_number" : ", NULL as raw_batch_number") .
-                    ($hasBatchId ? ", ii.batch_id as raw_batch_id" : ", NULL as raw_batch_id")
-                FROM local_invoices i
-                INNER JOIN local_invoice_items ii ON i.id = ii.invoice_id
-                LEFT JOIN products p ON ii.product_id = p.id
-                $batchJoin
-                WHERE i.customer_id = ?
-                -- GROUP BY غير ضروري هنا لأن ii.id هو primary key
-                ORDER BY i.date DESC, i.id DESC, ii.id ASC",
-                [$customerId]
-            ) ?: [];
+            try {
+                $purchaseHistory = $db->query(
+                    "SELECT 
+                        i.id as invoice_id,
+                        i.invoice_number,
+                        i.date as invoice_date,
+                        i.total_amount,
+                        i.paid_amount,
+                        i.status as invoice_status,
+                        ii.id as invoice_item_id,
+                        ii.product_id,
+                        $productNameSelect,
+                        p.unit,
+                        ii.quantity,
+                        ii.unit_price,
+                        ii.total_price,
+                        $batchSelect" . 
+                        ($hasBatchNumber ? ", ii.batch_number as raw_batch_number" : ", NULL as raw_batch_number") .
+                        ($hasBatchId ? ", ii.batch_id as raw_batch_id" : ", NULL as raw_batch_id")
+                    FROM local_invoices i
+                    INNER JOIN local_invoice_items ii ON i.id = ii.invoice_id
+                    LEFT JOIN products p ON ii.product_id = p.id
+                    $batchJoin
+                    WHERE i.customer_id = ?
+                    -- GROUP BY غير ضروري هنا لأن ii.id هو primary key
+                    ORDER BY i.date DESC, i.id DESC, ii.id ASC",
+                    [$customerId]
+                ) ?: [];
+            } catch (Throwable $queryError) {
+                error_log('customer_purchase_history API: Query error for local customer: ' . $queryError->getMessage());
+                error_log('Stack trace: ' . $queryError->getTraceAsString());
+                $purchaseHistory = [];
+            }
             
             // تسجيل البيانات المُجلبة للتشخيص
             if (!empty($purchaseHistory)) {
@@ -403,7 +428,8 @@ function handleGetHistory(): void
     } else {
         // Get purchase history from invoices with batch numbers
         // استعلام محسّن يضمن جلب اسم المنتج ورقم التشغيلة بشكل صحيح
-        $purchaseHistory = $db->query(
+        try {
+            $purchaseHistory = $db->query(
             "SELECT 
                 i.id as invoice_id,
                 i.invoice_number,
@@ -460,8 +486,13 @@ function handleGetHistory(): void
             WHERE i.customer_id = ?
             GROUP BY i.id, ii.id, ii.product_id, ii.quantity, ii.unit_price, ii.total_price, p.name, p.unit
             ORDER BY i.date DESC, i.id DESC, ii.id ASC",
-            [$customerId]
-        );
+                [$customerId]
+            ) ?: [];
+        } catch (Throwable $queryError) {
+            error_log('customer_purchase_history API: Query error for normal customer: ' . $queryError->getMessage());
+            error_log('Stack trace: ' . $queryError->getTraceAsString());
+            $purchaseHistory = [];
+        }
     }
     
     // Calculate already returned quantities (للعملاء المحليين والعاديين)
@@ -487,40 +518,48 @@ function handleGetHistory(): void
                 if (!empty($localReturnItemsTableExists)) {
                     $hasLocalInvoiceItemId = !empty($db->queryOne("SHOW COLUMNS FROM local_return_items LIKE 'invoice_item_id'"));
                     if ($hasLocalInvoiceItemId) {
-                        $returnedRows = $db->query(
-                            "SELECT ri.invoice_item_id, COALESCE(SUM(ri.quantity), 0) AS returned_quantity
-                             FROM local_return_items ri
-                             INNER JOIN local_returns r ON r.id = ri.return_id
-                             WHERE r.customer_id = ?
-                               AND r.status IN ('pending', 'approved', 'processed', 'completed')
-                               AND ri.invoice_item_id IS NOT NULL
-                             GROUP BY ri.invoice_item_id",
-                            [$customerId]
-                        ) ?: [];
-                        
-                        foreach ($returnedRows as $row) {
-                            $invoiceItemId = (int)$row['invoice_item_id'];
-                            $returnedQuantities[$invoiceItemId] = (float)$row['returned_quantity'];
+                        try {
+                            $returnedRows = $db->query(
+                                "SELECT ri.invoice_item_id, COALESCE(SUM(ri.quantity), 0) AS returned_quantity
+                                 FROM local_return_items ri
+                                 INNER JOIN local_returns r ON r.id = ri.return_id
+                                 WHERE r.customer_id = ?
+                                   AND r.status IN ('pending', 'approved', 'processed', 'completed')
+                                   AND ri.invoice_item_id IS NOT NULL
+                                 GROUP BY ri.invoice_item_id",
+                                [$customerId]
+                            ) ?: [];
+                            
+                            foreach ($returnedRows as $row) {
+                                $invoiceItemId = (int)$row['invoice_item_id'];
+                                $returnedQuantities[$invoiceItemId] = (float)$row['returned_quantity'];
+                            }
+                        } catch (Throwable $e) {
+                            error_log('customer_purchase_history API: Error fetching local return items: ' . $e->getMessage());
                         }
                     }
                 }
             }
         } else {
             // للعملاء العاديين - حساب الكمية المرتجعة لكل invoice_item_id
-            $returnedRows = $db->query(
-                "SELECT ri.invoice_item_id, COALESCE(SUM(ri.quantity), 0) AS returned_quantity
-                 FROM return_items ri
-                 INNER JOIN returns r ON r.id = ri.return_id
-                 WHERE r.customer_id = ?
-                   AND r.status IN ('pending', 'approved', 'processed', 'completed')
-                   AND ri.invoice_item_id IS NOT NULL
-                 GROUP BY ri.invoice_item_id",
-                [$customerId]
-            ) ?: [];
-            
-            foreach ($returnedRows as $row) {
-                $invoiceItemId = (int)$row['invoice_item_id'];
-                $returnedQuantities[$invoiceItemId] = (float)$row['returned_quantity'];
+            try {
+                $returnedRows = $db->query(
+                    "SELECT ri.invoice_item_id, COALESCE(SUM(ri.quantity), 0) AS returned_quantity
+                     FROM return_items ri
+                     INNER JOIN returns r ON r.id = ri.return_id
+                     WHERE r.customer_id = ?
+                       AND r.status IN ('pending', 'approved', 'processed', 'completed')
+                       AND ri.invoice_item_id IS NOT NULL
+                     GROUP BY ri.invoice_item_id",
+                    [$customerId]
+                ) ?: [];
+                
+                foreach ($returnedRows as $row) {
+                    $invoiceItemId = (int)$row['invoice_item_id'];
+                    $returnedQuantities[$invoiceItemId] = (float)$row['returned_quantity'];
+                }
+            } catch (Throwable $e) {
+                error_log('customer_purchase_history API: Error fetching return items: ' . $e->getMessage());
             }
         }
     }
@@ -594,13 +633,17 @@ function handleGetHistory(): void
             
             // إذا كان batch_numbers فارغاً لكن batch_number_ids موجود، نحاول جلب batch_numbers من قاعدة البيانات
             if (empty($batchNumbers) && !empty($batchNumberIds)) {
-                $batchNumbersFromDb = $db->query(
-                    "SELECT batch_number FROM batch_numbers WHERE id IN (" . implode(',', array_map('intval', $batchNumberIds)) . ") ORDER BY batch_number"
-                );
-                if ($batchNumbersFromDb) {
-                    $batchNumbers = array_filter(array_map(function($row) {
-                        return trim($row['batch_number'] ?? '');
-                    }, $batchNumbersFromDb));
+                try {
+                    $batchNumbersFromDb = $db->query(
+                        "SELECT batch_number FROM batch_numbers WHERE id IN (" . implode(',', array_map('intval', $batchNumberIds)) . ") ORDER BY batch_number"
+                    );
+                    if ($batchNumbersFromDb) {
+                        $batchNumbers = array_filter(array_map(function($row) {
+                            return trim($row['batch_number'] ?? '');
+                        }, $batchNumbersFromDb));
+                    }
+                } catch (Throwable $e) {
+                    error_log('customer_purchase_history API: Error fetching batch numbers: ' . $e->getMessage());
                 }
             }
         }
