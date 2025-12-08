@@ -1,25 +1,11 @@
 <?php
-/**
- * سكريبت تنظيف سجلات الرواتب ذات التواريخ الخاطئة
- * يقوم بحذف أو إصلاح السجلات التي تحتوي على month = 0000-00-00 أو year = 0 أو NULL
- * 
- * تشغيل السكريبت: php cleanup_invalid_salaries.php
- * أو من المتصفح: http://yoursite.com/cleanup_invalid_salaries.php
- */
 
-// تعريف ثابت الوصول للسماح بتشغيل السكريبت
 define('ACCESS_ALLOWED', true);
 
 // تضمين ملفات النظام
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/db.php';
 
-// للأمان: التحقق من الصلاحيات (اختياري - يمكنك إزالته للتشغيل المباشر)
-// require_once __DIR__ . '/includes/auth.php';
-// $currentUser = getCurrentUser();
-// if (!$currentUser || $currentUser['role'] !== 'admin') {
-//     die('Access denied. Admin only.');
-// }
 
 header('Content-Type: text/html; charset=utf-8');
 
