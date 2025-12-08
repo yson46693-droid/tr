@@ -513,13 +513,26 @@ if (!defined('ACCESS_ALLOWED')) {
             
             // PWA Splash Screen - استخدام localStorage فقط (بدون API calls) للأداء السريع
             const SPLASH_KEY = 'pwaSplashLastShown';
-            const SPLASH_COOLDOWN = 1500; // 1.5 ثانية فقط بين إظهارات splash screen (محسّن للموبايل)
-            const MAX_SPLASH_TIME = 500; // أقصى وقت لإظهار splash screen (500ms - محسّن للموبايل)
+            const SPLASH_COOLDOWN = 3000; // 3 ثواني بين إظهارات splash screen (للصفحة الأولى فقط)
+            const MAX_SPLASH_TIME = 100; // أقصى وقت لإظهار splash screen (100ms - محسّن للسرعة)
+            const INTERNAL_NAVIGATION_DELAY = 0; // لا تأخير للتنقل الداخلي
             
-            function hideSplashScreen() {
+            function hideSplashScreen(immediate = false) {
                 if (!pageLoader) return;
                 
-                // إخفاء فوري بدون تأخير
+                // إخفاء فوري بدون تأخير للتنقل الداخلي
+                if (immediate) {
+                    pageLoader.classList.add('hidden');
+                    if (pageLoader.style) {
+                        pageLoader.style.display = 'none';
+                    }
+                    if (dashboardMain) {
+                        dashboardMain.classList.add('content-fade-in');
+                    }
+                    return;
+                }
+                
+                // إخفاء مع انتقال سلس للصفحة الأولى فقط
                 pageLoader.classList.add('hidden');
                 
                 // إضافة تأثير fade-in للمحتوى
@@ -527,12 +540,12 @@ if (!defined('ACCESS_ALLOWED')) {
                     dashboardMain.classList.add('content-fade-in');
                 }
                 
-                // إزالة شاشة التحميل من DOM بعد انتهاء التأثير
+                // إزالة شاشة التحميل من DOM بعد انتهاء التأثير (مختصر)
                 setTimeout(function() {
                     if (pageLoader && pageLoader.style) {
                         pageLoader.style.display = 'none';
                     }
-                }, 300);
+                }, 150); // تقليل من 300ms إلى 150ms
             }
             
             // التحقق من الوقت المناسب لإظهار splash screen
@@ -575,21 +588,13 @@ if (!defined('ACCESS_ALLOWED')) {
                 const isInternalNavigation = sessionStorage.getItem('internalNavigation') === 'true';
                 sessionStorage.removeItem('internalNavigation'); // تنظيف بعد الاستخدام
                 
-                // إذا كان التنقل داخلي، لا تظهر splash screen
+                // إذا كان التنقل داخلي، لا تظهر splash screen - إخفاء فوري
                 if (isInternalNavigation) {
-                    if (pageLoader) {
-                        pageLoader.classList.add('hidden');
-                        if (pageLoader.style) {
-                            pageLoader.style.display = 'none';
-                        }
-                    }
-                    if (dashboardMain) {
-                        dashboardMain.classList.add('content-fade-in');
-                    }
+                    hideSplashScreen(true); // إخفاء فوري
                     return;
                 }
                 
-                // التحقق من الوقت المناسب لإظهار splash screen
+                // التحقق من الوقت المناسب لإظهار splash screen (للصفحة الأولى فقط)
                 if (shouldShowSplash()) {
                     markSplashShown();
                     
@@ -600,10 +605,12 @@ if (!defined('ACCESS_ALLOWED')) {
                         }
                     }
                     
-                    // إخفاء الشاشة بعد تحميل الصفحة أو بعد وقت أقصى
-                    const hideTimeout = setTimeout(hideSplashScreen, MAX_SPLASH_TIME);
+                    // إخفاء الشاشة بعد تحميل الصفحة أو بعد وقت أقصى (مختصر جداً)
+                    const hideTimeout = setTimeout(function() {
+                        hideSplashScreen();
+                    }, MAX_SPLASH_TIME);
                     
-                    if (document.readyState === 'complete') {
+                    if (document.readyState === 'complete' || document.readyState === 'interactive') {
                         clearTimeout(hideTimeout);
                         hideSplashScreen();
                     } else {
@@ -611,10 +618,16 @@ if (!defined('ACCESS_ALLOWED')) {
                             clearTimeout(hideTimeout);
                             hideSplashScreen();
                         }, { once: true });
+                        
+                        // إخفاء تلقائي بعد وقت قصير جداً حتى لو لم يتم التحميل
+                        setTimeout(function() {
+                            clearTimeout(hideTimeout);
+                            hideSplashScreen();
+                        }, MAX_SPLASH_TIME * 2);
                     }
                 } else {
                     // لا تظهر splash screen - إخفاء فوري
-                    hideSplashScreen();
+                    hideSplashScreen(true);
                 }
             });
             
@@ -626,7 +639,7 @@ if (!defined('ACCESS_ALLOWED')) {
                 }
             }, MAX_SPLASH_TIME);
             
-            // منطق بسيط بدون API calls
+            // منطق بسيط بدون API calls - محسّن للسرعة
             if (shouldShowSplash()) {
                 markSplashShown();
                 
@@ -637,33 +650,34 @@ if (!defined('ACCESS_ALLOWED')) {
                     }
                 }
                 
-                // إخفاء الشاشة بعد تحميل الصفحة أو بعد وقت أقصى
+                // إخفاء الشاشة بعد تحميل الصفحة أو بعد وقت أقصى (مختصر جداً)
                 const hideTimeout = setTimeout(function() {
                     clearTimeout(splashCheckTimeout);
                     hideSplashScreen();
                 }, MAX_SPLASH_TIME);
                 
-                if (document.readyState === 'complete') {
+                if (document.readyState === 'complete' || document.readyState === 'interactive') {
                     clearTimeout(splashCheckTimeout);
                     clearTimeout(hideTimeout);
                     hideSplashScreen();
-                } else if (document.readyState === 'interactive') {
-                    clearTimeout(splashCheckTimeout);
-                    window.addEventListener('load', function() {
-                        clearTimeout(hideTimeout);
-                        hideSplashScreen();
-                    }, { once: true });
                 } else {
                     window.addEventListener('load', function() {
                         clearTimeout(splashCheckTimeout);
                         clearTimeout(hideTimeout);
                         hideSplashScreen();
                     }, { once: true });
+                    
+                    // إخفاء تلقائي بعد وقت قصير جداً حتى لو لم يتم التحميل
+                    setTimeout(function() {
+                        clearTimeout(splashCheckTimeout);
+                        clearTimeout(hideTimeout);
+                        hideSplashScreen();
+                    }, MAX_SPLASH_TIME * 2);
                 }
             } else {
                 // لا تظهر splash screen - إخفاء فوري
                 clearTimeout(splashCheckTimeout);
-                hideSplashScreen();
+                hideSplashScreen(true);
             }
             
             // إخفاء شاشة التحميل عند فتح أي Modal
@@ -686,12 +700,16 @@ if (!defined('ACCESS_ALLOWED')) {
                 if (link && link.hasAttribute('data-no-splash')) {
                     // تسجيل أن هذا تنقل داخلي لتخطي منطق الجلسات في pageshow
                     sessionStorage.setItem('internalNavigation', 'true');
+                    // إخفاء فوري لشاشة التحميل
+                    hideSplashScreen(true);
                     return; // لا تعرض شاشة التحميل للروابط الداخلية
                 }
                 
                 // تحقق من أن الرابط يؤدي لتغيير الصفحة الكامل (ليس tabs أو sections)
-                if (link && 
+                // تحسين: لا تظهر شاشة التحميل للروابط الداخلية
+                const isInternalLink = link && 
                     link.href && 
+                    link.hostname === window.location.hostname &&
                     !link.href.includes('section=') && // تجاهل روابط الأقسام
                     !link.href.includes('&tab=') && 
                     !link.href.includes('#') &&
@@ -700,21 +718,30 @@ if (!defined('ACCESS_ALLOWED')) {
                     !link.href.startsWith('tel:') &&
                     !link.target &&
                     !link.download &&
-                    link.hostname === window.location.hostname &&
                     !link.hasAttribute('data-bs-toggle') && 
                     !link.hasAttribute('data-bs-target') &&
                     !link.classList.contains('dropdown-item') &&
                     !link.closest('.nav-tabs') && // تجاهل روابط التبويبات
-                    !link.closest('.section-tabs') && // تجاهل روابط أقسام المخزن
-                    !isNavigating) {
-                    
+                    !link.closest('.section-tabs'); // تجاهل روابط أقسام المخزن
+                
+                // فقط للروابط الخارجية أو الصفحات الجديدة تماماً
+                const isExternalOrNewPage = link && 
+                    link.href && 
+                    (link.hostname !== window.location.hostname || 
+                     link.href.includes('?page=') && !link.href.includes('section='));
+                
+                if (isExternalOrNewPage && !isNavigating) {
                     isNavigating = true;
-                    // إظهار شاشة التحميل فقط للتنقل بين الصفحات الرئيسية
-                    if (pageLoader) {
+                    // إظهار شاشة التحميل فقط للصفحات الجديدة (وليس الروابط الداخلية)
+                    if (pageLoader && !isInternalLink) {
                         pageLoader.classList.remove('hidden');
                         if (pageLoader.style) {
                             pageLoader.style.display = 'flex';
                         }
+                    } else if (isInternalLink) {
+                        // للروابط الداخلية: تسجيل التنقل وإخفاء فوري
+                        sessionStorage.setItem('internalNavigation', 'true');
+                        hideSplashScreen(true);
                     }
                 }
             });
@@ -732,6 +759,150 @@ if (!defined('ACCESS_ALLOWED')) {
                 }
             });
             
+        })();
+    </script>
+    
+    <!-- 🚀 Performance: Prefetch and Navigation Optimization -->
+    <script>
+        (function() {
+            'use strict';
+            
+            // تحسين التنقل: إضافة prefetch للروابط الشائعة عند hover
+            function addPrefetchOnHover() {
+                const links = document.querySelectorAll('a[href]:not([href^="#"]):not([href^="javascript:"]):not([href^="mailto:"]):not([href^="tel:"])');
+                
+                links.forEach(function(link) {
+                    // فقط للروابط الداخلية
+                    if (link.hostname === window.location.hostname || !link.hostname) {
+                        let prefetchLink = null;
+                        let hoverTimeout = null;
+                        
+                        // عند hover: prefetch بعد 100ms
+                        link.addEventListener('mouseenter', function() {
+                            hoverTimeout = setTimeout(function() {
+                                const href = link.getAttribute('href');
+                                if (href && !href.includes('#') && !document.querySelector('link[rel="prefetch"][href="' + href + '"]')) {
+                                    prefetchLink = document.createElement('link');
+                                    prefetchLink.rel = 'prefetch';
+                                    prefetchLink.href = href;
+                                    document.head.appendChild(prefetchLink);
+                                }
+                            }, 100);
+                        });
+                        
+                        // إلغاء prefetch إذا تم إلغاء hover
+                        link.addEventListener('mouseleave', function() {
+                            if (hoverTimeout) {
+                                clearTimeout(hoverTimeout);
+                            }
+                        });
+                        
+                        // عند click: إضافة preload فوري
+                        link.addEventListener('click', function(e) {
+                            const href = link.getAttribute('href');
+                            if (href && !href.includes('#') && !link.hasAttribute('data-no-splash')) {
+                                // إضافة preload للصفحة التالية
+                                const preloadLink = document.createElement('link');
+                                preloadLink.rel = 'preload';
+                                preloadLink.as = 'document';
+                                preloadLink.href = href;
+                                document.head.appendChild(preloadLink);
+                            }
+                        }, { once: true });
+                    }
+                });
+            }
+            
+            // تحسين: استخدام Intersection Observer لتحميل الصفحات مسبقاً عند اقترابها من viewport
+            function addIntersectionPrefetch() {
+                if (!('IntersectionObserver' in window)) {
+                    return;
+                }
+                
+                const links = document.querySelectorAll('a[href]:not([href^="#"]):not([href^="javascript:"])');
+                const observer = new IntersectionObserver(function(entries) {
+                    entries.forEach(function(entry) {
+                        if (entry.isIntersecting) {
+                            const link = entry.target;
+                            const href = link.getAttribute('href');
+                            
+                            if (href && 
+                                link.hostname === window.location.hostname && 
+                                !href.includes('#') &&
+                                !document.querySelector('link[rel="prefetch"][href="' + href + '"]')) {
+                                
+                                const prefetchLink = document.createElement('link');
+                                prefetchLink.rel = 'prefetch';
+                                prefetchLink.href = href;
+                                document.head.appendChild(prefetchLink);
+                                
+                                observer.unobserve(link);
+                            }
+                        }
+                    });
+                }, {
+                    rootMargin: '200px' // بدء prefetch قبل 200px من viewport
+                });
+                
+                links.forEach(function(link) {
+                    if (link.hostname === window.location.hostname || !link.hostname) {
+                        observer.observe(link);
+                    }
+                });
+            }
+            
+            // تحسين: استخدام requestIdleCallback لتحميل الصفحات المهمة
+            function prefetchImportantPages() {
+                if (!('requestIdleCallback' in window)) {
+                    return;
+                }
+                
+                requestIdleCallback(function() {
+                    // الحصول على base URL من الصفحة الحالية
+                    const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
+                    const currentPath = window.location.pathname;
+                    let dashboardUrl = baseUrl;
+                    
+                    // تحديد dashboard URL بناءً على الصفحة الحالية
+                    if (currentPath.includes('manager.php')) {
+                        dashboardUrl = baseUrl + 'dashboard/manager.php';
+                    } else if (currentPath.includes('sales.php')) {
+                        dashboardUrl = baseUrl + 'dashboard/sales.php';
+                    } else if (currentPath.includes('accountant.php')) {
+                        dashboardUrl = baseUrl + 'dashboard/accountant.php';
+                    } else if (currentPath.includes('production.php')) {
+                        dashboardUrl = baseUrl + 'dashboard/production.php';
+                    }
+                    
+                    const importantPages = [
+                        dashboardUrl,
+                        dashboardUrl + '?page=chat',
+                        dashboardUrl + '?page=customers'
+                    ];
+                    
+                    importantPages.forEach(function(url) {
+                        if (!document.querySelector('link[rel="prefetch"][href="' + url + '"]')) {
+                            const prefetchLink = document.createElement('link');
+                            prefetchLink.rel = 'prefetch';
+                            prefetchLink.href = url;
+                            document.head.appendChild(prefetchLink);
+                        }
+                    });
+                }, { timeout: 2000 });
+            }
+            
+            // تشغيل التحسينات بعد تحميل الصفحة
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    addPrefetchOnHover();
+                    addIntersectionPrefetch();
+                    prefetchImportantPages();
+                });
+            } else {
+                addPrefetchOnHover();
+                addIntersectionPrefetch();
+                prefetchImportantPages();
+            }
         })();
     </script>
     

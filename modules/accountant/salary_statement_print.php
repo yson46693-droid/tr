@@ -741,22 +741,6 @@ if (isset($_GET['month']) && isset($_GET['year'])) {
                     <div class="employee-info-value"><?php echo date('d/m/Y H:i'); ?></div>
                 </div>
             </div>
-            <?php if (isset($employee['accumulated_amount']) || isset($employee['paid_amount']) || isset($employee['actual_salary'])): ?>
-            <div class="employee-info-row" style="background: #f0f9ff; border-radius: 8px; padding: 12px; margin-top: 8px; border: 1px solid #bfdbfe;">
-                <div class="employee-info-item">
-                    <div class="employee-info-label">المبلغ التراكمي</div>
-                    <div class="employee-info-value" style="color: #2563eb; font-weight: 700;"><?php echo formatCurrency($employee['accumulated_amount'] ?? 0); ?></div>
-                </div>
-                <div class="employee-info-item">
-                    <div class="employee-info-label">المبلغ المدفوع</div>
-                    <div class="employee-info-value" style="color: #059669; font-weight: 700;"><?php echo formatCurrency($employee['paid_amount'] ?? 0); ?></div>
-                </div>
-                <div class="employee-info-item">
-                    <div class="employee-info-label">المتبقي</div>
-                    <div class="employee-info-value amount-positive" style="font-weight: 700; font-size: 18px;"><?php echo formatCurrency($employee['actual_salary'] ?? 0); ?></div>
-                </div>
-            </div>
-            <?php endif; ?>
         </div>
         
         <?php if (!empty($statementSalaries)): ?>
@@ -960,36 +944,20 @@ if (isset($_GET['month']) && isset($_GET['year'])) {
                 <span class="summary-label" style="font-weight: 700; color: #065f46;">المبلغ المدفوع</span>
                 <span class="summary-value amount-positive" style="font-size: 18px; font-weight: 700; color: #059669;"><?php echo formatCurrency($employee['paid_amount'] ?? 0); ?></span>
             </div>
+            <div class="summary-row" style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin-bottom: 12px; border: 2px solid #10b981;">
+                <span class="summary-label" style="font-weight: 700; color:rgb(156, 15, 10);">السلف</span>
+                <span class="summary-value amount-positive" style="font-size: 18px; font-weight: 700; color:rgb(156, 15, 10);"><?php echo formatCurrency($totalAdvances); ?></span>
+            </div>
             <div class="summary-row" style="background: #fffbeb; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 2px solid #f59e0b;">
                 <span class="summary-label" style="font-weight: 700; color: #92400e;">المتبقي</span>
                 <span class="summary-value amount-positive" style="font-size: 20px; font-weight: 700; color: #d97706;"><?php echo formatCurrency($employee['actual_salary'] ?? 0); ?></span>
             </div>
             <?php endif; ?>
             
-            <!-- ملخص الفترة -->
-            <div style="border-top: 2px solid #e2e8f0; padding-top: 16px; margin-top: 16px;">
-                <h3 style="font-size: 16px; font-weight: 600; color: #1f2937; margin-bottom: 12px;">ملخص الفترة المحددة</h3>
-                <div class="summary-row">
-                    <span class="summary-label">إجمالي الرواتب في الفترة</span>
-                    <span class="summary-value amount-positive"><?php echo formatCurrency($totalSalaries ?? 0); ?></span>
-                </div>
-                <?php if (($totalAdvances ?? 0) > 0): ?>
-                <div class="summary-row">
-                    <span class="summary-label">إجمالي السلف في الفترة</span>
-                    <span class="summary-value amount-negative"><?php echo formatCurrency($totalAdvances); ?></span>
-                </div>
-                <?php endif; ?>
-                <?php if (($totalSettlements ?? 0) > 0): ?>
-                <div class="summary-row">
-                    <span class="summary-label">إجمالي المدفوعات في الفترة</span>
-                    <span class="summary-value amount-positive"><?php echo formatCurrency($totalSettlements); ?></span>
-                </div>
-                <?php endif; ?>
-            </div>
         </div>
         
         <footer class="footer">
-            <div style="margin-bottom: 8px;">نشكركم على ثقتكم بنا</div>
+            <div style="margin-bottom: 8px;">صلي علي الرسول</div>
             <div>لأي استفسارات يرجى التواصل على: <?php echo htmlspecialchars($companyPhone); ?></div>
         </footer>
     </div>
