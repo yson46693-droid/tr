@@ -1596,20 +1596,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     if ($hasBatchNumber) {
                                         $batchNumber = null;
                                         if (!empty($item['batch_id'])) {
+                                            // جلب batch_number من finished_products مباشرة
                                             $batchInfo = $db->queryOne(
-                                                "SELECT COALESCE(fp.batch_number, bn.batch_number) as batch_number
+                                                "SELECT fp.batch_number
                                                  FROM finished_products fp
-                                                 LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
                                                  WHERE fp.id = ?
                                                  LIMIT 1",
                                                 [$item['batch_id']]
                                             );
                                             if ($batchInfo && !empty($batchInfo['batch_number'])) {
-                                                $batchNumber = $batchInfo['batch_number'];
+                                                $batchNumber = trim($batchInfo['batch_number']);
+                                                error_log("shipping_orders: Found batch_number from finished_products: $batchNumber for batch_id: " . $item['batch_id']);
+                                            } else {
+                                                // إذا لم يكن موجوداً في finished_products، نحاول من batch_numbers
+                                                $batchInfo2 = $db->queryOne(
+                                                    "SELECT bn.batch_number
+                                                     FROM finished_products fp
+                                                     INNER JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                                                     WHERE fp.id = ?
+                                                     LIMIT 1",
+                                                    [$item['batch_id']]
+                                                );
+                                                if ($batchInfo2 && !empty($batchInfo2['batch_number'])) {
+                                                    $batchNumber = trim($batchInfo2['batch_number']);
+                                                    error_log("shipping_orders: Found batch_number from batch_numbers: $batchNumber for batch_id: " . $item['batch_id']);
+                                                } else {
+                                                    error_log("shipping_orders: WARNING - batch_number not found for batch_id: " . $item['batch_id']);
+                                                }
                                             }
+                                        } else {
+                                            error_log("shipping_orders: batch_id is empty for product_id: $productId");
                                         }
                                         $columns[] = 'batch_number';
                                         $values[] = $batchNumber;
+                                        error_log("shipping_orders: Adding batch_number to local_invoice_items: " . ($batchNumber ?? 'NULL') . " for product_id: $productId");
                                     }
                                     
                                     if ($hasBatchId) {
