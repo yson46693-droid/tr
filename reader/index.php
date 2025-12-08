@@ -692,6 +692,11 @@ $_SESSION['reader_session_id'] = $_SESSION['reader_session_id'] ?? bin2hex(rando
         let advancedMode = false;
         let advancedDetectionActive = false;
         let lastAdvancedDetectionResult = { zxingReady: false, ocrReady: false };
+        
+        // تحسينات الأداء: cache للنتائج لتجنب القراءة المتكررة
+        let lastDetectedBarcode = null;
+        let lastDetectionTime = 0;
+        const DETECTION_CACHE_TIME = 1000; // 1 ثانية لتجنب القراءة المتكررة لنفس الباركود
 
         const historyEntries = [];
 
@@ -957,16 +962,26 @@ $_SESSION['reader_session_id'] = $_SESSION['reader_session_id'] ?? bin2hex(rando
             stopDetectionLoops();
 
             if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
+                currentStream.getTracks().forEach(track => {
+                    track.stop();
+                    // تحسين الأداء: إزالة event listeners
+                    track.onended = null;
+                });
                 currentStream = null;
             }
 
             video.srcObject = null;
+            // تحسين الأداء: تنظيف الفيديو
+            video.load(); // إعادة تحميل الفيديو لتحرير الذاكرة
             videoContainer.style.display = 'none';
             cameraSection.classList.remove('active');
             startCameraBtn.style.display = 'inline-flex';
             stopCameraBtn.style.display = 'none';
             detectionCooldown = false;
+            
+            // تنظيف cache بعد إيقاف الكاميرا
+            lastDetectedBarcode = null;
+            lastDetectionTime = 0;
         }
 
         async function ensureCameraPermission() {
@@ -1044,14 +1059,25 @@ $_SESSION['reader_session_id'] = $_SESSION['reader_session_id'] ?? bin2hex(rando
             if (!candidate) {
                 return;
             }
+            
+            // تحسين الأداء: تجنب معالجة نفس الباركود مرتين في وقت قصير
+            const now = Date.now();
+            if (lastDetectedBarcode === candidate && (now - lastDetectionTime) < DETECTION_CACHE_TIME) {
+                return; // تجاهل القراءة المتكررة
+            }
+            lastDetectedBarcode = candidate;
+            lastDetectionTime = now;
+            
             detectionCooldown = true;
             batchInput.value = candidate;
             batchInput.focus();
-            setTimeout(() => form.requestSubmit(), 120);
+            // تقليل التأخير من 120ms إلى 50ms للمعالجة السريعة
+            setTimeout(() => form.requestSubmit(), 50);
             stopCamera();
+            // تقليل detectionCooldown من 500ms إلى 200ms للسماح بقراءة سريعة متتالية
             setTimeout(() => {
                 detectionCooldown = false;
-            }, 500);
+            }, 200);
         }
 
         async function loadTesseractLibrary() {
@@ -1165,6 +1191,7 @@ $_SESSION['reader_session_id'] = $_SESSION['reader_session_id'] ?? bin2hex(rando
             }
             zxingActive = true;
             try {
+                // تحسين ZXing: استخدام callback محسّن للقراءة السريعة
                 await zxingReader.decodeFromVideoDevice(null, video, (result, error) => {
                     if (!zxingActive || detectionCooldown) {
                         return;
@@ -1174,6 +1201,10 @@ $_SESSION['reader_session_id'] = $_SESSION['reader_session_id'] ?? bin2hex(rando
                         if (candidate) {
                             completeDetection(candidate);
                         }
+                    }
+                    // تجاهل الأخطاء البسيطة للتركيز على القراءة السريعة
+                    if (error && error.name !== 'NotFoundException') {
+                        // تسجيل الأخطاء المهمة فقط
                     }
                 });
                 return true;
@@ -1200,7 +1231,9 @@ $_SESSION['reader_session_id'] = $_SESSION['reader_session_id'] ?? bin2hex(rando
 
             snapshotCanvas.width = targetWidth;
             snapshotCanvas.height = targetHeight;
-            snapshotContext.imageSmoothingEnabled = false;
+            // تحسينات معالجة الصورة للقراءة الأفضل والأسرع
+            snapshotContext.imageSmoothingEnabled = false; // تعطيل التمهيد للحصول على وضوح أعلى
+            snapshotContext.imageSmoothingQuality = 'high';
             snapshotContext.clearRect(0, 0, targetWidth, targetHeight);
             snapshotContext.drawImage(
                 video,
@@ -1241,6 +1274,7 @@ $_SESSION['reader_session_id'] = $_SESSION['reader_session_id'] ?? bin2hex(rando
             if (!detector) {
                 return false;
             }
+            // تحسين الأداء: تقليل الفاصل الزمني من 350ms إلى 150ms للقراءة السريعة
             barcodeInterval = setInterval(async () => {
                 if (!scanning || detectionCooldown || barcodeProcessing) {
                     return;
@@ -1252,19 +1286,21 @@ $_SESSION['reader_session_id'] = $_SESSION['reader_session_id'] ?? bin2hex(rando
                 try {
                     const result = await detector.detect(video);
                     if (!Array.isArray(result) || !result.length) {
+                        barcodeProcessing = false;
                         return;
                     }
                     const match = result.find(item => item.rawValue);
                     const candidate = normalizeBarcodeValue(match?.rawValue);
                     if (candidate) {
                         completeDetection(candidate);
+                        return; // إيقاف المعالجة فوراً بعد اكتشاف الباركود
                     }
                 } catch (error) {
                     console.error('Barcode detection error:', error);
                 } finally {
                     barcodeProcessing = false;
                 }
-            }, 350);
+            }, 150); // تقليل من 350ms إلى 150ms للقراءة السريعة
             return true;
         }
 
@@ -1298,7 +1334,8 @@ $_SESSION['reader_session_id'] = $_SESSION['reader_session_id'] ?? bin2hex(rando
             };
 
             await performOcr();
-            ocrInterval = setInterval(performOcr, 1800);
+            // تحسين الأداء: تقليل الفاصل الزمني للـ OCR من 1800ms إلى 1200ms
+            ocrInterval = setInterval(performOcr, 1200);
             return true;
         }
 
@@ -1346,16 +1383,32 @@ $_SESSION['reader_session_id'] = $_SESSION['reader_session_id'] ?? bin2hex(rando
             }
 
             try {
+                // تحسين إعدادات الكاميرا للقراءة السريعة والدقيقة
                 const constraints = {
                     video: {
                         facingMode: 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        // زيادة الدقة للقراءة الأفضل (مع الحفاظ على الأداء)
+                        width: { ideal: 1920, min: 1280 },
+                        height: { ideal: 1080, min: 720 },
+                        // إعدادات إضافية للأداء
+                        frameRate: { ideal: 30, min: 24 }, // إطارات أعلى للقراءة السريعة
+                        // تحسينات للضوء والتركيز
+                        focusMode: 'continuous', // تركيز مستمر
+                        exposureMode: 'continuous' // تعرض مستمر
                     }
                 };
 
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = currentStream;
+                
+                // تحسينات إضافية للفيديو للأداء الأفضل
+                video.setAttribute('playsinline', 'true');
+                video.setAttribute('autoplay', 'true');
+                video.setAttribute('muted', 'true');
+                
+                // تحسين جودة العرض للقراءة الأفضل
+                video.style.imageRendering = 'crisp-edges'; // وضوح أعلى للباركودات
+                
                 videoContainer.style.display = 'block';
                 cameraSection.classList.add('active');
                 startCameraBtn.style.display = 'none';
@@ -1367,6 +1420,14 @@ $_SESSION['reader_session_id'] = $_SESSION['reader_session_id'] ?? bin2hex(rando
                 stopDetectionLoops();
                 barcodeProcessing = false;
                 ocrProcessing = false;
+                
+                // بدء الكشف فوراً بعد تحميل الفيديو
+                video.addEventListener('loadedmetadata', () => {
+                    // التأكد من أن الفيديو جاهز قبل البدء
+                    if (video.readyState >= 2) {
+                        // لا حاجة لانتظار إضافي - البدء فوراً
+                    }
+                }, { once: true });
                 const barcodeReady = await startBarcodeDetection();
                 let zxingReady = false;
                 let ocrReady = false;
