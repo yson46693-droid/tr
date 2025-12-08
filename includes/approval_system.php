@@ -176,8 +176,38 @@ function requestApproval($type, $entityId, $requestedBy, $notes = null) {
                             $employeeName = $salary['full_name'] ?? $salary['username'] ?? 'غير محدد';
                             $userRole = $salary['role'] ?? 'production';
                             $userId = intval($salary['user_id'] ?? 0);
-                            $month = intval($salary['month'] ?? date('n'));
-                            $year = intval($salary['year'] ?? date('Y'));
+                            
+                            // استخراج الشهر والسنة مع التحقق من صحتهما
+                            $monthRaw = $salary['month'] ?? null;
+                            $yearRaw = $salary['year'] ?? null;
+                            
+                            // إذا كان month من نوع DATE وكانت القيمة '0000-00-00' أو NULL
+                            if (empty($monthRaw) || $monthRaw === '0000-00-00' || $monthRaw === '0000-00-00 00:00:00') {
+                                $month = (int)date('n');
+                            } else {
+                                // محاولة استخراج الشهر من التاريخ إذا كان DATE
+                                if (is_string($monthRaw) && preg_match('/^\d{4}-\d{2}/', $monthRaw)) {
+                                    $month = (int)date('n', strtotime($monthRaw));
+                                    if ($month < 1 || $month > 12) {
+                                        $month = (int)date('n');
+                                    }
+                                } else {
+                                    $month = intval($monthRaw);
+                                    if ($month < 1 || $month > 12) {
+                                        $month = (int)date('n');
+                                    }
+                                }
+                            }
+                            
+                            // استخراج السنة
+                            if (empty($yearRaw) || $yearRaw === 0 || $yearRaw === '0') {
+                                $year = (int)date('Y');
+                            } else {
+                                $year = intval($yearRaw);
+                                if ($year < 2000 || $year > 2100) {
+                                    $year = (int)date('Y');
+                                }
+                            }
                             
                             // التحقق من وجود عمود bonus أو bonuses
                             $bonusColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field IN ('bonus', 'bonuses')");

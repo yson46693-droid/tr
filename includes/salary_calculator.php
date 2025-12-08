@@ -809,6 +809,13 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
     if ($year < 2000 || $year > 2100) {
         return [
             'success' => false,
+            'message' => 'السنة يجب أن تكون بين 2000 و 2100. القيمة المستلمة: ' . $year
+        ];
+    }
+    
+    if ($year < 2000 || $year > 2100) {
+        return [
+            'success' => false,
             'message' => 'السنة غير صحيحة. يجب أن تكون بين 2000 و 2100. القيمة المستلمة: ' . $year
         ];
     }

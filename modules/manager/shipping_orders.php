@@ -585,20 +585,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
             }
 
-            // ربط أرقام التشغيلة بعناصر الفاتورة
+            // ربط أرقام التشغيلة بعناصر الفاتورة - مطابقة محسّنة لضمان الدقة
             $invoiceItemsFromDb = $db->query(
-                "SELECT id, product_id FROM invoice_items WHERE invoice_id = ? ORDER BY id",
+                "SELECT id, product_id, quantity, unit_price FROM invoice_items WHERE invoice_id = ? ORDER BY id",
                 [$invoiceId]
             );
             
-            // إنشاء خريطة للمطابقة بين invoice_items و normalizedItems
+            // إنشاء خريطة محسّنة للمطابقة بين invoice_items و normalizedItems
+            // المطابقة بناءً على product_id و quantity و unit_price لضمان الدقة
             $invoiceItemsMap = [];
             foreach ($invoiceItemsFromDb as $invItem) {
                 $productId = (int)$invItem['product_id'];
-                if (!isset($invoiceItemsMap[$productId])) {
-                    $invoiceItemsMap[$productId] = [];
+                $quantity = (float)$invItem['quantity'];
+                $unitPrice = (float)$invItem['unit_price'];
+                $key = "{$productId}_{$quantity}_{$unitPrice}";
+                
+                if (!isset($invoiceItemsMap[$key])) {
+                    $invoiceItemsMap[$key] = [];
                 }
-                $invoiceItemsMap[$productId][] = (int)$invItem['id'];
+                $invoiceItemsMap[$key][] = (int)$invItem['id'];
             }
             
             // ربط أرقام التشغيلة بعناصر الفاتورة
@@ -606,31 +611,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $productId = (int)$normalizedItem['product_id'];
                 $batchId = $normalizedItem['batch_id'] ?? null;
                 $productType = $normalizedItem['product_type'] ?? '';
-                $quantity = $normalizedItem['quantity'];
+                $quantity = (float)$normalizedItem['quantity'];
+                $unitPrice = (float)$normalizedItem['unit_price'];
                 
-                if (isset($invoiceItemsMap[$productId]) && !empty($invoiceItemsMap[$productId])) {
+                // البحث عن invoice_item_id المطابق بناءً على product_id و quantity و unit_price
+                $matchKey = "{$productId}_{$quantity}_{$unitPrice}";
+                $invoiceItemId = null;
+                
+                if (isset($invoiceItemsMap[$matchKey]) && !empty($invoiceItemsMap[$matchKey])) {
                     // استخدام أول invoice_item_id متطابق
-                    $invoiceItemId = array_shift($invoiceItemsMap[$productId]);
-                    
+                    $invoiceItemId = array_shift($invoiceItemsMap[$matchKey]);
+                    if (empty($invoiceItemsMap[$matchKey])) {
+                        unset($invoiceItemsMap[$matchKey]);
+                    }
+                } else {
+                    // إذا لم نجد مطابقة دقيقة، نبحث عن أي invoice_item بنفس product_id
+                    // (للتعامل مع حالات التقريب في الأسعار)
+                    foreach ($invoiceItemsMap as $key => $items) {
+                        $parts = explode('_', $key);
+                        if (count($parts) >= 3 && (int)$parts[0] === $productId) {
+                            // مطابقة product_id فقط
+                            if (!empty($items)) {
+                                $invoiceItemId = array_shift($items);
+                                if (empty($items)) {
+                                    unset($invoiceItemsMap[$key]);
+                                } else {
+                                    $invoiceItemsMap[$key] = $items;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if ($invoiceItemId) {
                     // البحث عن batch_number_id من جدول batch_numbers
                     $batchNumberId = null;
                     if ($productType === 'factory' && $batchId) {
                         // جلب batch_number من finished_products
                         $fp = $db->queryOne("
-                            SELECT fp.batch_number, fp.batch_id
+                            SELECT fp.batch_number, fp.batch_id, fp.product_id, fp.product_name
                             FROM finished_products fp
                             WHERE fp.id = ?
                             LIMIT 1
                         ", [$batchId]);
-                        
-                        error_log("shipping_orders: Linking batch - batchId: $batchId, fp data: " . json_encode($fp));
                         
                         if ($fp) {
                             // محاولة جلب batch_number من finished_products.batch_number مباشرة
                             $batchNumber = null;
                             if (!empty($fp['batch_number'])) {
                                 $batchNumber = trim($fp['batch_number']);
-                                error_log("shipping_orders: Found batch_number from finished_products: $batchNumber");
                             } elseif (!empty($fp['batch_id'])) {
                                 // إذا لم يكن batch_number موجوداً، نحاول جلب batch_number من batch_numbers باستخدام batch_id
                                 $batchFromTable = $db->queryOne(
@@ -639,7 +669,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 );
                                 if ($batchFromTable && !empty($batchFromTable['batch_number'])) {
                                     $batchNumber = trim($batchFromTable['batch_number']);
-                                    error_log("shipping_orders: Found batch_number from batch_numbers using batch_id: $batchNumber");
                                 }
                             }
                             
@@ -651,9 +680,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 );
                                 if ($batchCheck) {
                                     $batchNumberId = (int)$batchCheck['id'];
-                                    error_log("shipping_orders: Found batch_number_id: $batchNumberId for batch_number: $batchNumber");
                                 } else {
-                                    error_log("shipping_orders: WARNING - batch_number '$batchNumber' not found in batch_numbers table");
+                                    error_log("shipping_orders: WARNING - batch_number '$batchNumber' not found in batch_numbers table for batch_id=$batchId");
                                 }
                             } else {
                                 error_log("shipping_orders: WARNING - batch_number is empty for finished_products.id = $batchId");
@@ -674,14 +702,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             
                             if ($existingBatchLink) {
                                 // إذا كان السجل موجوداً، نحدّث الكمية فقط إذا كانت مختلفة
-                                if ((float)($existingBatchLink['quantity'] ?? 0) != $quantity) {
+                                if (abs((float)($existingBatchLink['quantity'] ?? 0) - $quantity) > 0.001) {
                                     $db->execute(
                                         "UPDATE sales_batch_numbers SET quantity = ? WHERE id = ?",
                                         [$quantity, $existingBatchLink['id']]
                                     );
-                                    error_log("shipping_orders: Updated existing batch link - batch_number_id $batchNumberId to invoice_item_id $invoiceItemId with quantity $quantity");
-                                } else {
-                                    error_log("shipping_orders: Batch link already exists with same quantity - batch_number_id $batchNumberId to invoice_item_id $invoiceItemId with quantity $quantity");
+                                    error_log("shipping_orders: Updated existing batch link - invoice_item_id=$invoiceItemId, batch_number_id=$batchNumberId, quantity=$quantity");
                                 }
                             } else {
                                 // إدراج سجل جديد
@@ -690,7 +716,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                      VALUES (?, ?, ?)",
                                     [$invoiceItemId, $batchNumberId, $quantity]
                                 );
-                                error_log("shipping_orders: Successfully linked batch_number_id $batchNumberId to invoice_item_id $invoiceItemId with quantity $quantity");
+                                error_log("shipping_orders: Successfully linked batch - invoice_item_id=$invoiceItemId, batch_number_id=$batchNumberId, batch_number=$batchNumber, quantity=$quantity, product_id=$productId, batch_id=$batchId");
                             }
                         } catch (Throwable $batchError) {
                             error_log('shipping_orders: Error linking batch number to invoice item: ' . $batchError->getMessage());
@@ -698,6 +724,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } else {
                         error_log("shipping_orders: WARNING - batchNumberId is null for product_id: $productId, batchId: $batchId, productType: $productType");
                     }
+                } else {
+                    error_log("shipping_orders: WARNING - Could not find matching invoice_item for normalized item - product_id=$productId, quantity=$quantity, unit_price=$unitPrice, batch_id=$batchId");
                 }
             }
 
@@ -1273,33 +1301,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
 
             // ربط أرقام التشغيلة بعناصر الفاتورة في sales_batch_numbers (لضمان ظهورها في سجل مشتريات العميل)
+            // هذا الحل الجذري يضمن الربط الصحيح حتى لو فشل عند إنشاء الطلب
             if (!empty($order['invoice_id'])) {
                 try {
                     $invoiceId = (int)$order['invoice_id'];
                     
-                    // جلب عناصر الفاتورة
+                    // جلب عناصر الفاتورة مع جميع البيانات المطلوبة للمطابقة الدقيقة
                     $invoiceItemsFromDb = $db->query(
-                        "SELECT id, product_id, quantity FROM invoice_items WHERE invoice_id = ? ORDER BY id",
+                        "SELECT id, product_id, quantity, unit_price FROM invoice_items WHERE invoice_id = ? ORDER BY id",
                         [$invoiceId]
                     );
                     
-                    // جلب عناصر طلب الشحن مع batch_id
+                    // جلب عناصر طلب الشحن مع batch_id و unit_price للمطابقة الدقيقة
                     $orderItemsWithBatch = $db->query(
-                        "SELECT product_id, batch_id, quantity FROM shipping_company_order_items WHERE order_id = ?",
+                        "SELECT product_id, batch_id, quantity, unit_price FROM shipping_company_order_items WHERE order_id = ? ORDER BY id",
                         [$orderId]
                     );
                     
-                    // إنشاء خريطة للمطابقة بين invoice_items و orderItems
+                    // إنشاء خريطة محسّنة للمطابقة بين invoice_items و orderItems
+                    // المطابقة بناءً على product_id و quantity و unit_price لضمان الدقة
                     $invoiceItemsMap = [];
                     foreach ($invoiceItemsFromDb as $invItem) {
                         $productId = (int)$invItem['product_id'];
-                        if (!isset($invoiceItemsMap[$productId])) {
-                            $invoiceItemsMap[$productId] = [];
+                        $quantity = (float)$invItem['quantity'];
+                        $unitPrice = (float)$invItem['unit_price'];
+                        $key = "{$productId}_{$quantity}_{$unitPrice}";
+                        
+                        if (!isset($invoiceItemsMap[$key])) {
+                            $invoiceItemsMap[$key] = [];
                         }
-                        $invoiceItemsMap[$productId][] = [
-                            'id' => (int)$invItem['id'],
-                            'quantity' => (float)$invItem['quantity']
-                        ];
+                        $invoiceItemsMap[$key][] = (int)$invItem['id'];
                     }
                     
                     // ربط أرقام التشغيلة بعناصر الفاتورة
@@ -1307,76 +1338,104 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $productId = (int)$orderItem['product_id'];
                         $batchId = !empty($orderItem['batch_id']) ? (int)$orderItem['batch_id'] : null;
                         $quantity = (float)$orderItem['quantity'];
+                        $unitPrice = (float)$orderItem['unit_price'];
                         
-                        if ($batchId && isset($invoiceItemsMap[$productId]) && !empty($invoiceItemsMap[$productId])) {
-                            // استخدام أول invoice_item_id متطابق
-                            $invoiceItemData = array_shift($invoiceItemsMap[$productId]);
-                            $invoiceItemId = $invoiceItemData['id'];
+                        if ($batchId) {
+                            // البحث عن invoice_item_id المطابق بناءً على product_id و quantity و unit_price
+                            $matchKey = "{$productId}_{$quantity}_{$unitPrice}";
+                            $invoiceItemId = null;
                             
-                            // جلب batch_number من finished_products
-                            $fp = $db->queryOne("
-                                SELECT fp.batch_number, fp.batch_id
-                                FROM finished_products fp
-                                WHERE fp.id = ?
-                                LIMIT 1
-                            ", [$batchId]);
-                            
-                            if ($fp) {
-                                $batchNumber = null;
-                                if (!empty($fp['batch_number'])) {
-                                    $batchNumber = trim($fp['batch_number']);
-                                } elseif (!empty($fp['batch_id'])) {
-                                    // إذا لم يكن batch_number موجوداً، نحاول جلب batch_number من batch_numbers
-                                    $batchFromTable = $db->queryOne(
-                                        "SELECT batch_number FROM batch_numbers WHERE id = ?",
-                                        [(int)$fp['batch_id']]
-                                    );
-                                    if ($batchFromTable && !empty($batchFromTable['batch_number'])) {
-                                        $batchNumber = trim($batchFromTable['batch_number']);
+                            if (isset($invoiceItemsMap[$matchKey]) && !empty($invoiceItemsMap[$matchKey])) {
+                                // استخدام أول invoice_item_id متطابق
+                                $invoiceItemId = array_shift($invoiceItemsMap[$matchKey]);
+                            } else {
+                                // إذا لم نجد مطابقة دقيقة، نبحث عن أي invoice_item بنفس product_id
+                                // (للتعامل مع حالات التقريب في الأسعار)
+                                foreach ($invoiceItemsMap as $key => $items) {
+                                    $parts = explode('_', $key);
+                                    if (count($parts) >= 3 && (int)$parts[0] === $productId) {
+                                        // مطابقة product_id فقط
+                                        if (!empty($items)) {
+                                            $invoiceItemId = array_shift($items);
+                                            if (empty($items)) {
+                                                unset($invoiceItemsMap[$key]);
+                                            } else {
+                                                $invoiceItemsMap[$key] = $items;
+                                            }
+                                            break;
+                                        }
                                     }
                                 }
+                            }
+                            
+                            if ($invoiceItemId) {
+                                // جلب batch_number من finished_products
+                                $fp = $db->queryOne("
+                                    SELECT fp.batch_number, fp.batch_id, fp.product_id, fp.product_name
+                                    FROM finished_products fp
+                                    WHERE fp.id = ?
+                                    LIMIT 1
+                                ", [$batchId]);
                                 
-                                if ($batchNumber) {
-                                    // البحث عن batch_number_id من جدول batch_numbers
-                                    $batchCheck = $db->queryOne(
-                                        "SELECT id FROM batch_numbers WHERE batch_number = ?",
-                                        [$batchNumber]
-                                    );
-                                    if ($batchCheck) {
-                                        $batchNumberId = (int)$batchCheck['id'];
-                                        
-                                        // التحقق من وجود سجل مسبقاً لتجنب التكرار
-                                        $existingBatchLink = $db->queryOne(
-                                            "SELECT id, quantity FROM sales_batch_numbers WHERE invoice_item_id = ? AND batch_number_id = ?",
-                                            [$invoiceItemId, $batchNumberId]
+                                if ($fp) {
+                                    $batchNumber = null;
+                                    if (!empty($fp['batch_number'])) {
+                                        $batchNumber = trim($fp['batch_number']);
+                                    } elseif (!empty($fp['batch_id'])) {
+                                        // إذا لم يكن batch_number موجوداً، نحاول جلب batch_number من batch_numbers
+                                        $batchFromTable = $db->queryOne(
+                                            "SELECT batch_number FROM batch_numbers WHERE id = ?",
+                                            [(int)$fp['batch_id']]
                                         );
-                                        
-                                        if ($existingBatchLink) {
-                                            // إذا كان السجل موجوداً، نحدّث الكمية فقط إذا كانت مختلفة
-                                            if ((float)($existingBatchLink['quantity'] ?? 0) != $quantity) {
+                                        if ($batchFromTable && !empty($batchFromTable['batch_number'])) {
+                                            $batchNumber = trim($batchFromTable['batch_number']);
+                                        }
+                                    }
+                                    
+                                    if ($batchNumber) {
+                                        // البحث عن batch_number_id من جدول batch_numbers
+                                        $batchCheck = $db->queryOne(
+                                            "SELECT id FROM batch_numbers WHERE batch_number = ?",
+                                            [$batchNumber]
+                                        );
+                                        if ($batchCheck) {
+                                            $batchNumberId = (int)$batchCheck['id'];
+                                            
+                                            // التحقق من وجود سجل مسبقاً لتجنب التكرار
+                                            $existingBatchLink = $db->queryOne(
+                                                "SELECT id, quantity FROM sales_batch_numbers WHERE invoice_item_id = ? AND batch_number_id = ?",
+                                                [$invoiceItemId, $batchNumberId]
+                                            );
+                                            
+                                            if ($existingBatchLink) {
+                                                // إذا كان السجل موجوداً، نحدّث الكمية فقط إذا كانت مختلفة
+                                                if (abs((float)($existingBatchLink['quantity'] ?? 0) - $quantity) > 0.001) {
+                                                    $db->execute(
+                                                        "UPDATE sales_batch_numbers SET quantity = ? WHERE id = ?",
+                                                        [$quantity, $existingBatchLink['id']]
+                                                    );
+                                                    error_log("shipping_orders: Updated batch link on delivery - invoice_item_id=$invoiceItemId, batch_number_id=$batchNumberId, batch_number=$batchNumber, quantity=$quantity");
+                                                }
+                                            } else {
+                                                // إدراج سجل جديد
                                                 $db->execute(
-                                                    "UPDATE sales_batch_numbers SET quantity = ? WHERE id = ?",
-                                                    [$quantity, $existingBatchLink['id']]
+                                                    "INSERT INTO sales_batch_numbers (invoice_item_id, batch_number_id, quantity) 
+                                                     VALUES (?, ?, ?)",
+                                                    [$invoiceItemId, $batchNumberId, $quantity]
                                                 );
-                                                error_log("shipping_orders: Updated batch link on delivery - batch_number_id $batchNumberId to invoice_item_id $invoiceItemId with quantity $quantity");
+                                                error_log("shipping_orders: Linked batch on delivery - invoice_item_id=$invoiceItemId, batch_number_id=$batchNumberId, batch_number=$batchNumber, quantity=$quantity, product_id=$productId, batch_id=$batchId");
                                             }
                                         } else {
-                                            // إدراج سجل جديد
-                                            $db->execute(
-                                                "INSERT INTO sales_batch_numbers (invoice_item_id, batch_number_id, quantity) 
-                                                 VALUES (?, ?, ?)",
-                                                [$invoiceItemId, $batchNumberId, $quantity]
-                                            );
-                                            error_log("shipping_orders: Linked batch_number_id $batchNumberId to invoice_item_id $invoiceItemId with quantity $quantity on delivery completion");
+                                            error_log("shipping_orders: WARNING - batch_number '$batchNumber' not found in batch_numbers table when completing delivery for batch_id=$batchId");
                                         }
                                     } else {
-                                        error_log("shipping_orders: WARNING - batch_number '$batchNumber' not found in batch_numbers table when completing delivery");
+                                        error_log("shipping_orders: WARNING - batch_number is empty for finished_products.id = $batchId when completing delivery");
                                     }
                                 } else {
-                                    error_log("shipping_orders: WARNING - batch_number is empty for finished_products.id = $batchId when completing delivery");
+                                    error_log("shipping_orders: ERROR - finished_products not found with id = $batchId when completing delivery");
                                 }
                             } else {
-                                error_log("shipping_orders: ERROR - finished_products not found with id = $batchId when completing delivery");
+                                error_log("shipping_orders: WARNING - Could not find matching invoice_item for order item - product_id=$productId, quantity=$quantity, unit_price=$unitPrice, batch_id=$batchId");
                             }
                         }
                     }
@@ -1385,6 +1444,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     error_log('shipping_orders: batch link error trace: ' . $batchLinkError->getTraceAsString());
                     // لا نوقف العملية إذا فشل ربط أرقام التشغيلة
                 }
+            } else {
+                error_log("shipping_orders: WARNING - invoice_id is empty for order_id=$orderId when completing delivery");
             }
 
             // إضافة المنتجات إلى جدول sales (سجل مشتريات العميل)

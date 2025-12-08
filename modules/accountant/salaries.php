@@ -210,6 +210,14 @@ if (empty($settlementsTableCheck)) {
 // الحصول على الشهر والسنة الحالية
 $selectedMonth = isset($_GET['month']) ? intval($_GET['month']) : date('n');
 $selectedYear = isset($_GET['year']) ? intval($_GET['year']) : date('Y');
+
+// التحقق من صحة الشهر والسنة
+if ($selectedMonth < 1 || $selectedMonth > 12) {
+    $selectedMonth = date('n');
+}
+if ($selectedYear < 2000 || $selectedYear > 2100) {
+    $selectedYear = date('Y');
+}
 $selectedUserId = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
 $salaryId = isset($_GET['id']) ? intval($_GET['id']) : 0;
 $view = isset($_GET['view']) ? $_GET['view'] : ''; // 'list' أو 'pending' أو 'advances'
@@ -266,9 +274,17 @@ if (isset($_SESSION['salaries_show_report']) && $_SESSION['salaries_show_report'
     $showReport = true;
     if (isset($_SESSION['salaries_report_month'])) {
         $selectedMonth = (int)$_SESSION['salaries_report_month'];
+        // التحقق من صحة الشهر
+        if ($selectedMonth < 1 || $selectedMonth > 12) {
+            $selectedMonth = date('n');
+        }
     }
     if (isset($_SESSION['salaries_report_year'])) {
         $selectedYear = (int)$_SESSION['salaries_report_year'];
+        // التحقق من صحة السنة
+        if ($selectedYear < 2000 || $selectedYear > 2100) {
+            $selectedYear = date('Y');
+        }
     }
     // تنظيف session
     unset($_SESSION['salaries_show_report']);

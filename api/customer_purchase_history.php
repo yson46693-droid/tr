@@ -315,7 +315,11 @@ function handleGetHistory(): void
                            (pr2.name IS NOT NULL AND TRIM(pr2.name) != '' AND pr2.name NOT LIKE 'منتج رقم%')
                            OR (fp2.product_name IS NOT NULL AND TRIM(fp2.product_name) != '' AND fp2.product_name NOT LIKE 'منتج رقم%')
                        )
-                     ORDER BY fp2.id DESC 
+                     ORDER BY 
+                       CASE WHEN COALESCE(fp2.product_id, bn2.product_id) = ii.product_id THEN 0 ELSE 1 END,
+                       CASE WHEN fp2.product_name IS NOT NULL AND TRIM(fp2.product_name) != '' AND fp2.product_name NOT LIKE 'منتج رقم%' THEN 0 ELSE 1 END,
+                       CASE WHEN pr2.name IS NOT NULL AND TRIM(pr2.name) != '' AND pr2.name NOT LIKE 'منتج رقم%' THEN 0 ELSE 1 END,
+                       fp2.id DESC 
                      LIMIT 1),
                     NULLIF(TRIM(p.name), ''),
                     CONCAT('منتج رقم ', p.id)

@@ -423,15 +423,35 @@ function handleSubmitReturn(): void
             
             $db->execute($sql, $values);
 
-            // البحث عن batch_number_id في finished_products إذا كان موجوداً
+            // البحث عن finished_products.id من batch_number_id مع fallback
             $finishedProductId = null;
+            $batchNumber = null;
             if ($batchNumberId) {
+                // البحث الأول: باستخدام batch_id
                 $finishedProduct = $db->queryOne(
-                    "SELECT id FROM finished_products WHERE batch_id = ?",
+                    "SELECT id, batch_number FROM finished_products WHERE batch_id = ? FOR UPDATE",
                     [$batchNumberId]
                 );
+                
                 if ($finishedProduct) {
                     $finishedProductId = (int)$finishedProduct['id'];
+                    $batchNumber = $finishedProduct['batch_number'] ?? null;
+                } else {
+                    // Fallback: البحث باستخدام batch_number من batch_numbers
+                    $batchInfo = $db->queryOne(
+                        "SELECT bn.batch_number FROM batch_numbers bn WHERE bn.id = ?",
+                        [$batchNumberId]
+                    );
+                    if ($batchInfo && !empty($batchInfo['batch_number'])) {
+                        $batchNumber = $batchInfo['batch_number'];
+                        $finishedProduct = $db->queryOne(
+                            "SELECT id FROM finished_products WHERE batch_number = ? FOR UPDATE",
+                            [$batchNumber]
+                        );
+                        if ($finishedProduct) {
+                            $finishedProductId = (int)$finishedProduct['id'];
+                        }
+                    }
                 }
             }
 
@@ -514,6 +534,28 @@ function handleSubmitReturn(): void
                             $userId
                         ]
                     );
+                }
+            }
+
+            // تحديث finished_products.quantity_produced مباشرة إذا كان المنتج له رقم تشغيلة
+            if ($finishedProductId) {
+                $currentFinishedProduct = $db->queryOne(
+                    "SELECT quantity_produced FROM finished_products WHERE id = ? FOR UPDATE",
+                    [$finishedProductId]
+                );
+                
+                if ($currentFinishedProduct) {
+                    $currentQuantityProduced = (float)($currentFinishedProduct['quantity_produced'] ?? 0);
+                    $newQuantityProduced = round($currentQuantityProduced + $item['quantity'], 3);
+                    
+                    $db->execute(
+                        "UPDATE finished_products SET quantity_produced = ? WHERE id = ?",
+                        [$newQuantityProduced, $finishedProductId]
+                    );
+                    
+                    error_log("invoice_returns: Updated finished_products.quantity_produced directly - finished_product_id: $finishedProductId, batch_number_id: $batchNumberId, current: $currentQuantityProduced, added: {$item['quantity']}, new: $newQuantityProduced");
+                } else {
+                    error_log("invoice_returns: WARNING - finished_products not found for id: $finishedProductId when returning product");
                 }
             }
 

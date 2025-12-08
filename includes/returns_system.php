@@ -729,6 +729,28 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
                     $quantityAfter = $quantity;
                 }
                 
+                // تحديث finished_products.quantity_produced مباشرة إذا كان المنتج له رقم تشغيلة
+                if ($finishedProductId) {
+                    $currentFinishedProduct = $db->queryOne(
+                        "SELECT quantity_produced FROM finished_products WHERE id = ? FOR UPDATE",
+                        [$finishedProductId]
+                    );
+                    
+                    if ($currentFinishedProduct) {
+                        $currentQuantityProduced = (float)($currentFinishedProduct['quantity_produced'] ?? 0);
+                        $newQuantityProduced = round($currentQuantityProduced + $quantity, 3);
+                        
+                        $db->execute(
+                            "UPDATE finished_products SET quantity_produced = ? WHERE id = ?",
+                            [$newQuantityProduced, $finishedProductId]
+                        );
+                        
+                        error_log("returns_system: Updated finished_products.quantity_produced directly - finished_product_id: $finishedProductId, batch_number_id: $batchNumberId, current: $currentQuantityProduced, added: $quantity, new: $newQuantityProduced");
+                    } else {
+                        error_log("returns_system: WARNING - finished_products not found for id: $finishedProductId when returning product");
+                    }
+                }
+                
                 // تسجيل حركة المخزون
                 if (function_exists('recordInventoryMovement')) {
                     recordInventoryMovement(
@@ -1039,9 +1061,27 @@ function applyReturnSalaryDeduction(int $returnId, ?int $salesRepId = null, ?int
         
         // الحصول على الشهر والسنة
         $returnDate = $return['return_date'] ?? date('Y-m-d');
-        $timestamp = strtotime($returnDate) ?: time();
+        
+        // التحقق من صحة التاريخ قبل استخراج الشهر والسنة
+        if (empty($returnDate) || $returnDate === '0000-00-00' || $returnDate === '0000-00-00 00:00:00') {
+            $returnDate = date('Y-m-d');
+        }
+        
+        $timestamp = strtotime($returnDate);
+        if ($timestamp === false || $timestamp <= 0) {
+            $timestamp = time();
+        }
+        
         $month = (int)date('n', $timestamp);
         $year = (int)date('Y', $timestamp);
+        
+        // التحقق النهائي من صحة القيم - حماية إضافية
+        if ($month < 1 || $month > 12 || $year < 2000 || $year > 2100) {
+            // استخدام التاريخ الحالي كبديل آمن
+            $month = (int)date('n');
+            $year = (int)date('Y');
+            error_log("Invalid date extracted from return_date ({$returnDate}), using current date: month={$month}, year={$year}");
+        }
         
         // البحث عن سجل الراتب الموجود أو إنشاؤه بدون إعادة حساب نسبة التحصيلات
         // (نسبة التحصيلات هي رقم تراكمي ولا يجب تعديلها عند المرتجع)
