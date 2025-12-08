@@ -2598,255 +2598,141 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 
 <style>
-/* إصلاح مشكلة عرض القوائم المنسدلة بشكل نصف واضح في النماذج */
-.modal {
+/* حل جذري ونهائي - إزالة overflow من modal-body عند وجود select */
+.modal.show .modal-body:has(select),
+.modal.show .modal-body:has(select.form-select) {
+    overflow: visible !important;
+    overflow-y: visible !important;
+    overflow-x: visible !important;
+    max-height: none !important;
+}
+
+/* حل بديل للمتصفحات التي لا تدعم :has() */
+.modal.show .modal-body.select-container {
+    overflow: visible !important;
+    overflow-y: visible !important;
+    overflow-x: visible !important;
+    max-height: none !important;
+}
+
+/* إزالة overflow من modal-content و modal-dialog */
+.modal.show .modal-content:has(.modal-body select),
+.modal.show .modal-dialog:has(.modal-body select) {
     overflow: visible !important;
 }
 
-.modal-dialog {
+.modal.show .modal-content.select-container-parent,
+.modal.show .modal-dialog.select-container-parent {
     overflow: visible !important;
 }
 
-.modal-content {
-    overflow: visible !important;
-}
-
-/* السماح للقوائم المنسدلة بالظهور خارج modal-body */
-.modal-body {
-    position: relative;
-    overflow-y: auto;
-    overflow-x: visible;
-}
-
-/* ضمان ظهور القوائم المنسدلة بشكل كامل */
+/* ضمان ظهور القوائم المنسدلة */
 .modal-body select.form-select,
 .modal-body select {
     position: relative;
-    z-index: 1055;
+    z-index: 9999 !important;
 }
 
-/* عند فتح القائمة المنسدلة */
 .modal-body select.form-select:focus,
-.modal-body select:focus {
-    z-index: 1060;
-    position: relative;
+.modal-body select:focus,
+.modal-body select.form-select:active,
+.modal-body select:active {
+    z-index: 9999 !important;
+    position: relative !important;
 }
 
-/* إصلاح خاص للقوائم المنسدلة في النماذج */
-.modal.show .modal-body {
-    overflow-y: auto;
-    overflow-x: visible;
-}
-
-/* ضمان أن القائمة المنسدلة تظهر فوق كل شيء */
-.modal.show select.form-select:focus,
-.modal.show select:focus {
-    z-index: 1065 !important;
-}
-
-/* إصلاح خاص للنماذج الكبيرة - إزالة overflow عند فتح select */
-.modal-body[style*="max-height"] {
-    overflow-y: auto !important;
-    overflow-x: visible !important;
-}
-
-/* عند فتح select، إزالة overflow من modal-body */
-.modal-body.select-open {
+/* إزالة overflow من modal-body عند وجود select */
+.modal-body[style*="max-height"]:has(select),
+.modal-body[style*="overflow"]:has(select) {
     overflow: visible !important;
     overflow-y: visible !important;
     overflow-x: visible !important;
 }
 
-/* عند فتح select، نسمح للقائمة بالظهور */
-.modal-body select.form-select option,
-.modal-body select option {
-    padding: 0.5rem;
-    white-space: normal;
+/* حل خاص للنماذج التي تحتوي على select */
+.modal.show .modal-body {
+    position: relative;
 }
 
-/* تحسين عرض القائمة المنسدلة على الهواتف */
+/* تحسين على الهواتف */
 @media (max-width: 767.98px) {
-    .modal-body {
-        max-height: calc(100vh - 200px) !important;
-        overflow-y: auto !important;
+    .modal.show .modal-body:has(select),
+    .modal.show .modal-body.select-container {
+        overflow: visible !important;
+        overflow-y: visible !important;
         overflow-x: visible !important;
+        max-height: none !important;
     }
     
     .modal-body select.form-select,
     .modal-body select {
-        font-size: 1rem !important; /* منع التكبير التلقائي على iOS */
+        font-size: 1rem !important;
         padding: 0.5rem !important;
     }
 }
 </style>
 
 <script>
-// حل جذري ونهائي لمشكلة القوائم المنسدلة المقطوعة
+// حل نهائي وجذري - إزالة overflow من modal-body عند وجود select
 (function() {
     'use strict';
     
-    function fixSelectDropdowns() {
-        const modals = document.querySelectorAll('.modal');
-        
-        modals.forEach(modal => {
-            const modalBody = modal.querySelector('.modal-body');
-            const modalContent = modal.querySelector('.modal-content');
-            const modalDialog = modal.querySelector('.modal-dialog');
-            
-            if (!modalBody) return;
-            
-            // حفظ الأنماط الأصلية
-            let savedStyles = {
-                body: {
-                    overflow: modalBody.style.overflow || '',
-                    overflowY: modalBody.style.overflowY || '',
-                    overflowX: modalBody.style.overflowX || '',
-                    maxHeight: modalBody.style.maxHeight || ''
-                },
-                content: {
-                    overflow: modalContent ? (modalContent.style.overflow || '') : '',
-                    overflowY: modalContent ? (modalContent.style.overflowY || '') : '',
-                    overflowX: modalContent ? (modalContent.style.overflowX || '') : ''
-                },
-                dialog: {
-                    overflow: modalDialog ? (modalDialog.style.overflow || '') : '',
-                    overflowY: modalDialog ? (modalDialog.style.overflowY || '') : '',
-                    overflowX: modalDialog ? (modalDialog.style.overflowX || '') : ''
+    function removeOverflowFromModals() {
+        document.querySelectorAll('.modal.show .modal-body').forEach(modalBody => {
+            const hasSelect = modalBody.querySelector('select.form-select, select');
+            if (hasSelect) {
+                // إضافة class للتحكم عبر CSS
+                modalBody.classList.add('select-container');
+                if (modalBody.closest('.modal-content')) {
+                    modalBody.closest('.modal-content').classList.add('select-container-parent');
                 }
-            };
-            
-            const selects = modalBody.querySelectorAll('select.form-select, select');
-            
-            selects.forEach(select => {
-                // عند فتح القائمة (mousedown يحدث قبل فتح القائمة)
-                select.addEventListener('mousedown', function(e) {
-                    // إزالة overflow من جميع العناصر بشكل قسري
-                    modalBody.style.setProperty('overflow', 'visible', 'important');
-                    modalBody.style.setProperty('overflow-y', 'visible', 'important');
-                    modalBody.style.setProperty('overflow-x', 'visible', 'important');
-                    
-                    if (modalContent) {
-                        modalContent.style.setProperty('overflow', 'visible', 'important');
-                        modalContent.style.setProperty('overflow-y', 'visible', 'important');
-                        modalContent.style.setProperty('overflow-x', 'visible', 'important');
-                    }
-                    
-                    if (modalDialog) {
-                        modalDialog.style.setProperty('overflow', 'visible', 'important');
-                        modalDialog.style.setProperty('overflow-y', 'visible', 'important');
-                        modalDialog.style.setProperty('overflow-x', 'visible', 'important');
-                    }
-                    
-                    this.style.setProperty('z-index', '9999', 'important');
-                    this.style.setProperty('position', 'relative', 'important');
-                    
-                    // Scroll إلى العنصر
-                    setTimeout(() => {
-                        this.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-                    }, 50);
-                });
+                if (modalBody.closest('.modal-dialog')) {
+                    modalBody.closest('.modal-dialog').classList.add('select-container-parent');
+                }
                 
-                // عند focus
-                select.addEventListener('focus', function() {
-                    modalBody.style.setProperty('overflow', 'visible', 'important');
-                    modalBody.style.setProperty('overflow-y', 'visible', 'important');
-                    modalBody.style.setProperty('overflow-x', 'visible', 'important');
-                    
-                    if (modalContent) {
-                        modalContent.style.setProperty('overflow', 'visible', 'important');
-                        modalContent.style.setProperty('overflow-y', 'visible', 'important');
-                        modalContent.style.setProperty('overflow-x', 'visible', 'important');
-                    }
-                    
-                    if (modalDialog) {
-                        modalDialog.style.setProperty('overflow', 'visible', 'important');
-                        modalDialog.style.setProperty('overflow-y', 'visible', 'important');
-                        modalDialog.style.setProperty('overflow-x', 'visible', 'important');
-                    }
-                    
-                    this.style.setProperty('z-index', '9999', 'important');
-                });
+                // إزالة overflow بشكل قسري
+                modalBody.style.setProperty('overflow', 'visible', 'important');
+                modalBody.style.setProperty('overflow-y', 'visible', 'important');
+                modalBody.style.setProperty('overflow-x', 'visible', 'important');
+                modalBody.style.setProperty('max-height', 'none', 'important');
                 
-                // عند إغلاق القائمة
-                const restoreOverflow = function() {
-                    setTimeout(() => {
-                        // إعادة الأنماط الأصلية
-                        if (savedStyles.body.overflow) {
-                            modalBody.style.overflow = savedStyles.body.overflow;
-                        } else {
-                            modalBody.style.removeProperty('overflow');
-                        }
-                        
-                        if (savedStyles.body.overflowY) {
-                            modalBody.style.overflowY = savedStyles.body.overflowY;
-                        } else {
-                            modalBody.style.removeProperty('overflow-y');
-                        }
-                        
-                        if (savedStyles.body.maxHeight) {
-                            modalBody.style.maxHeight = savedStyles.body.maxHeight;
-                        }
-                        
-                        if (modalContent) {
-                            if (savedStyles.content.overflow) {
-                                modalContent.style.overflow = savedStyles.content.overflow;
-                            } else {
-                                modalContent.style.removeProperty('overflow');
-                            }
-                        }
-                        
-                        if (modalDialog) {
-                            if (savedStyles.dialog.overflow) {
-                                modalDialog.style.overflow = savedStyles.dialog.overflow;
-                            } else {
-                                modalDialog.style.removeProperty('overflow');
-                            }
-                        }
-                        
-                        select.style.removeProperty('z-index');
-                        select.style.removeProperty('position');
-                    }, 300);
-                };
-                
-                select.addEventListener('change', restoreOverflow);
-                select.addEventListener('blur', restoreOverflow);
-            });
-            
-            // عند إغلاق النموذج
-            modal.addEventListener('hidden.bs.modal', function() {
-                modalBody.style.removeProperty('overflow');
-                modalBody.style.removeProperty('overflow-y');
-                modalBody.style.removeProperty('overflow-x');
+                // إزالة overflow من العناصر الأب
+                const modalContent = modalBody.closest('.modal-content');
+                const modalDialog = modalBody.closest('.modal-dialog');
                 
                 if (modalContent) {
-                    modalContent.style.removeProperty('overflow');
-                    modalContent.style.removeProperty('overflow-y');
-                    modalContent.style.removeProperty('overflow-x');
+                    modalContent.style.setProperty('overflow', 'visible', 'important');
                 }
-                
                 if (modalDialog) {
-                    modalDialog.style.removeProperty('overflow');
-                    modalDialog.style.removeProperty('overflow-y');
-                    modalDialog.style.removeProperty('overflow-x');
+                    modalDialog.style.setProperty('overflow', 'visible', 'important');
                 }
-                
-                selects.forEach(select => {
-                    select.style.removeProperty('z-index');
-                    select.style.removeProperty('position');
-                });
-            });
+            }
         });
     }
     
-    // تشغيل عند تحميل الصفحة
+    // مراقبة فتح النماذج
+    document.addEventListener('shown.bs.modal', function() {
+        setTimeout(removeOverflowFromModals, 10);
+    });
+    
+    // تشغيل فوري
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', fixSelectDropdowns);
+        document.addEventListener('DOMContentLoaded', removeOverflowFromModals);
     } else {
-        fixSelectDropdowns();
+        removeOverflowFromModals();
     }
     
-    // إعادة التشغيل عند فتح أي modal
-    document.addEventListener('shown.bs.modal', fixSelectDropdowns);
+    // مراقبة DOM للتغييرات
+    const observer = new MutationObserver(function(mutations) {
+        removeOverflowFromModals();
+    });
+    
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class']
+    });
 })();
 </script>
 
