@@ -1124,10 +1124,8 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             if ($calculation['deductions'] >= $deductedAdvancesTotal) {
                 $calculation['deductions'] = $otherDeductions;
             }
-        } else if ($deductions == 0 && $currentDeductions > 0) {
-            // إعادة حساب total_amount مع الخصومات التراكمية (إذا لم تكن هناك سلفات)
-            $calculation['total_amount'] = round($calculation['base_amount'] + $calculation['total_bonus'] - $calculation['deductions'] - $calculation['advances_deduction'], 2);
         }
+        // ملاحظة: total_amount تم حسابه بشكل صحيح في calculateSalary بناءً على الخصومات الصحيحة
         
         if ($hasBonusColumn) {
             if ($hasNotesColumn) {
