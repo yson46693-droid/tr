@@ -458,7 +458,7 @@ $lang = isset($translations) ? $translations : [];
                             
                             <!-- Modal تسوية الرصيد -->
                             <div class="modal fade" id="settleCreditModal<?php echo $customerType; ?>_<?php echo $customer['id']; ?>" tabindex="-1" aria-labelledby="settleCreditModalLabel<?php echo $customerType; ?>_<?php echo $customer['id']; ?>" aria-hidden="true">
-                                <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered">
                                     <div class="modal-content">
                                         <div class="modal-header">
                                             <h5 class="modal-title" id="settleCreditModalLabel<?php echo $customerType; ?>_<?php echo $customer['id']; ?>">
@@ -669,6 +669,42 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // ========== إصلاح مشكلة النموذج على الموبايل ==========
+    // التأكد من أن النماذج تفتح بشكل صحيح على الموبايل
+    const settleModals = document.querySelectorAll('[id^="settleCreditModal"]');
+    settleModals.forEach(function(modal) {
+        // عند فتح النموذج
+        modal.addEventListener('show.bs.modal', function() {
+            // على الموبايل، إزالة centered مؤقتاً إذا كان يسبب مشاكل
+            if (window.innerWidth <= 576) {
+                const modalDialog = modal.querySelector('.modal-dialog');
+                if (modalDialog) {
+                    modalDialog.classList.remove('modal-dialog-centered');
+                }
+            }
+        });
+        
+        // عند إغلاق النموذج، إعادة centered للشاشات الكبيرة
+        modal.addEventListener('hidden.bs.modal', function() {
+            const modalDialog = modal.querySelector('.modal-dialog');
+            if (modalDialog && window.innerWidth > 576) {
+                modalDialog.classList.add('modal-dialog-centered');
+            }
+        });
+        
+        // التأكد من أن النموذج يظهر بشكل صحيح
+        modal.addEventListener('shown.bs.modal', function() {
+            // إصلاح أي مشاكل في العرض على الموبايل
+            if (window.innerWidth <= 576) {
+                const modalContent = modal.querySelector('.modal-content');
+                if (modalContent) {
+                    modalContent.style.maxHeight = 'calc(100vh - 1rem)';
+                    modalContent.style.overflowY = 'auto';
+                }
+            }
+        });
+    });
+    
     // ========== تحسينات إضافية ==========
     // إضافة تأثير hover على صفوف الجدول
     const tableRows = document.querySelectorAll('#customersTableBody tr');
@@ -715,5 +751,61 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .no-results-row td {
     background-color: #fff3cd !important;
+}
+
+/* إصلاح مشكلة النموذج على الموبايل */
+@media (max-width: 576px) {
+    /* إزالة centered على الموبايل لتجنب مشاكل الظل والتفاعل */
+    [id^="settleCreditModal"] .modal-dialog.modal-dialog-centered {
+        margin: 0.5rem auto !important;
+        min-height: calc(100% - 1rem);
+        display: flex;
+        align-items: flex-start;
+        padding-top: 0.5rem;
+    }
+    
+    /* التأكد من أن النموذج يظهر بشكل صحيح */
+    [id^="settleCreditModal"].show .modal-dialog {
+        transform: none !important;
+    }
+    
+    /* إصلاح مشكلة الظل الذي يعيق الاستخدام - التأكد من أن النموذج يظهر */
+    [id^="settleCreditModal"].show {
+        display: block !important;
+        padding-left: 0 !important;
+    }
+    
+    [id^="settleCreditModal"] .modal-content {
+        border-radius: 0.5rem;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        margin: 0;
+        max-height: calc(100vh - 1rem);
+        overflow-y: auto;
+    }
+    
+    /* التأكد من أن backdrop لا يعيق التفاعل */
+    .modal-backdrop.show {
+        opacity: 0.5;
+        z-index: 1040;
+    }
+    
+    [id^="settleCreditModal"].show {
+        z-index: 1055;
+    }
+    
+    /* إصلاح محاذاة النموذج على الموبايل */
+    [id^="settleCreditModal"] .modal-dialog {
+        max-width: calc(100% - 1rem);
+        width: auto;
+        margin-left: 0.5rem;
+        margin-right: 0.5rem;
+    }
+}
+
+/* تحسينات للشاشات المتوسطة والكبيرة */
+@media (min-width: 577px) {
+    [id^="settleCreditModal"] .modal-dialog {
+        max-width: 500px;
+    }
 }
 </style>
