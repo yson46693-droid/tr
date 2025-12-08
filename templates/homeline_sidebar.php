@@ -355,6 +355,13 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => isset($lang['my_salary']) ? $lang['my_salary'] : 'مرتبي',
+                'icon' => 'bi-wallet2',
+                'url' => $baseUrl . 'accountant.php?page=my_salary',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'my_salary'),
+                'badge' => null
+            ],
+            [
                 'title' => 'متابعة الحضور والانصراف',
                 'icon' => 'bi-bar-chart',
                 'url' => $baseUrl . 'accountant.php?page=attendance_management',

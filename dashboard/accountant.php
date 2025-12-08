@@ -1416,6 +1416,15 @@ $pageDescription = 'لوحة تحكم المحاسب - إدارة المعامل
                 }
                 ?>
                 
+            <?php elseif ($page === 'my_salary'): ?>
+                <!-- صفحة مرتب المستخدم -->
+                <?php 
+                $modulePath = __DIR__ . '/../modules/user/my_salary.php';
+                if (file_exists($modulePath)) {
+                    include $modulePath;
+                }
+                ?>
+                
             <?php elseif ($page === 'company_products'): ?>
                 <!-- صفحة منتجات الشركة -->
                 <?php 
