@@ -143,8 +143,46 @@ function handleGetHistory(): void
             $purchaseHistory = [];
         } else {
             // التحقق من وجود أعمدة batch_number و batch_id في local_invoice_items
-            $hasBatchNumber = !empty($db->queryOne("SHOW COLUMNS FROM local_invoice_items LIKE 'batch_number'"));
-            $hasBatchId = !empty($db->queryOne("SHOW COLUMNS FROM local_invoice_items LIKE 'batch_id'"));
+            // محاولة إضافة الأعمدة إذا لم تكن موجودة
+            try {
+                $hasBatchNumber = !empty($db->queryOne("SHOW COLUMNS FROM local_invoice_items LIKE 'batch_number'"));
+                if (!$hasBatchNumber) {
+                    try {
+                        $db->execute("ALTER TABLE local_invoice_items ADD COLUMN `batch_number` varchar(100) DEFAULT NULL AFTER `total_price`");
+                        $hasBatchNumber = true;
+                        error_log("customer_purchase_history API: Added batch_number column to local_invoice_items");
+                    } catch (Throwable $e) {
+                        error_log("customer_purchase_history API: Error adding batch_number column: " . $e->getMessage());
+                        $hasBatchNumber = false;
+                    }
+                }
+            } catch (Throwable $e) {
+                error_log("customer_purchase_history API: Error checking batch_number column: " . $e->getMessage());
+                $hasBatchNumber = false;
+            }
+            
+            try {
+                $hasBatchId = !empty($db->queryOne("SHOW COLUMNS FROM local_invoice_items LIKE 'batch_id'"));
+                if (!$hasBatchId) {
+                    try {
+                        $db->execute("ALTER TABLE local_invoice_items ADD COLUMN `batch_id` int(11) DEFAULT NULL AFTER `batch_number`");
+                        $hasBatchId = true;
+                        // إضافة index
+                        try {
+                            $db->execute("ALTER TABLE local_invoice_items ADD KEY `batch_id` (`batch_id`)");
+                        } catch (Throwable $indexError) {
+                            // تجاهل خطأ index إذا كان موجوداً بالفعل
+                        }
+                        error_log("customer_purchase_history API: Added batch_id column to local_invoice_items");
+                    } catch (Throwable $e) {
+                        error_log("customer_purchase_history API: Error adding batch_id column: " . $e->getMessage());
+                        $hasBatchId = false;
+                    }
+                }
+            } catch (Throwable $e) {
+                error_log("customer_purchase_history API: Error checking batch_id column: " . $e->getMessage());
+                $hasBatchId = false;
+            }
             
             // بناء الاستعلام ديناميكياً - استخدام sales_batch_numbers أيضاً للعملاء المحليين
             // أولاً: محاولة جلب رقم التشغيلة من sales_batch_numbers (مثل العملاء العاديين)
@@ -325,10 +363,9 @@ function handleGetHistory(): void
                     ii.quantity,
                     ii.unit_price,
                     ii.total_price,
-                    $batchSelect,
-                    -- إضافة حقول إضافية للتشخيص
-                    ii.batch_number as raw_batch_number,
-                    ii.batch_id as raw_batch_id
+                    $batchSelect" . 
+                    ($hasBatchNumber ? ", ii.batch_number as raw_batch_number" : ", NULL as raw_batch_number") .
+                    ($hasBatchId ? ", ii.batch_id as raw_batch_id" : ", NULL as raw_batch_id")
                 FROM local_invoices i
                 INNER JOIN local_invoice_items ii ON i.id = ii.invoice_id
                 LEFT JOIN products p ON ii.product_id = p.id

@@ -1725,7 +1725,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // التأكد من وجود جدول local_invoice_items وإنشاؤه إذا لم يكن موجوداً
                     $localInvoiceItemsTableExists = $db->queryOne("SHOW TABLES LIKE 'local_invoice_items'");
                     if (empty($localInvoiceItemsTableExists)) {
-                        // إنشاء جدول local_invoice_items
+                        // إنشاء جدول local_invoice_items مع الأعمدة المطلوبة
                         $db->execute("
                             CREATE TABLE IF NOT EXISTS `local_invoice_items` (
                               `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -1735,12 +1735,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                               `quantity` decimal(10,2) NOT NULL,
                               `unit_price` decimal(15,2) NOT NULL,
                               `total_price` decimal(15,2) NOT NULL,
+                              `batch_number` varchar(100) DEFAULT NULL,
+                              `batch_id` int(11) DEFAULT NULL,
                               `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
                               PRIMARY KEY (`id`),
                               KEY `invoice_id` (`invoice_id`),
-                              KEY `product_id` (`product_id`)
+                              KEY `product_id` (`product_id`),
+                              KEY `batch_id` (`batch_id`)
                             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                         ");
+                        error_log("shipping_orders: Created local_invoice_items table with batch_number and batch_id columns");
+                    } else {
+                        // التأكد من وجود الأعمدة المطلوبة وإضافتها إذا لم تكن موجودة
+                        $requiredColumns = [
+                            'batch_number' => "ALTER TABLE local_invoice_items ADD COLUMN `batch_number` varchar(100) DEFAULT NULL AFTER `total_price`",
+                            'batch_id' => "ALTER TABLE local_invoice_items ADD COLUMN `batch_id` int(11) DEFAULT NULL AFTER `batch_number`"
+                        ];
+                        
+                        foreach ($requiredColumns as $columnName => $alterSql) {
+                            $columnExists = !empty($db->queryOne("SHOW COLUMNS FROM local_invoice_items LIKE '$columnName'"));
+                            if (!$columnExists) {
+                                try {
+                                    $db->execute($alterSql);
+                                    // إضافة index لـ batch_id إذا لم يكن موجوداً
+                                    if ($columnName === 'batch_id') {
+                                        try {
+                                            $indexExists = !empty($db->queryOne("SHOW INDEX FROM local_invoice_items WHERE Key_name = 'batch_id'"));
+                                            if (!$indexExists) {
+                                                $db->execute("ALTER TABLE local_invoice_items ADD KEY `batch_id` (`batch_id`)");
+                                            }
+                                        } catch (Throwable $indexError) {
+                                            error_log("shipping_orders: Error adding index for batch_id: " . $indexError->getMessage());
+                                        }
+                                    }
+                                    error_log("shipping_orders: Added column $columnName to local_invoice_items table");
+                                } catch (Throwable $alterError) {
+                                    error_log("shipping_orders: Error adding column $columnName to local_invoice_items: " . $alterError->getMessage());
+                                }
+                            }
+                        }
                     }
                     
                     // إنشاء الفاتورة المحلية
