@@ -674,26 +674,36 @@ document.addEventListener('DOMContentLoaded', function() {
     settleModals.forEach(function(modal) {
         // عند فتح النموذج
         modal.addEventListener('show.bs.modal', function() {
-            // التأكد من إزالة أي styles قد تسبب مشاكل
-            const modalDialog = modal.querySelector('.modal-dialog');
-            const modalContent = modal.querySelector('.modal-content');
-            const modalBody = modal.querySelector('.modal-body');
-            
             if (window.innerWidth <= 576) {
-                // على الموبايل: ضبط الارتفاع والتمرير
+                // على الموبايل: ضبط البنية بشكل صحيح
+                const modalDialog = modal.querySelector('.modal-dialog');
+                const modalContent = modal.querySelector('.modal-content');
+                const modalBody = modal.querySelector('.modal-body');
+                const modalFooter = modal.querySelector('.modal-footer');
+                
                 if (modalDialog) {
                     modalDialog.style.maxHeight = 'calc(100vh - 1rem)';
+                    modalDialog.style.margin = '0.5rem auto';
                 }
+                
                 if (modalContent) {
                     modalContent.style.maxHeight = 'calc(100vh - 1rem)';
                     modalContent.style.display = 'flex';
                     modalContent.style.flexDirection = 'column';
+                    modalContent.style.height = 'auto';
                 }
+                
                 if (modalBody) {
                     modalBody.style.overflowY = 'auto';
+                    modalBody.style.overflowX = 'hidden';
                     modalBody.style.flex = '1 1 auto';
-                    modalBody.style.maxHeight = 'calc(100vh - 200px)';
+                    modalBody.style.minHeight = '0';
                     modalBody.style.webkitOverflowScrolling = 'touch';
+                }
+                
+                if (modalFooter) {
+                    modalFooter.style.flexShrink = '0';
+                    modalFooter.style.marginTop = 'auto';
                 }
             }
         });
@@ -701,19 +711,23 @@ document.addEventListener('DOMContentLoaded', function() {
         // بعد فتح النموذج بالكامل
         modal.addEventListener('shown.bs.modal', function() {
             if (window.innerWidth <= 576) {
-                // التأكد من أن الأزرار مرئية
-                const modalFooter = modal.querySelector('.modal-footer');
-                if (modalFooter) {
-                    modalFooter.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }
-                
                 // التأكد من أن النموذج في الموضع الصحيح
                 const modalDialog = modal.querySelector('.modal-dialog');
                 if (modalDialog) {
                     modalDialog.style.transform = 'none';
-                    modalDialog.style.marginTop = '0.5rem';
-                    modalDialog.style.marginBottom = '0.5rem';
                 }
+                
+                // التأكد من أن الأزرار مرئية - تمرير إلى الأسفل إذا لزم الأمر
+                setTimeout(function() {
+                    const modalFooter = modal.querySelector('.modal-footer');
+                    if (modalFooter) {
+                        const rect = modalFooter.getBoundingClientRect();
+                        const isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
+                        if (!isVisible) {
+                            modalFooter.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                        }
+                    }
+                }, 100);
             }
         });
         
@@ -722,10 +736,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const modalDialog = modal.querySelector('.modal-dialog');
             const modalContent = modal.querySelector('.modal-content');
             const modalBody = modal.querySelector('.modal-body');
+            const modalFooter = modal.querySelector('.modal-footer');
             
             if (modalDialog) modalDialog.style.cssText = '';
             if (modalContent) modalContent.style.cssText = '';
             if (modalBody) modalBody.style.cssText = '';
+            if (modalFooter) modalFooter.style.cssText = '';
         });
     });
     
@@ -781,41 +797,55 @@ document.addEventListener('DOMContentLoaded', function() {
 @media (max-width: 576px) {
     /* ضبط النموذج على الموبايل */
     [id^="settleCreditModal"] .modal-dialog {
-        margin: 0.5rem !important;
+        margin: 0.5rem auto !important;
         max-width: calc(100% - 1rem) !important;
+        height: auto !important;
+        min-height: auto !important;
         max-height: calc(100vh - 1rem) !important;
         display: flex !important;
         flex-direction: column !important;
+        position: relative !important;
     }
     
     /* جعل المحتوى قابل للتمرير */
     [id^="settleCreditModal"] .modal-content {
         border-radius: 0.5rem;
         max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
         display: flex !important;
         flex-direction: column !important;
         overflow: hidden !important;
+        position: relative !important;
     }
     
-    /* جعل modal-body قابل للتمرير */
+    /* جعل modal-body قابل للتمرير - هذا هو المفتاح */
     [id^="settleCreditModal"] .modal-body {
         overflow-y: auto !important;
+        overflow-x: hidden !important;
         flex: 1 1 auto !important;
-        max-height: calc(100vh - 200px) !important;
+        min-height: 0 !important;
         -webkit-overflow-scrolling: touch !important;
+        padding: 1rem !important;
     }
     
-    /* التأكد من أن modal-footer مرئي وثابت */
+    /* التأكد من أن modal-footer مرئي وثابت في الأسفل */
     [id^="settleCreditModal"] .modal-footer {
         flex-shrink: 0 !important;
-        border-top: 1px solid #dee2e6;
-        padding: 0.75rem !important;
-        background-color: #fff;
+        flex-grow: 0 !important;
+        border-top: 1px solid #dee2e6 !important;
+        padding: 0.75rem 1rem !important;
+        background-color: #fff !important;
+        margin-top: auto !important;
+        position: relative !important;
+        z-index: 10 !important;
     }
     
-    /* التأكد من أن modal-header ثابت */
+    /* التأكد من أن modal-header ثابت في الأعلى */
     [id^="settleCreditModal"] .modal-header {
         flex-shrink: 0 !important;
+        flex-grow: 0 !important;
+        padding: 1rem !important;
+        border-bottom: 1px solid #dee2e6 !important;
     }
     
     /* إصلاح موضع النموذج */
