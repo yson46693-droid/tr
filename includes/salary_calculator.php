@@ -982,7 +982,7 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
         
         if ($hasAccumulatedColumn) {
             // قراءة جميع البيانات الحالية بما في ذلك collections_bonus للمحافظة على المكافآت الفورية
-            $currentSalaryQuery = "SELECT accumulated_amount, total_amount, advances_deduction, deductions";
+            $currentSalaryQuery = "SELECT accumulated_amount, total_amount, advances_deduction, deductions, paid_amount";
             if ($hasCollectionsBonusColumn) {
                 $currentSalaryQuery .= ", collections_bonus, collections_amount";
             }
@@ -990,6 +990,7 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             $currentSalary = $db->queryOne($currentSalaryQuery, [$existingSalary['id']]);
             $currentAccumulated = floatval($currentSalary['accumulated_amount'] ?? 0);
             $currentTotalAmount = floatval($currentSalary['total_amount'] ?? 0);
+            $currentPaidAmount = floatval($currentSalary['paid_amount'] ?? 0);
             $currentAdvancesDeduction = floatval($currentSalary['advances_deduction'] ?? 0);
             $currentDeductions = floatval($currentSalary['deductions'] ?? 0);
             
@@ -1018,15 +1019,9 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                 }
             }
             
-            // إضافة المبلغ الجديد للتراكمي (إذا تغير total_amount ولم تكن هناك سلفات مخصومة)
-            if (!$hasDeductedAdvances) {
-                $oldTotalAmount = $currentTotalAmount;
-                $newTotalAmount = $calculation['total_amount'];
-                if (abs($newTotalAmount - $oldTotalAmount) > 0.01) {
-                    // إضافة الفرق للتراكمي
-                    $currentAccumulated += ($newTotalAmount - $oldTotalAmount);
-                }
-            }
+            // حساب المبلغ التراكمي الجديد = total_amount الجديد - paid_amount الحالي
+            // المبلغ التراكمي = المتبقي من الراتب الحالي فقط
+            $currentAccumulated = max(0, $calculation['total_amount'] - $currentPaidAmount);
         } else {
             // إذا لم يكن هناك عمود accumulated_amount، احصل على total_amount الحالي والخصومات
             // قراءة جميع البيانات الحالية بما في ذلك collections_bonus للمحافظة على المكافآت الفورية
