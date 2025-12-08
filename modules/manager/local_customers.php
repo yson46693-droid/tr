@@ -36,27 +36,89 @@ $db = db();
 
 // التأكد من وجود الجداول
 try {
+    // إنشاء جدول local_customers إذا لم يكن موجوداً
     $localCustomersTable = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
     if (empty($localCustomersTable)) {
-        // تحميل ملف SQL وإنشاء الجداول
-        $sqlFile = __DIR__ . '/../../database/migrations/create_local_customers_tables.sql';
-        if (file_exists($sqlFile)) {
-            $sql = file_get_contents($sqlFile);
-            // تنفيذ كل استعلام على حدة
-            $statements = array_filter(array_map('trim', explode(';', $sql)));
-            foreach ($statements as $statement) {
-                if (!empty($statement) && !preg_match('/^--/', $statement)) {
-                    try {
-                        $db->execute($statement);
-                    } catch (Throwable $e) {
-                        error_log('Error executing migration: ' . $e->getMessage());
+        // إنشاء جدول local_customers مباشرة
+        $createTableSql = "CREATE TABLE IF NOT EXISTS `local_customers` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `name` varchar(100) NOT NULL,
+            `phone` varchar(20) DEFAULT NULL,
+            `address` text DEFAULT NULL,
+            `balance` decimal(15,2) DEFAULT 0.00 COMMENT 'رصيد العميل (موجب = دين، سالب = رصيد دائن)',
+            `status` enum('active','inactive') DEFAULT 'active',
+            `created_by` int(11) NOT NULL COMMENT 'المستخدم الذي أضاف العميل',
+            `latitude` decimal(10,8) DEFAULT NULL COMMENT 'خط العرض',
+            `longitude` decimal(11,8) DEFAULT NULL COMMENT 'خط الطول',
+            `location_captured_at` datetime DEFAULT NULL COMMENT 'تاريخ تحديد الموقع',
+            `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `created_by` (`created_by`),
+            KEY `name` (`name`),
+            KEY `status` (`status`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='جدول العملاء المحليين (منفصل عن عملاء المندوبين)'";
+        
+        try {
+            $db->connection->query($createTableSql);
+            error_log('Table local_customers created successfully');
+            
+            // محاولة إضافة foreign key constraint إذا كان جدول users موجوداً
+            try {
+                $usersTableExists = $db->queryOne("SHOW TABLES LIKE 'users'");
+                if (!empty($usersTableExists)) {
+                    // التحقق من وجود constraint مسبقاً
+                    $fkCheck = $db->queryOne("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'local_customers' AND CONSTRAINT_NAME = 'local_customers_ibfk_1'");
+                    if (empty($fkCheck)) {
+                        $db->connection->query("ALTER TABLE `local_customers` ADD CONSTRAINT `local_customers_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE");
+                        error_log('Foreign key constraint added to local_customers');
                     }
                 }
+            } catch (Throwable $fkError) {
+                error_log('Could not add foreign key constraint: ' . $fkError->getMessage());
+                // لا نوقف العملية، الجدول موجود بدون constraint
             }
+        } catch (Throwable $e) {
+            error_log('Error creating local_customers table: ' . $e->getMessage());
+        }
+    }
+    
+    // إنشاء جدول local_collections إذا لم يكن موجوداً
+    $localCollectionsTable = $db->queryOne("SHOW TABLES LIKE 'local_collections'");
+    if (empty($localCollectionsTable)) {
+        $createCollectionsTableSql = "CREATE TABLE IF NOT EXISTS `local_collections` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `collection_number` varchar(50) DEFAULT NULL COMMENT 'رقم التحصيل',
+            `customer_id` int(11) NOT NULL COMMENT 'معرف العميل المحلي',
+            `amount` decimal(15,2) NOT NULL COMMENT 'المبلغ المحصل',
+            `date` date NOT NULL COMMENT 'تاريخ التحصيل',
+            `payment_method` enum('cash','bank','cheque','other') DEFAULT 'cash' COMMENT 'طريقة الدفع',
+            `reference_number` varchar(50) DEFAULT NULL COMMENT 'رقم مرجعي',
+            `notes` text DEFAULT NULL COMMENT 'ملاحظات',
+            `collected_by` int(11) NOT NULL COMMENT 'من قام بالتحصيل',
+            `status` enum('pending','approved','rejected') DEFAULT 'pending' COMMENT 'حالة التحصيل',
+            `approved_by` int(11) DEFAULT NULL COMMENT 'من وافق على التحصيل',
+            `approved_at` timestamp NULL DEFAULT NULL COMMENT 'تاريخ الموافقة',
+            `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `collection_number` (`collection_number`),
+            KEY `customer_id` (`customer_id`),
+            KEY `collected_by` (`collected_by`),
+            KEY `approved_by` (`approved_by`),
+            KEY `date` (`date`),
+            KEY `status` (`status`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='جدول التحصيلات للعملاء المحليين'";
+        
+        try {
+            $db->connection->query($createCollectionsTableSql);
+            error_log('Table local_collections created successfully');
+        } catch (Throwable $e) {
+            error_log('Error creating local_collections table: ' . $e->getMessage());
         }
     }
 } catch (Throwable $e) {
-    error_log('Error checking local_customers table: ' . $e->getMessage());
+    error_log('Error checking local_customers tables: ' . $e->getMessage());
 }
 
 // معالجة update_location قبل أي شيء آخر
