@@ -323,9 +323,9 @@ function recordInventoryMovement($productId, $warehouseId, $type, $quantity, $re
         // تحديث finished_products.quantity_produced إذا كان batchId موجوداً ونوع الحركة 'in'
         // ملاحظة: يتم تحديث finished_products.quantity_produced مباشرة في api/invoice_returns.php و includes/returns_system.php
         // لذلك لا نحتاج لتحديثه هنا مرة أخرى لتجنب التحديث المزدوج
-        // لكن سنترك هذا الكود كـ fallback في حالة استدعاء recordInventoryMovement من مكان آخر
-        if ($batchId && $type === 'in' && !$usingVehicleInventory) {
-            error_log("recordInventoryMovement: Processing return (non-vehicle) - batchId: $batchId, productId: $productId, quantity: $quantity");
+        // نتحقق من referenceType - إذا كان 'return'، نتخطى التحديث لأن returnProductsToMainWarehouse قام به بالفعل
+        if ($batchId && $type === 'in' && !$usingVehicleInventory && $referenceType !== 'return') {
+            error_log("recordInventoryMovement: Processing return (non-vehicle, non-return reference) - batchId: $batchId, productId: $productId, quantity: $quantity, referenceType: " . ($referenceType ?? 'NULL'));
             
             // البحث عن finished_products باستخدام batchId (finished_products.id)
             $finishedProductCheck = $db->queryOne(
@@ -343,10 +343,13 @@ function recordInventoryMovement($productId, $warehouseId, $type, $quantity, $re
                     [$newQuantityProduced, $batchId]
                 );
                 
-                error_log("recordInventoryMovement: Updated finished_products.quantity_produced (return, non-vehicle) - batch_id: $batchId, type: $type, current: $currentQuantityProduced, added: $quantity, new: $newQuantityProduced");
+                error_log("recordInventoryMovement: Updated finished_products.quantity_produced (non-return, non-vehicle) - batch_id: $batchId, type: $type, current: $currentQuantityProduced, added: $quantity, new: $newQuantityProduced");
             } else {
                 error_log("recordInventoryMovement: WARNING - finished_products not found for batch_id: $batchId when returning product (productId: $productId, quantity: $quantity)");
             }
+        } else if ($batchId && $type === 'in' && $referenceType === 'return') {
+            // عند referenceType === 'return'، يتم تحديث finished_products.quantity_produced مباشرة في returnProductsToMainWarehouse
+            error_log("recordInventoryMovement: Skipping finished_products.quantity_produced update (return reference) - batchId: $batchId, productId: $productId, quantity: $quantity. Update already done in returnProductsToMainWarehouse.");
         } else if ($batchId && $type === 'in' && $usingVehicleInventory) {
             // عند usingVehicleInventory=true، يتم تحديث finished_products.quantity_produced مباشرة في api/invoice_returns.php و includes/returns_system.php
             error_log("recordInventoryMovement: Skipping finished_products.quantity_produced update (vehicle inventory) - batchId: $batchId, productId: $productId, quantity: $quantity. Update should be done directly in return functions.");
