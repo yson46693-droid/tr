@@ -179,38 +179,56 @@ function requestApproval($type, $entityId, $requestedBy, $notes = null) {
                             $month = intval($salary['month'] ?? date('n'));
                             $year = intval($salary['year'] ?? date('Y'));
                             
-                            // حساب الراتب الحالي بنفس طريقة الحساب في بطاقة الموظف (نسخ الكود بالضبط)
-                            $hourlyRate = cleanFinancialValue($salary['hourly_rate'] ?? $salary['current_hourly_rate'] ?? 0);
-                            $currentBonus = cleanFinancialValue($salary['bonus'] ?? 0);
-                            $currentDeductions = cleanFinancialValue($salary['deductions'] ?? 0);
-                            $collectionsBonus = cleanFinancialValue($salary['collections_bonus'] ?? 0);
+                            // تحديد اسم عمود المكافآت الصحيح (bonus أو bonuses) - نفس كود صفحة الرواتب
+                            $bonusColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field IN ('bonus', 'bonuses')");
+                            $bonusColumnName = $bonusColumnCheck ? $bonusColumnCheck['Field'] : 'bonus';
                             
-                            // حساب الراتب الأساسي بناءً على الساعات المكتملة فقط (لجميع الأدوار)
-                            // لا يوجد راتب أساسي حتى يتم تسجيل الانصراف
-                            require_once __DIR__ . '/salary_calculator.php';
-                            $completedHours = calculateCompletedMonthlyHours($userId, $month, $year);
-                            $baseAmount = round($completedHours * $hourlyRate, 2);
+                            // استخدام total_amount مباشرة من قاعدة البيانات (مثل بطاقة الموظف)
+                            // هذا يضمن أن الراتب الحالي المعروض في الإشعار يطابق ما هو معروض في بطاقة الموظف
+                            $currentTotal = cleanFinancialValue($salary['total_amount'] ?? 0);
                             
-                            // إذا كان مندوب مبيعات، أعد حساب نسبة التحصيلات (نفس كود بطاقة الموظف)
-                            if ($userRole === 'sales') {
-                                $recalculatedCollectionsAmount = calculateSalesCollections($userId, $month, $year);
-                                $recalculatedCollectionsBonus = round($recalculatedCollectionsAmount * 0.02, 2);
+                            // إذا كان total_amount صفر أو غير موجود، نحاول حساب الراتب من المكونات
+                            if ($currentTotal <= 0) {
+                                $hourlyRate = cleanFinancialValue($salary['hourly_rate'] ?? $salary['current_hourly_rate'] ?? 0);
+                                $currentBonus = cleanFinancialValue($salary[$bonusColumnName] ?? $salary['bonus'] ?? $salary['bonuses'] ?? 0);
+                                $currentDeductions = cleanFinancialValue($salary['deductions'] ?? 0);
+                                $collectionsBonus = cleanFinancialValue($salary['collections_bonus'] ?? 0);
                                 
-                                // استخدم القيمة المحسوبة حديثاً إذا كانت أكبر من القيمة المحفوظة
-                                if ($recalculatedCollectionsBonus > $collectionsBonus || $collectionsBonus == 0) {
-                                    $collectionsBonus = $recalculatedCollectionsBonus;
+                                // حساب الراتب الأساسي بناءً على الساعات المكتملة فقط
+                                $completedHours = calculateCompletedMonthlyHours($userId, $month, $year);
+                                $baseAmount = round($completedHours * $hourlyRate, 2);
+                                
+                                // إذا كان مندوب مبيعات، أعد حساب نسبة التحصيلات
+                                if ($userRole === 'sales') {
+                                    $recalculatedCollectionsAmount = calculateSalesCollections($userId, $month, $year);
+                                    $recalculatedCollectionsBonus = round($recalculatedCollectionsAmount * 0.02, 2);
+                                    
+                                    // استخدم القيمة المحسوبة حديثاً إذا كانت أكبر من القيمة المحفوظة
+                                    if ($recalculatedCollectionsBonus > $collectionsBonus || $collectionsBonus == 0) {
+                                        $collectionsBonus = $recalculatedCollectionsBonus;
+                                    }
                                 }
+                                
+                                // حساب الراتب الإجمالي من المكونات
+                                $currentTotal = $baseAmount + $currentBonus + $collectionsBonus - $currentDeductions;
+                                $currentTotal = max(0, $currentTotal);
+                            } else {
+                                // إذا كان total_amount موجوداً، استخدمه مباشرة
+                                // لكن نحتاج لحساب المكونات للراتب الجديد
+                                $baseAmount = cleanFinancialValue($salary['base_amount'] ?? 0);
+                                $currentBonus = cleanFinancialValue($salary[$bonusColumnName] ?? $salary['bonus'] ?? $salary['bonuses'] ?? 0);
+                                $currentDeductions = cleanFinancialValue($salary['deductions'] ?? 0);
+                                $collectionsBonus = cleanFinancialValue($salary['collections_bonus'] ?? 0);
                             }
                             
-                            // حساب الراتب الإجمالي الصحيح دائماً من المكونات (نفس كود بطاقة الموظف)
-                            // الراتب الإجمالي = الراتب الأساسي + المكافآت + نسبة التحصيلات - الخصومات
-                            $currentTotal = $baseAmount + $currentBonus + $collectionsBonus - $currentDeductions;
+                            // حساب الراتب الجديد مع التعديلات (نفس طريقة الحساب في modify_salary)
+                            // المكافآت النهائية = المكافآت الحالية + المكافآت الجديدة المضافة
+                            $finalBonus = $currentBonus + $bonus;
+                            // الخصومات النهائية = الخصومات الحالية + الخصومات الجديدة المضافة
+                            $finalDeductions = $currentDeductions + $deductions;
                             
-                            // التأكد من أن الراتب الإجمالي لا يكون سالباً
-                            $currentTotal = max(0, $currentTotal);
-                            
-                            // حساب الراتب الجديد مع التعديلات (نفس طريقة الحساب في بطاقة الموظف)
-                            $newTotal = $baseAmount + $bonus + $collectionsBonus - $deductions;
+                            // حساب الراتب الجديد: الراتب الأساسي + المكافآت (الحالية + الجديدة) + نسبة التحصيلات - الخصومات (الحالية + الجديدة)
+                            $newTotal = $baseAmount + $finalBonus + $collectionsBonus - $finalDeductions;
                             $newTotal = max(0, $newTotal);
                             
                             // إشعار مختصر
