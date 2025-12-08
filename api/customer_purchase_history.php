@@ -163,69 +163,75 @@ function handleGetHistory(): void
             
             if ($hasBatchNumber && $hasBatchId) {
                 // الحالة المثالية: كلا العمودين موجودان
-                // نستخدم batch_number مباشرة من local_invoice_items
+                // نستخدم batch_number مباشرة من local_invoice_items - أبسط طريقة وأكثر موثوقية
                 $batchSelect = "
-                    CASE 
-                        WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != '' AND ii.batch_number != 'NULL'
-                        THEN TRIM(ii.batch_number)
-                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
-                        THEN (
-                            SELECT COALESCE(
-                                NULLIF(TRIM(fp.batch_number), ''),
-                                NULLIF(TRIM(bn.batch_number), ''),
-                                ''
+                    COALESCE(
+                        NULLIF(TRIM(ii.batch_number), ''),
+                        CASE 
+                            WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
+                            THEN (
+                                SELECT NULLIF(TRIM(fp.batch_number), '')
+                                FROM finished_products fp
+                                WHERE fp.id = ii.batch_id
+                                LIMIT 1
                             )
-                            FROM finished_products fp
-                            LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
-                            WHERE fp.id = ii.batch_id
-                            LIMIT 1
-                        )
-                        ELSE ''
-                    END as batch_numbers,
-                    CASE 
-                        WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != '' AND ii.batch_number != 'NULL'
-                        THEN COALESCE(
-                            (SELECT CAST(bn.id AS CHAR) FROM batch_numbers bn WHERE bn.batch_number = TRIM(ii.batch_number) LIMIT 1),
-                            CAST(ii.batch_id AS CHAR),
-                            ''
-                        )
-                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
-                        THEN CAST(ii.batch_id AS CHAR)
-                        ELSE ''
-                    END as batch_number_ids";
+                            ELSE NULL
+                        END,
+                        ''
+                    ) as batch_numbers,
+                    COALESCE(
+                        CASE 
+                            WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != ''
+                            THEN (
+                                SELECT CAST(bn.id AS CHAR)
+                                FROM batch_numbers bn
+                                WHERE bn.batch_number = TRIM(ii.batch_number)
+                                LIMIT 1
+                            )
+                            ELSE NULL
+                        END,
+                        CASE 
+                            WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
+                            THEN CAST(ii.batch_id AS CHAR)
+                            ELSE NULL
+                        END,
+                        ''
+                    ) as batch_number_ids";
                 $batchJoin = "";
             } elseif ($hasBatchNumber) {
-                // فقط batch_number موجود
+                // فقط batch_number موجود - أبسط طريقة
                 $batchSelect = "
-                    CASE 
-                        WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != '' AND ii.batch_number != 'NULL'
-                        THEN TRIM(ii.batch_number)
-                        ELSE ''
-                    END as batch_numbers,
-                    CASE 
-                        WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != '' AND ii.batch_number != 'NULL'
-                        THEN COALESCE(
-                            (SELECT CAST(bn.id AS CHAR) FROM batch_numbers bn WHERE bn.batch_number = TRIM(ii.batch_number) LIMIT 1),
-                            ''
-                        )
-                        ELSE ''
-                    END as batch_number_ids";
+                    COALESCE(NULLIF(TRIM(ii.batch_number), ''), '') as batch_numbers,
+                    COALESCE(
+                        CASE 
+                            WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != ''
+                            THEN (
+                                SELECT CAST(bn.id AS CHAR)
+                                FROM batch_numbers bn
+                                WHERE bn.batch_number = TRIM(ii.batch_number)
+                                LIMIT 1
+                            )
+                            ELSE NULL
+                        END,
+                        ''
+                    ) as batch_number_ids";
                 $batchJoin = "";
             } elseif ($hasBatchId) {
                 // فقط batch_id موجود - جلب batch_number من finished_products
                 $batchSelect = "
-                    CASE 
-                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
-                        THEN COALESCE(
-                            (SELECT NULLIF(TRIM(fp.batch_number), '') FROM finished_products fp WHERE fp.id = ii.batch_id LIMIT 1),
-                            (SELECT NULLIF(TRIM(bn.batch_number), '') 
-                             FROM finished_products fp
-                             LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
-                             WHERE fp.id = ii.batch_id LIMIT 1),
-                            ''
-                        )
-                        ELSE ''
-                    END as batch_numbers,
+                    COALESCE(
+                        CASE 
+                            WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
+                            THEN (
+                                SELECT NULLIF(TRIM(fp.batch_number), '')
+                                FROM finished_products fp
+                                WHERE fp.id = ii.batch_id
+                                LIMIT 1
+                            )
+                            ELSE NULL
+                        END,
+                        ''
+                    ) as batch_numbers,
                     CASE 
                         WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
                         THEN CAST(ii.batch_id AS CHAR)
