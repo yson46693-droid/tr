@@ -130,9 +130,9 @@ try {
                        THEN CONCAT(s.year, '-', LPAD(s.month, 2, '0'))
                        ELSE CONCAT(COALESCE(s.year, YEAR(CURDATE())), '-', LPAD(COALESCE(s.month, MONTH(CURDATE())), 2, '0'))
                     END as month_label";
-        // تبسيط WHERE clause - فقط التحقق من user_id
-        $whereClause = "WHERE s.user_id = ?";
-        $orderClause = "ORDER BY COALESCE(s.year, YEAR(CURDATE())) DESC, COALESCE(s.month, MONTH(CURDATE())) DESC, s.id DESC";
+        // استبعاد السجلات ذات التواريخ غير الصحيحة (month = 0 أو year = 0)
+        $whereClause = "WHERE s.user_id = ? AND s.month > 0 AND s.month <= 12 AND s.year > 0";
+        $orderClause = "ORDER BY s.year DESC, s.month DESC, s.id DESC";
     } else {
         // إذا كان month من نوع DATE
         if ($isMonthDate) {
@@ -141,14 +141,14 @@ try {
                            THEN DATE_FORMAT(s.month, '%Y-%m')
                            ELSE DATE_FORMAT(CURDATE(), '%Y-%m')
                         END as month_label";
-            // تبسيط WHERE clause - فقط التحقق من user_id
-            $whereClause = "WHERE s.user_id = ?";
+            // استبعاد السجلات ذات التواريخ غير الصحيحة
+            $whereClause = "WHERE s.user_id = ? AND s.month IS NOT NULL AND s.month != '0000-00-00' AND s.month != '1970-01-01'";
             $orderClause = "ORDER BY s.month DESC, s.id DESC";
         } else {
             // إذا كان month من نوع INT بدون year
             $query .= ", DATE_FORMAT(CONCAT(YEAR(CURDATE()), '-', LPAD(COALESCE(s.month, MONTH(CURDATE())), 2, '0'), '-01'), '%Y-%m') as month_label";
-            // تبسيط WHERE clause - فقط التحقق من user_id
-            $whereClause = "WHERE s.user_id = ?";
+            // استبعاد السجلات ذات التواريخ غير الصحيحة
+            $whereClause = "WHERE s.user_id = ? AND s.month IS NOT NULL AND s.month > 0 AND s.month <= 12";
             $orderClause = "ORDER BY s.month DESC, s.id DESC";
         }
     }

@@ -1250,7 +1250,8 @@ $whereConditions = [];
 $params = [];
 
 if ($hasYearColumn) {
-    $whereConditions[] = "s.month = ? AND s.year = ?";
+    // استبعاد السجلات ذات التواريخ غير الصحيحة
+    $whereConditions[] = "s.month = ? AND s.year = ? AND s.month > 0 AND s.year > 0";
     $params[] = $selectedMonth;
     $params[] = $selectedYear;
 } else {
@@ -1258,10 +1259,12 @@ if ($hasYearColumn) {
     $monthType = $monthColumnCheck['Type'] ?? '';
     
     if (stripos($monthType, 'date') !== false) {
-        $whereConditions[] = "DATE_FORMAT(s.month, '%Y-%m') = ?";
+        // استبعاد السجلات ذات التواريخ غير الصحيحة
+        $whereConditions[] = "DATE_FORMAT(s.month, '%Y-%m') = ? AND s.month != '0000-00-00' AND s.month != '1970-01-01'";
         $params[] = sprintf('%04d-%02d', $selectedYear, $selectedMonth);
     } else {
-        $whereConditions[] = "s.month = ?";
+        // استبعاد السجلات ذات التواريخ غير الصحيحة
+        $whereConditions[] = "s.month = ? AND s.month > 0";
         $params[] = $selectedMonth;
     }
 }
