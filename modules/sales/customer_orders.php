@@ -1217,28 +1217,53 @@ if (isset($_GET['id'])) {
 
 /* تحسينات الجداول على الهواتف - فقط لعناصر الطلب */
 @media (max-width: 767.98px) {
-    /* تحسين جدول تفاصيل الطلب */
+    /* تحسين جدول تفاصيل الطلب - كل عنوان وقيمته على سطر واحد */
     .dashboard-table-details {
         width: 100%;
         font-size: 0.9rem;
+        margin-bottom: 0;
+    }
+    
+    .dashboard-table-details tr {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        padding: 0.4rem 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .dashboard-table-details tr:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
     }
     
     .dashboard-table-details th {
-        width: 40% !important;
+        width: auto;
+        min-width: 35%;
         font-size: 0.85rem;
-        padding: 0.5rem 0.5rem 0.5rem 0;
-        vertical-align: top;
+        font-weight: 600;
+        padding: 0.3rem 0.5rem 0.3rem 0;
+        margin: 0;
+        vertical-align: middle;
+        color: #495057;
+        flex-shrink: 0;
     }
     
     .dashboard-table-details td {
         font-size: 0.9rem;
-        padding: 0.5rem 0;
+        padding: 0.3rem 0;
+        margin: 0;
         word-break: break-word;
+        flex: 1;
+        min-width: 0;
+        vertical-align: middle;
     }
     
-    /* تحسين جدول عناصر الطلب فقط */
+    /* تحسين جدول عناصر الطلب - تقليل المسافات */
     .dashboard-table--compact {
         font-size: 0.85rem;
+        margin-bottom: 0;
     }
     
     .dashboard-table--compact thead {
@@ -1247,39 +1272,46 @@ if (isset($_GET['id'])) {
     
     .dashboard-table--compact tbody tr {
         display: block;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
         border: 1px solid #dee2e6;
-        border-radius: 8px;
-        padding: 0.75rem;
+        border-radius: 6px;
+        padding: 0.5rem;
         background: #fff;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    }
+    
+    .dashboard-table--compact tbody tr:last-child {
+        margin-bottom: 0;
     }
     
     .dashboard-table--compact tbody td {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.5rem 0;
+        padding: 0.35rem 0;
         border: none;
         border-bottom: 1px solid #f0f0f0;
+        margin: 0;
     }
     
     .dashboard-table--compact tbody td:last-child {
         border-bottom: none;
+        padding-bottom: 0;
     }
     
     .dashboard-table--compact tbody td::before {
         content: attr(data-label);
-        font-weight: 700;
+        font-weight: 600;
         color: #495057;
         margin-left: 0.5rem;
         text-align: right;
         flex-shrink: 0;
+        font-size: 0.8rem;
     }
     
     /* تحسين عرض تفاصيل الطلب */
     .card-body .row > .col-md-6 {
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
     }
     
     .card-body .row > .col-md-6:last-child {
@@ -1302,6 +1334,44 @@ if (isset($_GET['id'])) {
         font-size: 0.9rem;
         padding: 0.5rem;
     }
+}
+
+/* تحسينات إضافية لجدول تفاصيل الطلب على جميع الشاشات */
+.dashboard-table-details {
+    margin-bottom: 0;
+}
+
+.dashboard-table-details tr {
+    border-bottom: 1px solid #e9ecef;
+}
+
+.dashboard-table-details tr:last-child {
+    border-bottom: none;
+}
+
+.dashboard-table-details th {
+    padding: 0.5rem 0.75rem 0.5rem 0;
+    font-weight: 600;
+    color: #495057;
+    white-space: nowrap;
+}
+
+.dashboard-table-details td {
+    padding: 0.5rem 0.75rem 0.5rem 0;
+    word-break: break-word;
+}
+
+/* تحسينات إضافية لجدول عناصر الطلب على جميع الشاشات */
+.dashboard-table--compact tbody tr {
+    margin-bottom: 0.5rem;
+}
+
+.dashboard-table--compact tbody tr:last-child {
+    margin-bottom: 0;
+}
+
+.dashboard-table--compact tbody td {
+    padding: 0.4rem 0;
 }
 </style>
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
