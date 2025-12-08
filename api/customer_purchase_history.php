@@ -34,6 +34,10 @@ while (ob_get_level() > 0) {
     ob_end_clean();
 }
 
+// تعطيل عرض الأخطاء مرة أخرى بعد تحميل config.php (لأنه قد يعيد تفعيلها)
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
 $action = $_GET['action'] ?? $_POST['action'] ?? null;
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
@@ -88,8 +92,30 @@ function returnJson(array $data, int $status = 200): void
         ob_end_clean();
     }
     
-    http_response_code($status);
-    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    // التأكد من عدم وجود output قبل JSON
+    if (ob_get_level() > 0) {
+        ob_clean();
+    }
+    
+    // التأكد من أن headers لم يتم إرسالها بعد
+    if (!headers_sent()) {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+    
+    // إرسال JSON
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    
+    // التحقق من أن JSON صحيح
+    if ($json === false) {
+        $json = json_encode([
+            'success' => false,
+            'message' => 'خطأ في تنسيق البيانات',
+            'json_error' => json_last_error_msg()
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    
+    echo $json;
     exit;
 }
 
@@ -100,15 +126,16 @@ function handleGetHistory(): void
 {
     global $currentUser;
     
-    $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
-    $customerType = isset($_GET['type']) ? trim($_GET['type']) : 'normal'; // 'normal' or 'local'
-    $isLocalCustomer = ($customerType === 'local');
-    
-    if ($customerId <= 0) {
-        returnJson(['success' => false, 'message' => 'معرف العميل غير صالح'], 422);
-    }
-    
-    $db = db();
+    try {
+        $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
+        $customerType = isset($_GET['type']) ? trim($_GET['type']) : 'normal'; // 'normal' or 'local'
+        $isLocalCustomer = ($customerType === 'local');
+        
+        if ($customerId <= 0) {
+            returnJson(['success' => false, 'message' => 'معرف العميل غير صالح'], 422);
+        }
+        
+        $db = db();
     
     // Verify customer exists
     if ($isLocalCustomer) {
@@ -675,17 +702,26 @@ function handleGetHistory(): void
         ];
     }
     
-    returnJson([
-        'success' => true,
-        'customer' => [
-            'id' => (int)$customer['id'],
-            'name' => $customer['name'],
-            'phone' => $customer['phone'] ?? '',
-            'address' => $customer['address'] ?? '',
-            'balance' => (float)$customer['balance']
-        ],
-        'purchase_history' => $result
-    ]);
+        returnJson([
+            'success' => true,
+            'customer' => [
+                'id' => (int)$customer['id'],
+                'name' => $customer['name'],
+                'phone' => $customer['phone'] ?? '',
+                'address' => $customer['address'] ?? '',
+                'balance' => (float)$customer['balance']
+            ],
+            'purchase_history' => $result
+        ]);
+    } catch (Throwable $e) {
+        error_log('handleGetHistory error: ' . $e->getMessage());
+        error_log('Stack trace: ' . $e->getTraceAsString());
+        returnJson([
+            'success' => false,
+            'message' => 'حدث خطأ أثناء جلب سجل المشتريات',
+            'purchase_history' => []
+        ], 500);
+    }
 }
 
 /**
