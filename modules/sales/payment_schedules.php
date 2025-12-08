@@ -93,7 +93,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'create_reminder') {
         $scheduleId = intval($_POST['schedule_id'] ?? 0);
-        $daysBeforeDue = intval($_POST['days_before_due'] ?? 3);
+        // قراءة القيمة من POST بشكل صحيح - التحقق من وجودها أولاً
+        $daysBeforeDue = isset($_POST['days_before_due']) && $_POST['days_before_due'] !== '' 
+            ? intval($_POST['days_before_due']) 
+            : 3;
+        
+        // التحقق من أن القيمة صحيحة (بين 1 و 30)
+        if ($daysBeforeDue < 1 || $daysBeforeDue > 30) {
+            $daysBeforeDue = 3;
+        }
         
         if ($scheduleId > 0) {
             if (createAutoReminder($scheduleId, $daysBeforeDue)) {
@@ -887,21 +895,36 @@ if (isset($_GET['id'])) {
 
 <script>
 function showReminderModal(scheduleId) {
-    document.getElementById('reminderScheduleId').value = scheduleId;
+    const scheduleIdInput = document.getElementById('reminderScheduleId');
+    const daysInput = document.getElementById('daysBeforeDueInput');
     
-    // جلب القيمة المحفوظة للتذكير (إن وجدت)
+    if (!scheduleIdInput || !daysInput) {
+        console.error('Required elements not found');
+        return;
+    }
+    
+    scheduleIdInput.value = scheduleId;
+    
+    // جلب القيمة المحفوظة للتذكير (إن وجدت) فقط عند فتح المودال لأول مرة
+    // لا نعيد تعيين القيمة إذا كان المستخدم قد غيرها
+    const originalValue = daysInput.value;
+    
     fetch('?page=payment_schedules&action=get_reminder_days&schedule_id=' + scheduleId)
         .then(response => response.json())
         .then(data => {
+            // تحديث القيمة فقط إذا كانت القيمة الحالية هي القيمة الافتراضية (3)
+            // أو إذا كانت القيمة المحفوظة موجودة ولم يتم تغييرها من قبل المستخدم
             if (data.success && data.days_before_due) {
-                document.getElementById('daysBeforeDueInput').value = data.days_before_due;
-            } else {
-                document.getElementById('daysBeforeDueInput').value = 3;
+                // تحديث القيمة فقط إذا كانت القيمة الحالية هي القيمة الافتراضية
+                if (daysInput.value === '3' || daysInput.value === originalValue) {
+                    daysInput.value = data.days_before_due;
+                }
             }
+            // إذا لم تكن هناك قيمة محفوظة، نترك القيمة الحالية كما هي (3 أو القيمة التي أدخلها المستخدم)
         })
         .catch(error => {
             console.error('Error fetching reminder days:', error);
-            document.getElementById('daysBeforeDueInput').value = 3;
+            // في حالة الخطأ، نترك القيمة الحالية كما هي
         });
     
     const modal = new bootstrap.Modal(document.getElementById('reminderModal'));
@@ -958,6 +981,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const form = editScheduleModal.querySelector('form');
             if (form) {
                 form.reset();
+            }
+        });
+    }
+    
+    // إعادة تعيين مودال التنبيه عند إغلاقه
+    const reminderModal = document.getElementById('reminderModal');
+    if (reminderModal) {
+        reminderModal.addEventListener('hidden.bs.modal', function () {
+            const daysInput = document.getElementById('daysBeforeDueInput');
+            if (daysInput) {
+                daysInput.value = '3'; // إعادة تعيين القيمة الافتراضية
             }
         });
     }
