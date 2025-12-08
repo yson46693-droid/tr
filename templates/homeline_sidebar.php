@@ -383,13 +383,7 @@ switch ($role) {
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'returns'),
                 'badge' => null
             ],
-            [
-                'title' => 'نقل المخازن',
-                'icon' => 'bi-arrow-left-right',
-                'url' => $baseUrl . 'accountant.php?page=warehouse_transfers',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'warehouse_transfers'),
-                'badge' => null
-            ],
+            
             [
                 'title' => 'السيارات',
                 'icon' => 'bi-car-front',

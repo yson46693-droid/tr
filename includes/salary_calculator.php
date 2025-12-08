@@ -1013,19 +1013,22 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             $existingCollectionsBonus = 0;
             if ($hasCollectionsBonusColumn) {
                 $existingCollectionsBonus = floatval($currentSalary['collections_bonus'] ?? 0);
-                // ===== إصلاح جذري: استخدام القيمة الموجودة دائماً =====
-                // collections_bonus يتم تحديثه مباشرة عبر applyCollectionInstantReward
-                // لذلك يجب استخدام القيمة الموجودة في قاعدة البيانات دائماً
-                // وعدم استبدالها بقيمة محسوبة من جديد (لمنع الحساب المزدوج)
-                $collectionsBonusCalc = $existingCollectionsBonus;
+                // ===== إصلاح: استخدام القيمة الأكبر بين الموجودة والمحسوبة =====
+                // collections_bonus يتم تحديثه مباشرة عبر applyCollectionInstantReward (للتحصيلات الجزئية)
+                // لكن للبيع الكاش، يتم حسابه عبر calculateSalesCollections
+                // لذلك نستخدم القيمة الأكبر لضمان عدم فقدان أي مكافآت
+                $calculatedCollectionsBonus = round($collectionsBonusCalc, 2);
+                $collectionsBonusCalc = max($existingCollectionsBonus, $calculatedCollectionsBonus);
                 $calculation['collections_bonus'] = $collectionsBonusCalc;
                 $calculation['total_bonus'] = $calculation['bonus'] + $collectionsBonusCalc;
                 
                 // تسجيل لأغراض التتبع
                 error_log(sprintf(
-                    'Collections bonus preserved from DB for user %d: %.2f (not recalculated)',
+                    'Collections bonus for user %d: existing=%.2f, calculated=%.2f, final=%.2f',
                     $userId,
-                    $existingCollectionsBonus
+                    $existingCollectionsBonus,
+                    $calculatedCollectionsBonus,
+                    $collectionsBonusCalc
                 ));
             }
             
@@ -1063,19 +1066,22 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             // قراءة collections_bonus الحالي للمحافظة على المكافآت الفورية
             if ($hasCollectionsBonusColumn) {
                 $existingCollectionsBonus = floatval($currentSalary['collections_bonus'] ?? 0);
-                // ===== إصلاح جذري: استخدام القيمة الموجودة دائماً =====
-                // collections_bonus يتم تحديثه مباشرة عبر applyCollectionInstantReward
-                // لذلك يجب استخدام القيمة الموجودة في قاعدة البيانات دائماً
-                // وعدم استبدالها بقيمة محسوبة من جديد (لمنع الحساب المزدوج)
-                $collectionsBonusCalc = $existingCollectionsBonus;
+                // ===== إصلاح: استخدام القيمة الأكبر بين الموجودة والمحسوبة =====
+                // collections_bonus يتم تحديثه مباشرة عبر applyCollectionInstantReward (للتحصيلات الجزئية)
+                // لكن للبيع الكاش، يتم حسابه عبر calculateSalesCollections
+                // لذلك نستخدم القيمة الأكبر لضمان عدم فقدان أي مكافآت
+                $calculatedCollectionsBonus = round($collectionsBonusCalc, 2);
+                $collectionsBonusCalc = max($existingCollectionsBonus, $calculatedCollectionsBonus);
                 $calculation['collections_bonus'] = $collectionsBonusCalc;
                 $calculation['total_bonus'] = $calculation['bonus'] + $collectionsBonusCalc;
                 
                 // تسجيل لأغراض التتبع
                 error_log(sprintf(
-                    'Collections bonus preserved from DB for user %d: %.2f (not recalculated)',
+                    'Collections bonus for user %d: existing=%.2f, calculated=%.2f, final=%.2f',
                     $userId,
-                    $existingCollectionsBonus
+                    $existingCollectionsBonus,
+                    $calculatedCollectionsBonus,
+                    $collectionsBonusCalc
                 ));
             }
             
