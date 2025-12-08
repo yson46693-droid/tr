@@ -142,17 +142,28 @@ try {
             $deletedCount = 0;
             $errors = [];
             
+            // التحقق من وجود جدول salary_payments
+            $hasPaymentsTable = false;
+            try {
+                $tableCheck = $db->queryOne("SHOW TABLES LIKE 'salary_payments'");
+                $hasPaymentsTable = !empty($tableCheck);
+            } catch (Exception $e) {
+                $hasPaymentsTable = false;
+            }
+            
             foreach ($invalidRecords as $record) {
                 try {
-                    // التحقق من أن السجل ليس له مدفوعات مرتبطة
-                    $hasPayments = $db->queryOne(
-                        "SELECT COUNT(*) as cnt FROM salary_payments WHERE salary_id = ?",
-                        [$record['id']]
-                    );
-                    
-                    if (!empty($hasPayments) && $hasPayments['cnt'] > 0) {
-                        $errors[] = "السجل ID:{$record['id']} له مدفوعات مرتبطة - تم تخطيه";
-                        continue;
+                    // التحقق من أن السجل ليس له مدفوعات مرتبطة (فقط إذا كان الجدول موجوداً)
+                    if ($hasPaymentsTable) {
+                        $hasPayments = $db->queryOne(
+                            "SELECT COUNT(*) as cnt FROM salary_payments WHERE salary_id = ?",
+                            [$record['id']]
+                        );
+                        
+                        if (!empty($hasPayments) && $hasPayments['cnt'] > 0) {
+                            $errors[] = "السجل ID:{$record['id']} له مدفوعات مرتبطة - تم تخطيه";
+                            continue;
+                        }
                     }
                     
                     // حذف السجل

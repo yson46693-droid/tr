@@ -319,6 +319,36 @@ function recordInventoryMovement($productId, $warehouseId, $type, $quantity, $re
         // إذا كنا نستخدم vehicle_inventory، لا نحدث products.quantity لأن الكمية الفعلية في vehicle_inventory
         // إذا كنا نستخدم finished_products.quantity_produced، لا نحدث products.quantity
         // لأن الكمية الفعلية موجودة في finished_products وليس في products
+        
+        // تحديث finished_products.quantity_produced إذا كان batchId موجوداً ونوع الحركة 'in'
+        // حتى لو كان usingVehicleInventory=true (لإرجاع المنتجات إلى المتبقي من التشغيلة)
+        if ($batchId && $type === 'in') {
+            error_log("recordInventoryMovement: Processing return - batchId: $batchId, productId: $productId, quantity: $quantity, usingVehicleInventory: " . ($usingVehicleInventory ? 'true' : 'false'));
+            
+            // البحث عن finished_products باستخدام batchId (finished_products.id)
+            $finishedProductCheck = $db->queryOne(
+                "SELECT id, quantity_produced FROM finished_products WHERE id = ? FOR UPDATE",
+                [$batchId]
+            );
+            
+            if ($finishedProductCheck) {
+                $currentQuantityProduced = (float)($finishedProductCheck['quantity_produced'] ?? 0);
+                $newQuantityProduced = $currentQuantityProduced + $quantity;
+                
+                // تحديث finished_products.quantity_produced
+                $db->execute(
+                    "UPDATE finished_products SET quantity_produced = ? WHERE id = ?",
+                    [$newQuantityProduced, $batchId]
+                );
+                
+                error_log("recordInventoryMovement: Updated finished_products.quantity_produced (return) - batch_id: $batchId, type: $type, current: $currentQuantityProduced, added: $quantity, new: $newQuantityProduced");
+            } else {
+                error_log("recordInventoryMovement: WARNING - finished_products not found for batch_id: $batchId when returning product (productId: $productId, quantity: $quantity)");
+            }
+        } else if ($type === 'in' && !$batchId) {
+            error_log("recordInventoryMovement: WARNING - type='in' but batchId is NULL (productId: $productId, quantity: $quantity). Cannot update finished_products.quantity_produced.");
+        }
+        
         if ($usingVehicleInventory) {
             // لا نحدث products.quantity لأن الكمية الفعلية في vehicle_inventory
             // vehicle_inventory يتم تحديثه في updateVehicleInventory قبل استدعاء recordInventoryMovement
@@ -328,7 +358,7 @@ function recordInventoryMovement($productId, $warehouseId, $type, $quantity, $re
             $db->execute($updateSql, [$quantityAfter, $warehouseId ?? $product['warehouse_id'], $productId]);
         } else {
             // إذا كنا نستخدم finished_products، نحتاج تحديث quantity_produced
-            if ($usingFinishedProductQuantity && ($type === 'out' || $type === 'transfer' || $type === 'in')) {
+            if ($usingFinishedProductQuantity && ($type === 'out' || $type === 'transfer')) {
                 // التحقق من الكمية الحالية قبل التحديث (للتشخيص)
                 $currentCheck = $db->queryOne(
                     "SELECT quantity_produced FROM finished_products WHERE id = ?",
