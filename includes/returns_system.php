@@ -611,17 +611,70 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
                 $quantity = (float)$item['quantity'];
                 $batchNumberId = isset($item['batch_number_id']) && $item['batch_number_id'] ? (int)$item['batch_number_id'] : null;
                 $batchNumber = $item['batch_number'] ?? null;
+                $invoiceItemId = isset($item['invoice_item_id']) && $item['invoice_item_id'] ? (int)$item['invoice_item_id'] : null;
                 
-                // البحث عن finished_products.id من batch_number_id
+                // Fallback: إذا لم يكن batch_number_id موجوداً، نحاول جلبه من invoice_item_id
+                if (!$batchNumberId && $invoiceItemId) {
+                    $batchRow = $db->queryOne(
+                        "SELECT batch_number_id FROM sales_batch_numbers 
+                         WHERE invoice_item_id = ? 
+                         ORDER BY id ASC LIMIT 1",
+                        [$invoiceItemId]
+                    );
+                    if ($batchRow && !empty($batchRow['batch_number_id'])) {
+                        $batchNumberId = (int)$batchRow['batch_number_id'];
+                        error_log("returns_system: Found batch_number_id from invoice_item_id - invoice_item_id: $invoiceItemId, batch_number_id: $batchNumberId");
+                    }
+                }
+                
+                // البحث عن finished_products.id من batch_number_id مع fallback
                 $finishedProductId = null;
+                $batchNumberForSearch = $batchNumber;
                 if ($batchNumberId) {
+                    // البحث الأول: باستخدام batch_id
                     $finishedProduct = $db->queryOne(
-                        "SELECT id FROM finished_products WHERE batch_id = ?",
+                        "SELECT id, batch_number FROM finished_products WHERE batch_id = ? FOR UPDATE",
                         [$batchNumberId]
                     );
+                    
                     if ($finishedProduct) {
                         $finishedProductId = (int)$finishedProduct['id'];
+                        $batchNumberForSearch = $finishedProduct['batch_number'] ?? $batchNumber;
+                        error_log("returns_system: Found finished_products using batch_id - batch_number_id: $batchNumberId, finished_product_id: $finishedProductId");
+                    } else {
+                        // Fallback: البحث باستخدام batch_number
+                        if ($batchNumber) {
+                            $finishedProduct = $db->queryOne(
+                                "SELECT id FROM finished_products WHERE batch_number = ? FOR UPDATE",
+                                [$batchNumber]
+                            );
+                            if ($finishedProduct) {
+                                $finishedProductId = (int)$finishedProduct['id'];
+                                error_log("returns_system: Found finished_products using batch_number - batch_number: $batchNumber, finished_product_id: $finishedProductId");
+                            }
+                        }
+                        
+                        // Fallback آخر: البحث باستخدام batch_number من batch_numbers
+                        if (!$finishedProductId) {
+                            $batchInfo = $db->queryOne(
+                                "SELECT bn.batch_number FROM batch_numbers bn WHERE bn.id = ?",
+                                [$batchNumberId]
+                            );
+                            if ($batchInfo && !empty($batchInfo['batch_number'])) {
+                                $batchNumberForSearch = $batchInfo['batch_number'];
+                                $finishedProduct = $db->queryOne(
+                                    "SELECT id FROM finished_products WHERE batch_number = ? FOR UPDATE",
+                                    [$batchNumberForSearch]
+                                );
+                                if ($finishedProduct) {
+                                    $finishedProductId = (int)$finishedProduct['id'];
+                                    error_log("returns_system: Found finished_products using batch_number from batch_numbers - batch_number_id: $batchNumberId, batch_number: $batchNumberForSearch, finished_product_id: $finishedProductId");
+                                }
+                            }
+                        }
                     }
+                } else {
+                    error_log("returns_system: WARNING - No batch_number_id found for return_item - product_id: $productId, invoice_item_id: " . ($invoiceItemId ?? 'NULL') . ", batch_number: " . ($batchNumber ?? 'NULL'));
                 }
                 
                 // البحث عن Batch Number في المخزون
@@ -745,10 +798,12 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
                             [$newQuantityProduced, $finishedProductId]
                         );
                         
-                        error_log("returns_system: Updated finished_products.quantity_produced directly - finished_product_id: $finishedProductId, batch_number_id: $batchNumberId, current: $currentQuantityProduced, added: $quantity, new: $newQuantityProduced");
+                        error_log("returns_system: Updated finished_products.quantity_produced directly - finished_product_id: $finishedProductId, batch_number_id: " . ($batchNumberId ?? 'NULL') . ", current: $currentQuantityProduced, added: $quantity, new: $newQuantityProduced");
                     } else {
-                        error_log("returns_system: WARNING - finished_products not found for id: $finishedProductId when returning product");
+                        error_log("returns_system: WARNING - finished_products not found for id: $finishedProductId when returning product (product_id: $productId, batch_number_id: " . ($batchNumberId ?? 'NULL') . ")");
                     }
+                } else {
+                    error_log("returns_system: WARNING - finishedProductId is NULL - product_id: $productId, batch_number_id: " . ($batchNumberId ?? 'NULL') . ", invoice_item_id: " . ($invoiceItemId ?? 'NULL') . ", batch_number: " . ($batchNumber ?? 'NULL'));
                 }
                 
                 // تسجيل حركة المخزون
@@ -1185,19 +1240,38 @@ function applyReturnSalaryDeduction(int $returnId, ?int $salesRepId = null, ?int
                     }
                 }
                 
+                // التحقق من نوع عمود month - إذا كان DATE، يجب تحويل القيم إلى تاريخ
+                $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+                $monthType = $monthColumnCheck['Type'] ?? '';
+                $isMonthDate = stripos($monthType, 'date') !== false;
+                
+                // تحديد قيمة month للإدراج
+                $monthValue = $month;
+                if ($isMonthDate) {
+                    // إذا كان month من نوع DATE، يجب تحويل الشهر والسنة إلى تاريخ
+                    if ($month < 1 || $month > 12 || $year < 2000 || $year > 2100) {
+                        error_log("Invalid month/year for DATE column in returns_system: month={$month}, year={$year}");
+                        // استخدام التاريخ الحالي كبديل آمن
+                        $monthValue = date('Y-m-01');
+                        $year = (int)date('Y');
+                    } else {
+                        $monthValue = sprintf('%04d-%02d-01', $year, $month);
+                    }
+                }
+                
                 // دائماً استخدم الإدراج مع year لضمان صحة البيانات
                 if ($hasBonusColumn) {
                     if ($hasCreatedByColumn) {
                         $db->execute(
                             "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, created_by, status) 
                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                            [$salesRepId, $month, $year, $hourlyRate, $totalHours, $baseAmount, $bonus, $deductions, $totalAmount, $createdBy]
+                            [$salesRepId, $monthValue, $year, $hourlyRate, $totalHours, $baseAmount, $bonus, $deductions, $totalAmount, $createdBy]
                         );
                     } else {
                         $db->execute(
                             "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, status) 
                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                            [$salesRepId, $month, $year, $hourlyRate, $totalHours, $baseAmount, $bonus, $deductions, $totalAmount]
+                            [$salesRepId, $monthValue, $year, $hourlyRate, $totalHours, $baseAmount, $bonus, $deductions, $totalAmount]
                         );
                     }
                 } else {
@@ -1205,13 +1279,13 @@ function applyReturnSalaryDeduction(int $returnId, ?int $salesRepId = null, ?int
                         $db->execute(
                             "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, created_by, status) 
                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                            [$salesRepId, $month, $year, $hourlyRate, $totalHours, $baseAmount, $deductions, $totalAmount, $createdBy]
+                            [$salesRepId, $monthValue, $year, $hourlyRate, $totalHours, $baseAmount, $deductions, $totalAmount, $createdBy]
                         );
                     } else {
                         $db->execute(
                             "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, status) 
                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                            [$salesRepId, $month, $year, $hourlyRate, $totalHours, $baseAmount, $deductions, $totalAmount]
+                            [$salesRepId, $monthValue, $year, $hourlyRate, $totalHours, $baseAmount, $deductions, $totalAmount]
                         );
                     }
                 }

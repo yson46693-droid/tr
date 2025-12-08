@@ -1450,19 +1450,38 @@ foreach ($users as $user) {
                 }
             }
             
+            // التحقق من نوع عمود month - إذا كان DATE، يجب تحويل القيم إلى تاريخ
+            $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+            $monthType = $monthColumnCheck['Type'] ?? '';
+            $isMonthDate = stripos($monthType, 'date') !== false;
+            
+            // تحديد قيمة month للإدراج
+            $monthValue = $selectedMonth;
+            if ($isMonthDate) {
+                // إذا كان month من نوع DATE، يجب تحويل الشهر والسنة إلى تاريخ
+                if ($selectedMonth < 1 || $selectedMonth > 12 || $selectedYear < 2000 || $selectedYear > 2100) {
+                    error_log("Invalid month/year for DATE column: month={$selectedMonth}, year={$selectedYear}");
+                    // استخدام التاريخ الحالي كبديل آمن
+                    $monthValue = date('Y-m-01');
+                    $selectedYear = (int)date('Y');
+                } else {
+                    $monthValue = sprintf('%04d-%02d-01', $selectedYear, $selectedMonth);
+                }
+            }
+            
             // دائماً استخدم الإدراج مع year لضمان صحة البيانات
             if ($hasBonusColumn && $hasCollectionsBonusColumn) {
                 if ($hasCreatedByColumn) {
                     $db->execute(
                         "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, {$bonusColumnName}, collections_bonus, deductions, total_amount, status, created_by) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'calculated', ?)",
-                        [$userId, $selectedMonth, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $collectionsBonus, 0, $totalAmount, $currentUser['id']]
+                        [$userId, $monthValue, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $collectionsBonus, 0, $totalAmount, $currentUser['id']]
                     );
                 } else {
                     $db->execute(
                         "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, {$bonusColumnName}, collections_bonus, deductions, total_amount, status) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'calculated')",
-                        [$userId, $selectedMonth, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $collectionsBonus, 0, $totalAmount]
+                        [$userId, $monthValue, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $collectionsBonus, 0, $totalAmount]
                     );
                 }
             } else {
@@ -1470,13 +1489,13 @@ foreach ($users as $user) {
                     $db->execute(
                         "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, status, created_by) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'calculated', ?)",
-                        [$userId, $selectedMonth, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $totalAmount, $currentUser['id']]
+                        [$userId, $monthValue, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $totalAmount, $currentUser['id']]
                     );
                 } else {
                     $db->execute(
                         "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, status) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'calculated')",
-                        [$userId, $selectedMonth, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $totalAmount]
+                        [$userId, $monthValue, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $totalAmount]
                     );
                 }
             }
