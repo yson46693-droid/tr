@@ -93,15 +93,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'create_reminder') {
         $scheduleId = intval($_POST['schedule_id'] ?? 0);
+        
         // قراءة القيمة من POST بشكل صحيح - التحقق من وجودها أولاً
-        $daysBeforeDue = isset($_POST['days_before_due']) && $_POST['days_before_due'] !== '' 
-            ? intval($_POST['days_before_due']) 
-            : 3;
+        $daysBeforeDueRaw = $_POST['days_before_due'] ?? null;
+        
+        // تسجيل للتشخيص
+        error_log("create_reminder: scheduleId=$scheduleId, days_before_due raw=" . var_export($daysBeforeDueRaw, true));
+        
+        // قراءة القيمة بشكل صحيح
+        if ($daysBeforeDueRaw !== null && $daysBeforeDueRaw !== '') {
+            $daysBeforeDue = intval($daysBeforeDueRaw);
+        } else {
+            $daysBeforeDue = 3;
+        }
         
         // التحقق من أن القيمة صحيحة (بين 1 و 30)
         if ($daysBeforeDue < 1 || $daysBeforeDue > 30) {
+            error_log("create_reminder: Invalid days_before_due value: $daysBeforeDue, resetting to 3");
             $daysBeforeDue = 3;
         }
+        
+        error_log("create_reminder: Final days_before_due=$daysBeforeDue");
         
         if ($scheduleId > 0) {
             if (createAutoReminder($scheduleId, $daysBeforeDue)) {
@@ -109,6 +121,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $error = 'حدث خطأ في إنشاء التذكير';
             }
+        } else {
+            $error = 'معرف الجدول الزمني غير صحيح';
         }
     } elseif ($action === 'create_schedule') {
         $customerId = intval($_POST['customer_id'] ?? 0);
@@ -872,7 +886,7 @@ if (isset($_GET['id'])) {
                 <h5 class="modal-title"><i class="bi bi-bell-fill me-2"></i>تحديد عدد أيام التنبيه</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" id="reminderForm" onsubmit="return validateReminderForm(this)">
                 <input type="hidden" name="action" value="create_reminder">
                 <input type="hidden" name="schedule_id" id="reminderScheduleId">
                 <div class="modal-body">
@@ -894,6 +908,25 @@ if (isset($_GET['id'])) {
 </div>
 
 <script>
+// متغير لتتبع ما إذا كان المستخدم قد غير القيمة
+let userChangedDays = false;
+let lastScheduleId = null;
+
+// دالة للتحقق من صحة النموذج قبل الإرسال
+function validateReminderForm(form) {
+    const daysInput = form.querySelector('input[name="days_before_due"]');
+    if (daysInput) {
+        const value = parseInt(daysInput.value);
+        if (isNaN(value) || value < 1 || value > 30) {
+            alert('يرجى إدخال عدد أيام صحيح بين 1 و 30');
+            return false;
+        }
+        // تسجيل القيمة قبل الإرسال للتشخيص
+        console.log('Submitting reminder form with days_before_due:', value);
+    }
+    return true;
+}
+
 function showReminderModal(scheduleId) {
     const scheduleIdInput = document.getElementById('reminderScheduleId');
     const daysInput = document.getElementById('daysBeforeDueInput');
@@ -903,29 +936,36 @@ function showReminderModal(scheduleId) {
         return;
     }
     
+    // إذا كان scheduleId مختلف عن الأخير، نعيد تعيين المتغيرات
+    if (lastScheduleId !== scheduleId) {
+        userChangedDays = false;
+        lastScheduleId = scheduleId;
+    }
+    
     scheduleIdInput.value = scheduleId;
     
-    // جلب القيمة المحفوظة للتذكير (إن وجدت) فقط عند فتح المودال لأول مرة
-    // لا نعيد تعيين القيمة إذا كان المستخدم قد غيرها
-    const originalValue = daysInput.value;
-    
-    fetch('?page=payment_schedules&action=get_reminder_days&schedule_id=' + scheduleId)
-        .then(response => response.json())
-        .then(data => {
-            // تحديث القيمة فقط إذا كانت القيمة الحالية هي القيمة الافتراضية (3)
-            // أو إذا كانت القيمة المحفوظة موجودة ولم يتم تغييرها من قبل المستخدم
-            if (data.success && data.days_before_due) {
-                // تحديث القيمة فقط إذا كانت القيمة الحالية هي القيمة الافتراضية
-                if (daysInput.value === '3' || daysInput.value === originalValue) {
-                    daysInput.value = data.days_before_due;
+    // جلب القيمة المحفوظة فقط إذا لم يقم المستخدم بتغييرها
+    if (!userChangedDays) {
+        fetch('?page=payment_schedules&action=get_reminder_days&schedule_id=' + scheduleId)
+            .then(response => response.json())
+            .then(data => {
+                // تحديث القيمة فقط إذا لم يقم المستخدم بتغييرها
+                if (!userChangedDays) {
+                    if (data.success && data.days_before_due) {
+                        daysInput.value = data.days_before_due;
+                    } else {
+                        daysInput.value = '3';
+                    }
                 }
-            }
-            // إذا لم تكن هناك قيمة محفوظة، نترك القيمة الحالية كما هي (3 أو القيمة التي أدخلها المستخدم)
-        })
-        .catch(error => {
-            console.error('Error fetching reminder days:', error);
-            // في حالة الخطأ، نترك القيمة الحالية كما هي
-        });
+            })
+            .catch(error => {
+                console.error('Error fetching reminder days:', error);
+                // في حالة الخطأ، نستخدم القيمة الافتراضية فقط إذا لم يقم المستخدم بتغييرها
+                if (!userChangedDays) {
+                    daysInput.value = '3';
+                }
+            });
+    }
     
     const modal = new bootstrap.Modal(document.getElementById('reminderModal'));
     modal.show();
@@ -988,8 +1028,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // إعادة تعيين مودال التنبيه عند إغلاقه
     const reminderModal = document.getElementById('reminderModal');
     if (reminderModal) {
+        // تتبع تغييرات المستخدم في حقل عدد الأيام
+        const daysInput = document.getElementById('daysBeforeDueInput');
+        if (daysInput) {
+            daysInput.addEventListener('input', function() {
+                userChangedDays = true;
+            });
+        }
+        
         reminderModal.addEventListener('hidden.bs.modal', function () {
-            const daysInput = document.getElementById('daysBeforeDueInput');
+            // إعادة تعيين المتغيرات عند إغلاق المودال
+            userChangedDays = false;
+            lastScheduleId = null;
             if (daysInput) {
                 daysInput.value = '3'; // إعادة تعيين القيمة الافتراضية
             }
