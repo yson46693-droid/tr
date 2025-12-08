@@ -720,6 +720,84 @@ if (ob_get_level() > 0) {
             z-index: 10 !important;
         }
         
+        /* إصلاح مشكلة عدم ظهور خيارات الـ dropdown في النماذج */
+        /* السماح لخيارات select بالظهور خارج modal-body */
+        .modal-content {
+            overflow: visible !important;
+        }
+        
+        .modal-dialog {
+            overflow: visible !important;
+        }
+        
+        /* إصلاح خاص للـ modal-body - السماح للـ dropdown بالظهور */
+        .modal-body {
+            overflow-x: hidden !important;
+            /* لا نضبط overflow-y هنا حتى لا نكسر الـ scroll */
+            position: relative;
+        }
+        
+        /* للنماذج التي تحتوي على overflow-y في الـ style مباشرة */
+        .modal-body[style*="overflow-y: auto"],
+        .modal-body[style*="overflow-y:auto"],
+        .modal-body[style*="overflow-y: scroll"],
+        .modal-body[style*="overflow-y:scroll"] {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            position: relative;
+            /* السماح للعناصر المطلقة الموضع بالظهور خارج الحدود */
+            contain: none !important;
+        }
+        
+        /* إصلاح خاص لـ modal-dialog-scrollable */
+        .modal-dialog-scrollable {
+            overflow: visible !important;
+        }
+        
+        .modal-dialog-scrollable .modal-body {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            position: relative;
+            contain: none !important;
+        }
+        
+        /* التأكد من أن select dropdown يظهر بشكل صحيح */
+        .modal-body select.form-select,
+        .modal-body select {
+            position: relative;
+        }
+        
+        .modal-body select.form-select:focus,
+        .modal-body select.form-select:active,
+        .modal-body select:focus,
+        .modal-body select:active {
+            z-index: 1060 !important;
+            position: relative;
+        }
+        
+        /* حل خاص: عندما يكون select في modal-body مع overflow */
+        .modal.show .modal-body {
+            /* السماح بالتداخل للعناصر المطلقة الموضع */
+            contain: none !important;
+        }
+        
+        /* إصلاح لـ Bootstrap 5 select في modals */
+        .modal-body .form-select:focus {
+            border-color: #86b7fe;
+            outline: 0;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+        
+        /* حل إضافي: التأكد من أن dropdown options يمكنها الظهور */
+        /* هذا يساعد مع native HTML select elements */
+        .modal.show {
+            overflow: visible !important;
+        }
+        
+        .modal.show .modal-dialog {
+            overflow: visible !important;
+        }
+        
         /* لوجو PWA */
         .loader-logo {
             width: 180px;

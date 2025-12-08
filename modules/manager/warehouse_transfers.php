@@ -2596,6 +2596,72 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 3000);
     }
 })();
+
+// إصلاح مشكلة عدم ظهور خيارات الـ dropdown في النماذج
+document.addEventListener('DOMContentLoaded', function() {
+    // معالجة جميع النماذج
+    const modals = document.querySelectorAll('.modal');
+    
+    modals.forEach(modal => {
+        // عند فتح النموذج
+        modal.addEventListener('shown.bs.modal', function() {
+            const modalBody = this.querySelector('.modal-body');
+            const modalContent = this.querySelector('.modal-content');
+            const modalDialog = this.querySelector('.modal-dialog');
+            
+            if (!modalBody) return;
+            
+            // التأكد من أن modal-content و modal-dialog يسمحان بالـ overflow
+            if (modalContent) {
+                modalContent.style.overflow = 'visible';
+            }
+            if (modalDialog) {
+                modalDialog.style.overflow = 'visible';
+            }
+            
+            // إيجاد جميع select elements داخل modal-body
+            const selects = modalBody.querySelectorAll('select.form-select, select');
+            
+            selects.forEach(select => {
+                // عند click على select (لأن native select يفتح dropdown عند click)
+                select.addEventListener('mousedown', function(e) {
+                    const bodyStyle = window.getComputedStyle(modalBody);
+                    
+                    // إذا كان modal-body له overflow-y، نحاول حل المشكلة
+                    if (bodyStyle.overflowY === 'auto' || bodyStyle.overflowY === 'scroll') {
+                        // تحديد موقع select بالنسبة لـ modal-body
+                        const selectRect = this.getBoundingClientRect();
+                        const bodyRect = modalBody.getBoundingClientRect();
+                        
+                        // إذا كان select قريب من أسفل modal-body، قد نحتاج لـ scroll
+                        const distanceFromBottom = bodyRect.bottom - selectRect.bottom;
+                        
+                        // التأكد من أن select مرئي بشكل كامل
+                        if (distanceFromBottom < 200) {
+                            // Scroll إلى select لضمان ظهور dropdown بشكل أفضل
+                            setTimeout(() => {
+                                this.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            }, 10);
+                        }
+                        
+                        // تحسين z-index
+                        this.style.position = 'relative';
+                        this.style.zIndex = '1060';
+                    }
+                });
+                
+                // عند focus أيضاً
+                select.addEventListener('focus', function() {
+                    const bodyStyle = window.getComputedStyle(modalBody);
+                    if (bodyStyle.overflowY === 'auto' || bodyStyle.overflowY === 'scroll') {
+                        this.style.position = 'relative';
+                        this.style.zIndex = '1060';
+                    }
+                });
+            });
+        });
+    });
+});
 </script>
 
 
