@@ -874,10 +874,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     );
                                 }
 
-                                // تسجيل السلفة في accountant_transactions كـ expense لتسوية المرتبات
+                                // تسجيل السلفة في accountant_transactions كـ expense (مصروف معتمد)
                                 $user = $db->queryOne("SELECT full_name, username FROM users WHERE id = ?", [$advance['user_id']]);
                                 $employeeName = $user['full_name'] ?? $user['username'] ?? 'غير محدد';
-                                $advanceDescription = 'تسوية راتب - سلفة موظف: ' . $employeeName . 
+                                $advanceDescription = 'سلفة موظف: ' . $employeeName . 
                                                      ' (السلفة #' . $advanceId . ')';
                                 $referenceNumber = 'ADV-' . $advanceId . '-' . date('YmdHis');
                                 
