@@ -361,21 +361,59 @@ function getInvoice($invoiceId) {
     );
     
     if ($invoice) {
+        // جلب عناصر الفاتورة مع رقم التشغيلة من مصادر متعددة
         $invoice['items'] = $db->query(
-            "SELECT ii.*, p.name as product_name, p.unit,
-                    GROUP_CONCAT(DISTINCT 
+            "SELECT ii.*, 
+                    p.name as product_name, 
+                    p.unit,
+                    -- جلب رقم التشغيلة من sales_batch_numbers أولاً
+                    COALESCE(
+                        -- 1. من sales_batch_numbers -> batch_numbers
+                        (SELECT GROUP_CONCAT(DISTINCT 
+                            CASE 
+                                WHEN bn2.batch_number IS NOT NULL AND TRIM(bn2.batch_number) != '' 
+                                THEN bn2.batch_number 
+                                ELSE NULL 
+                            END
+                            ORDER BY bn2.batch_number 
+                            SEPARATOR ', '
+                        )
+                        FROM sales_batch_numbers sbn2
+                        INNER JOIN batch_numbers bn2 ON sbn2.batch_number_id = bn2.id
+                        WHERE sbn2.invoice_item_id = ii.id
+                          AND bn2.batch_number IS NOT NULL 
+                          AND TRIM(bn2.batch_number) != ''),
+                        -- 2. من shipping_company_order_items -> finished_products (للفواتير من طلبات الشحن)
+                        (SELECT GROUP_CONCAT(DISTINCT 
+                            CASE 
+                                WHEN fp.batch_number IS NOT NULL AND TRIM(fp.batch_number) != '' 
+                                THEN fp.batch_number 
+                                ELSE NULL 
+                            END
+                            ORDER BY fp.batch_number 
+                            SEPARATOR ', '
+                        )
+                        FROM shipping_company_orders sco
+                        INNER JOIN shipping_company_order_items scoi ON sco.id = scoi.order_id
+                        INNER JOIN finished_products fp ON scoi.batch_id = fp.id
+                        WHERE sco.invoice_id = ii.invoice_id
+                          AND scoi.product_id = ii.product_id
+                          AND ABS(scoi.quantity - ii.quantity) < 0.001
+                          AND ABS(scoi.unit_price - ii.unit_price) < 0.001
+                          AND fp.batch_number IS NOT NULL 
+                          AND TRIM(fp.batch_number) != ''),
+                        -- 3. من description إذا كان يحتوي على رقم تشغيلة (مثل: اسم المنتج (رقم التشغيلة))
                         CASE 
-                            WHEN bn.batch_number IS NOT NULL AND TRIM(bn.batch_number) != '' 
-                            THEN bn.batch_number 
-                            ELSE NULL 
-                        END
-                        ORDER BY bn.batch_number 
-                        SEPARATOR ', '
+                            WHEN ii.description REGEXP '\\\\([A-Za-z0-9-]+\\\\)$'
+                            THEN SUBSTRING(ii.description, 
+                                 LOCATE('(', ii.description) + 1, 
+                                 LOCATE(')', ii.description) - LOCATE('(', ii.description) - 1)
+                            ELSE NULL
+                        END,
+                        ''
                     ) as batch_numbers
              FROM invoice_items ii
              LEFT JOIN products p ON ii.product_id = p.id
-             LEFT JOIN sales_batch_numbers sbn ON ii.id = sbn.invoice_item_id
-             LEFT JOIN batch_numbers bn ON sbn.batch_number_id = bn.id AND bn.batch_number IS NOT NULL
              WHERE ii.invoice_id = ?
              GROUP BY ii.id
              ORDER BY ii.id",
@@ -387,6 +425,15 @@ function getInvoice($invoiceId) {
             // التأكد من أن batch_numbers ليس NULL أو سلسلة فارغة
             $batchNumbers = isset($item['batch_numbers']) ? trim((string)$item['batch_numbers']) : '';
             $item['batch_number'] = !empty($batchNumbers) ? $batchNumbers : null;
+            
+            // إذا كان اسم المنتج يحتوي على رقم التشغيلة في الأقواس، نستخرجه
+            if (empty($item['batch_number']) && !empty($item['description'])) {
+                if (preg_match('/\(([A-Za-z0-9-]+)\)$/', $item['description'], $matches)) {
+                    $item['batch_number'] = $matches[1];
+                    // تنظيف اسم المنتج من رقم التشغيلة للعرض
+                    $item['product_name_clean'] = trim(preg_replace('/\s*\([A-Za-z0-9-]+\)$/', '', $item['description']));
+                }
+            }
         }
         unset($item);
     }
