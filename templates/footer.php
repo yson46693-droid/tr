@@ -29,6 +29,60 @@ if (!defined('ACCESS_ALLOWED')) {
         </div>
     </footer>
     
+    <!-- Session Keep-Alive Script -->
+    <script>
+    (function() {
+        // تحديث الجلسة تلقائياً كل 10 دقائق عند وجود نشاط
+        let lastActivity = Date.now();
+        const SESSION_REFRESH_INTERVAL = 10 * 60 * 1000; // 10 دقائق
+        const ACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 دقائق
+        
+        // تتبع النشاط
+        const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+        let activityTimer;
+        
+        function updateActivity() {
+            lastActivity = Date.now();
+            clearTimeout(activityTimer);
+            
+            // تحديث الجلسة عند النشاط
+            activityTimer = setTimeout(function() {
+                refreshSession();
+            }, ACTIVITY_TIMEOUT);
+        }
+        
+        // إضافة مستمعي الأحداث للنشاط
+        activityEvents.forEach(function(event) {
+            document.addEventListener(event, updateActivity, { passive: true });
+        });
+        
+        // تحديث الجلسة بشكل دوري
+        function refreshSession() {
+            // تحديث الجلسة عبر طلب AJAX بسيط
+            fetch(window.location.href, {
+                method: 'HEAD',
+                cache: 'no-cache',
+                credentials: 'same-origin'
+            }).catch(function(error) {
+                // تجاهل الأخطاء في تحديث الجلسة
+                console.log('Session refresh skipped');
+            });
+        }
+        
+        // تحديث الجلسة كل 10 دقائق
+        setInterval(function() {
+            const timeSinceActivity = Date.now() - lastActivity;
+            // تحديث فقط إذا كان هناك نشاط في آخر 5 دقائق
+            if (timeSinceActivity < ACTIVITY_TIMEOUT) {
+                refreshSession();
+            }
+        }, SESSION_REFRESH_INTERVAL);
+        
+        // تحديث أولي بعد تحميل الصفحة
+        setTimeout(refreshSession, 30000); // بعد 30 ثانية من تحميل الصفحة
+    })();
+    </script>
+    
     <!-- Install Banner -->
     <div class="install-banner" id="installBanner">
         <div class="d-flex align-items-center justify-content-between">

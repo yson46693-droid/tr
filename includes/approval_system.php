@@ -631,16 +631,18 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
         case 'salary_modification':
             // عند الموافقة على تعديل الراتب
             if ($status === 'approved') {
-                // entityId هنا هو approval_id وليس salary_id
-                $approval = $db->queryOne("SELECT * FROM approvals WHERE id = ?", [$entityId]);
-                if (!$approval) {
-                    throw new Exception('طلب الموافقة غير موجود');
-                }
-                
+                // entityId هنا هو salary_id (من عمود الكيان في جدول الموافقات)
                 $entityColumnName = getApprovalsEntityColumn();
-                $salaryId = $approval[$entityColumnName] ?? null;
-                if ($salaryId === null) {
-                    throw new Exception('تعذر تحديد الراتب المراد تعديله');
+                $salaryId = $entityId;
+                
+                // البحث عن الموافقة باستخدام salary_id
+                $approval = $db->queryOne("SELECT * FROM approvals WHERE {$entityColumnName} = ? AND type = 'salary_modification' AND status = 'pending'", [$salaryId]);
+                if (!$approval) {
+                    // محاولة البحث عن أي موافقة (حتى لو كانت approved) في حالة وجود مشكلة
+                    $approval = $db->queryOne("SELECT * FROM approvals WHERE {$entityColumnName} = ? AND type = 'salary_modification' ORDER BY id DESC LIMIT 1", [$salaryId]);
+                    if (!$approval) {
+                        throw new Exception('طلب الموافقة غير موجود');
+                    }
                 }
                 
                 // استخراج بيانات التعديل من notes أو approval_notes
