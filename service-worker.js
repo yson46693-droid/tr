@@ -1,5 +1,6 @@
-const CACHE_VERSION = '1.0.2'; // Updated for mobile performance
+const CACHE_VERSION = '1.0.3'; // Updated for fast navigation
 const CACHE_NAME = 'company-management-v' + CACHE_VERSION;
+const NAVIGATION_CACHE_NAME = 'navigation-cache-v' + CACHE_VERSION;
 const BASE = '/v1/';
 
 // تقليل الملفات الأساسية للكاش لتسريع التحميل
@@ -9,7 +10,9 @@ const CORE_CACHE = [
   BASE + 'assets/icons/icon-96x96.png'
 ];
 
-const MAX_DYNAMIC_CACHE_ITEMS = 30; // تقليل حجم الكاش للأداء الأفضل
+const MAX_DYNAMIC_CACHE_ITEMS = 50; // زيادة حجم الكاش للصفحات
+const MAX_NAVIGATION_CACHE_ITEMS = 20; // كاش خاص للصفحات الشائعة
+const NAVIGATION_CACHE_TTL = 5 * 60 * 1000; // 5 دقائق للصفحات
 
 // Install event - Cache essential files (non-blocking for faster startup)
 self.addEventListener('install', event => {
@@ -37,7 +40,9 @@ self.addEventListener('activate', event => {
     caches.keys().then(keys =>
       Promise.all(
         keys.map(key => {
-          if (key !== CACHE_NAME) return caches.delete(key);
+          if (key !== CACHE_NAME && key !== NAVIGATION_CACHE_NAME) {
+            return caches.delete(key);
+          }
         })
       )
     ).then(() => self.clients.claim())
@@ -49,9 +54,38 @@ async function limitCacheSize(cacheName, maxItems) {
   const cache = await caches.open(cacheName);
   const keys = await cache.keys();
   if (keys.length > maxItems) {
+    // حذف أقدم عنصر
     await cache.delete(keys[0]);
     await limitCacheSize(cacheName, maxItems);
   }
+}
+
+// Helper to check if cache entry is still valid
+async function isCacheValid(request, maxAge) {
+  try {
+    const cache = await caches.open(NAVIGATION_CACHE_NAME);
+    const cachedResponse = await cache.match(request);
+    if (!cachedResponse) return false;
+    
+    const cachedDate = cachedResponse.headers.get('sw-cached-date');
+    if (!cachedDate) return false;
+    
+    const age = Date.now() - parseInt(cachedDate);
+    return age < maxAge;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Helper to add cache metadata
+function addCacheMetadata(response) {
+  const headers = new Headers(response.headers);
+  headers.set('sw-cached-date', Date.now().toString());
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: headers
+  });
 }
 
 // Fetch event - smart caching with error and CSP handling
@@ -84,26 +118,79 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // CRITICAL FIX: Don't intercept navigation requests or requests that might result in redirects
-  // This prevents "Response served by service worker has redirections" error
-  // Navigation requests (document requests) often involve redirects and must be handled by browser
+  // تحديد نوع الطلب
   const isNavigationRequest = event.request.mode === 'navigate' || 
                                event.request.destination === 'document' ||
                                event.request.headers.get('accept')?.includes('text/html');
 
-  // Skip interception for PHP files, root paths, and dynamic URLs that might redirect
+  // للصفحات (navigation requests): استخدام Network First مع Cache Fallback
+  if (isNavigationRequest) {
+    event.respondWith(
+      (async () => {
+        // محاولة جلب من الشبكة أولاً
+        try {
+          const networkResponse = await fetch(event.request, {
+            redirect: 'follow',
+            cache: 'no-store' // عدم استخدام كاش المتصفح
+          });
+          
+          // إذا كانت الاستجابة ناجحة وليست redirect
+          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+            // حفظ في كاش التنقل
+            const responseClone = networkResponse.clone();
+            const cache = await caches.open(NAVIGATION_CACHE_NAME);
+            const cachedResponse = addCacheMetadata(responseClone);
+            await cache.put(event.request, cachedResponse);
+            await limitCacheSize(NAVIGATION_CACHE_NAME, MAX_NAVIGATION_CACHE_ITEMS);
+            
+            return networkResponse;
+          }
+          
+          // إذا كانت redirect أو خطأ، محاولة الكاش
+          if (networkResponse.status >= 300 && networkResponse.status < 400) {
+            return networkResponse; // إرجاع redirect كما هي
+          }
+        } catch (error) {
+          // في حالة خطأ الشبكة، محاولة الكاش
+        }
+        
+        // محاولة جلب من الكاش
+        const cache = await caches.open(NAVIGATION_CACHE_NAME);
+        const cachedResponse = await cache.match(event.request);
+        
+        if (cachedResponse) {
+          // التحقق من صلاحية الكاش
+          const isValid = await isCacheValid(event.request, NAVIGATION_CACHE_TTL);
+          if (isValid) {
+            return cachedResponse;
+          } else {
+            // حذف الكاش القديم
+            await cache.delete(event.request);
+          }
+        }
+        
+        // إذا لم يكن في الكاش، محاولة جلب من الكاش العام
+        const generalCache = await caches.open(CACHE_NAME);
+        const generalCached = await generalCache.match(event.request);
+        if (generalCached) {
+          return generalCached;
+        }
+        
+        // إذا فشل كل شيء، إرجاع offline page
+        return caches.match(BASE + 'offline.html') || new Response('', { status: 503 });
+      })()
+    );
+    return;
+  }
+  
+  // تخطي PHP files مع query parameters (ديناميكية)
   const skipInterception = 
-    isNavigationRequest ||
-    url.pathname.endsWith('.php') || 
+    (url.pathname.endsWith('.php') && url.search.length > 0) ||
     url.pathname === '/' || 
     url.pathname === BASE || 
-    url.pathname === BASE.slice(0, -1) ||
-    (!url.pathname.includes('.') && !url.pathname.endsWith('/')) ||
-    url.search.length > 0; // Skip URLs with query parameters (often dynamic/redirects)
+    url.pathname === BASE.slice(0, -1);
 
   if (skipInterception) {
-    // Let browser handle these requests directly - no service worker interception
-    // This prevents redirect errors completely
     return;
   }
 
@@ -114,17 +201,31 @@ self.addEventListener('fetch', event => {
       const isStaticAsset = /\.(css|js|png|jpg|jpeg|svg|gif|woff2?|ico|webp)$/i.test(url.pathname);
       
       if (isStaticAsset) {
+        // محاولة الكاش أولاً (أسرع)
         const cachedResponse = await caches.match(event.request);
         if (cachedResponse) {
-          // إرجاع من الكاش فوراً (أسرع)
-          return cachedResponse;
+          // جلب من الشبكة في الخلفية لتحديث الكاش (Stale-While-Revalidate)
+          fetch(event.request, {
+            redirect: 'follow',
+            cache: 'reload'
+          }).then(response => {
+            if (response && response.status === 200 && response.type === 'basic') {
+              const responseClone = response.clone();
+              caches.open(CACHE_NAME).then(cache => {
+                cache.put(event.request, responseClone);
+                limitCacheSize(CACHE_NAME, MAX_DYNAMIC_CACHE_ITEMS);
+              });
+            }
+          }).catch(() => {}); // تجاهل الأخطاء في التحديث
+          
+          return cachedResponse; // إرجاع من الكاش فوراً
         }
         
         // إذا لم يكن في الكاش، جلب من الشبكة وتخزينه
         try {
           const response = await fetch(event.request, {
             redirect: 'follow',
-            cache: 'reload' // التأكد من الحصول على أحدث نسخة
+            cache: 'reload'
           });
           
           if (response && response.status === 200 && response.type === 'basic') {
@@ -141,7 +242,31 @@ self.addEventListener('fetch', event => {
         }
       }
       
-      // للباقي: Network First (للحصول على أحدث البيانات)
+      // للـ API requests: Network First مع Cache Fallback
+      const isApiRequest = url.pathname.includes('/api/');
+      
+      if (isApiRequest) {
+        try {
+          const response = await fetch(event.request, {
+            redirect: 'follow',
+            cache: 'no-store'
+          });
+          
+          // لا نحفظ API responses في الكاش (ديناميكية)
+          return response;
+        } catch (error) {
+          // في حالة الخطأ، إرجاع response خطأ
+          return new Response(JSON.stringify({
+            success: false,
+            message: 'لا يوجد اتصال بالشبكة'
+          }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+          });
+        }
+      }
+      
+      // للباقي: Network First مع Cache Fallback
       try {
         const response = await fetch(event.request, {
           redirect: 'follow'
@@ -150,6 +275,14 @@ self.addEventListener('fetch', event => {
         // CRITICAL FIX: Never cache redirect responses
         if (response && response.status >= 300 && response.status < 400) {
           return response; // إرجاع إعادة التوجيه كما هي
+        }
+        
+        // حفظ في الكاش إذا كانت ناجحة
+        if (response && response.status === 200 && response.type === 'basic') {
+          const responseClone = response.clone();
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(event.request, responseClone);
+          await limitCacheSize(CACHE_NAME, MAX_DYNAMIC_CACHE_ITEMS);
         }
         
         return response;

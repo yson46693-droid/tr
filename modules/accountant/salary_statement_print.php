@@ -944,8 +944,8 @@ if (isset($_GET['month']) && isset($_GET['year'])) {
                 <span class="summary-label" style="font-weight: 700; color: #065f46;">المبلغ المدفوع</span>
                 <span class="summary-value amount-positive" style="font-size: 18px; font-weight: 700; color: #059669;"><?php echo formatCurrency($employee['paid_amount'] ?? 0); ?></span>
             </div>
-            <div class="summary-row" style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin-bottom: 12px; border: 2px solid #10b981;">
-                <span class="summary-label" style="font-weight: 700; color:rgb(156, 15, 10);">السلف</span>
+            <div class="summary-row" style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin-bottom: 12px; border: 2px solidrgb(156, 15, 10);">
+                <span class="summary-label" style="font-weight: 700; color:rgb(156, 15, 10);">اجمالي السلف</span>
                 <span class="summary-value amount-positive" style="font-size: 18px; font-weight: 700; color:rgb(156, 15, 10);"><?php echo formatCurrency($totalAdvances); ?></span>
             </div>
             <div class="summary-row" style="background: #fffbeb; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 2px solid #f59e0b;">
