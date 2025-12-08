@@ -146,32 +146,66 @@ function handleGetHistory(): void
             $hasBatchNumber = !empty($db->queryOne("SHOW COLUMNS FROM local_invoice_items LIKE 'batch_number'"));
             $hasBatchId = !empty($db->queryOne("SHOW COLUMNS FROM local_invoice_items LIKE 'batch_id'"));
             
-            // بناء الاستعلام ديناميكياً
+            // بناء الاستعلام ديناميكياً - استخدام sales_batch_numbers أيضاً للعملاء المحليين
+            // أولاً: محاولة جلب رقم التشغيلة من sales_batch_numbers (مثل العملاء العاديين)
+            // ثانياً: إذا لم يوجد، استخدام batch_number من local_invoice_items
+            
             $batchSelect = '';
-            if ($hasBatchNumber && $hasBatchId) {
-                // إذا كانا موجودين، نستخدمهما مباشرة
-                $batchSelect = "COALESCE(ii.batch_number, '') as batch_numbers,
-                                CASE 
-                                    WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
-                                    THEN CAST(ii.batch_id AS CHAR)
-                                    ELSE ''
-                                END as batch_number_ids";
-            } elseif ($hasBatchNumber) {
-                // إذا كان batch_number موجوداً فقط
-                $batchSelect = "COALESCE(ii.batch_number, '') as batch_numbers,
-                                '' as batch_number_ids";
-            } elseif ($hasBatchId) {
-                // إذا كان batch_id موجوداً فقط
-                $batchSelect = "'' as batch_numbers,
-                                CASE 
-                                    WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
-                                    THEN CAST(ii.batch_id AS CHAR)
-                                    ELSE ''
-                                END as batch_number_ids";
+            $batchJoin = '';
+            
+            // التحقق من وجود الجداول المطلوبة
+            $hasSalesBatchNumbers = !empty($db->queryOne("SHOW TABLES LIKE 'sales_batch_numbers'"));
+            $hasInvoicesTable = !empty($db->queryOne("SHOW TABLES LIKE 'invoices'"));
+            $hasInvoiceItemsTable = !empty($db->queryOne("SHOW TABLES LIKE 'invoice_items'"));
+            
+            if ($hasSalesBatchNumbers && $hasInvoicesTable && $hasInvoiceItemsTable) {
+                // محاولة ربط local_invoices مع invoices من خلال invoice_number
+                // ثم ربط invoice_items مع sales_batch_numbers للحصول على رقم التشغيلة
+                $batchSelect = "COALESCE(
+                    NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.batch_number ORDER BY bn.batch_number SEPARATOR ', ')), ''),
+                    COALESCE(NULLIF(TRIM(ii.batch_number), ''), ''),
+                    ''
+                ) as batch_numbers,
+                COALESCE(
+                    NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.id ORDER BY bn.id SEPARATOR ',')), ''),
+                    CASE 
+                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
+                        THEN CAST(ii.batch_id AS CHAR)
+                        ELSE ''
+                    END,
+                    ''
+                ) as batch_number_ids";
+                
+                $batchJoin = "LEFT JOIN invoices inv ON inv.invoice_number = REPLACE(i.invoice_number, 'LOC-', '')
+                             LEFT JOIN invoice_items inv_ii ON inv.id = inv_ii.invoice_id 
+                                 AND inv_ii.product_id = ii.product_id 
+                                 AND ABS(inv_ii.quantity - ii.quantity) < 0.001
+                                 AND ABS(inv_ii.unit_price - ii.unit_price) < 0.001
+                             LEFT JOIN sales_batch_numbers sbn ON inv_ii.id = sbn.invoice_item_id
+                             LEFT JOIN batch_numbers bn ON sbn.batch_number_id = bn.id AND bn.batch_number IS NOT NULL AND TRIM(bn.batch_number) != ''";
             } else {
-                // إذا لم يكونا موجودين
-                $batchSelect = "'' as batch_numbers,
-                                '' as batch_number_ids";
+                // إذا لم تكن الجداول موجودة، نستخدم batch_number من local_invoice_items
+                if ($hasBatchNumber && $hasBatchId) {
+                    $batchSelect = "COALESCE(NULLIF(TRIM(ii.batch_number), ''), '') as batch_numbers,
+                                    CASE 
+                                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
+                                        THEN CAST(ii.batch_id AS CHAR)
+                                        ELSE ''
+                                    END as batch_number_ids";
+                } elseif ($hasBatchNumber) {
+                    $batchSelect = "COALESCE(NULLIF(TRIM(ii.batch_number), ''), '') as batch_numbers,
+                                    '' as batch_number_ids";
+                } elseif ($hasBatchId) {
+                    $batchSelect = "'' as batch_numbers,
+                                    CASE 
+                                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
+                                        THEN CAST(ii.batch_id AS CHAR)
+                                        ELSE ''
+                                    END as batch_number_ids";
+                } else {
+                    $batchSelect = "'' as batch_numbers,
+                                    '' as batch_number_ids";
+                }
             }
             
             // بناء استعلام لجلب اسم المنتج الصحيح من finished_products إذا كان batch_id موجوداً
@@ -218,6 +252,7 @@ function handleGetHistory(): void
                 FROM local_invoices i
                 INNER JOIN local_invoice_items ii ON i.id = ii.invoice_id
                 LEFT JOIN products p ON ii.product_id = p.id
+                $batchJoin
                 WHERE i.customer_id = ?
                 GROUP BY i.id, ii.id
                 ORDER BY i.date DESC, i.id DESC, ii.id ASC",
