@@ -874,6 +874,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     );
                                 }
 
+                                // تسجيل السلفة في accountant_transactions كـ expense لتسوية المرتبات
+                                $user = $db->queryOne("SELECT full_name, username FROM users WHERE id = ?", [$advance['user_id']]);
+                                $employeeName = $user['full_name'] ?? $user['username'] ?? 'غير محدد';
+                                $advanceDescription = 'تسوية راتب - سلفة موظف: ' . $employeeName . 
+                                                     ' (السلفة #' . $advanceId . ')';
+                                $referenceNumber = 'ADV-' . $advanceId . '-' . date('YmdHis');
+                                
+                                // التأكد من وجود جدول accountant_transactions
+                                $accountantTableCheck = $db->queryOne("SHOW TABLES LIKE 'accountant_transactions'");
+                                if (!empty($accountantTableCheck)) {
+                                    $db->execute(
+                                        "INSERT INTO accountant_transactions 
+                                            (transaction_type, amount, description, reference_number, 
+                                             status, approved_by, created_by, approved_at)
+                                         VALUES (?, ?, ?, ?, 'approved', ?, ?, NOW())",
+                                        [
+                                            'expense',
+                                            $advance['amount'],
+                                            $advanceDescription,
+                                            $referenceNumber,
+                                            $currentUser['id'],
+                                            $currentUser['id']
+                                        ]
+                                    );
+                                }
+
                                 $db->commit();
                             } catch (Throwable $approvalError) {
                                 $db->rollback();

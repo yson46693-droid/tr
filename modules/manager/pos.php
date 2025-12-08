@@ -892,6 +892,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $invoiceId = (int) $invoiceResult['invoice_id'];
                 $invoiceNumber = $invoiceResult['invoice_number'] ?? '';
 
+                // ربط أرقام التشغيلة بعناصر الفاتورة
+                $invoiceItemsFromDb = $db->query(
+                    "SELECT id, product_id FROM invoice_items WHERE invoice_id = ? ORDER BY id",
+                    [$invoiceId]
+                );
+                
+                // إنشاء خريطة للمطابقة بين invoice_items و normalizedCart
+                $invoiceItemsMap = [];
+                foreach ($invoiceItemsFromDb as $invItem) {
+                    $productId = (int)$invItem['product_id'];
+                    if (!isset($invoiceItemsMap[$productId])) {
+                        $invoiceItemsMap[$productId] = [];
+                    }
+                    $invoiceItemsMap[$productId][] = (int)$invItem['id'];
+                }
+                
+                // ربط أرقام التشغيلة
+                foreach ($normalizedCart as $item) {
+                    $productId = (int)$item['product_id'];
+                    $batchId = $item['batch_id'] ?? null;
+                    $batchNumber = null;
+                    
+                    // جلب batch_number من batch_id إذا كان موجوداً
+                    if ($batchId) {
+                        $batchInfo = $db->queryOne(
+                            "SELECT COALESCE(fp.batch_number, bn.batch_number) as batch_number
+                             FROM finished_products fp
+                             LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                             WHERE fp.id = ?
+                             LIMIT 1",
+                            [$batchId]
+                        );
+                        if ($batchInfo && !empty($batchInfo['batch_number'])) {
+                            $batchNumber = $batchInfo['batch_number'];
+                        }
+                    }
+                    
+                    if (isset($invoiceItemsMap[$productId]) && !empty($invoiceItemsMap[$productId]) && $batchNumber) {
+                        // استخدام أول invoice_item_id متطابق
+                        $invoiceItemId = array_shift($invoiceItemsMap[$productId]);
+                        
+                        // البحث عن batch_number_id من جدول batch_numbers
+                        $batchNumberId = null;
+                        $batchCheck = $db->queryOne(
+                            "SELECT id FROM batch_numbers WHERE batch_number = ?",
+                            [$batchNumber]
+                        );
+                        if ($batchCheck) {
+                            $batchNumberId = (int)$batchCheck['id'];
+                        }
+                        
+                        // ربط رقم التشغيلة بعنصر الفاتورة إذا وُجد
+                        if ($batchNumberId) {
+                            try {
+                                $db->execute(
+                                    "INSERT INTO sales_batch_numbers (invoice_item_id, batch_number_id, quantity) 
+                                     VALUES (?, ?, ?)
+                                     ON DUPLICATE KEY UPDATE quantity = quantity + ?",
+                                    [$invoiceItemId, $batchNumberId, $item['quantity'], $item['quantity']]
+                                );
+                            } catch (Throwable $batchError) {
+                                error_log('Error linking batch number to invoice item: ' . $batchError->getMessage());
+                            }
+                        }
+                    }
+                }
+
                 $invoiceStatus = 'sent';
                 // حساب المبلغ الإجمالي المدفوع (نقدي + رصيد دائن) للفاتورة
                 $totalPaidAmount = $effectivePaidAmount + $creditUsed;
