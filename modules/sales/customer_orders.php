@@ -1217,25 +1217,32 @@ if (isset($_GET['id'])) {
 
 /* تحسينات الجداول على الهواتف - فقط لعناصر الطلب */
 @media (max-width: 767.98px) {
-    /* تحسين جدول تفاصيل الطلب - كل عنوان وقيمته على سطر واحد */
+    /* تحسين جدول تفاصيل الطلب - كل عنوان وقيمته على سطر واحد - محكم داخل الإطار */
     .dashboard-table-details {
         width: 100%;
         font-size: 0.9rem;
-        margin-bottom: 0;
+        margin: 0;
+        padding: 0;
+        border-spacing: 0;
     }
     
     .dashboard-table-details tr {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        margin-bottom: 0.5rem;
-        padding: 0.4rem 0;
+        margin-bottom: 0.35rem;
+        padding: 0.25rem 0;
         border-bottom: 1px solid #e9ecef;
+    }
+    
+    .dashboard-table-details tr:first-child {
+        padding-top: 0;
     }
     
     .dashboard-table-details tr:last-child {
         border-bottom: none;
         margin-bottom: 0;
+        padding-bottom: 0;
     }
     
     .dashboard-table-details th {
@@ -1243,7 +1250,7 @@ if (isset($_GET['id'])) {
         min-width: 35%;
         font-size: 0.85rem;
         font-weight: 600;
-        padding: 0.3rem 0.5rem 0.3rem 0;
+        padding: 0.25rem 0.5rem 0.25rem 0;
         margin: 0;
         vertical-align: middle;
         color: #495057;
@@ -1252,7 +1259,7 @@ if (isset($_GET['id'])) {
     
     .dashboard-table-details td {
         font-size: 0.9rem;
-        padding: 0.3rem 0;
+        padding: 0.25rem 0;
         margin: 0;
         word-break: break-word;
         flex: 1;
@@ -1260,24 +1267,34 @@ if (isset($_GET['id'])) {
         vertical-align: middle;
     }
     
-    /* تحسين جدول عناصر الطلب - تقليل المسافات */
+    /* تحسين جدول عناصر الطلب - تقليل المسافات الفارغة */
     .dashboard-table--compact {
         font-size: 0.85rem;
-        margin-bottom: 0;
+        margin: 0;
+        padding: 0;
     }
     
     .dashboard-table--compact thead {
         display: none;
     }
     
+    .dashboard-table--compact tbody {
+        margin: 0;
+        padding: 0;
+    }
+    
     .dashboard-table--compact tbody tr {
         display: block;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.4rem;
         border: 1px solid #dee2e6;
-        border-radius: 6px;
-        padding: 0.5rem;
+        border-radius: 5px;
+        padding: 0.4rem;
         background: #fff;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    }
+    
+    .dashboard-table--compact tbody tr:first-child {
+        margin-top: 0;
     }
     
     .dashboard-table--compact tbody tr:last-child {
@@ -1288,10 +1305,14 @@ if (isset($_GET['id'])) {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.35rem 0;
+        padding: 0.25rem 0;
         border: none;
         border-bottom: 1px solid #f0f0f0;
         margin: 0;
+    }
+    
+    .dashboard-table--compact tbody td:first-child {
+        padding-top: 0;
     }
     
     .dashboard-table--compact tbody td:last-child {
@@ -1303,7 +1324,7 @@ if (isset($_GET['id'])) {
         content: attr(data-label);
         font-weight: 600;
         color: #495057;
-        margin-left: 0.5rem;
+        margin-left: 0.4rem;
         text-align: right;
         flex-shrink: 0;
         font-size: 0.8rem;
@@ -1311,7 +1332,7 @@ if (isset($_GET['id'])) {
     
     /* تحسين عرض تفاصيل الطلب */
     .card-body .row > .col-md-6 {
-        margin-bottom: 1rem;
+        margin-bottom: 0.75rem;
     }
     
     .card-body .row > .col-md-6:last-child {
@@ -1336,34 +1357,57 @@ if (isset($_GET['id'])) {
     }
 }
 
-/* تحسينات إضافية لجدول تفاصيل الطلب على جميع الشاشات */
+/* تحسينات إضافية لجدول تفاصيل الطلب على جميع الشاشات - محكم داخل الإطار */
 .dashboard-table-details {
-    margin-bottom: 0;
+    margin: 0;
+    padding: 0;
+    border-spacing: 0;
 }
 
 .dashboard-table-details tr {
     border-bottom: 1px solid #e9ecef;
+    margin-bottom: 0.35rem;
+}
+
+.dashboard-table-details tr:first-child {
+    padding-top: 0;
 }
 
 .dashboard-table-details tr:last-child {
     border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
 }
 
 .dashboard-table-details th {
-    padding: 0.5rem 0.75rem 0.5rem 0;
+    padding: 0.4rem 0.75rem 0.4rem 0;
     font-weight: 600;
     color: #495057;
     white-space: nowrap;
 }
 
 .dashboard-table-details td {
-    padding: 0.5rem 0.75rem 0.5rem 0;
+    padding: 0.4rem 0.75rem 0.4rem 0;
     word-break: break-word;
 }
 
-/* تحسينات إضافية لجدول عناصر الطلب على جميع الشاشات */
+/* تحسينات إضافية لجدول عناصر الطلب على جميع الشاشات - تقليل المسافات */
+.dashboard-table--compact {
+    margin: 0;
+    padding: 0;
+}
+
+.dashboard-table--compact tbody {
+    margin: 0;
+    padding: 0;
+}
+
 .dashboard-table--compact tbody tr {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+
+.dashboard-table--compact tbody tr:first-child {
+    margin-top: 0;
 }
 
 .dashboard-table--compact tbody tr:last-child {
@@ -1371,7 +1415,15 @@ if (isset($_GET['id'])) {
 }
 
 .dashboard-table--compact tbody td {
-    padding: 0.4rem 0;
+    padding: 0.3rem 0;
+}
+
+.dashboard-table--compact tbody td:first-child {
+    padding-top: 0;
+}
+
+.dashboard-table--compact tbody td:last-child {
+    padding-bottom: 0;
 }
 </style>
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
