@@ -2550,9 +2550,16 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
         z-index: 1065 !important;
     }
 
-    /* إصلاح خاص للنماذج الكبيرة */
+    /* إصلاح خاص للنماذج الكبيرة - إزالة overflow عند فتح select */
     .modal-body[style*="max-height"] {
         overflow-y: auto !important;
+        overflow-x: visible !important;
+    }
+
+    /* عند فتح select، إزالة overflow من modal-body */
+    .modal-body.select-open {
+        overflow: visible !important;
+        overflow-y: visible !important;
         overflow-x: visible !important;
     }
 
@@ -4949,31 +4956,34 @@ document.addEventListener('DOMContentLoaded', function() {
             const selects = modalBody.querySelectorAll('select.form-select, select');
             
             selects.forEach(select => {
+                // حفظ قيمة overflow الأصلية
+                let originalOverflow = modalBody.style.overflow || '';
+                let originalOverflowY = modalBody.style.overflowY || '';
+                
                 select.addEventListener('mousedown', function(e) {
-                    const bodyStyle = window.getComputedStyle(modalBody);
+                    // إزالة overflow من modal-body عند فتح select
+                    modalBody.classList.add('select-open');
+                    modalBody.style.overflow = 'visible';
+                    modalBody.style.overflowY = 'visible';
+                    modalBody.style.overflowX = 'visible';
                     
-                    if (bodyStyle.overflowY === 'auto' || bodyStyle.overflowY === 'scroll') {
-                        const selectRect = this.getBoundingClientRect();
-                        const bodyRect = modalBody.getBoundingClientRect();
-                        const distanceFromBottom = bodyRect.bottom - selectRect.bottom;
-                        
-                        if (distanceFromBottom < 200) {
-                            setTimeout(() => {
-                                this.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                            }, 10);
-                        }
-                        
-                        this.style.position = 'relative';
-                        this.style.zIndex = '1065';
-                    }
+                    this.style.position = 'relative';
+                    this.style.zIndex = '1065';
+                    
+                    setTimeout(() => {
+                        this.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                    }, 10);
                 });
                 
                 select.addEventListener('focus', function() {
-                    const bodyStyle = window.getComputedStyle(modalBody);
-                    if (bodyStyle.overflowY === 'auto' || bodyStyle.overflowY === 'scroll') {
-                        this.style.position = 'relative';
-                        this.style.zIndex = '1065';
-                    }
+                    // إزالة overflow من modal-body عند focus
+                    modalBody.classList.add('select-open');
+                    modalBody.style.overflow = 'visible';
+                    modalBody.style.overflowY = 'visible';
+                    modalBody.style.overflowX = 'visible';
+                    
+                    this.style.position = 'relative';
+                    this.style.zIndex = '1065';
                     
                     setTimeout(() => {
                         this.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
@@ -4981,12 +4991,52 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 
                 select.addEventListener('change', function() {
+                    modalBody.classList.remove('select-open');
+                    if (originalOverflow) {
+                        modalBody.style.overflow = originalOverflow;
+                    } else {
+                        modalBody.style.overflow = '';
+                    }
+                    if (originalOverflowY) {
+                        modalBody.style.overflowY = originalOverflowY;
+                    } else {
+                        modalBody.style.overflowY = '';
+                    }
                     this.style.zIndex = '1055';
+                });
+                
+                select.addEventListener('blur', function() {
+                    setTimeout(() => {
+                        modalBody.classList.remove('select-open');
+                        if (originalOverflow) {
+                            modalBody.style.overflow = originalOverflow;
+                        } else {
+                            modalBody.style.overflow = '';
+                        }
+                        if (originalOverflowY) {
+                            modalBody.style.overflowY = originalOverflowY;
+                        } else {
+                            modalBody.style.overflowY = '';
+                        }
+                        this.style.zIndex = '1055';
+                    }, 200);
                 });
             });
         });
         
         modal.addEventListener('hidden.bs.modal', function() {
+            const modalBody = this.querySelector('.modal-body');
+            if (modalBody) {
+                modalBody.classList.remove('select-open');
+                const styleAttr = modalBody.getAttribute('style');
+                if (styleAttr && styleAttr.includes('overflow')) {
+                    // الحفاظ على style الأصلي
+                } else {
+                    modalBody.style.overflow = '';
+                    modalBody.style.overflowY = '';
+                    modalBody.style.overflowX = '';
+                }
+            }
             const selects = this.querySelectorAll('select.form-select, select');
             selects.forEach(select => {
                 select.style.zIndex = '';

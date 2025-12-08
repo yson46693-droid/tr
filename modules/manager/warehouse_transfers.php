@@ -2644,9 +2644,16 @@ document.addEventListener('DOMContentLoaded', function() {
     z-index: 1065 !important;
 }
 
-/* إصلاح خاص للنماذج الكبيرة */
+/* إصلاح خاص للنماذج الكبيرة - إزالة overflow عند فتح select */
 .modal-body[style*="max-height"] {
     overflow-y: auto !important;
+    overflow-x: visible !important;
+}
+
+/* عند فتح select، إزالة overflow من modal-body */
+.modal-body.select-open {
+    overflow: visible !important;
+    overflow-y: visible !important;
     overflow-x: visible !important;
 }
 
@@ -2700,40 +2707,38 @@ document.addEventListener('DOMContentLoaded', function() {
             const selects = modalBody.querySelectorAll('select.form-select, select');
             
             selects.forEach(select => {
+                // حفظ قيمة overflow الأصلية
+                let originalOverflow = modalBody.style.overflow || '';
+                let originalOverflowY = modalBody.style.overflowY || '';
+                
                 // عند click على select (لأن native select يفتح dropdown عند click)
                 select.addEventListener('mousedown', function(e) {
-                    const bodyStyle = window.getComputedStyle(modalBody);
+                    // إزالة overflow من modal-body عند فتح select
+                    modalBody.classList.add('select-open');
+                    modalBody.style.overflow = 'visible';
+                    modalBody.style.overflowY = 'visible';
+                    modalBody.style.overflowX = 'visible';
                     
-                    // إذا كان modal-body له overflow-y، نحاول حل المشكلة
-                    if (bodyStyle.overflowY === 'auto' || bodyStyle.overflowY === 'scroll') {
-                        // تحديد موقع select بالنسبة لـ modal-body
-                        const selectRect = this.getBoundingClientRect();
-                        const bodyRect = modalBody.getBoundingClientRect();
-                        
-                        // إذا كان select قريب من أسفل modal-body، قد نحتاج لـ scroll
-                        const distanceFromBottom = bodyRect.bottom - selectRect.bottom;
-                        
-                        // التأكد من أن select مرئي بشكل كامل
-                        if (distanceFromBottom < 200) {
-                            // Scroll إلى select لضمان ظهور dropdown بشكل أفضل
-                            setTimeout(() => {
-                                this.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                            }, 10);
-                        }
-                        
-                        // تحسين z-index
-                        this.style.position = 'relative';
-                        this.style.zIndex = '1065';
-                    }
+                    // تحسين z-index
+                    this.style.position = 'relative';
+                    this.style.zIndex = '1065';
+                    
+                    // Scroll إلى select لضمان ظهور dropdown بشكل أفضل
+                    setTimeout(() => {
+                        this.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                    }, 10);
                 });
                 
                 // عند focus أيضاً
                 select.addEventListener('focus', function() {
-                    const bodyStyle = window.getComputedStyle(modalBody);
-                    if (bodyStyle.overflowY === 'auto' || bodyStyle.overflowY === 'scroll') {
-                        this.style.position = 'relative';
-                        this.style.zIndex = '1065';
-                    }
+                    // إزالة overflow من modal-body عند focus
+                    modalBody.classList.add('select-open');
+                    modalBody.style.overflow = 'visible';
+                    modalBody.style.overflowY = 'visible';
+                    modalBody.style.overflowX = 'visible';
+                    
+                    this.style.position = 'relative';
+                    this.style.zIndex = '1065';
                     
                     // التأكد من أن select مرئي
                     setTimeout(() => {
@@ -2741,15 +2746,57 @@ document.addEventListener('DOMContentLoaded', function() {
                     }, 100);
                 });
                 
-                // عند change أيضاً
+                // عند change أو blur، إعادة overflow
                 select.addEventListener('change', function() {
+                    modalBody.classList.remove('select-open');
+                    if (originalOverflow) {
+                        modalBody.style.overflow = originalOverflow;
+                    } else {
+                        modalBody.style.overflow = '';
+                    }
+                    if (originalOverflowY) {
+                        modalBody.style.overflowY = originalOverflowY;
+                    } else {
+                        modalBody.style.overflowY = '';
+                    }
                     this.style.zIndex = '1055';
+                });
+                
+                select.addEventListener('blur', function() {
+                    // تأخير بسيط لإعادة overflow بعد إغلاق القائمة
+                    setTimeout(() => {
+                        modalBody.classList.remove('select-open');
+                        if (originalOverflow) {
+                            modalBody.style.overflow = originalOverflow;
+                        } else {
+                            modalBody.style.overflow = '';
+                        }
+                        if (originalOverflowY) {
+                            modalBody.style.overflowY = originalOverflowY;
+                        } else {
+                            modalBody.style.overflowY = '';
+                        }
+                        this.style.zIndex = '1055';
+                    }, 200);
                 });
             });
         });
         
-        // عند إغلاق النموذج، إعادة تعيين z-index
+        // عند إغلاق النموذج، إعادة تعيين z-index و overflow
         modal.addEventListener('hidden.bs.modal', function() {
+            const modalBody = this.querySelector('.modal-body');
+            if (modalBody) {
+                modalBody.classList.remove('select-open');
+                // إعادة overflow الأصلي من style attribute إن وجد
+                const styleAttr = modalBody.getAttribute('style');
+                if (styleAttr && styleAttr.includes('overflow')) {
+                    // الحفاظ على style الأصلي
+                } else {
+                    modalBody.style.overflow = '';
+                    modalBody.style.overflowY = '';
+                    modalBody.style.overflowX = '';
+                }
+            }
             const selects = this.querySelectorAll('select.form-select, select');
             selects.forEach(select => {
                 select.style.zIndex = '';
