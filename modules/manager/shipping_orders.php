@@ -1318,28 +1318,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // تاريخ البيع (تاريخ التسليم)
                     $saleDate = date('Y-m-d');
                     
+                    // التحقق من وجود عمود batch_id في جدول sales
+                    $hasBatchIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM sales LIKE 'batch_id'"));
+                    
                     // إضافة كل منتج إلى جدول sales
                     foreach ($orderItems as $item) {
                         $productId = (int)($item['product_id'] ?? 0);
+                        $batchId = !empty($item['batch_id']) ? (int)$item['batch_id'] : null;
                         $quantity = (float)($item['quantity'] ?? 0);
                         $unitPrice = (float)($item['unit_price'] ?? 0);
                         $totalPrice = (float)($item['total_price'] ?? 0);
                         
                         if ($productId > 0 && $quantity > 0) {
-                            $db->execute(
-                                "INSERT INTO sales (customer_id, product_id, quantity, price, total, date, salesperson_id, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')",
-                                [$salesCustomerId, $productId, $quantity, $unitPrice, $totalPrice, $saleDate, $currentUser['id'] ?? null]
-                            );
-                            
-                            error_log(sprintf(
-                                'shipping_orders: Added sale record - customer_id=%d, product_id=%d, quantity=%.2f, total=%.2f, order_id=%d',
-                                $salesCustomerId,
-                                $productId,
-                                $quantity,
-                                $totalPrice,
-                                $orderId
-                            ));
+                            if ($hasBatchIdColumn && $batchId) {
+                                // إضافة batch_id إذا كان العمود موجوداً وكان batch_id متوفراً
+                                $db->execute(
+                                    "INSERT INTO sales (customer_id, product_id, batch_id, quantity, price, total, date, salesperson_id, status) 
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed')",
+                                    [$salesCustomerId, $productId, $batchId, $quantity, $unitPrice, $totalPrice, $saleDate, $currentUser['id'] ?? null]
+                                );
+                                
+                                error_log(sprintf(
+                                    'shipping_orders: Added sale record with batch_id - customer_id=%d, product_id=%d, batch_id=%d, quantity=%.2f, total=%.2f, order_id=%d',
+                                    $salesCustomerId,
+                                    $productId,
+                                    $batchId,
+                                    $quantity,
+                                    $totalPrice,
+                                    $orderId
+                                ));
+                            } else {
+                                // إضافة بدون batch_id (للتوافق مع الإصدارات القديمة)
+                                $db->execute(
+                                    "INSERT INTO sales (customer_id, product_id, quantity, price, total, date, salesperson_id, status) 
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')",
+                                    [$salesCustomerId, $productId, $quantity, $unitPrice, $totalPrice, $saleDate, $currentUser['id'] ?? null]
+                                );
+                                
+                                error_log(sprintf(
+                                    'shipping_orders: Added sale record - customer_id=%d, product_id=%d, quantity=%.2f, total=%.2f, order_id=%d%s',
+                                    $salesCustomerId,
+                                    $productId,
+                                    $quantity,
+                                    $totalPrice,
+                                    $orderId,
+                                    $batchId ? " (batch_id=$batchId not added - column not exists)" : ''
+                                ));
+                            }
                         }
                     }
                     

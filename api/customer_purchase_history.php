@@ -293,14 +293,20 @@ function handleGetHistory(): void
                 ii.id as invoice_item_id,
                 ii.product_id,
                 COALESCE(
-                    (SELECT fp2.product_name 
-                     FROM finished_products fp2 
-                     INNER JOIN batch_numbers bn2 ON fp2.batch_id = bn2.id
-                     INNER JOIN sales_batch_numbers sbn2 ON bn2.id = sbn2.batch_number_id
+                    (SELECT COALESCE(
+                        NULLIF(TRIM(pr2.name), ''),
+                        NULLIF(TRIM(fp2.product_name), ''),
+                        NULL
+                    )
+                     FROM sales_batch_numbers sbn2
+                     INNER JOIN batch_numbers bn2 ON sbn2.batch_number_id = bn2.id
+                     INNER JOIN finished_products fp2 ON fp2.batch_number = bn2.batch_number
+                     LEFT JOIN products pr2 ON COALESCE(fp2.product_id, bn2.product_id) = pr2.id
                      WHERE sbn2.invoice_item_id = ii.id
-                       AND fp2.product_name IS NOT NULL 
-                       AND TRIM(fp2.product_name) != ''
-                       AND fp2.product_name NOT LIKE 'منتج رقم%'
+                       AND (
+                           (pr2.name IS NOT NULL AND TRIM(pr2.name) != '' AND pr2.name NOT LIKE 'منتج رقم%')
+                           OR (fp2.product_name IS NOT NULL AND TRIM(fp2.product_name) != '' AND fp2.product_name NOT LIKE 'منتج رقم%')
+                       )
                      ORDER BY fp2.id DESC 
                      LIMIT 1),
                     NULLIF(TRIM(p.name), ''),
@@ -499,13 +505,20 @@ function handleSearch(): void
             ii.id as invoice_item_id,
             ii.product_id,
             COALESCE(
-                (SELECT fp2.product_name 
-                 FROM finished_products fp2 
-                 INNER JOIN batch_numbers bn2 ON fp2.batch_id = bn2.id
-                 INNER JOIN sales_batch_numbers sbn2 ON bn2.id = sbn2.batch_number_id
+                (SELECT COALESCE(
+                    NULLIF(TRIM(pr2.name), ''),
+                    NULLIF(TRIM(fp2.product_name), ''),
+                    NULL
+                )
+                 FROM sales_batch_numbers sbn2
+                 INNER JOIN batch_numbers bn2 ON sbn2.batch_number_id = bn2.id
+                 INNER JOIN finished_products fp2 ON fp2.batch_number = bn2.batch_number
+                 LEFT JOIN products pr2 ON COALESCE(fp2.product_id, bn2.product_id) = pr2.id
                  WHERE sbn2.invoice_item_id = ii.id
-                   AND fp2.product_name IS NOT NULL 
-                   AND TRIM(fp2.product_name) != ''
+                   AND (
+                       (pr2.name IS NOT NULL AND TRIM(pr2.name) != '' AND pr2.name NOT LIKE 'منتج رقم%')
+                       OR (fp2.product_name IS NOT NULL AND TRIM(fp2.product_name) != '' AND fp2.product_name NOT LIKE 'منتج رقم%')
+                   )
                  ORDER BY fp2.id DESC 
                  LIMIT 1),
                 NULLIF(TRIM(p.name), ''),
