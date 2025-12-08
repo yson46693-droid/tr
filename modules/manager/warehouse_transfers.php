@@ -2673,24 +2673,25 @@ document.addEventListener('DOMContentLoaded', function() {
 </style>
 
 <script>
-// حل نهائي وجذري - إزالة overflow من modal-body عند وجود select
+// حل نهائي - إزالة overflow مباشرة عند النقر على select
 (function() {
     'use strict';
     
-    function removeOverflowFromModals() {
-        document.querySelectorAll('.modal.show .modal-body').forEach(modalBody => {
-            const hasSelect = modalBody.querySelector('select.form-select, select');
-            if (hasSelect) {
-                // إضافة class للتحكم عبر CSS
-                modalBody.classList.add('select-container');
-                if (modalBody.closest('.modal-content')) {
-                    modalBody.closest('.modal-content').classList.add('select-container-parent');
-                }
-                if (modalBody.closest('.modal-dialog')) {
-                    modalBody.closest('.modal-dialog').classList.add('select-container-parent');
-                }
+    // استخدام event delegation على document level
+    document.addEventListener('mousedown', function(e) {
+        const target = e.target;
+        if (target && (target.tagName === 'SELECT' || target.closest('select'))) {
+            const select = target.tagName === 'SELECT' ? target : target.closest('select');
+            const modalBody = select.closest('.modal-body');
+            
+            if (modalBody) {
+                // حفظ القيم الأصلية
+                const originalOverflow = modalBody.style.overflow || '';
+                const originalOverflowY = modalBody.style.overflowY || '';
+                const originalOverflowX = modalBody.style.overflowX || '';
+                const originalMaxHeight = modalBody.style.maxHeight || '';
                 
-                // إزالة overflow بشكل قسري
+                // إزالة overflow بشكل فوري وقسري
                 modalBody.style.setProperty('overflow', 'visible', 'important');
                 modalBody.style.setProperty('overflow-y', 'visible', 'important');
                 modalBody.style.setProperty('overflow-x', 'visible', 'important');
@@ -2706,33 +2707,78 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (modalDialog) {
                     modalDialog.style.setProperty('overflow', 'visible', 'important');
                 }
+                
+                // إعادة overflow بعد إغلاق القائمة
+                const restoreOverflow = function() {
+                    setTimeout(function() {
+                        if (originalOverflow) {
+                            modalBody.style.overflow = originalOverflow;
+                        } else {
+                            modalBody.style.removeProperty('overflow');
+                        }
+                        if (originalOverflowY) {
+                            modalBody.style.overflowY = originalOverflowY;
+                        } else {
+                            modalBody.style.removeProperty('overflow-y');
+                        }
+                        if (originalOverflowX) {
+                            modalBody.style.overflowX = originalOverflowX;
+                        } else {
+                            modalBody.style.removeProperty('overflow-x');
+                        }
+                        if (originalMaxHeight) {
+                            modalBody.style.maxHeight = originalMaxHeight;
+                        } else {
+                            modalBody.style.removeProperty('max-height');
+                        }
+                        
+                        if (modalContent) {
+                            modalContent.style.removeProperty('overflow');
+                        }
+                        if (modalDialog) {
+                            modalDialog.style.removeProperty('overflow');
+                        }
+                    }, 300);
+                };
+                
+                // إعادة overflow عند change أو blur
+                select.addEventListener('change', restoreOverflow, { once: true });
+                select.addEventListener('blur', restoreOverflow, { once: true });
+                
+                // أيضاً عند click خارج select
+                document.addEventListener('click', function clickHandler(e) {
+                    if (!select.contains(e.target) && e.target !== select) {
+                        restoreOverflow();
+                        document.removeEventListener('click', clickHandler);
+                    }
+                }, { once: true });
             }
-        });
-    }
+        }
+    }, true); // استخدام capture phase
     
-    // مراقبة فتح النماذج
-    document.addEventListener('shown.bs.modal', function() {
-        setTimeout(removeOverflowFromModals, 10);
-    });
-    
-    // تشغيل فوري
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', removeOverflowFromModals);
-    } else {
-        removeOverflowFromModals();
-    }
-    
-    // مراقبة DOM للتغييرات
-    const observer = new MutationObserver(function(mutations) {
-        removeOverflowFromModals();
-    });
-    
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['class']
-    });
+    // أيضاً عند focus
+    document.addEventListener('focus', function(e) {
+        const target = e.target;
+        if (target && target.tagName === 'SELECT') {
+            const modalBody = target.closest('.modal-body');
+            if (modalBody) {
+                modalBody.style.setProperty('overflow', 'visible', 'important');
+                modalBody.style.setProperty('overflow-y', 'visible', 'important');
+                modalBody.style.setProperty('overflow-x', 'visible', 'important');
+                modalBody.style.setProperty('max-height', 'none', 'important');
+                
+                const modalContent = modalBody.closest('.modal-content');
+                const modalDialog = modalBody.closest('.modal-dialog');
+                
+                if (modalContent) {
+                    modalContent.style.setProperty('overflow', 'visible', 'important');
+                }
+                if (modalDialog) {
+                    modalDialog.style.setProperty('overflow', 'visible', 'important');
+                }
+            }
+        }
+    }, true);
 })();
 </script>
 

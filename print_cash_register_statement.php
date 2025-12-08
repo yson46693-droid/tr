@@ -788,30 +788,6 @@ $statementTime = date('H:i:s');
             background: #1d4ed8;
         }
         
-        .print-button-top {
-            position: sticky;
-            top: 20px;
-            background: #2563eb;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-            z-index: 1000;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 20px;
-            float: left;
-        }
-        
-        .print-button-top:hover {
-            background: #1d4ed8;
-        }
-        
         /* تحسينات للعرض داخل iframe */
         @media (max-width: 768px) {
             .print-button {
@@ -819,12 +795,6 @@ $statementTime = date('H:i:s');
                 right: 10px;
                 padding: 10px 20px;
                 font-size: 14px;
-            }
-            
-            .print-button-top {
-                width: 100%;
-                float: none;
-                margin-bottom: 15px;
             }
         }
         
@@ -838,7 +808,7 @@ $statementTime = date('H:i:s');
     </style>
 </head>
 <body>
-    <button class="print-button no-print" onclick="window.print()" title="طباعة كشف الحساب">
+    <button class="print-button no-print" onclick="handlePrint()" title="طباعة كشف الحساب">
         <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16" style="margin-left: 4px;">
             <path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/>
             <path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1v2H4V3zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1h12a1 1 0 0 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2H5zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1h6a1 1 0 0 1 1z"/>
@@ -846,14 +816,29 @@ $statementTime = date('H:i:s');
         طباعة
     </button>
     
+    <script>
+    function handlePrint() {
+        // محاولة الطباعة من iframe إذا كنا داخل iframe
+        try {
+            if (window.self !== window.top) {
+                // نحن داخل iframe
+                if (window.parent && typeof window.parent.print === 'function') {
+                    window.parent.print();
+                } else {
+                    window.print();
+                }
+            } else {
+                // نحن في نافذة عادية
+                window.print();
+            }
+        } catch (e) {
+            // في حالة الخطأ، استخدم window.print() العادي
+            window.print();
+        }
+    }
+    </script>
+    
     <div class="statement-wrapper">
-        <button class="print-button-top no-print" onclick="window.print()" title="طباعة كشف الحساب">
-            <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/>
-                <path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1v2H4V3zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1h12a1 1 0 0 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2H5zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1h6a1 1 0 0 1 1z"/>
-            </svg>
-            طباعة كشف الحساب
-        </button>
         <header class="statement-header">
             <div class="brand-block">
                 <div class="logo-placeholder">
