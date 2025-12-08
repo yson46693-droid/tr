@@ -467,60 +467,100 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            // ===== إعداد عناصر الفاتورة مع اسم المنتج الصحيح =====
             $invoiceItems = [];
             foreach ($normalizedItems as $normalizedItem) {
                 $productId = $normalizedItem['product_id'];
                 $productType = $normalizedItem['product_type'] ?? '';
                 $batchId = $normalizedItem['batch_id'] ?? null;
+                $correctProductId = $productId;
                 
                 $productName = '';
+                $batchNumberForDisplay = '';
+                
                 if ($productType === 'factory' && $batchId) {
-                    // منتج مصنع - جلب product_name من finished_products أولاً، ثم من products
-                    $fp = $db->queryOne("
+                    // ===== منتج مصنع - جلب جميع البيانات من finished_products =====
+                    $fpData = $db->queryOne("
                         SELECT 
+                            fp.id as finished_product_id,
                             fp.product_name as fp_product_name,
-                            fp.batch_number,
+                            fp.batch_number as fp_batch_number,
                             fp.product_id as fp_product_id,
-                            pr.name as pr_name,
+                            bn.id as batch_number_id,
+                            bn.batch_number as bn_batch_number,
                             bn.product_id as bn_product_id,
+                            pr1.name as pr1_name,
                             pr2.name as pr2_name
                         FROM finished_products fp
                         LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
-                        LEFT JOIN products pr ON fp.product_id = pr.id
-                        LEFT JOIN products pr2 ON COALESCE(bn.product_id, fp.product_id) = pr2.id
+                        LEFT JOIN products pr1 ON fp.product_id = pr1.id
+                        LEFT JOIN products pr2 ON bn.product_id = pr2.id
                         WHERE fp.id = ?
                         LIMIT 1
                     ", [$batchId]);
                     
-                    // تحديد اسم المنتج بالترتيب: fp.product_name > pr.name (من fp.product_id) > pr2.name (من bn.product_id)
-                    if ($fp) {
-                        if (!empty($fp['fp_product_name']) && trim($fp['fp_product_name']) !== '' && $fp['fp_product_name'] !== 'منتج رقم' . $batchId) {
-                            $productName = trim($fp['fp_product_name']);
-                        } elseif (!empty($fp['pr_name']) && trim($fp['pr_name']) !== '' && $fp['pr_name'] !== 'منتج رقم' . $productId) {
-                            $productName = trim($fp['pr_name']);
-                        } elseif (!empty($fp['pr2_name']) && trim($fp['pr2_name']) !== '' && $fp['pr2_name'] !== 'منتج رقم' . $productId) {
-                            $productName = trim($fp['pr2_name']);
-                        } else {
-                            $productName = 'منتج رقم ' . $productId;
+                    if ($fpData) {
+                        // 1. جلب batch_number
+                        if (!empty($fpData['fp_batch_number'])) {
+                            $batchNumberForDisplay = trim($fpData['fp_batch_number']);
+                        } elseif (!empty($fpData['bn_batch_number'])) {
+                            $batchNumberForDisplay = trim($fpData['bn_batch_number']);
                         }
                         
-                        // إضافة رقم التشغيلة إلى اسم المنتج إذا كان موجوداً
-                        if (!empty($fp['batch_number'])) {
-                            $productName .= ' (' . trim($fp['batch_number']) . ')';
+                        // 2. تحديد product_id الصحيح
+                        if (!empty($fpData['fp_product_id']) && $fpData['fp_product_id'] > 0) {
+                            $correctProductId = (int)$fpData['fp_product_id'];
+                        } elseif (!empty($fpData['bn_product_id']) && $fpData['bn_product_id'] > 0) {
+                            $correctProductId = (int)$fpData['bn_product_id'];
                         }
+                        
+                        // 3. تحديد اسم المنتج - الأولوية لأسماء products
+                        $candidateNames = [];
+                        
+                        // اسم من products المرتبط بـ fp.product_id
+                        if (!empty($fpData['pr1_name']) && trim($fpData['pr1_name']) !== '' 
+                            && strpos($fpData['pr1_name'], 'منتج رقم') !== 0) {
+                            $candidateNames[] = trim($fpData['pr1_name']);
+                        }
+                        
+                        // اسم من products المرتبط بـ bn.product_id
+                        if (!empty($fpData['pr2_name']) && trim($fpData['pr2_name']) !== '' 
+                            && strpos($fpData['pr2_name'], 'منتج رقم') !== 0) {
+                            $candidateNames[] = trim($fpData['pr2_name']);
+                        }
+                        
+                        // اسم من finished_products
+                        if (!empty($fpData['fp_product_name']) && trim($fpData['fp_product_name']) !== '' 
+                            && strpos($fpData['fp_product_name'], 'منتج رقم') !== 0) {
+                            $candidateNames[] = trim($fpData['fp_product_name']);
+                        }
+                        
+                        // اختيار أول اسم صالح
+                        if (!empty($candidateNames)) {
+                            $productName = $candidateNames[0];
+                        } else {
+                            $productName = 'منتج رقم ' . $correctProductId;
+                        }
+                        
+                        // إضافة رقم التشغيلة إلى اسم المنتج للعرض
+                        if (!empty($batchNumberForDisplay)) {
+                            $productName .= ' (' . $batchNumberForDisplay . ')';
+                        }
+                        
+                        error_log("shipping_orders: Invoice item - product_name: $productName, batch_number: $batchNumberForDisplay, correct_product_id: $correctProductId");
                     } else {
-                        // إذا لم يُعثر على finished_product، جلب من products
+                        // لم يُعثر على finished_product
                         $product = $db->queryOne("SELECT name FROM products WHERE id = ?", [$productId]);
                         $productName = $product['name'] ?? 'غير محدد';
                     }
                 } else {
-                    // منتج خارجي - جلب اسم المنتج من products
+                    // ===== منتج خارجي =====
                     $productRow = $db->queryOne("SELECT name FROM products WHERE id = ?", [$productId]);
                     $productName = $productRow['name'] ?? 'غير محدد';
                 }
                 
                 $invoiceItems[] = [
-                    'product_id' => $productId,
+                    'product_id' => $correctProductId, // استخدام product_id الصحيح
                     'description' => $productName,
                     'quantity' => $normalizedItem['quantity'],
                     'unit_price' => $normalizedItem['unit_price'],
@@ -1778,76 +1818,113 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $totalPrice = (float)($item['total_price'] ?? 0);
                                 
                                 if ($productId > 0 && $quantity > 0) {
-                                    // جلب اسم المنتج - إذا كان batch_id موجوداً، نستخدم product_name من finished_products
+                                    // ===== جلب بيانات المنتج ورقم التشغيلة بشكل جذري =====
                                     $batchId = isset($item['batch_id']) && $item['batch_id'] ? (int)$item['batch_id'] : null;
                                     $productName = '';
+                                    $batchNumber = null;
+                                    $correctProductId = $productId; // product_id الصحيح للمنتج
                                     
-                                    $batchNumber = null; // تهيئة batch_number
+                                    error_log("shipping_orders: Processing local_invoice_item - original product_id: $productId, batch_id: " . ($batchId ?? 'NULL'));
+                                    
                                     if ($batchId) {
-                                        // منتج مصنع - جلب product_name و batch_number من finished_products أولاً، ثم من products
-                                        $fp = $db->queryOne("
+                                        // ===== منتج مصنع - جلب جميع البيانات من finished_products =====
+                                        $fpData = $db->queryOne("
                                             SELECT 
+                                                fp.id as finished_product_id,
                                                 fp.product_name as fp_product_name,
-                                                fp.batch_number,
+                                                fp.batch_number as fp_batch_number,
                                                 fp.product_id as fp_product_id,
-                                                pr.name as pr_name,
+                                                bn.id as batch_number_id,
+                                                bn.batch_number as bn_batch_number,
                                                 bn.product_id as bn_product_id,
+                                                pr1.name as pr1_name,
                                                 pr2.name as pr2_name
                                             FROM finished_products fp
                                             LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
-                                            LEFT JOIN products pr ON fp.product_id = pr.id
-                                            LEFT JOIN products pr2 ON COALESCE(bn.product_id, fp.product_id) = pr2.id
+                                            LEFT JOIN products pr1 ON fp.product_id = pr1.id
+                                            LEFT JOIN products pr2 ON bn.product_id = pr2.id
                                             WHERE fp.id = ?
                                             LIMIT 1
                                         ", [$batchId]);
                                         
-                                        // تحديد اسم المنتج بالترتيب: fp.product_name > pr.name (من fp.product_id) > pr2.name (من bn.product_id)
-                                        if ($fp) {
-                                            // جلب batch_number
-                                            if (!empty($fp['batch_number'])) {
-                                                $batchNumber = trim($fp['batch_number']);
+                                        if ($fpData) {
+                                            // 1. جلب batch_number
+                                            if (!empty($fpData['fp_batch_number'])) {
+                                                $batchNumber = trim($fpData['fp_batch_number']);
+                                            } elseif (!empty($fpData['bn_batch_number'])) {
+                                                $batchNumber = trim($fpData['bn_batch_number']);
                                             }
                                             
-                                            // تحديد اسم المنتج
-                                            if (!empty($fp['fp_product_name']) && trim($fp['fp_product_name']) !== '' && $fp['fp_product_name'] !== 'منتج رقم' . $batchId) {
-                                                $productName = trim($fp['fp_product_name']);
-                                            } elseif (!empty($fp['pr_name']) && trim($fp['pr_name']) !== '' && $fp['pr_name'] !== 'منتج رقم' . $productId) {
-                                                $productName = trim($fp['pr_name']);
-                                            } elseif (!empty($fp['pr2_name']) && trim($fp['pr2_name']) !== '' && $fp['pr2_name'] !== 'منتج رقم' . $productId) {
-                                                $productName = trim($fp['pr2_name']);
-                                            } else {
-                                                $productName = 'منتج رقم ' . $productId;
+                                            // 2. تحديد product_id الصحيح
+                                            if (!empty($fpData['fp_product_id']) && $fpData['fp_product_id'] > 0) {
+                                                $correctProductId = (int)$fpData['fp_product_id'];
+                                            } elseif (!empty($fpData['bn_product_id']) && $fpData['bn_product_id'] > 0) {
+                                                $correctProductId = (int)$fpData['bn_product_id'];
                                             }
+                                            
+                                            // 3. تحديد اسم المنتج بالترتيب الصحيح
+                                            // الأولوية: اسم من products المرتبط بـ fp.product_id > اسم من products المرتبط بـ bn.product_id > fp.product_name
+                                            $candidateNames = [];
+                                            
+                                            // اسم المنتج من products (fp.product_id)
+                                            if (!empty($fpData['pr1_name']) && trim($fpData['pr1_name']) !== '' 
+                                                && strpos($fpData['pr1_name'], 'منتج رقم') !== 0) {
+                                                $candidateNames[] = trim($fpData['pr1_name']);
+                                            }
+                                            
+                                            // اسم المنتج من products (bn.product_id)
+                                            if (!empty($fpData['pr2_name']) && trim($fpData['pr2_name']) !== '' 
+                                                && strpos($fpData['pr2_name'], 'منتج رقم') !== 0) {
+                                                $candidateNames[] = trim($fpData['pr2_name']);
+                                            }
+                                            
+                                            // اسم المنتج من finished_products
+                                            if (!empty($fpData['fp_product_name']) && trim($fpData['fp_product_name']) !== '' 
+                                                && strpos($fpData['fp_product_name'], 'منتج رقم') !== 0) {
+                                                $candidateNames[] = trim($fpData['fp_product_name']);
+                                            }
+                                            
+                                            // اختيار أول اسم صالح
+                                            if (!empty($candidateNames)) {
+                                                $productName = $candidateNames[0];
+                                            } else {
+                                                // لا يوجد اسم صالح، نستخدم product_id
+                                                $productName = 'منتج رقم ' . $correctProductId;
+                                            }
+                                            
+                                            error_log("shipping_orders: Found fpData - batch_number: " . ($batchNumber ?? 'NULL') . 
+                                                      ", product_name: $productName, correct_product_id: $correctProductId" .
+                                                      ", fp_product_id: " . ($fpData['fp_product_id'] ?? 'NULL') .
+                                                      ", bn_product_id: " . ($fpData['bn_product_id'] ?? 'NULL'));
                                         } else {
-                                            // إذا لم يُعثر على finished_product، جلب من products
+                                            // لم يُعثر على finished_product - جلب من products
+                                            error_log("shipping_orders: WARNING - finished_products not found for batch_id: $batchId");
                                             $product = $db->queryOne("SELECT name FROM products WHERE id = ?", [$productId]);
                                             $productName = $product['name'] ?? 'منتج رقم ' . $productId;
                                         }
                                     } else {
-                                        // منتج خارجي - جلب اسم المنتج من products
+                                        // ===== منتج خارجي - جلب اسم المنتج من products =====
                                         $product = $db->queryOne("SELECT name FROM products WHERE id = ?", [$productId]);
                                         $productName = $product['name'] ?? 'منتج رقم ' . $productId;
                                     }
                                     
                                     $itemTotal = $quantity * $unitPrice;
                                     
-                                    // بناء استعلام INSERT ديناميكياً بناءً على وجود الأعمدة
+                                    // ===== بناء استعلام INSERT ديناميكياً =====
                                     $columns = ['invoice_id', 'product_id', 'description', 'quantity', 'unit_price', 'total_price'];
                                     $values = [
                                         $localInvoiceId,
-                                        $productId,
-                                        $productName,
+                                        $correctProductId, // استخدام product_id الصحيح
+                                        $productName,      // اسم المنتج الصحيح
                                         $quantity,
                                         $unitPrice,
                                         $itemTotal
                                     ];
                                     
                                     if ($hasBatchNumber) {
-                                        // batch_number تم جلبه مسبقاً من finished_products في الكود أعلاه
-                                        // إذا كان فارغاً ولم يكن هناك batch_id، نتركه null
                                         $columns[] = 'batch_number';
                                         $values[] = $batchNumber;
-                                        error_log("shipping_orders: Adding batch_number to local_invoice_items: " . ($batchNumber ?? 'NULL') . " for product_id: $productId, batch_id: " . ($batchId ?? 'NULL'));
+                                        error_log("shipping_orders: Adding to local_invoice_items - product_name: $productName, batch_number: " . ($batchNumber ?? 'NULL') . ", product_id: $correctProductId, batch_id: " . ($batchId ?? 'NULL'));
                                     }
                                     
                                     if ($hasBatchId) {

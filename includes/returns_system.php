@@ -866,6 +866,7 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
 /**
  * إرجاع المنتجات إلى مخزن الشركة الرئيسي
  * Return products to main company warehouse
+ * نفس طريقة returnProductsToVehicleInventory لكن للمخزن الرئيسي
  * 
  * @param int $returnId معرف المرتجع
  * @param int|null $approvedBy معرف المستخدم الذي وافق على المرتجع
@@ -970,6 +971,7 @@ function returnProductsToMainWarehouse(int $returnId, ?int $approvedBy = null): 
                 $invoiceItemId = isset($item['invoice_item_id']) && $item['invoice_item_id'] ? (int)$item['invoice_item_id'] : null;
                 
                 // Fallback: إذا لم يكن batch_number_id موجوداً، نحاول جلبه من invoice_item_id
+                // نفس طريقة returnProductsToVehicleInventory
                 if (!$batchNumberId && $invoiceItemId) {
                     $batchRow = $db->queryOne(
                         "SELECT batch_number_id FROM sales_batch_numbers 
@@ -979,43 +981,39 @@ function returnProductsToMainWarehouse(int $returnId, ?int $approvedBy = null): 
                     );
                     if ($batchRow && !empty($batchRow['batch_number_id'])) {
                         $batchNumberId = (int)$batchRow['batch_number_id'];
+                        error_log("returnProductsToMainWarehouse: Found batch_number_id from invoice_item_id - invoice_item_id: $invoiceItemId, batch_number_id: $batchNumberId");
                     }
                 }
                 
-                // البحث عن finished_products.id من batch_number_id
+                // البحث عن finished_products.id من batch_number_id مع fallback
+                // نفس طريقة returnProductsToVehicleInventory بالضبط
                 $finishedProductId = null;
                 $batchNumberForSearch = $batchNumber;
-                
-                error_log("returnProductsToMainWarehouse: Searching for finished_product - product_id: $productId, batch_number_id: " . ($batchNumberId ?? 'NULL') . ", batch_number: " . ($batchNumber ?? 'NULL'));
-                
                 if ($batchNumberId) {
-                    // البحث الأول: باستخدام batch_id (finished_products.batch_id = batch_numbers.id)
+                    // البحث الأول: باستخدام batch_id
                     $finishedProduct = $db->queryOne(
-                        "SELECT id, batch_number, quantity_produced FROM finished_products WHERE batch_id = ? FOR UPDATE",
+                        "SELECT id, batch_number FROM finished_products WHERE batch_id = ? FOR UPDATE",
                         [$batchNumberId]
                     );
                     
                     if ($finishedProduct) {
                         $finishedProductId = (int)$finishedProduct['id'];
                         $batchNumberForSearch = $finishedProduct['batch_number'] ?? $batchNumber;
-                        error_log("returnProductsToMainWarehouse: Found finished_product using batch_id - finished_product_id: $finishedProductId, batch_number: $batchNumberForSearch, current_quantity_produced: " . ($finishedProduct['quantity_produced'] ?? 0));
+                        error_log("returnProductsToMainWarehouse: Found finished_products using batch_id - batch_number_id: $batchNumberId, finished_product_id: $finishedProductId");
                     } else {
-                        error_log("returnProductsToMainWarehouse: finished_product not found using batch_id: $batchNumberId, trying batch_number");
-                        
-                        // البحث الثاني: باستخدام batch_number مباشرة
+                        // Fallback: البحث باستخدام batch_number
                         if ($batchNumber) {
                             $finishedProduct = $db->queryOne(
-                                "SELECT id, batch_number, quantity_produced FROM finished_products WHERE batch_number = ? FOR UPDATE",
+                                "SELECT id FROM finished_products WHERE batch_number = ? FOR UPDATE",
                                 [$batchNumber]
                             );
                             if ($finishedProduct) {
                                 $finishedProductId = (int)$finishedProduct['id'];
-                                $batchNumberForSearch = $finishedProduct['batch_number'] ?? $batchNumber;
-                                error_log("returnProductsToMainWarehouse: Found finished_product using batch_number - finished_product_id: $finishedProductId, batch_number: $batchNumberForSearch, current_quantity_produced: " . ($finishedProduct['quantity_produced'] ?? 0));
+                                error_log("returnProductsToMainWarehouse: Found finished_products using batch_number - batch_number: $batchNumber, finished_product_id: $finishedProductId");
                             }
                         }
                         
-                        // البحث الثالث: جلب batch_number من batch_numbers ثم البحث
+                        // Fallback آخر: البحث باستخدام batch_number من batch_numbers
                         if (!$finishedProductId) {
                             $batchInfo = $db->queryOne(
                                 "SELECT bn.batch_number FROM batch_numbers bn WHERE bn.id = ?",
@@ -1024,40 +1022,23 @@ function returnProductsToMainWarehouse(int $returnId, ?int $approvedBy = null): 
                             if ($batchInfo && !empty($batchInfo['batch_number'])) {
                                 $batchNumberForSearch = $batchInfo['batch_number'];
                                 $finishedProduct = $db->queryOne(
-                                    "SELECT id, batch_number, quantity_produced FROM finished_products WHERE batch_number = ? FOR UPDATE",
+                                    "SELECT id FROM finished_products WHERE batch_number = ? FOR UPDATE",
                                     [$batchNumberForSearch]
                                 );
                                 if ($finishedProduct) {
                                     $finishedProductId = (int)$finishedProduct['id'];
-                                    error_log("returnProductsToMainWarehouse: Found finished_product using batch_number from batch_numbers - finished_product_id: $finishedProductId, batch_number: $batchNumberForSearch, current_quantity_produced: " . ($finishedProduct['quantity_produced'] ?? 0));
+                                    error_log("returnProductsToMainWarehouse: Found finished_products using batch_number from batch_numbers - batch_number_id: $batchNumberId, batch_number: $batchNumberForSearch, finished_product_id: $finishedProductId");
                                 }
                             }
                         }
-                        
-                        if (!$finishedProductId) {
-                            error_log("returnProductsToMainWarehouse: WARNING - finished_product not found for batch_number_id: $batchNumberId, batch_number: " . ($batchNumber ?? 'NULL') . ", product_id: $productId");
-                        }
-                    }
-                } else if ($batchNumber) {
-                    // إذا لم يكن batch_number_id موجوداً لكن batch_number موجود
-                    $finishedProduct = $db->queryOne(
-                        "SELECT id, batch_number, quantity_produced FROM finished_products WHERE batch_number = ? FOR UPDATE",
-                        [$batchNumber]
-                    );
-                    if ($finishedProduct) {
-                        $finishedProductId = (int)$finishedProduct['id'];
-                        $batchNumberForSearch = $finishedProduct['batch_number'] ?? $batchNumber;
-                        error_log("returnProductsToMainWarehouse: Found finished_product using batch_number only - finished_product_id: $finishedProductId, batch_number: $batchNumberForSearch, current_quantity_produced: " . ($finishedProduct['quantity_produced'] ?? 0));
-                    } else {
-                        error_log("returnProductsToMainWarehouse: WARNING - finished_product not found for batch_number: $batchNumber, product_id: $productId");
                     }
                 } else {
-                    error_log("returnProductsToMainWarehouse: WARNING - No batch_number_id or batch_number found for return_item - product_id: $productId, invoice_item_id: " . ($invoiceItemId ?? 'NULL'));
+                    error_log("returnProductsToMainWarehouse: WARNING - No batch_number_id found for return_item - product_id: $productId, invoice_item_id: " . ($invoiceItemId ?? 'NULL') . ", batch_number: " . ($batchNumber ?? 'NULL'));
                 }
                 
                 // الحصول على المنتج من جدول products
                 $product = $db->queryOne(
-                    "SELECT id, quantity, warehouse_id FROM products WHERE id = ? FOR UPDATE",
+                    "SELECT id, name, category, unit, quantity, warehouse_id FROM products WHERE id = ? FOR UPDATE",
                     [$productId]
                 );
                 
@@ -1070,26 +1051,18 @@ function returnProductsToMainWarehouse(int $returnId, ?int $approvedBy = null): 
                 $currentQuantity = (float)($product['quantity'] ?? 0);
                 $newQuantity = round($currentQuantity + $quantity, 3);
                 
-                // تحديث المنتج مع التأكد من ربطه بالمخزن الرئيسي
-                $updateSql = "UPDATE products SET quantity = ?, updated_at = NOW()";
-                $updateParams = [$newQuantity];
+                $db->execute(
+                    "UPDATE products SET quantity = ?, warehouse_id = ?, updated_at = NOW() WHERE id = ?",
+                    [$newQuantity, $warehouseId, $productId]
+                );
                 
-                // إذا لم يكن المنتج مرتبطاً بمخزن أو مرتبط بمخزن آخر، نربطه بالمخزن الرئيسي
-                $currentWarehouseId = isset($product['warehouse_id']) ? (int)$product['warehouse_id'] : 0;
-                if ($currentWarehouseId <= 0 || $currentWarehouseId !== $warehouseId) {
-                    $updateSql .= ", warehouse_id = ?";
-                    $updateParams[] = $warehouseId;
-                }
+                error_log("returnProductsToMainWarehouse: Updated products.quantity - product_id: $productId, current: $currentQuantity, added: $quantity, new: $newQuantity");
                 
-                $updateSql .= " WHERE id = ?";
-                $updateParams[] = $productId;
-                
-                $db->execute($updateSql, $updateParams);
-                
-                // تحديث finished_products.quantity_produced إذا كان المنتج له رقم تشغيلة
+                // تحديث finished_products.quantity_produced مباشرة إذا كان المنتج له رقم تشغيلة
+                // نفس طريقة returnProductsToVehicleInventory بالضبط
                 if ($finishedProductId) {
                     $currentFinishedProduct = $db->queryOne(
-                        "SELECT id, quantity_produced, batch_number FROM finished_products WHERE id = ? FOR UPDATE",
+                        "SELECT quantity_produced FROM finished_products WHERE id = ? FOR UPDATE",
                         [$finishedProductId]
                     );
                     
@@ -1102,23 +1075,16 @@ function returnProductsToMainWarehouse(int $returnId, ?int $approvedBy = null): 
                             [$newQuantityProduced, $finishedProductId]
                         );
                         
-                        error_log("returnProductsToMainWarehouse: SUCCESS - Updated finished_products.quantity_produced - finished_product_id: $finishedProductId, batch_number: " . ($currentFinishedProduct['batch_number'] ?? 'NULL') . ", current: $currentQuantityProduced, added: $quantity, new: $newQuantityProduced");
+                        error_log("returnProductsToMainWarehouse: Updated finished_products.quantity_produced directly - finished_product_id: $finishedProductId, batch_number_id: " . ($batchNumberId ?? 'NULL') . ", current: $currentQuantityProduced, added: $quantity, new: $newQuantityProduced");
                     } else {
-                        error_log("returnProductsToMainWarehouse: ERROR - finished_product not found after search - finished_product_id: $finishedProductId");
+                        error_log("returnProductsToMainWarehouse: WARNING - finished_products not found for id: $finishedProductId when returning product (product_id: $productId, batch_number_id: " . ($batchNumberId ?? 'NULL') . ")");
                     }
                 } else {
-                    error_log("returnProductsToMainWarehouse: WARNING - finishedProductId is NULL - product_id: $productId, batch_number_id: " . ($batchNumberId ?? 'NULL') . ", batch_number: " . ($batchNumber ?? 'NULL') . ". Cannot update finished_products.quantity_produced.");
+                    error_log("returnProductsToMainWarehouse: WARNING - finishedProductId is NULL - product_id: $productId, batch_number_id: " . ($batchNumberId ?? 'NULL') . ", invoice_item_id: " . ($invoiceItemId ?? 'NULL') . ", batch_number: " . ($batchNumber ?? 'NULL'));
                 }
                 
                 // تسجيل حركة المخزون
-                // ملاحظة: لا نمرر finishedProductId كـ batchId لأن recordInventoryMovement سيقوم بتحديث finished_products.quantity_produced مرة أخرى
-                // وقد قمنا بتحديثه بالفعل أعلاه. لكن إذا كان finishedProductId موجوداً، نمرره للتوافق مع باقي الكود
-                // recordInventoryMovement سيتحقق من أن finished_products.quantity_produced تم تحديثه بالفعل ولن يحدثه مرة أخرى
                 if (function_exists('recordInventoryMovement')) {
-                    // إذا كان finishedProductId موجوداً، نمرره كـ batchId
-                    // لكن recordInventoryMovement سيتحقق من الكمية الحالية قبل التحديث
-                    $batchIdForMovement = $finishedProductId;
-                    
                     recordInventoryMovement(
                         $productId,
                         $warehouseId,
@@ -1128,7 +1094,7 @@ function returnProductsToMainWarehouse(int $returnId, ?int $approvedBy = null): 
                         $returnId,
                         "إرجاع منتج من مرتجع رقم: {$return['return_number']} إلى المخزن الرئيسي",
                         $approvedBy,
-                        $batchIdForMovement
+                        $finishedProductId // تمرير finishedProductId كـ batchId
                     );
                 }
             }

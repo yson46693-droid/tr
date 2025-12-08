@@ -158,111 +158,135 @@ function handleGetHistory(): void
             $hasInvoicesTable = !empty($db->queryOne("SHOW TABLES LIKE 'invoices'"));
             $hasInvoiceItemsTable = !empty($db->queryOne("SHOW TABLES LIKE 'invoice_items'"));
             
-            if ($hasSalesBatchNumbers && $hasInvoicesTable && $hasInvoiceItemsTable) {
-                // محاولة ربط local_invoices مع invoices من خلال invoice_number
-                // ثم ربط invoice_items مع sales_batch_numbers للحصول على رقم التشغيلة
-                
-                // بناء batch_numbers بناءً على وجود العمود
-                if ($hasBatchNumber) {
-                    $batchNumbersExpr = "COALESCE(
-                        NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.batch_number ORDER BY bn.batch_number SEPARATOR ', ')), ''),
-                        COALESCE(NULLIF(TRIM(ii.batch_number), ''), ''),
-                        ''
-                    )";
-                } else {
-                    $batchNumbersExpr = "COALESCE(
-                        NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.batch_number ORDER BY bn.batch_number SEPARATOR ', ')), ''),
-                        ''
-                    )";
-                }
-                
-                // بناء batch_number_ids بناءً على وجود العمود
-                if ($hasBatchId) {
-                    $batchNumberIdsExpr = "COALESCE(
-                        NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.id ORDER BY bn.id SEPARATOR ',')), ''),
-                        CASE 
-                            WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
-                            THEN CAST(ii.batch_id AS CHAR)
-                            ELSE ''
-                        END,
-                        ''
-                    )";
-                } else {
-                    $batchNumberIdsExpr = "COALESCE(
-                        NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.id ORDER BY bn.id SEPARATOR ',')), ''),
-                        ''
-                    )";
-                }
-                
-                $batchSelect = "$batchNumbersExpr as batch_numbers,
-                               $batchNumberIdsExpr as batch_number_ids";
-                
-                $batchJoin = "LEFT JOIN invoices inv ON inv.invoice_number = REPLACE(i.invoice_number, 'LOC-', '')
-                             LEFT JOIN invoice_items inv_ii ON inv.id = inv_ii.invoice_id 
-                                 AND inv_ii.product_id = ii.product_id 
-                                 AND ABS(inv_ii.quantity - ii.quantity) < 0.001
-                                 AND ABS(inv_ii.unit_price - ii.unit_price) < 0.001
-                             LEFT JOIN sales_batch_numbers sbn ON inv_ii.id = sbn.invoice_item_id
-                             LEFT JOIN batch_numbers bn ON sbn.batch_number_id = bn.id AND bn.batch_number IS NOT NULL AND TRIM(bn.batch_number) != ''";
+            // ===== جلب رقم التشغيلة - الأولوية لـ batch_number المحفوظ في local_invoice_items =====
+            // هذا أكثر موثوقية لأنه تم حفظه مباشرة من finished_products عند التسليم
+            
+            if ($hasBatchNumber && $hasBatchId) {
+                // الحالة المثالية: كلا العمودين موجودان
+                $batchSelect = "COALESCE(
+                    -- أولاً: batch_number المحفوظ مباشرة في local_invoice_items
+                    NULLIF(TRIM(ii.batch_number), ''),
+                    -- ثانياً: جلب من finished_products باستخدام batch_id
+                    CASE 
+                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
+                        THEN (SELECT NULLIF(TRIM(fp.batch_number), '') FROM finished_products fp WHERE fp.id = ii.batch_id LIMIT 1)
+                        ELSE ''
+                    END,
+                    ''
+                ) as batch_numbers,
+                COALESCE(
+                    -- batch_number_id من batch_numbers
+                    CASE 
+                        WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != ''
+                        THEN (SELECT CAST(bn.id AS CHAR) FROM batch_numbers bn WHERE bn.batch_number = ii.batch_number LIMIT 1)
+                        ELSE NULL
+                    END,
+                    CASE 
+                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
+                        THEN CAST(ii.batch_id AS CHAR)
+                        ELSE ''
+                    END,
+                    ''
+                ) as batch_number_ids";
+                $batchJoin = "";
+            } elseif ($hasBatchNumber) {
+                // فقط batch_number موجود
+                $batchSelect = "COALESCE(NULLIF(TRIM(ii.batch_number), ''), '') as batch_numbers,
+                                COALESCE(
+                                    CASE 
+                                        WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != ''
+                                        THEN (SELECT CAST(bn.id AS CHAR) FROM batch_numbers bn WHERE bn.batch_number = ii.batch_number LIMIT 1)
+                                        ELSE ''
+                                    END,
+                                    ''
+                                ) as batch_number_ids";
+                $batchJoin = "";
+            } elseif ($hasBatchId) {
+                // فقط batch_id موجود - جلب batch_number من finished_products
+                $batchSelect = "COALESCE(
+                    CASE 
+                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
+                        THEN (SELECT NULLIF(TRIM(fp.batch_number), '') FROM finished_products fp WHERE fp.id = ii.batch_id LIMIT 1)
+                        ELSE ''
+                    END,
+                    ''
+                ) as batch_numbers,
+                CASE 
+                    WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
+                    THEN CAST(ii.batch_id AS CHAR)
+                    ELSE ''
+                END as batch_number_ids";
+                $batchJoin = "";
             } else {
-                // إذا لم تكن الجداول موجودة، نستخدم batch_number من local_invoice_items
-                if ($hasBatchNumber && $hasBatchId) {
-                    $batchSelect = "COALESCE(NULLIF(TRIM(ii.batch_number), ''), '') as batch_numbers,
-                                    CASE 
-                                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
-                                        THEN CAST(ii.batch_id AS CHAR)
-                                        ELSE ''
-                                    END as batch_number_ids";
-                } elseif ($hasBatchNumber) {
-                    $batchSelect = "COALESCE(NULLIF(TRIM(ii.batch_number), ''), '') as batch_numbers,
-                                    '' as batch_number_ids";
-                } elseif ($hasBatchId) {
-                    $batchSelect = "'' as batch_numbers,
-                                    CASE 
-                                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
-                                        THEN CAST(ii.batch_id AS CHAR)
-                                        ELSE ''
-                                    END as batch_number_ids";
-                } else {
-                    $batchSelect = "'' as batch_numbers,
-                                    '' as batch_number_ids";
-                }
+                // لا يوجد أي عمود
+                $batchSelect = "'' as batch_numbers, '' as batch_number_ids";
+                $batchJoin = "";
             }
             
-            // بناء استعلام لجلب اسم المنتج الصحيح - الأولوية لاسم المنتج من finished_products، ثم من products
+            // ===== بناء استعلام لجلب اسم المنتج الصحيح =====
+            // الأولوية: 1) description من local_invoice_items (تم حفظه بشكل صحيح عند التسليم)
+            //          2) اسم من products المرتبط بـ fp.product_id
+            //          3) اسم من products المرتبط بـ bn.product_id  
+            //          4) fp.product_name من finished_products
+            //          5) p.name من products
             $productNameSelect = '';
             if ($hasBatchId) {
-                // إذا كان batch_id موجوداً، نستخدم اسم المنتج من finished_products أولاً، ثم من products
                 $productNameSelect = "COALESCE(
+                    -- أولاً: استخدام description المحفوظ في local_invoice_items (إذا كان صالحاً)
+                    CASE 
+                        WHEN ii.description IS NOT NULL 
+                             AND TRIM(ii.description) != '' 
+                             AND ii.description NOT LIKE 'منتج رقم%'
+                             AND ii.description NOT LIKE 'غير محدد%'
+                        THEN TRIM(ii.description)
+                        ELSE NULL
+                    END,
+                    -- ثانياً: جلب اسم المنتج من finished_products/products إذا كان batch_id موجوداً
                     CASE 
                         WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
                         THEN (
                             SELECT COALESCE(
-                                NULLIF(TRIM(fp.product_name), ''),
-                                NULLIF(TRIM(pr.name), ''),
+                                -- اسم من products المرتبط بـ fp.product_id
+                                NULLIF(TRIM(pr1.name), ''),
+                                -- اسم من products المرتبط بـ bn.product_id
                                 NULLIF(TRIM(pr2.name), ''),
+                                -- اسم من finished_products
+                                NULLIF(TRIM(fp.product_name), ''),
                                 NULL
                             )
                             FROM finished_products fp
                             LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
-                            LEFT JOIN products pr ON fp.product_id = pr.id
-                            LEFT JOIN products pr2 ON COALESCE(bn.product_id, fp.product_id) = pr2.id
+                            LEFT JOIN products pr1 ON fp.product_id = pr1.id
+                            LEFT JOIN products pr2 ON bn.product_id = pr2.id
                             WHERE fp.id = ii.batch_id
                               AND (
-                                  (fp.product_name IS NOT NULL AND TRIM(fp.product_name) != '' AND fp.product_name NOT LIKE 'منتج رقم%')
-                                  OR (pr.name IS NOT NULL AND TRIM(pr.name) != '' AND pr.name NOT LIKE 'منتج رقم%')
+                                  (pr1.name IS NOT NULL AND TRIM(pr1.name) != '' AND pr1.name NOT LIKE 'منتج رقم%')
                                   OR (pr2.name IS NOT NULL AND TRIM(pr2.name) != '' AND pr2.name NOT LIKE 'منتج رقم%')
+                                  OR (fp.product_name IS NOT NULL AND TRIM(fp.product_name) != '' AND fp.product_name NOT LIKE 'منتج رقم%')
                               )
                             LIMIT 1
                         )
-                        ELSE NULLIF(TRIM(p.name), '')
+                        ELSE NULL
+                    END,
+                    -- ثالثاً: اسم من products
+                    NULLIF(TRIM(p.name), ''),
+                    -- رابعاً: قيمة افتراضية
+                    'غير محدد'
+                ) as product_name";
+            } else {
+                // إذا لم يكن batch_id موجوداً، نستخدم description أو اسم المنتج من products
+                $productNameSelect = "COALESCE(
+                    CASE 
+                        WHEN ii.description IS NOT NULL 
+                             AND TRIM(ii.description) != '' 
+                             AND ii.description NOT LIKE 'منتج رقم%'
+                             AND ii.description NOT LIKE 'غير محدد%'
+                        THEN TRIM(ii.description)
+                        ELSE NULL
                     END,
                     NULLIF(TRIM(p.name), ''),
                     'غير محدد'
                 ) as product_name";
-            } else {
-                // إذا لم يكن batch_id موجوداً، نستخدم اسم المنتج من products
-                $productNameSelect = "NULLIF(TRIM(p.name), '') as product_name";
             }
             
             $purchaseHistory = $db->query(
