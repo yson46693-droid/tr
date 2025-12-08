@@ -813,7 +813,7 @@ $statementTime = date('H:i:s');
     </style>
 </head>
 <body>
-    <a href="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>" target="_blank" class="print-button no-print" onclick="return handlePrint(event)" title="طباعة كشف الحساب">
+    <a href="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>" target="_blank" class="print-button no-print" title="طباعة كشف الحساب" data-allow-new-window="true">
         <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16" style="margin-left: 4px;">
             <path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/>
             <path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1v2H4V3zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1h12a1 1 0 0 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2H5zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1h6a1 1 0 0 1 1z"/>
@@ -822,46 +822,21 @@ $statementTime = date('H:i:s');
     </a>
     
     <script>
-    function handlePrint(event) {
-        event.preventDefault();
-        event.stopPropagation();
-        
-        try {
-            const currentUrl = window.location.href;
-            
-            // إذا كنا داخل iframe، افتح الصفحة في نافذة جديدة
-            if (window.self !== window.top) {
-                const printWindow = window.open(currentUrl, '_blank');
-                
-                if (printWindow) {
-                    // انتظر تحميل الصفحة ثم اطبع
-                    printWindow.addEventListener('load', function() {
-                        setTimeout(function() {
-                            try {
-                                printWindow.print();
-                            } catch (e) {
-                                console.log('Print dialog will open manually');
-                            }
-                        }, 1000);
-                    });
-                } else {
-                    // إذا فشل فتح النافذة، دع الرابط يعمل بشكل طبيعي
-                    return true;
-                }
-            } else {
-                // نحن في نافذة عادية - استخدم window.print() مباشرة
-                setTimeout(function() {
+    // إضافة event listener للرابط لفتح الصفحة في نافذة جديدة ثم الطباعة
+    document.addEventListener('DOMContentLoaded', function() {
+        const printButton = document.querySelector('.print-button');
+        if (printButton) {
+            printButton.addEventListener('click', function(e) {
+                // إذا كنا داخل iframe، دع الرابط يفتح في نافذة جديدة بشكل طبيعي
+                // وإلا استخدم window.print()
+                if (window.self === window.top) {
+                    e.preventDefault();
                     window.print();
-                }, 100);
-            }
-        } catch (e) {
-            console.error('Print error:', e);
-            // في حالة الخطأ، دع الرابط يعمل بشكل طبيعي
-            return true;
+                }
+                // إذا كنا داخل iframe، دع الرابط يعمل بشكل طبيعي (يفتح في نافذة جديدة)
+            });
         }
-        
-        return false;
-    }
+    });
     </script>
     
     <div class="statement-wrapper">
