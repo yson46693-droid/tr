@@ -183,8 +183,7 @@ function requestApproval($type, $entityId, $requestedBy, $notes = null) {
                             $bonusColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field IN ('bonus', 'bonuses')");
                             $bonusColumnName = $bonusColumnCheck ? $bonusColumnCheck['Field'] : 'bonus';
                             
-                            // استخدام total_amount مباشرة من قاعدة البيانات (مثل بطاقة الموظف)
-                            // هذا يضمن أن الراتب الحالي المعروض في الإشعار يطابق ما هو معروض في بطاقة الموظف
+                            // حساب الراتب الإجمالي الحالي (نفس طريقة بطاقة الموظف)
                             $currentTotal = cleanFinancialValue($salary['total_amount'] ?? 0);
                             
                             // إذا كان total_amount صفر أو غير موجود، نحاول حساب الراتب من المكونات
@@ -221,6 +220,22 @@ function requestApproval($type, $entityId, $requestedBy, $notes = null) {
                                 $collectionsBonus = cleanFinancialValue($salary['collections_bonus'] ?? 0);
                             }
                             
+                            // حساب المبلغ التراكمي الحالي (نفس طريقة بطاقة الموظف)
+                            require_once __DIR__ . '/salary_calculator.php';
+                            $accumulatedData = calculateSalaryAccumulatedAmount(
+                                $userId,
+                                intval($salary['id'] ?? 0),
+                                $currentTotal,
+                                $month,
+                                $year,
+                                $db
+                            );
+                            $currentAccumulated = $accumulatedData['accumulated'];
+                            $currentPaid = cleanFinancialValue($salary['paid_amount'] ?? 0);
+                            
+                            // حساب المتبقي الحالي (نفس طريقة بطاقة الموظف)
+                            $currentRemaining = max(0, $currentAccumulated - $currentPaid);
+                            
                             // حساب الراتب الجديد مع التعديلات (نفس طريقة الحساب في modify_salary)
                             // المكافآت النهائية = المكافآت الحالية + المكافآت الجديدة المضافة
                             $finalBonus = $currentBonus + $bonus;
@@ -231,12 +246,27 @@ function requestApproval($type, $entityId, $requestedBy, $notes = null) {
                             $newTotal = $baseAmount + $finalBonus + $collectionsBonus - $finalDeductions;
                             $newTotal = max(0, $newTotal);
                             
-                            // إشعار مختصر
+                            // حساب المبلغ التراكمي الجديد بعد التعديل
+                            $newAccumulatedData = calculateSalaryAccumulatedAmount(
+                                $userId,
+                                intval($salary['id'] ?? 0),
+                                $newTotal,
+                                $month,
+                                $year,
+                                $db
+                            );
+                            $newAccumulated = $newAccumulatedData['accumulated'];
+                            
+                            // حساب المتبقي الجديد (نفس طريقة بطاقة الموظف)
+                            // المتبقي الجديد = المبلغ التراكمي الجديد - المبلغ المدفوع الحالي
+                            $newRemaining = max(0, $newAccumulated - $currentPaid);
+                            
+                            // إشعار مختصر - عرض المتبقي بدلاً من الراتب الإجمالي (مثل بطاقة الموظف)
                             $salaryDetails = sprintf(
-                                "\n\n👤 الموظف: %s\n💰 الراتب الحالي: %s\n✨ الراتب الجديد: %s\n📝 الملاحظات: %s",
+                                "\n\n👤 الموظف: %s\n💰 المتبقي الحالي: %s\n✨ المتبقي الجديد: %s\n📝 الملاحظات: %s",
                                 $employeeName,
-                                formatCurrency($currentTotal),
-                                formatCurrency($newTotal),
+                                formatCurrency($currentRemaining),
+                                formatCurrency($newRemaining),
                                 $notesText ?: 'لا توجد ملاحظات'
                             );
                         }

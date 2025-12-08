@@ -107,6 +107,10 @@ try {
         $salaryYear = date('Y');
     }
     
+    // جلب بيانات المستخدم (الدور) لتحديد طريقة حساب الراتب
+    $userInfo = $db->queryOne("SELECT role, hourly_rate FROM users WHERE id = ?", [$userId]);
+    $userRole = $userInfo['role'] ?? 'production';
+    
     // استخدام نفس طريقة حساب الراتب من المكونات كما في بطاقة الموظف
     // الراتب الإجمالي = الراتب الأساسي + المكافآت + نسبة التحصيلات - الخصومات
     // cleanFinancialValue موجودة في config.php الذي تم تحميله في السطر 32
@@ -114,6 +118,41 @@ try {
     $bonus = cleanFinancialValue($salary['bonus_standardized'] ?? ($salary['bonus'] ?? $salary['bonuses'] ?? 0));
     $deductions = cleanFinancialValue($salary['deductions'] ?? 0);
     $collectionsBonus = cleanFinancialValue($salary['collections_bonus'] ?? 0);
+    
+    // إعادة حساب نسبة التحصيلات للمندوبين (مطابق لبطاقة الموظف في salaries.php)
+    // يجب أن تُحسب نسبة التحصيلات على رصيد الخزنة الإجمالي (مطابق لصفحة خزنة المندوب)
+    if ($userRole === 'sales') {
+        require_once __DIR__ . '/../includes/approval_system.php';
+        if (function_exists('calculateSalesRepCashBalance')) {
+            try {
+                $cashRegisterBalance = calculateSalesRepCashBalance($userId);
+                if ($cashRegisterBalance !== null && $cashRegisterBalance !== false) {
+                    $displayCashBalance = (float)$cashRegisterBalance;
+                    $recalculatedCollectionsBonus = round($displayCashBalance * 0.02, 2);
+                    
+                    // استخدام القيمة المحسوبة إذا كانت أكبر من المحفوظة أو إذا لم تكن هناك قيمة محفوظة
+                    if ($collectionsBonus <= 0 || $recalculatedCollectionsBonus > $collectionsBonus) {
+                        $collectionsBonus = $recalculatedCollectionsBonus;
+                    }
+                }
+            } catch (Throwable $e) {
+                error_log('Error calculating cash balance for user ' . $userId . ' in get_salary_details: ' . $e->getMessage());
+                // في حالة الخطأ، استخدم الطريقة البديلة
+                $recalculatedCollectionsAmount = calculateSalesCollections($userId, $salaryMonth, $salaryYear);
+                $recalculatedCollectionsBonus = round($recalculatedCollectionsAmount * 0.02, 2);
+                if ($collectionsBonus <= 0 || $recalculatedCollectionsBonus > $collectionsBonus) {
+                    $collectionsBonus = $recalculatedCollectionsBonus;
+                }
+            }
+        } else {
+            // إذا لم تكن الدالة موجودة، نستخدم الطريقة القديمة
+            $recalculatedCollectionsAmount = calculateSalesCollections($userId, $salaryMonth, $salaryYear);
+            $recalculatedCollectionsBonus = round($recalculatedCollectionsAmount * 0.02, 2);
+            if ($collectionsBonus <= 0 || $recalculatedCollectionsBonus > $collectionsBonus) {
+                $collectionsBonus = $recalculatedCollectionsBonus;
+            }
+        }
+    }
     
     // حساب الراتب الإجمالي من المكونات (مطابق لبطاقة الموظف)
     $currentTotal = round($baseAmount + $bonus + $collectionsBonus - $deductions, 2);
