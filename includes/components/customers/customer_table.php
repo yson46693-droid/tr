@@ -455,4 +455,136 @@ if (!function_exists('buildCustomerQuerySuffix')) {
         return $params ? '&' . implode('&', $params) : '';
     }
 }
+?>
+
+<style>
+/* تحسين جداول العملاء على الهواتف - يطبق على جميع الجداول */
+@media (max-width: 767.98px) {
+    /* تحسين الجدول الرئيسي للعملاء */
+    .customers-table-container,
+    .dashboard-table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0 -0.75rem;
+        padding: 0 0.75rem;
+    }
+    
+    .dashboard-table {
+        min-width: 800px;
+        font-size: 0.8rem;
+    }
+    
+    .dashboard-table thead th {
+        font-size: 0.75rem;
+        padding: 0.5rem 0.4rem;
+        white-space: nowrap;
+        font-weight: 600;
+    }
+    
+    .dashboard-table tbody td {
+        padding: 0.5rem 0.4rem;
+        font-size: 0.8rem;
+        vertical-align: middle;
+    }
+    
+    /* تحسين الأزرار في الجدول */
+    .dashboard-table .btn {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+        white-space: nowrap;
+    }
+    
+    .dashboard-table .btn i {
+        font-size: 0.75rem;
+    }
+    
+    /* تحسين الأزرار المتعددة في عمود الإجراءات */
+    .dashboard-table tbody td:last-child .d-flex {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    
+    .dashboard-table tbody td:last-child .btn {
+        flex: 0 0 auto;
+        min-width: auto;
+    }
+    
+    /* تحسين Badge الرصيد */
+    .dashboard-table .badge {
+        font-size: 0.65rem;
+        padding: 0.2rem 0.4rem;
+    }
+    
+    /* تحسين عمود العنوان */
+    .dashboard-table tbody td:nth-child(4) {
+        max-width: 150px;
+        word-wrap: break-word;
+        white-space: normal;
+    }
+    
+    /* تحسين عمود الموقع */
+    .dashboard-table tbody td:nth-child(5) .d-flex {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+    
+    .dashboard-table tbody td:nth-child(5) .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* تحسين بطاقة البحث */
+    .customers-list-card .card-body {
+        padding: 0.75rem;
+    }
+    
+    /* تحسين نموذج البحث */
+    .customers-search-card .card-body {
+        padding: 0.75rem;
+    }
+    
+    .customers-search-card .form-control,
+    .customers-search-card .form-select {
+        font-size: 0.85rem;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .dashboard-table {
+        min-width: 700px;
+        font-size: 0.75rem;
+    }
+    
+    .dashboard-table thead th {
+        font-size: 0.7rem;
+        padding: 0.4rem 0.3rem;
+    }
+    
+    .dashboard-table tbody td {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.3rem;
+    }
+    
+    .dashboard-table .btn {
+        font-size: 0.65rem;
+        padding: 0.2rem 0.4rem;
+    }
+    
+    /* إخفاء عمود العنوان على الشاشات الصغيرة جداً */
+    .dashboard-table thead th:nth-child(4),
+    .dashboard-table tbody td:nth-child(4) {
+        display: none;
+    }
+    
+    /* تحسين Pagination */
+    .pagination {
+        font-size: 0.8rem;
+    }
+    
+    .pagination .page-link {
+        padding: 0.35rem 0.5rem;
+    }
+}
+</style>
 
