@@ -1221,28 +1221,30 @@ if (isset($_GET['id'])) {
     .dashboard-table-details {
         width: 100%;
         font-size: 0.9rem;
-        margin: 0;
-        padding: 0;
-        border-spacing: 0;
+        margin: 0 !important;
+        padding: 0 !important;
+        border-spacing: 0 !important;
+        border-collapse: collapse !important;
     }
     
     .dashboard-table-details tr {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        margin-bottom: 0.35rem;
-        padding: 0.25rem 0;
+        margin-bottom: 0.25rem !important;
+        padding: 0.2rem 0 !important;
         border-bottom: 1px solid #e9ecef;
     }
     
     .dashboard-table-details tr:first-child {
-        padding-top: 0;
+        padding-top: 0 !important;
+        margin-top: 0 !important;
     }
     
     .dashboard-table-details tr:last-child {
         border-bottom: none;
-        margin-bottom: 0;
-        padding-bottom: 0;
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
     }
     
     .dashboard-table-details th {
@@ -1250,8 +1252,8 @@ if (isset($_GET['id'])) {
         min-width: 35%;
         font-size: 0.85rem;
         font-weight: 600;
-        padding: 0.25rem 0.5rem 0.25rem 0;
-        margin: 0;
+        padding: 0.2rem 0.4rem 0.2rem 0 !important;
+        margin: 0 !important;
         vertical-align: middle;
         color: #495057;
         flex-shrink: 0;
@@ -1259,8 +1261,8 @@ if (isset($_GET['id'])) {
     
     .dashboard-table-details td {
         font-size: 0.9rem;
-        padding: 0.25rem 0;
-        margin: 0;
+        padding: 0.2rem 0 !important;
+        margin: 0 !important;
         word-break: break-word;
         flex: 1;
         min-width: 0;
@@ -1270,8 +1272,8 @@ if (isset($_GET['id'])) {
     /* تحسين جدول عناصر الطلب - تقليل المسافات الفارغة */
     .dashboard-table--compact {
         font-size: 0.85rem;
-        margin: 0;
-        padding: 0;
+        margin: 0 !important;
+        padding: 0 !important;
     }
     
     .dashboard-table--compact thead {
@@ -1279,45 +1281,50 @@ if (isset($_GET['id'])) {
     }
     
     .dashboard-table--compact tbody {
-        margin: 0;
-        padding: 0;
+        margin: 0 !important;
+        padding: 0 !important;
     }
     
     .dashboard-table--compact tbody tr {
         display: block;
-        margin-bottom: 0.4rem;
+        margin-bottom: 0.3rem !important;
+        margin-top: 0 !important;
         border: 1px solid #dee2e6;
-        border-radius: 5px;
-        padding: 0.4rem;
+        border-radius: 4px;
+        padding: 0.3rem !important;
         background: #fff;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     
     .dashboard-table--compact tbody tr:first-child {
-        margin-top: 0;
+        margin-top: 0 !important;
+        padding-top: 0.3rem !important;
     }
     
     .dashboard-table--compact tbody tr:last-child {
-        margin-bottom: 0;
+        margin-bottom: 0 !important;
+        padding-bottom: 0.3rem !important;
     }
     
     .dashboard-table--compact tbody td {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.25rem 0;
+        padding: 0.2rem 0 !important;
         border: none;
         border-bottom: 1px solid #f0f0f0;
-        margin: 0;
+        margin: 0 !important;
     }
     
     .dashboard-table--compact tbody td:first-child {
-        padding-top: 0;
+        padding-top: 0 !important;
+        margin-top: 0 !important;
     }
     
     .dashboard-table--compact tbody td:last-child {
         border-bottom: none;
-        padding-bottom: 0;
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
     }
     
     .dashboard-table--compact tbody td::before {
@@ -1359,71 +1366,83 @@ if (isset($_GET['id'])) {
 
 /* تحسينات إضافية لجدول تفاصيل الطلب على جميع الشاشات - محكم داخل الإطار */
 .dashboard-table-details {
-    margin: 0;
-    padding: 0;
-    border-spacing: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-spacing: 0 !important;
+    border-collapse: collapse !important;
 }
 
 .dashboard-table-details tr {
     border-bottom: 1px solid #e9ecef;
-    margin-bottom: 0.35rem;
+    margin-bottom: 0 !important;
+    padding: 0 !important;
 }
 
 .dashboard-table-details tr:first-child {
-    padding-top: 0;
+    padding-top: 0 !important;
+    margin-top: 0 !important;
 }
 
 .dashboard-table-details tr:last-child {
     border-bottom: none;
-    margin-bottom: 0;
-    padding-bottom: 0;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
 }
 
 .dashboard-table-details th {
-    padding: 0.4rem 0.75rem 0.4rem 0;
+    padding: 0.3rem 0.5rem 0.3rem 0 !important;
     font-weight: 600;
     color: #495057;
     white-space: nowrap;
+    margin: 0 !important;
 }
 
 .dashboard-table-details td {
-    padding: 0.4rem 0.75rem 0.4rem 0;
+    padding: 0.3rem 0.5rem 0.3rem 0 !important;
     word-break: break-word;
+    margin: 0 !important;
 }
 
 /* تحسينات إضافية لجدول عناصر الطلب على جميع الشاشات - تقليل المسافات */
 .dashboard-table--compact {
-    margin: 0;
-    padding: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-spacing: 0 !important;
 }
 
 .dashboard-table--compact tbody {
-    margin: 0;
-    padding: 0;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 .dashboard-table--compact tbody tr {
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.3rem !important;
+    margin-top: 0 !important;
 }
 
 .dashboard-table--compact tbody tr:first-child {
-    margin-top: 0;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
 }
 
 .dashboard-table--compact tbody tr:last-child {
-    margin-bottom: 0;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
 }
 
 .dashboard-table--compact tbody td {
-    padding: 0.3rem 0;
+    padding: 0.2rem 0 !important;
+    margin: 0 !important;
 }
 
 .dashboard-table--compact tbody td:first-child {
-    padding-top: 0;
+    padding-top: 0 !important;
+    margin-top: 0 !important;
 }
 
 .dashboard-table--compact tbody td:last-child {
-    padding-bottom: 0;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
 }
 </style>
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
@@ -1544,9 +1563,9 @@ if (isset($_GET['id'])) {
             </div>
             
             <?php if (!empty($selectedOrder['items'])): ?>
-                <h6 class="mt-3">عناصر الطلب:</h6>
-                <div class="table-responsive dashboard-table-wrapper">
-                    <table class="table dashboard-table dashboard-table--compact align-middle">
+                <h6 class="mt-3 mb-2">عناصر الطلب:</h6>
+                <div class="table-responsive dashboard-table-wrapper" style="margin: 0; padding: 0;">
+                    <table class="table dashboard-table dashboard-table--compact align-middle" style="margin: 0 !important; padding: 0 !important;">
                         <thead>
                             <tr>
                                 <th>المنتج</th>
