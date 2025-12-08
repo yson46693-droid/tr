@@ -65,7 +65,7 @@ try {
     
     if ($isMonthDate) {
         // إذا كان month من نوع DATE
-        $invalidRecords = $db->queryAll(
+        $invalidRecords = $db->query(
             "SELECT s.*, u.full_name, u.username 
              FROM salaries s 
              LEFT JOIN users u ON s.user_id = u.id 
@@ -79,7 +79,7 @@ try {
     } else {
         // إذا كان month من نوع INT
         if ($hasYearColumn) {
-            $invalidRecords = $db->queryAll(
+            $invalidRecords = $db->query(
                 "SELECT s.*, u.full_name, u.username 
                  FROM salaries s 
                  LEFT JOIN users u ON s.user_id = u.id 
@@ -93,7 +93,7 @@ try {
                  ORDER BY s.id"
             );
         } else {
-            $invalidRecords = $db->queryAll(
+            $invalidRecords = $db->query(
                 "SELECT s.*, u.full_name, u.username 
                  FROM salaries s 
                  LEFT JOIN users u ON s.user_id = u.id 
