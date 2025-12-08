@@ -4585,6 +4585,12 @@ function loadSelectedSalaryData() {
     // إذا كان راتب مختلف، جلب البيانات من API
     settleSalaryIdEl.value = salaryId;
     
+    // إظهار حالة التحميل
+    if (settleAccumulatedAmountEl) settleAccumulatedAmountEl.textContent = 'جاري التحميل...';
+    if (settlePaidAmountEl) settlePaidAmountEl.textContent = 'جاري التحميل...';
+    if (settleRemainingAmountEl) settleRemainingAmountEl.textContent = 'جاري التحميل...';
+    if (settleRemainingAmount2El) settleRemainingAmount2El.textContent = 'جاري التحميل...';
+    
     // جلب بيانات الراتب المحدد
     const apiUrl = '<?php echo getBasePath(); ?>/api/get_salary_details.php?salary_id=' + salaryId;
     console.log('Fetching salary details from API for different salary:', apiUrl);
@@ -4617,18 +4623,29 @@ function loadSelectedSalaryData() {
             
             if (data.success && data.salary) {
                 const salary = data.salary;
+                
+                // استخدام القيم المحسوبة من API (يجب أن تكون صحيحة لأنها تستخدم calculateSalaryAccumulatedAmount)
                 const accumulated = parseFloat(salary.calculated_accumulated || salary.accumulated_amount || salary.total_amount || 0);
                 const paid = parseFloat(salary.paid_amount || 0);
                 const remaining = parseFloat(salary.remaining || Math.max(0, accumulated - paid));
                 
-                // حفظ القيمة الفعلية للمتبقي
-                settleModalRemainingValue = remaining;
-                
-                console.log('Salary data from API:', {
+                // حفظ القيم في متغير عام لاستخدامها لاحقاً
+                settleModalCalculatedValues = {
                     accumulated: accumulated,
                     paid: paid,
                     remaining: remaining,
-                    calculated_accumulated: salary.calculated_accumulated
+                    salaryId: parseInt(salaryId)
+                };
+                
+                // حفظ القيمة الفعلية للمتبقي
+                settleModalRemainingValue = remaining;
+                
+                console.log('Salary data from API (updated):', {
+                    accumulated: accumulated,
+                    paid: paid,
+                    remaining: remaining,
+                    calculated_accumulated: salary.calculated_accumulated,
+                    salary_id: salary.id
                 });
                 
                 // تحديث القيم مع التحقق من وجود العناصر
@@ -4639,21 +4656,46 @@ function loadSelectedSalaryData() {
                 if (settleAmountEl) {
                     settleAmountEl.value = '';
                     settleAmountEl.max = remaining;
+                    settleAmountEl.min = 0;
                 }
                 
-                // تحديث حالة الزر بعد تحديث القيم - مع انتظار صغير للتأكد من أن جميع العناصر جاهزة
+                // تحديث حالة الزر بعد تحديث القيم
+                const submitBtn = document.getElementById('settleSubmitBtn');
+                if (submitBtn) {
+                    if (remaining > 0) {
+                        submitBtn.disabled = true; // سيتم تفعيله عند إدخال مبلغ
+                    } else {
+                        submitBtn.disabled = true; // لا يوجد متبقي
+                    }
+                }
+                
+                // تحديث المتبقي بعد التسوية
                 setTimeout(function() {
                     updateSettleRemaining();
                 }, 200);
             } else {
                 const errorMsg = data && data.message ? data.message : 'خطأ في تحميل بيانات الراتب';
                 console.error('API Error:', errorMsg);
+                
+                // إعادة تعيين القيم في حالة الخطأ
+                if (settleAccumulatedAmountEl) settleAccumulatedAmountEl.textContent = formatCurrency(0);
+                if (settlePaidAmountEl) settlePaidAmountEl.textContent = formatCurrency(0);
+                if (settleRemainingAmountEl) settleRemainingAmountEl.textContent = formatCurrency(0);
+                if (settleRemainingAmount2El) settleRemainingAmount2El.textContent = formatCurrency(0);
+                
                 alert(errorMsg);
             }
         })
         .catch(error => {
             console.error('Error loading salary details:', error);
             const errorMsg = error.message || 'خطأ في تحميل بيانات الراتب';
+            
+            // إعادة تعيين القيم في حالة الخطأ
+            if (settleAccumulatedAmountEl) settleAccumulatedAmountEl.textContent = formatCurrency(0);
+            if (settlePaidAmountEl) settlePaidAmountEl.textContent = formatCurrency(0);
+            if (settleRemainingAmountEl) settleRemainingAmountEl.textContent = formatCurrency(0);
+            if (settleRemainingAmount2El) settleRemainingAmount2El.textContent = formatCurrency(0);
+            
             alert('خطأ في تحميل بيانات الراتب: ' + errorMsg);
         });
 }
