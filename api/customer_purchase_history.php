@@ -328,7 +328,7 @@ function handleGetHistory(): void
                 LEFT JOIN products p ON ii.product_id = p.id
                 $batchJoin
                 WHERE i.customer_id = ?
-                GROUP BY i.id, ii.id
+                -- GROUP BY غير ضروري هنا لأن ii.id هو primary key
                 ORDER BY i.date DESC, i.id DESC, ii.id ASC",
                 [$customerId]
             ) ?: [];
