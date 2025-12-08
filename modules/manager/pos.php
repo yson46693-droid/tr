@@ -401,25 +401,16 @@ try {
             $batchNumber = $fp['batch_number'] ?? '';
             $batchId = (int)($fp['batch_id'] ?? 0);
             
-            // حساب الكمية المتاحة (طرح المبيعات والطلبات المعلقة)
-            $soldQty = 0;
+            // حساب الكمية المتاحة (نفس منطق صفحة منتجات الشركة)
+            // ملاحظة: quantity_produced يتم تحديثه تلقائياً عند المبيعات وطلبات الشحن
+            // (يتم خصم الكمية منه عبر recordInventoryMovement)
+            // لذلك quantity_produced يحتوي بالفعل على الكمية المتبقية بعد خصم المبيعات وطلبات الشحن
+            // نحتاج فقط خصم طلبات العملاء المعلقة (pendingQty)
             $pendingQty = 0;
-            $pendingShippingQty = 0;
             
             if (!empty($batchNumber) && $batchId) {
                 try {
-                    // حساب الكمية المباعة
-                    $sold = $db->queryOne("
-                        SELECT COALESCE(SUM(ii.quantity), 0) AS sold_quantity
-                        FROM invoice_items ii
-                        INNER JOIN invoices i ON ii.invoice_id = i.id
-                        INNER JOIN sales_batch_numbers sbn ON ii.id = sbn.invoice_item_id
-                        INNER JOIN batch_numbers bn ON sbn.batch_number_id = bn.id
-                        WHERE bn.batch_number = ?
-                    ", [$batchNumber]);
-                    $soldQty = (float)($sold['sold_quantity'] ?? 0);
-                    
-                    // حساب الكمية المحجوزة في طلبات العملاء المعلقة
+                    // حساب الكمية المحجوزة في طلبات العملاء المعلقة (نفس منطق company_products.php)
                     $pending = $db->queryOne("
                         SELECT COALESCE(SUM(oi.quantity), 0) AS pending_quantity
                         FROM customer_order_items oi
@@ -428,23 +419,15 @@ try {
                         WHERE co.status = 'pending'
                     ", [$batchNumber]);
                     $pendingQty = (float)($pending['pending_quantity'] ?? 0);
-                    
-                    // حساب الكمية المحجوزة في طلبات الشحن المعلقة
-                    $pendingShipping = $db->queryOne("
-                        SELECT COALESCE(SUM(soi.quantity), 0) AS pending_quantity
-                        FROM shipping_company_order_items soi
-                        INNER JOIN shipping_company_orders sco ON soi.order_id = sco.id
-                        WHERE sco.status = 'in_transit'
-                          AND soi.batch_id = ?
-                    ", [$batchId]);
-                    $pendingShippingQty = (float)($pendingShipping['pending_quantity'] ?? 0);
                 } catch (Throwable $calcError) {
                     error_log('manager_pos: error calculating available quantity for batch ' . $batchNumber . ': ' . $calcError->getMessage());
                 }
             }
             
-            // حساب الكمية المتاحة
-            $availableQuantity = max(0, $quantityProduced - $soldQty - $pendingQty - $pendingShippingQty);
+            // حساب الكمية المتاحة (نفس منطق company_products.php)
+            // quantity_produced يتم تحديثه تلقائياً عند المبيعات وطلبات الشحن
+            // لذلك نحتاج فقط خصم طلبات العملاء المعلقة (pendingQty)
+            $availableQuantity = max(0, $quantityProduced - $pendingQty);
             
             // استخدام الكمية المتاحة بدلاً من الكمية المنتجة
             $quantity = $availableQuantity;
@@ -1124,7 +1107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($productType === 'factory' && $batchId) {
                         // للمنتجات المصنعة: التحقق من finished_products مباشرة
                         $finishedProduct = $db->queryOne(
-                            "SELECT id, quantity_produced FROM finished_products WHERE id = ? FOR UPDATE",
+                            "SELECT id, quantity_produced, batch_number FROM finished_products WHERE id = ? FOR UPDATE",
                             [$batchId]
                         );
                         
@@ -1132,13 +1115,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             throw new RuntimeException('التشغيلة المحددة غير موجودة في قاعدة البيانات.');
                         }
                         
-                        $availableQuantity = (float)($finishedProduct['quantity_produced'] ?? 0);
+                        $quantityProduced = (float)($finishedProduct['quantity_produced'] ?? 0);
+                        $batchNumber = $finishedProduct['batch_number'] ?? '';
+                        
+                        // حساب الكمية المتاحة (نفس منطق صفحة منتجات الشركة)
+                        // quantity_produced يتم تحديثه تلقائياً عند المبيعات وطلبات الشحن
+                        // لذلك نحتاج فقط خصم طلبات العملاء المعلقة (pendingQty)
+                        $pendingQty = 0;
+                        
+                        if (!empty($batchNumber)) {
+                            try {
+                                // حساب الكمية المحجوزة في طلبات العملاء المعلقة (نفس منطق company_products.php)
+                                $pending = $db->queryOne(
+                                    "SELECT COALESCE(SUM(oi.quantity), 0) AS pending_quantity
+                                     FROM customer_order_items oi
+                                     INNER JOIN customer_orders co ON oi.order_id = co.id
+                                     INNER JOIN finished_products fp2 ON fp2.product_id = oi.product_id AND fp2.batch_number = ?
+                                     WHERE co.status = 'pending'",
+                                    [$batchNumber]
+                                );
+                                $pendingQty = (float)($pending['pending_quantity'] ?? 0);
+                            } catch (Throwable $calcError) {
+                                error_log('manager_pos: error calculating pending quantity for verification - batch ' . $batchNumber . ': ' . $calcError->getMessage());
+                            }
+                        }
+                        
+                        // حساب الكمية المتاحة (نفس منطق company_products.php)
+                        $availableQuantity = max(0, $quantityProduced - $pendingQty);
                         
                         if ($quantity > $availableQuantity) {
                             throw new RuntimeException('الكمية المتاحة للمنتج ' . $item['name'] . ' غير كافية. المتاح: ' . number_format($availableQuantity, 2) . '، المطلوب: ' . number_format($quantity, 2));
                         }
                         
-                        error_log("Manager POS: Verified quantity from finished_products - batch_id: $batchId, available: $availableQuantity, requested: $quantity");
+                        error_log("Manager POS: Verified quantity from finished_products - batch_id: $batchId, quantity_produced: $quantityProduced, pending: $pendingQty, available: $availableQuantity, requested: $quantity");
                     } elseif ($productType === 'external') {
                         // للمنتجات الخارجية: التحقق من products مباشرة
                         $product = $db->queryOne(

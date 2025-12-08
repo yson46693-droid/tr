@@ -1552,7 +1552,16 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                 }
             }
         } else {
-            // إذا لم يكن year موجوداً
+            // إذا لم يكن year موجوداً، أضفه تلقائياً
+            try {
+                $db->execute("ALTER TABLE salaries ADD COLUMN year INT(4) DEFAULT NULL AFTER month");
+                $hasYearColumn = true;
+                error_log("Added missing 'year' column to salaries table in createOrUpdateSalary");
+            } catch (Exception $alterEx) {
+                // إذا فشل إضافة العمود (ربما لأنه موجود بالفعل أو خطأ آخر)
+                error_log("Could not add year column in createOrUpdateSalary: " . $alterEx->getMessage());
+            }
+            
             if (stripos($monthType, 'date') !== false) {
                 // إذا كان month من نوع DATE
                 // التحقق من صحة year و month قبل إنشاء التاريخ
@@ -1701,16 +1710,17 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                     }
                 }
             } else {
-                // إذا كان month من نوع INT فقط
+                // إذا كان month من نوع INT فقط - يجب أيضاً إدراج year
                 if ($hasBonusColumn) {
                     if ($hasNotesColumn) {
                         if ($hasCreatedByColumn) {
                             $result = $db->execute(
-                                "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, notes, created_by, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                                "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, notes, created_by, status) 
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
                                 [
                                     $userId,
                                     $month,
+                                    $year,
                                     $calculation['hourly_rate'],
                                     $calculation['total_hours'],
                                     $calculation['base_amount'],
@@ -1723,11 +1733,12 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                             );
                         } else {
                             $result = $db->execute(
-                                "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, notes, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                                "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, notes, status) 
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
                                 [
                                     $userId,
                                     $month,
+                                    $year,
                                     $calculation['hourly_rate'],
                                     $calculation['total_hours'],
                                     $calculation['base_amount'],
@@ -1741,11 +1752,12 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                     } else {
                         if ($hasCreatedByColumn) {
                             $result = $db->execute(
-                                "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, created_by, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                                "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, created_by, status) 
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
                                 [
                                     $userId,
                                     $month,
+                                    $year,
                                     $calculation['hourly_rate'],
                                     $calculation['total_hours'],
                                     $calculation['base_amount'],
@@ -1757,11 +1769,12 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                             );
                         } else {
                             $result = $db->execute(
-                                "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                                "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, status) 
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
                                 [
                                     $userId,
                                     $month,
+                                    $year,
                                     $calculation['hourly_rate'],
                                     $calculation['total_hours'],
                                     $calculation['base_amount'],
@@ -1776,11 +1789,12 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                     if ($hasNotesColumn) {
                         if ($hasCreatedByColumn) {
                             $result = $db->execute(
-                                "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, deductions, total_amount, notes, created_by, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                                "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, notes, created_by, status) 
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
                                 [
                                     $userId,
                                     $month,
+                                    $year,
                                     $calculation['hourly_rate'],
                                     $calculation['total_hours'],
                                     $calculation['base_amount'],
@@ -1792,11 +1806,12 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                             );
                         } else {
                             $result = $db->execute(
-                                "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, deductions, total_amount, notes, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                                "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, notes, status) 
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
                                 [
                                     $userId,
                                     $month,
+                                    $year,
                                     $calculation['hourly_rate'],
                                     $calculation['total_hours'],
                                     $calculation['base_amount'],
@@ -1809,11 +1824,12 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                     } else {
                         if ($hasCreatedByColumn) {
                             $result = $db->execute(
-                                "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, deductions, total_amount, created_by, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                                "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, created_by, status) 
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
                                 [
                                     $userId,
                                     $month,
+                                    $year,
                                     $calculation['hourly_rate'],
                                     $calculation['total_hours'],
                                     $calculation['base_amount'],
@@ -1824,11 +1840,12 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                             );
                         } else {
                             $result = $db->execute(
-                                "INSERT INTO salaries (user_id, month, hourly_rate, total_hours, base_amount, deductions, total_amount, status) 
-                                 VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')",
+                                "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, status) 
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
                                 [
                                     $userId,
                                     $month,
+                                    $year,
                                     $calculation['hourly_rate'],
                                     $calculation['total_hours'],
                                     $calculation['base_amount'],
