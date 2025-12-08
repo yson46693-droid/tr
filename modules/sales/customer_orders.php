@@ -1215,7 +1215,7 @@ if (isset($_GET['id'])) {
     }
 }
 
-/* تحسينات الجداول على الهواتف */
+/* تحسينات الجداول على الهواتف - فقط لعناصر الطلب */
 @media (max-width: 767.98px) {
     /* تحسين جدول تفاصيل الطلب */
     .dashboard-table-details {
@@ -1236,24 +1236,16 @@ if (isset($_GET['id'])) {
         word-break: break-word;
     }
     
-    /* تحسين جدول عناصر الطلب */
-    .dashboard-table-wrapper {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        margin: 0 -1rem;
-        padding: 0 1rem;
-    }
-    
-    .dashboard-table {
-        min-width: 100%;
+    /* تحسين جدول عناصر الطلب فقط */
+    .dashboard-table--compact {
         font-size: 0.85rem;
     }
     
-    .dashboard-table thead {
+    .dashboard-table--compact thead {
         display: none;
     }
     
-    .dashboard-table tbody tr {
+    .dashboard-table--compact tbody tr {
         display: block;
         margin-bottom: 1rem;
         border: 1px solid #dee2e6;
@@ -1263,7 +1255,7 @@ if (isset($_GET['id'])) {
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     
-    .dashboard-table tbody td {
+    .dashboard-table--compact tbody td {
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -1272,77 +1264,17 @@ if (isset($_GET['id'])) {
         border-bottom: 1px solid #f0f0f0;
     }
     
-    .dashboard-table tbody td:last-child {
+    .dashboard-table--compact tbody td:last-child {
         border-bottom: none;
     }
     
-    .dashboard-table tbody td::before {
+    .dashboard-table--compact tbody td::before {
         content: attr(data-label);
         font-weight: 700;
         color: #495057;
         margin-left: 0.5rem;
         text-align: right;
         flex-shrink: 0;
-    }
-    
-    .dashboard-table tbody td:not([data-label])::before {
-        content: '';
-    }
-    
-    /* تحسين جدول قائمة الطلبات */
-    .dashboard-table:not(.dashboard-table--compact) tbody tr {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 0.5rem;
-        padding: 1rem;
-    }
-    
-    .dashboard-table:not(.dashboard-table--compact) tbody td {
-        display: flex;
-        justify-content: space-between;
-        padding: 0.5rem 0;
-        border-bottom: 1px solid #f0f0f0;
-    }
-    
-    .dashboard-table:not(.dashboard-table--compact) tbody td:first-child {
-        font-weight: 700;
-        font-size: 1rem;
-        border-bottom: 2px solid #0d6efd;
-        padding-bottom: 0.75rem;
-        margin-bottom: 0.5rem;
-    }
-    
-    .dashboard-table:not(.dashboard-table--compact) tbody td::before {
-        content: attr(data-label);
-        font-weight: 600;
-        color: #6c757d;
-        margin-left: 0.5rem;
-    }
-    
-    /* إضافة data-label للخلايا في جدول قائمة الطلبات */
-    .dashboard-table:not(.dashboard-table--compact) tbody td:nth-child(1)::before { content: 'رقم الطلب:'; }
-    .dashboard-table:not(.dashboard-table--compact) tbody td:nth-child(2)::before { content: 'العميل:'; }
-    .dashboard-table:not(.dashboard-table--compact) tbody td:nth-child(3)::before { content: 'تاريخ الطلب:'; }
-    .dashboard-table:not(.dashboard-table--compact) tbody td:nth-child(4)::before { content: 'تاريخ التسليم:'; }
-    .dashboard-table:not(.dashboard-table--compact) tbody td:nth-child(5)::before { content: 'المندوب:'; }
-    .dashboard-table:not(.dashboard-table--compact) tbody td:nth-child(6)::before { content: 'النوع:'; }
-    .dashboard-table:not(.dashboard-table--compact) tbody td:nth-child(7)::before { content: 'الأولوية:'; }
-    .dashboard-table:not(.dashboard-table--compact) tbody td:nth-child(8)::before { content: 'الحالة:'; }
-    .dashboard-table:not(.dashboard-table--compact) tbody td:nth-child(9)::before { content: 'الإجراءات:'; }
-    
-    /* تحسين الأزرار في الجداول */
-    .dashboard-table .btn-group {
-        flex-direction: column;
-        width: 100%;
-    }
-    
-    .dashboard-table .btn-group .btn {
-        width: 100%;
-        margin-bottom: 0.25rem;
-    }
-    
-    .dashboard-table .btn-group .btn:last-child {
-        margin-bottom: 0;
     }
     
     /* تحسين عرض تفاصيل الطلب */
@@ -1369,22 +1301,6 @@ if (isset($_GET['id'])) {
     .modal-xl .modal-body .form-select {
         font-size: 0.9rem;
         padding: 0.5rem;
-    }
-}
-
-/* تحسينات إضافية للشاشات الصغيرة جداً */
-@media (max-width: 400px) {
-    .dashboard-table tbody tr {
-        padding: 0.5rem;
-    }
-    
-    .dashboard-table tbody td {
-        font-size: 0.8rem;
-        padding: 0.4rem 0;
-    }
-    
-    .dashboard-table tbody td::before {
-        font-size: 0.75rem;
     }
 }
 </style>
@@ -1665,17 +1581,17 @@ if (isset($_GET['id'])) {
                     <?php else: ?>
                         <?php foreach ($orders as $order): ?>
                             <tr>
-                                <td data-label="رقم الطلب">
+                                <td>
                                     <a href="?page=orders&id=<?php echo $order['id']; ?>" class="text-decoration-none">
                                         <strong><?php echo htmlspecialchars($order['order_number']); ?></strong>
                                     </a>
                                 </td>
-                                <td data-label="العميل"><?php echo htmlspecialchars($order['customer_name'] ?? '-'); ?></td>
-                                <td data-label="تاريخ الطلب"><?php echo formatDate($order['order_date']); ?></td>
-                                <td data-label="تاريخ التسليم"><?php echo $order['delivery_date'] ? formatDate($order['delivery_date']) : '-'; ?></td>
+                                <td><?php echo htmlspecialchars($order['customer_name'] ?? '-'); ?></td>
+                                <td><?php echo formatDate($order['order_date']); ?></td>
+                                <td><?php echo $order['delivery_date'] ? formatDate($order['delivery_date']) : '-'; ?></td>
                                 <?php if (!$isSalesUser): ?>
-                                <td data-label="المندوب"><?php echo htmlspecialchars($order['sales_rep_name'] ?? '-'); ?></td>
-                                <td data-label="النوع">
+                                <td><?php echo htmlspecialchars($order['sales_rep_name'] ?? '-'); ?></td>
+                                <td>
                                     <?php if (isset($order['order_type']) && $order['order_type'] === 'company'): ?>
                                         <span class="badge bg-success">شركة</span>
                                     <?php else: ?>
@@ -1683,7 +1599,7 @@ if (isset($_GET['id'])) {
                                     <?php endif; ?>
                                 </td>
                                 <?php endif; ?>
-                                <td data-label="الأولوية">
+                                <td>
                                     <span class="badge bg-<?php 
                                         echo $order['priority'] === 'urgent' ? 'danger' : 
                                             ($order['priority'] === 'high' ? 'warning' : 
@@ -1700,7 +1616,7 @@ if (isset($_GET['id'])) {
                                         ?>
                                     </span>
                                 </td>
-                                <td data-label="الحالة">
+                                <td>
                                     <span class="badge bg-<?php 
                                         echo $order['status'] === 'delivered' ? 'success' : 
                                             ($order['status'] === 'in_production' ? 'info' : 
@@ -1719,7 +1635,7 @@ if (isset($_GET['id'])) {
                                         ?>
                                     </span>
                                 </td>
-                                <td data-label="الإجراءات">
+                                <td>
                                     <div class="btn-group btn-group-sm" role="group">
                                         <a href="?page=orders&id=<?php echo $order['id']; ?>" 
                                            class="btn btn-info" title="عرض">

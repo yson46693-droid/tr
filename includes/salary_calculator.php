@@ -1305,8 +1305,77 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
         ];
     } else {
         // إنشاء راتب جديد
-        // عند إنشاء راتب جديد، نضيف total_amount للتراكمي
-        $newAccumulatedAmount = $calculation['total_amount'];
+        // حساب المبلغ التراكمي من المتبقي من الشهر السابق (accumulated - paid)
+        $previousAccumulatedAmount = 0;
+        if ($hasAccumulatedColumn) {
+            // حساب المتبقي من الرواتب السابقة فقط (بدون الراتب الحالي)
+            $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
+            $hasYearColumn = !empty($yearColumnCheck);
+            
+            // جلب الرواتب السابقة
+            if ($hasYearColumn) {
+                $previousSalaries = $db->query(
+                    "SELECT s.total_amount, s.paid_amount, s.accumulated_amount,
+                            COALESCE(s.accumulated_amount, s.total_amount) as prev_accumulated
+                     FROM salaries s
+                     WHERE s.user_id = ? 
+                     AND s.year IS NOT NULL AND s.month IS NOT NULL
+                     AND (s.year < ? OR (s.year = ? AND s.month < ?))
+                     ORDER BY s.year ASC, s.month ASC",
+                    [$userId, $year, $year, $month]
+                );
+            } else {
+                // التحقق من نوع month
+                $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+                $monthType = $monthColumnCheck['Type'] ?? '';
+                $isMonthDate = stripos($monthType, 'date') !== false;
+                
+                if ($isMonthDate) {
+                    $targetDate = sprintf('%04d-%02d-01', $year, $month);
+                    $previousSalaries = $db->query(
+                        "SELECT s.total_amount, s.paid_amount, s.accumulated_amount,
+                                COALESCE(s.accumulated_amount, s.total_amount) as prev_accumulated
+                         FROM salaries s
+                         WHERE s.user_id = ? 
+                         AND s.month IS NOT NULL 
+                         AND s.month != '0000-00-00' 
+                         AND s.month != '1970-01-01'
+                         AND s.month < ?
+                         ORDER BY s.month ASC",
+                        [$userId, $targetDate]
+                    );
+                } else {
+                    $previousSalaries = $db->query(
+                        "SELECT s.total_amount, s.paid_amount, s.accumulated_amount,
+                                COALESCE(s.accumulated_amount, s.total_amount) as prev_accumulated
+                         FROM salaries s
+                         WHERE s.user_id = ? 
+                         AND s.month IS NOT NULL
+                         AND s.month < ?
+                         ORDER BY s.month ASC",
+                        [$userId, $month]
+                    );
+                }
+            }
+            
+            // جمع المتبقي من الرواتب السابقة
+            foreach ($previousSalaries as $prevSalary) {
+                $prevAccumulated = cleanFinancialValue($prevSalary['prev_accumulated'] ?? $prevSalary['total_amount'] ?? 0);
+                $prevPaid = cleanFinancialValue($prevSalary['paid_amount'] ?? 0);
+                
+                // حساب المتبقي من الراتب السابق
+                $prevRemaining = max(0, $prevAccumulated - $prevPaid);
+                
+                // إضافة المتبقي إلى المبلغ التراكمي فقط إذا كان هناك متبقي
+                if ($prevRemaining > 0.01) {
+                    $previousAccumulatedAmount += $prevRemaining;
+                }
+            }
+            
+            // إضافة المبلغ التراكمي للراتب الإجمالي
+            $calculation['total_amount'] = round($calculation['total_amount'] + $previousAccumulatedAmount, 2);
+        }
+        
         if ($hasYearColumn) {
             // إذا كان عمود year موجوداً
             if ($hasBonusColumn) {
@@ -1748,18 +1817,13 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
         $salaryId = $result['insert_id'] ?? null;
         
         // تحديث accumulated_amount بعد إنشاء الراتب
+        // المبلغ التراكمي الجديد = المتبقي من الراتب الحالي (total_amount - paid_amount)
+        // في البداية paid_amount = 0، لذا المبلغ التراكمي = total_amount
+        // المبلغ التراكمي السابق تم إضافته للراتب الإجمالي، لذا لا نحتاج لإضافته مرة أخرى
         if ($hasAccumulatedColumn && $salaryId) {
-            // الحصول على المبلغ التراكمي الحالي للموظف من جميع الرواتب السابقة
-            $previousAccumulated = $db->queryOne(
-                "SELECT COALESCE(SUM(accumulated_amount), 0) as total 
-                 FROM salaries 
-                 WHERE user_id = ? AND id != ?",
-                [$userId, $salaryId]
-            );
-            $previousAccumulated = floatval($previousAccumulated['total'] ?? 0);
-            
-            // إضافة المبلغ الجديد للتراكمي
-            $newAccumulated = $previousAccumulated + $calculation['total_amount'];
+            // المبلغ التراكمي الجديد = المتبقي من الراتب الحالي
+            // سيتم تحديثه لاحقاً عند إجراء التسويات
+            $newAccumulated = $calculation['total_amount'];
             
             $db->execute(
                 "UPDATE salaries SET accumulated_amount = ? WHERE id = ?",
