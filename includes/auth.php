@@ -194,6 +194,7 @@ function checkRememberToken($cookieValue) {
         $_SESSION['username'] = $tokenRecord['username'];
         $_SESSION['role'] = $tokenRecord['role'];
         $_SESSION['logged_in'] = true;
+        $_SESSION['last_activity'] = time(); // تحديث وقت آخر نشاط
         generateCSRFToken(true);
         
         return true;
@@ -400,6 +401,7 @@ function login($username, $password, $rememberMe = false) {
     $_SESSION['username'] = $user['username'];
     $_SESSION['role'] = $user['role'];
     $_SESSION['logged_in'] = true;
+    $_SESSION['last_activity'] = time(); // تحديث وقت آخر نشاط
     
     // إذا تم تفعيل "تذكرني"، إنشاء cookie
     if ($rememberMe) {

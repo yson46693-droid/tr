@@ -52,10 +52,13 @@ define('DATE_FORMAT', 'd/m/Y');
 define('TIME_FORMAT', 'g:i A'); // نظام 12 ساعة صباحاً ومساءً
 define('DATETIME_FORMAT', 'd/m/Y g:i A');
 
-// إعدادات الجلسة
-define('SESSION_LIFETIME', 3600 * 24); // 24 ساعة
+// إعدادات الجلسة - 7 أيام (604800 ثانية)
+define('SESSION_LIFETIME', 3600 * 24 * 7); // 7 أيام
 ini_set('session.gc_maxlifetime', SESSION_LIFETIME);
 ini_set('session.cookie_lifetime', SESSION_LIFETIME);
+// إعدادات إضافية لتحسين استقرار الجلسات
+ini_set('session.gc_probability', 1);
+ini_set('session.gc_divisor', 1000); // تنظيف الجلسات القديمة بنسبة 0.1%
 
 $isHttps = (
     (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
@@ -78,15 +81,33 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 } else {
     // تحديث إعدادات الكوكي الحالية إن كانت الجلسة قد بدأت بالفعل قبل تضمين الملف
+    // تحديث تلقائي لوقت انتهاء الجلسة عند كل طلب نشط
     if (!headers_sent() && session_id()) {
-        setcookie(session_name(), session_id(), [
-            'expires' => time() + SESSION_LIFETIME,
-            'path' => '/',
-            'domain' => '',
-            'secure' => $isHttps,
-            'httponly' => true,
-            'samesite' => 'Lax',
-        ]);
+        // تحديث وقت انتهاء الجلسة عند كل طلب نشط (إذا كان المستخدم مسجل دخول)
+        if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+            // تحديث وقت آخر نشاط
+            $_SESSION['last_activity'] = time();
+            
+            // تحديث الكوكي بوقت انتهاء جديد
+            setcookie(session_name(), session_id(), [
+                'expires' => time() + SESSION_LIFETIME,
+                'path' => '/',
+                'domain' => '',
+                'secure' => $isHttps,
+                'httponly' => true,
+                'samesite' => $isHttps ? 'None' : 'Lax',
+            ]);
+        } else {
+            // للمستخدمين غير المسجلين، تحديث عادي
+            setcookie(session_name(), session_id(), [
+                'expires' => time() + SESSION_LIFETIME,
+                'path' => '/',
+                'domain' => '',
+                'secure' => $isHttps,
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ]);
+        }
     }
 }
 
@@ -126,6 +147,26 @@ if (session_status() === PHP_SESSION_ACTIVE) {
             // إعادة بدء جلسة جديدة نظيفة
             session_set_cookie_params($sessionCookieOptions);
             session_start();
+        } else {
+            // التحقق من وقت آخر نشاط وإلغاء الجلسة إذا انتهت
+            if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+                $lastActivity = $_SESSION['last_activity'] ?? time();
+                $timeSinceActivity = time() - $lastActivity;
+                
+                // إذا مر أكثر من وقت الجلسة، إلغاء الجلسة
+                if ($timeSinceActivity > SESSION_LIFETIME) {
+                    $userId = $_SESSION['user_id'] ?? 'unknown';
+                    error_log("Session expired due to inactivity for user ID: {$userId}");
+                    
+                    session_unset();
+                    session_destroy();
+                    session_set_cookie_params($sessionCookieOptions);
+                    session_start();
+                } else {
+                    // تحديث وقت آخر نشاط
+                    $_SESSION['last_activity'] = time();
+                }
+            }
         }
     }
 }
