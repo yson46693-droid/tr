@@ -893,26 +893,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $invoiceNumber = $invoiceResult['invoice_number'] ?? '';
 
                 // ربط أرقام التشغيلة بعناصر الفاتورة
+                // جلب عناصر الفاتورة بالترتيب الذي تم إضافتها به
                 $invoiceItemsFromDb = $db->query(
-                    "SELECT id, product_id FROM invoice_items WHERE invoice_id = ? ORDER BY id",
+                    "SELECT id, product_id, quantity, unit_price FROM invoice_items WHERE invoice_id = ? ORDER BY id",
                     [$invoiceId]
                 );
                 
-                // إنشاء خريطة للمطابقة بين invoice_items و normalizedCart
-                $invoiceItemsMap = [];
-                foreach ($invoiceItemsFromDb as $invItem) {
-                    $productId = (int)$invItem['product_id'];
-                    if (!isset($invoiceItemsMap[$productId])) {
-                        $invoiceItemsMap[$productId] = [];
-                    }
-                    $invoiceItemsMap[$productId][] = (int)$invItem['id'];
-                }
-                
-                // ربط أرقام التشغيلة
+                // ربط أرقام التشغيلة - نستخدم الترتيب المطابق بين normalizedCart و invoiceItems
+                // لأن createInvoice يحافظ على نفس الترتيب
+                $invoiceItemIndex = 0;
                 foreach ($normalizedCart as $item) {
+                    // التأكد من وجود عنصر فاتورة مطابق
+                    if ($invoiceItemIndex >= count($invoiceItemsFromDb)) {
+                        break;
+                    }
+                    
+                    $invoiceItem = $invoiceItemsFromDb[$invoiceItemIndex];
                     $productId = (int)$item['product_id'];
                     $batchId = $item['batch_id'] ?? null;
                     $batchNumber = null;
+                    
+                    // التحقق من أن product_id و quantity و unit_price متطابقة
+                    if ((int)$invoiceItem['product_id'] !== $productId ||
+                        abs((float)$invoiceItem['quantity'] - (float)$item['quantity']) > 0.001 ||
+                        abs((float)$invoiceItem['unit_price'] - (float)$item['unit_price']) > 0.001) {
+                        // إذا لم تتطابق، نبحث عن عنصر مطابق
+                        $found = false;
+                        for ($i = $invoiceItemIndex; $i < count($invoiceItemsFromDb); $i++) {
+                            $invItem = $invoiceItemsFromDb[$i];
+                            if ((int)$invItem['product_id'] === $productId &&
+                                abs((float)$invItem['quantity'] - (float)$item['quantity']) < 0.001 &&
+                                abs((float)$invItem['unit_price'] - (float)$item['unit_price']) < 0.001) {
+                                $invoiceItem = $invItem;
+                                $invoiceItemIndex = $i;
+                                $found = true;
+                                break;
+                            }
+                        }
+                        if (!$found) {
+                            $invoiceItemIndex++;
+                            continue;
+                        }
+                    }
                     
                     // جلب batch_number من batch_id إذا كان موجوداً
                     if ($batchId) {
@@ -929,9 +951,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                     
-                    if (isset($invoiceItemsMap[$productId]) && !empty($invoiceItemsMap[$productId]) && $batchNumber) {
-                        // استخدام أول invoice_item_id متطابق
-                        $invoiceItemId = array_shift($invoiceItemsMap[$productId]);
+                    if ($batchNumber) {
+                        $invoiceItemId = (int)$invoiceItem['id'];
                         
                         // البحث عن batch_number_id من جدول batch_numbers
                         $batchNumberId = null;
@@ -957,6 +978,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
                     }
+                    
+                    $invoiceItemIndex++;
                 }
 
                 $invoiceStatus = 'sent';
