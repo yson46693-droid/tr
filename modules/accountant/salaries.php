@@ -1935,9 +1935,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1' && $salaryId > 0) {
         $delaySummary = calculateMonthlyDelaySummary($userId, $salaryMonth, $salaryYear);
         
         // حساب المبلغ التراكمي والمتبقي (مطابق لبطاقة الموظف)
-        // المبلغ التراكمي = المتبقي من الراتب الحالي فقط (accumulated_amount - paid_amount)
-        // يتم استخدام accumulated_amount المحفوظ في قاعدة البيانات مباشرة
-        $accumulated = cleanFinancialValue($salary['accumulated_amount'] ?? $totalAmount);
+        // المبلغ التراكمي = الراتب الإجمالي الحالي (totalAmount) فقط
+        // يجب استخدام totalAmount المحسوب حديثاً وليس accumulated_amount المحفوظ (قد يكون خاطئاً)
+        $accumulated = $totalAmount;
         $paid = floatval($salary['paid_amount'] ?? 0);
         $remaining = max(0, $accumulated - $paid);
         
