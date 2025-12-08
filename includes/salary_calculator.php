@@ -2595,6 +2595,7 @@ function calculateSalaryAccumulatedAmount($userId, $salaryId, $currentTotalAmoun
                  FROM salaries s
                  WHERE s.user_id = ? AND s.id != ? 
                  AND s.year IS NOT NULL AND s.month IS NOT NULL
+                 AND s.year > 0 AND s.month > 0 AND s.month <= 12
                  AND (s.year < ? OR (s.year = ? AND s.month < ?))
                  ORDER BY s.year ASC, s.month ASC",
                 [$userId, $salaryId, $currentYear, $currentYear, $currentMonth]
@@ -2606,6 +2607,7 @@ function calculateSalaryAccumulatedAmount($userId, $salaryId, $currentTotalAmoun
                  FROM salaries s
                  WHERE s.user_id = ? 
                  AND s.year IS NOT NULL AND s.month IS NOT NULL
+                 AND s.year > 0 AND s.month > 0 AND s.month <= 12
                  AND (s.year < ? OR (s.year = ? AND s.month < ?))
                  ORDER BY s.year ASC, s.month ASC",
                 [$userId, $currentYear, $currentYear, $currentMonth]
@@ -2650,6 +2652,7 @@ function calculateSalaryAccumulatedAmount($userId, $salaryId, $currentTotalAmoun
                      FROM salaries s
                      WHERE s.user_id = ? AND s.id != ? 
                      AND s.month IS NOT NULL
+                     AND s.month > 0 AND s.month <= 12
                      AND s.month < ?
                      ORDER BY s.month ASC",
                     [$userId, $salaryId, $currentMonth]
@@ -2661,6 +2664,7 @@ function calculateSalaryAccumulatedAmount($userId, $salaryId, $currentTotalAmoun
                      FROM salaries s
                      WHERE s.user_id = ? 
                      AND s.month IS NOT NULL
+                     AND s.month > 0 AND s.month <= 12
                      AND s.month < ?
                      ORDER BY s.month ASC",
                     [$userId, $currentMonth]
