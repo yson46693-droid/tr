@@ -873,6 +873,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 // استخدام tempCustomerId لإنشاء الفاتورة (لأن invoices table مرتبط بـ customers)
+                // تمرير created_from_pos = true لأن هذه فاتورة من نقطة البيع
                 $invoiceResult = createInvoice(
                     $tempCustomerId,
                     $currentUser['id'],
@@ -882,7 +883,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $prepaidAmount,
                     $notes,
                     $currentUser['id'],
-                    $dueDate
+                    $dueDate,
+                    true  // created_from_pos = true
                 );
 
                 if (empty($invoiceResult['success'])) {
@@ -994,6 +996,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $invoiceStatus = 'partial';
                 }
 
+                // لا يتم تحديث الفاتورة بعد إنشائها من نقطة البيع
+                // الفاتورة يجب أن تبقى على تفاصيلها الأصلية ولا يتم تحديثها أبداً
+                // تم تعطيل التحديث التالي لضمان عدم تحديث فواتير نقطة البيع
+                /*
                 // تحديث الفاتورة بالمبلغ المدفوع والمبلغ المتبقي
                 // نستخدم totalPaidAmount (نقدي + رصيد دائن) للفاتورة
                 $invoiceUpdateSql = "UPDATE invoices SET paid_amount = ?, remaining_amount = ?, status = ?, updated_at = NOW()";
@@ -1018,6 +1024,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $invoiceUpdateParams[] = $invoiceId;
                 $db->execute($invoiceUpdateSql . " WHERE id = ?", $invoiceUpdateParams);
+                */
 
                 // تسجيل الإيراد في خزنة الشركة (accountant_transactions)
                 // مهم: نستخدم فقط المبلغ النقدي الفعلي (effectivePaidAmount) وليس creditUsed
@@ -1885,10 +1892,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $invoiceId = (int)$invoiceResult['invoice_id'];
                     $invoiceNumber = $invoiceResult['invoice_number'] ?? '';
 
-                    $db->execute(
-                        "UPDATE invoices SET paid_amount = 0, remaining_amount = ?, status = 'sent', updated_at = NOW() WHERE id = ?",
-                        [$totalAmount, $invoiceId]
-                    );
+                    // التحقق من عدم تحديث فواتير نقطة البيع
+                    $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+                    if ($hasCreatedFromPosColumn) {
+                        $invoiceCheck = $db->queryOne("SELECT created_from_pos FROM invoices WHERE id = ?", [$invoiceId]);
+                        if (empty($invoiceCheck) || empty($invoiceCheck['created_from_pos'])) {
+                            // ليست فاتورة من نقطة البيع، يمكن تحديثها
+                            $db->execute(
+                                "UPDATE invoices SET paid_amount = 0, remaining_amount = ?, status = 'sent', updated_at = NOW() WHERE id = ?",
+                                [$totalAmount, $invoiceId]
+                            );
+                        }
+                    } else {
+                        // العمود غير موجود، يمكن التحديث (للتوافق مع الإصدارات القديمة)
+                        $db->execute(
+                            "UPDATE invoices SET paid_amount = 0, remaining_amount = ?, status = 'sent', updated_at = NOW() WHERE id = ?",
+                            [$totalAmount, $invoiceId]
+                        );
+                    }
 
                     $orderNumber = generateShippingOrderNumber($db);
 
@@ -2159,10 +2180,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
 
                 if (!empty($order['invoice_id'])) {
-                    $db->execute(
-                        "UPDATE invoices SET status = 'sent', remaining_amount = ?, updated_at = NOW() WHERE id = ?",
-                        [$totalAmount, $order['invoice_id']]
-                    );
+                    // التحقق من عدم تحديث فواتير نقطة البيع
+                    $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+                    if ($hasCreatedFromPosColumn) {
+                        $invoiceCheck = $db->queryOne("SELECT created_from_pos FROM invoices WHERE id = ?", [$order['invoice_id']]);
+                        if (empty($invoiceCheck) || empty($invoiceCheck['created_from_pos'])) {
+                            // ليست فاتورة من نقطة البيع، يمكن تحديثها
+                            $db->execute(
+                                "UPDATE invoices SET status = 'sent', remaining_amount = ?, updated_at = NOW() WHERE id = ?",
+                                [$totalAmount, $order['invoice_id']]
+                            );
+                        }
+                    } else {
+                        // العمود غير موجود، يمكن التحديث (للتوافق مع الإصدارات القديمة)
+                        $db->execute(
+                            "UPDATE invoices SET status = 'sent', remaining_amount = ?, updated_at = NOW() WHERE id = ?",
+                            [$totalAmount, $order['invoice_id']]
+                        );
+                    }
                 }
 
                 logAudit(

@@ -566,10 +566,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $invoiceId = (int)$invoiceResult['invoice_id'];
             $invoiceNumber = $invoiceResult['invoice_number'] ?? '';
 
-            $db->execute(
-                "UPDATE invoices SET paid_amount = 0, remaining_amount = ?, status = 'sent', updated_at = NOW() WHERE id = ?",
-                [$totalAmount, $invoiceId]
-            );
+            // التحقق من عدم تحديث فواتير نقطة البيع
+            $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+            if ($hasCreatedFromPosColumn) {
+                $invoiceCheck = $db->queryOne("SELECT created_from_pos FROM invoices WHERE id = ?", [$invoiceId]);
+                if (empty($invoiceCheck) || empty($invoiceCheck['created_from_pos'])) {
+                    // ليست فاتورة من نقطة البيع، يمكن تحديثها
+                    $db->execute(
+                        "UPDATE invoices SET paid_amount = 0, remaining_amount = ?, status = 'sent', updated_at = NOW() WHERE id = ?",
+                        [$totalAmount, $invoiceId]
+                    );
+                }
+            } else {
+                // العمود غير موجود، يمكن التحديث (للتوافق مع الإصدارات القديمة)
+                $db->execute(
+                    "UPDATE invoices SET paid_amount = 0, remaining_amount = ?, status = 'sent', updated_at = NOW() WHERE id = ?",
+                    [$totalAmount, $invoiceId]
+                );
+            }
 
             // ربط أرقام التشغيلة بعناصر الفاتورة
             $invoiceItemsFromDb = $db->query(
@@ -1109,10 +1123,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // إلغاء الفاتورة إذا كانت موجودة
             if (!empty($order['invoice_id'])) {
-                $db->execute(
-                    "UPDATE invoices SET status = 'cancelled', updated_at = NOW() WHERE id = ?",
-                    [$order['invoice_id']]
-                );
+                // التحقق من عدم تحديث فواتير نقطة البيع
+                $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+                if ($hasCreatedFromPosColumn) {
+                    $invoiceCheck = $db->queryOne("SELECT created_from_pos FROM invoices WHERE id = ?", [$order['invoice_id']]);
+                    if (empty($invoiceCheck) || empty($invoiceCheck['created_from_pos'])) {
+                        // ليست فاتورة من نقطة البيع، يمكن تحديثها
+                        $db->execute(
+                            "UPDATE invoices SET status = 'cancelled', updated_at = NOW() WHERE id = ?",
+                            [$order['invoice_id']]
+                        );
+                    }
+                } else {
+                    // العمود غير موجود، يمكن التحديث (للتوافق مع الإصدارات القديمة)
+                    $db->execute(
+                        "UPDATE invoices SET status = 'cancelled', updated_at = NOW() WHERE id = ?",
+                        [$order['invoice_id']]
+                    );
+                }
             }
 
             logAudit(
@@ -1576,11 +1604,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // تحديث الفاتورة لتعكس المبلغ المتبقي وإضافة المنتجات إلى سجل مشتريات العميل
             if (!empty($order['invoice_id'])) {
-                // تحديث حالة الفاتورة والمبالغ
-                $db->execute(
-                    "UPDATE invoices SET status = 'sent', remaining_amount = ?, paid_amount = 0, updated_at = NOW() WHERE id = ?",
-                    [$totalAmount, $order['invoice_id']]
-                );
+                // التحقق من عدم تحديث فواتير نقطة البيع
+                $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+                if ($hasCreatedFromPosColumn) {
+                    $invoiceCheck = $db->queryOne("SELECT created_from_pos FROM invoices WHERE id = ?", [$order['invoice_id']]);
+                    if (empty($invoiceCheck) || empty($invoiceCheck['created_from_pos'])) {
+                        // ليست فاتورة من نقطة البيع، يمكن تحديثها
+                        $db->execute(
+                            "UPDATE invoices SET status = 'sent', remaining_amount = ?, paid_amount = 0, updated_at = NOW() WHERE id = ?",
+                            [$totalAmount, $order['invoice_id']]
+                        );
+                    }
+                } else {
+                    // العمود غير موجود، يمكن التحديث (للتوافق مع الإصدارات القديمة)
+                    $db->execute(
+                        "UPDATE invoices SET status = 'sent', remaining_amount = ?, paid_amount = 0, updated_at = NOW() WHERE id = ?",
+                        [$totalAmount, $order['invoice_id']]
+                    );
+                }
                 
                 // جلب بيانات الفاتورة للتأكد من تحديث سجل المشتريات
                 $invoiceData = $db->queryOne(

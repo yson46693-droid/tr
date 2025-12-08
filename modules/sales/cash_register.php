@@ -218,12 +218,25 @@ if (!empty($invoicesTableExists)) {
                     // إذا كان الرصيد المتوقع قريب من الرصيد الفعلي (مع هامش خطأ صغير)
                     // فهذا يعني أن الفاتورة دفعت من رصيد دائن
                     if (abs($expectedBalanceAfter - $currentBalance) < 0.02) {
-                        // تحديث الفاتورة لتحديدها كمدفوعة من رصيد دائن
-                        $db->execute(
-                            "UPDATE invoices SET paid_from_credit = 1 WHERE id = ?",
-                            [$invoiceId]
-                        );
-                        $updatedCount++;
+                        // التحقق من عدم تحديث فواتير نقطة البيع
+                        $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+                        $canUpdate = true;
+                        if ($hasCreatedFromPosColumn) {
+                            $invoiceCheck = $db->queryOne("SELECT created_from_pos FROM invoices WHERE id = ?", [$invoiceId]);
+                            if (!empty($invoiceCheck) && !empty($invoiceCheck['created_from_pos'])) {
+                                // هذه فاتورة من نقطة البيع، لا يمكن تحديثها
+                                $canUpdate = false;
+                            }
+                        }
+                        
+                        if ($canUpdate) {
+                            // تحديث الفاتورة لتحديدها كمدفوعة من رصيد دائن
+                            $db->execute(
+                                "UPDATE invoices SET paid_from_credit = 1 WHERE id = ?",
+                                [$invoiceId]
+                            );
+                            $updatedCount++;
+                        }
                     }
                 }
             }

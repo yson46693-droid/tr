@@ -698,6 +698,7 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     ];
                 }
 
+                // تمرير created_from_pos = true لأن هذه فاتورة من نقطة البيع
                 $invoiceResult = createInvoice(
                     $customerId,
                     $currentUser['id'],
@@ -707,7 +708,8 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $prepaidAmount,
                     $notes,
                     $currentUser['id'],
-                    $dueDate  // تمرير تاريخ الاستحقاق
+                    $dueDate,  // تمرير تاريخ الاستحقاق
+                    true  // created_from_pos = true
                 );
 
                 if (empty($invoiceResult['success'])) {
@@ -800,6 +802,10 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $isCreditSale = ($creditUsed > 0.0001);
                 $hasRemainingDebt = ($dueAmount > 0.0001);
                 
+                // لا يتم تحديث الفاتورة بعد إنشائها من نقطة البيع
+                // الفاتورة يجب أن تبقى على تفاصيلها الأصلية ولا يتم تحديثها أبداً
+                // تم تعطيل التحديث التالي لضمان عدم تحديث فواتير نقطة البيع
+                /*
                 // تحديث الفاتورة بالمبلغ المدفوع والمبلغ المتبقي
                 $invoiceUpdateSql = "UPDATE invoices SET paid_amount = ?, remaining_amount = ?, status = ?, updated_at = NOW()";
                 $invoiceUpdateParams = [$effectivePaidAmount, $dueAmount, $invoiceStatus];
@@ -878,6 +884,7 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         $creditUsed
                     ));
                 }
+                */
                 
                 // إضافة الفاتورة إلى سجل مشتريات العميل
                 try {

@@ -15,7 +15,7 @@ require_once __DIR__ . '/notifications.php';
 /**
  * إنشاء فاتورة جديدة
  */
-function createInvoice($customerId, $salesRepId, $date, $items, $taxRate = 0, $discountAmount = 0, $notes = null, $createdBy = null, $dueDate = null) {
+function createInvoice($customerId, $salesRepId, $date, $items, $taxRate = 0, $discountAmount = 0, $notes = null, $createdBy = null, $dueDate = null, $createdFromPos = false) {
     try {
         $db = db();
         
@@ -27,6 +27,16 @@ function createInvoice($customerId, $salesRepId, $date, $items, $taxRate = 0, $d
         
         if (!$createdBy) {
             return ['success' => false, 'message' => 'يجب تسجيل الدخول'];
+        }
+        
+        // التحقق من وجود عمود created_from_pos وإضافته إذا لم يكن موجوداً
+        $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+        if (!$hasCreatedFromPosColumn) {
+            try {
+                $db->execute("ALTER TABLE invoices ADD COLUMN created_from_pos TINYINT(1) DEFAULT 0 COMMENT 'تم إنشاء الفاتورة من نقطة البيع' AFTER amount_added_to_sales");
+            } catch (Throwable $e) {
+                error_log('Error adding created_from_pos column: ' . $e->getMessage());
+            }
         }
         
         // توليد رقم فاتورة
@@ -79,24 +89,30 @@ function createInvoice($customerId, $salesRepId, $date, $items, $taxRate = 0, $d
         // إنشاء الفاتورة
         $sql = "INSERT INTO invoices 
                 (invoice_number, customer_id, sales_rep_id, date, due_date, subtotal, tax_rate, tax_amount, 
-                 discount_amount, total_amount, notes, created_by, status) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')";
+                 discount_amount, total_amount, notes, created_by, status" . ($hasCreatedFromPosColumn ? ", created_from_pos" : "") . ") 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft'" . ($hasCreatedFromPosColumn ? ", ?" : "") . ")";
+        
+        $params = [
+            $invoiceNumber,
+            $customerId,
+            $salesRepId,
+            $date,
+            $dueDate,
+            $subtotal,
+            $taxRate,
+            $taxAmount,
+            $discountAmount,
+            $totalAmount,
+            $notes,
+            $createdBy
+        ];
+        
+        if ($hasCreatedFromPosColumn) {
+            $params[] = $createdFromPos ? 1 : 0;
+        }
         
         try {
-            $result = $db->execute($sql, [
-                $invoiceNumber,
-                $customerId,
-                $salesRepId,
-                $date,
-                $dueDate,
-                $subtotal,
-                $taxRate,
-                $taxAmount,
-                $discountAmount,
-                $totalAmount,
-                $notes,
-                $createdBy
-            ]);
+            $result = $db->execute($sql, $params);
         } catch (Exception $insertError) {
             // إذا فشل الإدراج بسبب تكرار رقم الفاتورة (UNIQUE constraint)
             if (strpos($insertError->getMessage(), 'Duplicate entry') !== false || 
@@ -107,7 +123,7 @@ function createInvoice($customerId, $salesRepId, $date, $items, $taxRate = 0, $d
                 $invoiceNumber = generateInvoiceNumber();
                 
                 // محاولة الإدراج مرة أخرى
-                $result = $db->execute($sql, [
+                $retryParams = [
                     $invoiceNumber,
                     $customerId,
                     $salesRepId,
@@ -120,7 +136,13 @@ function createInvoice($customerId, $salesRepId, $date, $items, $taxRate = 0, $d
                     $totalAmount,
                     $notes,
                     $createdBy
-                ]);
+                ];
+                
+                if ($hasCreatedFromPosColumn) {
+                    $retryParams[] = $createdFromPos ? 1 : 0;
+                }
+                
+                $result = $db->execute($sql, $retryParams);
             } else {
                 // إذا كان الخطأ مختلفاً، ارميه مرة أخرى
                 throw $insertError;
@@ -443,6 +465,16 @@ function updateInvoiceStatus($invoiceId, $status, $updatedBy = null) {
         
         $oldInvoice = getInvoice($invoiceId);
         
+        // التحقق من وجود عمود created_from_pos وعدم تحديث فواتير نقطة البيع
+        $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+        if ($hasCreatedFromPosColumn) {
+            $invoiceCheck = $db->queryOne("SELECT created_from_pos FROM invoices WHERE id = ?", [$invoiceId]);
+            if (!empty($invoiceCheck) && !empty($invoiceCheck['created_from_pos'])) {
+                // هذه فاتورة من نقطة البيع، لا يمكن تحديثها
+                return ['success' => false, 'message' => 'لا يمكن تحديث فاتورة تم إنشاؤها من نقطة البيع'];
+            }
+        }
+        
         $sql = "UPDATE invoices SET status = ?, updated_at = NOW() WHERE id = ?";
         $db->execute($sql, [$status, $invoiceId]);
         
@@ -495,6 +527,16 @@ function recordInvoicePayment($invoiceId, $amount, $notes = null, $createdBy = n
             return ['success' => false, 'message' => 'الفاتورة غير موجودة'];
         }
         
+        // التحقق من وجود عمود created_from_pos وعدم تحديث فواتير نقطة البيع
+        $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+        if ($hasCreatedFromPosColumn) {
+            $invoiceCheck = $db->queryOne("SELECT created_from_pos FROM invoices WHERE id = ?", [$invoiceId]);
+            if (!empty($invoiceCheck) && !empty($invoiceCheck['created_from_pos'])) {
+                // هذه فاتورة من نقطة البيع، لا يمكن تحديثها
+                return ['success' => false, 'message' => 'لا يمكن تحديث فاتورة تم إنشاؤها من نقطة البيع'];
+            }
+        }
+        
         $newPaidAmount = $invoice['paid_amount'] + $amount;
         
         // تحديث المبلغ المدفوع
@@ -542,16 +584,24 @@ function distributeCollectionToInvoices($customerId, $amount, $createdBy = null)
         $statusEnum = $statusCheck['Type'] ?? '';
         $hasPartialStatus = strpos($statusEnum, 'partial') !== false;
         
+        // التحقق من وجود عمود created_from_pos
+        $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+        
         // الحصول على فواتير العميل التي لم يتم دفعها بالكامل، مرتبة من الأقدم للأحدث
-        $invoices = $db->query(
-            "SELECT id, invoice_number, total_amount, paid_amount, status 
-             FROM invoices 
-             WHERE customer_id = ? 
-             AND status NOT IN ('paid', 'cancelled')
-             AND (total_amount - paid_amount) > 0
-             ORDER BY date ASC, created_at ASC",
-            [$customerId]
-        );
+        // استبعاد الفواتير التي تم إنشاؤها من نقطة البيع (created_from_pos = 1)
+        $sql = "SELECT id, invoice_number, total_amount, paid_amount, status 
+                FROM invoices 
+                WHERE customer_id = ? 
+                AND status NOT IN ('paid', 'cancelled')
+                AND (total_amount - paid_amount) > 0";
+        
+        if ($hasCreatedFromPosColumn) {
+            $sql .= " AND (created_from_pos IS NULL OR created_from_pos = 0)";
+        }
+        
+        $sql .= " ORDER BY date ASC, created_at ASC";
+        
+        $invoices = $db->query($sql, [$customerId]);
         
         if (empty($invoices)) {
             return ['success' => true, 'message' => 'لا توجد فواتير معلقة للعميل'];
