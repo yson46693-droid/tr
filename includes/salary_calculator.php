@@ -1013,14 +1013,20 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             $existingCollectionsBonus = 0;
             if ($hasCollectionsBonusColumn) {
                 $existingCollectionsBonus = floatval($currentSalary['collections_bonus'] ?? 0);
-                // الحفاظ على collections_bonus الموجود إذا كان أكبر من المحسوب
-                // لأن collections_bonus الموجود قد يحتوي على مكافآت فورية تم إضافتها عبر applyCollectionInstantReward
-                // ولا يجب استبدالها بقيمة محسوبة من جديد (لتجنب الحساب المزدوج)
-                if ($existingCollectionsBonus > round($collectionsBonusCalc, 2)) {
-                    $collectionsBonusCalc = $existingCollectionsBonus;
-                }
+                // ===== إصلاح جذري: استخدام القيمة الموجودة دائماً =====
+                // collections_bonus يتم تحديثه مباشرة عبر applyCollectionInstantReward
+                // لذلك يجب استخدام القيمة الموجودة في قاعدة البيانات دائماً
+                // وعدم استبدالها بقيمة محسوبة من جديد (لمنع الحساب المزدوج)
+                $collectionsBonusCalc = $existingCollectionsBonus;
                 $calculation['collections_bonus'] = $collectionsBonusCalc;
                 $calculation['total_bonus'] = $calculation['bonus'] + $collectionsBonusCalc;
+                
+                // تسجيل لأغراض التتبع
+                error_log(sprintf(
+                    'Collections bonus preserved from DB for user %d: %.2f (not recalculated)',
+                    $userId,
+                    $existingCollectionsBonus
+                ));
             }
             
             // التحقق من وجود سلفات مخصومة بالفعل
@@ -1057,14 +1063,20 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             // قراءة collections_bonus الحالي للمحافظة على المكافآت الفورية
             if ($hasCollectionsBonusColumn) {
                 $existingCollectionsBonus = floatval($currentSalary['collections_bonus'] ?? 0);
-                // الحفاظ على collections_bonus الموجود إذا كان أكبر من المحسوب
-                // لأن collections_bonus الموجود قد يحتوي على مكافآت فورية تم إضافتها عبر applyCollectionInstantReward
-                // ولا يجب استبدالها بقيمة محسوبة من جديد (لتجنب الحساب المزدوج)
-                if ($existingCollectionsBonus > round($collectionsBonusCalc, 2)) {
-                    $collectionsBonusCalc = $existingCollectionsBonus;
-                }
+                // ===== إصلاح جذري: استخدام القيمة الموجودة دائماً =====
+                // collections_bonus يتم تحديثه مباشرة عبر applyCollectionInstantReward
+                // لذلك يجب استخدام القيمة الموجودة في قاعدة البيانات دائماً
+                // وعدم استبدالها بقيمة محسوبة من جديد (لمنع الحساب المزدوج)
+                $collectionsBonusCalc = $existingCollectionsBonus;
                 $calculation['collections_bonus'] = $collectionsBonusCalc;
                 $calculation['total_bonus'] = $calculation['bonus'] + $collectionsBonusCalc;
+                
+                // تسجيل لأغراض التتبع
+                error_log(sprintf(
+                    'Collections bonus preserved from DB for user %d: %.2f (not recalculated)',
+                    $userId,
+                    $existingCollectionsBonus
+                ));
             }
             
             // التحقق من وجود سلفات مخصومة بالفعل
@@ -1098,34 +1110,33 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             }
         }
         
-        // الحفاظ على الخصومات: الخصومات تم قراءتها مسبقاً من قاعدة البيانات واستخدامها في calculateSalary
-        // لذلك لا حاجة لتعديلها هنا لأنها بالفعل صحيحة
-        // لكن إذا كانت هناك سلفات مخصومة، يجب التأكد من أن الخصومات لا تحتوي على السلفات
-        if ($hasDeductedAdvances && $deductedAdvancesTotal > 0) {
-            // الخصومات الحالية = خصومات أخرى + سلفات (إذا كانت مضمنة)
-            // نحتاج للحفاظ على الخصومات الأخرى فقط
-            $otherDeductionsFromDB = max(0, $calculation['deductions'] - $deductedAdvancesTotal);
-            $calculation['deductions'] = $otherDeductionsFromDB;
-        }
+        // ===== إصلاح جذري: الحفاظ على الخصومات بشكل مطلق =====
+        // الخصومات تم قراءتها من قاعدة البيانات واستخدامها في calculateSalary
+        // يجب أن تبقى ثابتة ولا تتغير أبداً إلا بتعديل يدوي من المدير/المحاسب
+        // لذلك نستخدم القيمة من قاعدة البيانات مباشرة
+        $calculation['deductions'] = $existingDeductions;
         
-        // إذا كانت هناك سلفات مخصومة، احسب total_amount بشكل صحيح
-        if ($hasDeductedAdvances && $deductedAdvancesTotal > 0) {
-            // حساب الراتب الإجمالي قبل خصم السلفات
-            // يجب طرح السلفة من deductions لأنها قد تكون مضمنة فيها
-            $baseAmount = $calculation['base_amount'];
-            $bonus = $calculation['total_bonus'];
-            $otherDeductions = max(0, $calculation['deductions'] - $deductedAdvancesTotal);
-            
-            // حساب total_amount = الراتب قبل الخصم - السلفات المخصومة
-            $totalBeforeAdvances = $baseAmount + $bonus - $otherDeductions;
-            $calculation['total_amount'] = max(0, $totalBeforeAdvances - $deductedAdvancesTotal);
-            
-            // تحديث deductions لاستبعاد السلفة (إذا كانت مضمنة)
-            if ($calculation['deductions'] >= $deductedAdvancesTotal) {
-                $calculation['deductions'] = $otherDeductions;
-            }
-        }
-        // ملاحظة: total_amount تم حسابه بشكل صحيح في calculateSalary بناءً على الخصومات الصحيحة
+        // إعادة حساب total_amount بناءً على الخصومات الثابتة
+        // total_amount = base_amount + total_bonus - deductions - advances_deduction
+        $calculation['total_amount'] = round(
+            $calculation['base_amount'] + 
+            $calculation['total_bonus'] - 
+            $calculation['deductions'] - 
+            $calculation['advances_deduction'], 
+            2
+        );
+        
+        // تسجيل لأغراض التتبع
+        error_log(sprintf(
+            'Salary calculation for user %d: base=%.2f, bonus=%.2f, collections_bonus=%.2f, deductions=%.2f (preserved from DB), advances=%.2f, total=%.2f',
+            $userId,
+            $calculation['base_amount'],
+            $calculation['bonus'],
+            $calculation['collections_bonus'],
+            $calculation['deductions'],
+            $calculation['advances_deduction'],
+            $calculation['total_amount']
+        ));
         
         if ($hasBonusColumn) {
             if ($hasNotesColumn) {
