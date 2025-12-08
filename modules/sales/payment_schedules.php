@@ -1028,7 +1028,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // جلب القيمة المحفوظة عند فتح المودال
                 fetch('?page=payment_schedules&action=get_reminder_days&schedule_id=' + scheduleId)
-                    .then(response => response.json())
+                    .then(response => {
+                        // التحقق من نوع المحتوى
+                        const contentType = response.headers.get('content-type');
+                        if (!contentType || !contentType.includes('application/json')) {
+                            throw new Error('Expected JSON but got: ' + contentType);
+                        }
+                        return response.json();
+                    })
                     .then(data => {
                         if (data.success && data.days_before_due) {
                             // تحديث القيمة بالقيمة المحفوظة

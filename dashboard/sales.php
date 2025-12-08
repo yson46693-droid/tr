@@ -48,6 +48,62 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'load_products') {
     }
 }
 
+// معالجة طلبات AJAX لـ payment_schedules
+if (isset($_GET['page']) && $_GET['page'] === 'payment_schedules' && isset($_GET['action']) && $_GET['action'] === 'get_reminder_days') {
+    // تحميل الملفات الأساسية فقط
+    require_once __DIR__ . '/../includes/config.php';
+    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/auth.php';
+    
+    // التحقق من تسجيل الدخول
+    if (!isLoggedIn()) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => false,
+            'message' => 'يجب تسجيل الدخول أولاً'
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+    
+    // تنظيف أي output buffer
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    $db = db();
+    $scheduleId = intval($_GET['schedule_id'] ?? 0);
+    
+    if ($scheduleId > 0) {
+        $reminder = $db->queryOne(
+            "SELECT days_before_due FROM payment_reminders 
+             WHERE payment_schedule_id = ? AND reminder_type = 'before_due' 
+             ORDER BY created_at DESC LIMIT 1",
+            [$scheduleId]
+        );
+        
+        header('Content-Type: application/json; charset=utf-8');
+        if ($reminder && isset($reminder['days_before_due'])) {
+            echo json_encode([
+                'success' => true,
+                'days_before_due' => (int)$reminder['days_before_due']
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'days_before_due' => 3
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+    } else {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => false,
+            'days_before_due' => 3,
+            'message' => 'معرف الجدول الزمني غير صحيح'
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    exit;
+}
+
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
