@@ -163,59 +163,74 @@ function handleGetHistory(): void
             
             if ($hasBatchNumber && $hasBatchId) {
                 // الحالة المثالية: كلا العمودين موجودان
-                $batchSelect = "COALESCE(
-                    -- أولاً: batch_number المحفوظ مباشرة في local_invoice_items
-                    NULLIF(TRIM(ii.batch_number), ''),
-                    -- ثانياً: جلب من finished_products باستخدام batch_id
+                // نستخدم batch_number مباشرة من local_invoice_items
+                $batchSelect = "
+                    CASE 
+                        WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != '' AND ii.batch_number != 'NULL'
+                        THEN TRIM(ii.batch_number)
+                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
+                        THEN (
+                            SELECT COALESCE(
+                                NULLIF(TRIM(fp.batch_number), ''),
+                                NULLIF(TRIM(bn.batch_number), ''),
+                                ''
+                            )
+                            FROM finished_products fp
+                            LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                            WHERE fp.id = ii.batch_id
+                            LIMIT 1
+                        )
+                        ELSE ''
+                    END as batch_numbers,
+                    CASE 
+                        WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != '' AND ii.batch_number != 'NULL'
+                        THEN COALESCE(
+                            (SELECT CAST(bn.id AS CHAR) FROM batch_numbers bn WHERE bn.batch_number = TRIM(ii.batch_number) LIMIT 1),
+                            CAST(ii.batch_id AS CHAR),
+                            ''
+                        )
+                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
+                        THEN CAST(ii.batch_id AS CHAR)
+                        ELSE ''
+                    END as batch_number_ids";
+                $batchJoin = "";
+            } elseif ($hasBatchNumber) {
+                // فقط batch_number موجود
+                $batchSelect = "
+                    CASE 
+                        WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != '' AND ii.batch_number != 'NULL'
+                        THEN TRIM(ii.batch_number)
+                        ELSE ''
+                    END as batch_numbers,
+                    CASE 
+                        WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != '' AND ii.batch_number != 'NULL'
+                        THEN COALESCE(
+                            (SELECT CAST(bn.id AS CHAR) FROM batch_numbers bn WHERE bn.batch_number = TRIM(ii.batch_number) LIMIT 1),
+                            ''
+                        )
+                        ELSE ''
+                    END as batch_number_ids";
+                $batchJoin = "";
+            } elseif ($hasBatchId) {
+                // فقط batch_id موجود - جلب batch_number من finished_products
+                $batchSelect = "
                     CASE 
                         WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
-                        THEN (SELECT NULLIF(TRIM(fp.batch_number), '') FROM finished_products fp WHERE fp.id = ii.batch_id LIMIT 1)
+                        THEN COALESCE(
+                            (SELECT NULLIF(TRIM(fp.batch_number), '') FROM finished_products fp WHERE fp.id = ii.batch_id LIMIT 1),
+                            (SELECT NULLIF(TRIM(bn.batch_number), '') 
+                             FROM finished_products fp
+                             LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                             WHERE fp.id = ii.batch_id LIMIT 1),
+                            ''
+                        )
                         ELSE ''
-                    END,
-                    ''
-                ) as batch_numbers,
-                COALESCE(
-                    -- batch_number_id من batch_numbers
-                    CASE 
-                        WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != ''
-                        THEN (SELECT CAST(bn.id AS CHAR) FROM batch_numbers bn WHERE bn.batch_number = ii.batch_number LIMIT 1)
-                        ELSE NULL
-                    END,
+                    END as batch_numbers,
                     CASE 
                         WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
                         THEN CAST(ii.batch_id AS CHAR)
                         ELSE ''
-                    END,
-                    ''
-                ) as batch_number_ids";
-                $batchJoin = "";
-            } elseif ($hasBatchNumber) {
-                // فقط batch_number موجود
-                $batchSelect = "COALESCE(NULLIF(TRIM(ii.batch_number), ''), '') as batch_numbers,
-                                COALESCE(
-                                    CASE 
-                                        WHEN ii.batch_number IS NOT NULL AND TRIM(ii.batch_number) != ''
-                                        THEN (SELECT CAST(bn.id AS CHAR) FROM batch_numbers bn WHERE bn.batch_number = ii.batch_number LIMIT 1)
-                                        ELSE ''
-                                    END,
-                                    ''
-                                ) as batch_number_ids";
-                $batchJoin = "";
-            } elseif ($hasBatchId) {
-                // فقط batch_id موجود - جلب batch_number من finished_products
-                $batchSelect = "COALESCE(
-                    CASE 
-                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
-                        THEN (SELECT NULLIF(TRIM(fp.batch_number), '') FROM finished_products fp WHERE fp.id = ii.batch_id LIMIT 1)
-                        ELSE ''
-                    END,
-                    ''
-                ) as batch_numbers,
-                CASE 
-                    WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
-                    THEN CAST(ii.batch_id AS CHAR)
-                    ELSE ''
-                END as batch_number_ids";
+                    END as batch_number_ids";
                 $batchJoin = "";
             } else {
                 // لا يوجد أي عمود
@@ -304,7 +319,10 @@ function handleGetHistory(): void
                     ii.quantity,
                     ii.unit_price,
                     ii.total_price,
-                    $batchSelect
+                    $batchSelect,
+                    -- إضافة حقول إضافية للتشخيص
+                    ii.batch_number as raw_batch_number,
+                    ii.batch_id as raw_batch_id
                 FROM local_invoices i
                 INNER JOIN local_invoice_items ii ON i.id = ii.invoice_id
                 LEFT JOIN products p ON ii.product_id = p.id
@@ -314,6 +332,30 @@ function handleGetHistory(): void
                 ORDER BY i.date DESC, i.id DESC, ii.id ASC",
                 [$customerId]
             ) ?: [];
+            
+            // تسجيل البيانات المُجلبة للتشخيص
+            if (!empty($purchaseHistory)) {
+                error_log("customer_purchase_history API: Found " . count($purchaseHistory) . " items for local customer_id=$customerId");
+                foreach ($purchaseHistory as $idx => $item) {
+                    error_log(sprintf(
+                        "customer_purchase_history API: Item[%d] - invoice_item_id=%d, product_id=%d, batch_numbers=%s, raw_batch_number=%s, raw_batch_id=%s",
+                        $idx,
+                        $item['invoice_item_id'] ?? 0,
+                        $item['product_id'] ?? 0,
+                        $item['batch_numbers'] ?? 'NULL',
+                        $item['raw_batch_number'] ?? 'NULL',
+                        $item['raw_batch_id'] ?? 'NULL'
+                    ));
+                }
+            } else {
+                error_log("customer_purchase_history API: No items found for local customer_id=$customerId");
+            }
+            
+            // إزالة الحقول الإضافية قبل إرسال الاستجابة
+            foreach ($purchaseHistory as &$item) {
+                unset($item['raw_batch_number'], $item['raw_batch_id']);
+            }
+            unset($item);
         }
     } else {
         // Get purchase history from invoices with batch numbers
