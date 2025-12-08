@@ -1,31 +1,33 @@
-const CACHE_VERSION = '1.0.1'; // Updated to fix redirect error
+const CACHE_VERSION = '1.0.2'; // Updated for mobile performance
 const CACHE_NAME = 'company-management-v' + CACHE_VERSION;
 const BASE = '/v1/';
 
+// تقليل الملفات الأساسية للكاش لتسريع التحميل
 const CORE_CACHE = [
-  BASE,
-  BASE + 'index.php',
   BASE + 'offline.html',
-
-  BASE + 'assets/css/responsive.css?v=1.0.0',
-  BASE + 'assets/css/dark-mode.css?v=1.0.0',
-
-  BASE + 'assets/js/main.js?v=1.0.0',
-  BASE + 'assets/js/pwa-install.js?v=1.0.0',
-
   BASE + 'assets/icons/icon-192x192.png',
   BASE + 'assets/icons/icon-96x96.png'
 ];
 
-const MAX_DYNAMIC_CACHE_ITEMS = 50;
+const MAX_DYNAMIC_CACHE_ITEMS = 30; // تقليل حجم الكاش للأداء الأفضل
 
-// Install event - Cache essential files
+// Install event - Cache essential files (non-blocking for faster startup)
 self.addEventListener('install', event => {
+  // استخدام skipWaiting فوراً لتسريع التفعيل
+  self.skipWaiting();
+  
+  // تحميل الملفات الأساسية في الخلفية بدون انتظار
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(CORE_CACHE))
-      .catch(() => {}) // تجاهل الأخطاء
-      .finally(() => self.skipWaiting())
+      .then(cache => {
+        // تحميل الملفات بشكل متوازي لتسريع العملية
+        return Promise.allSettled(
+          CORE_CACHE.map(url => 
+            cache.add(url).catch(() => {}) // تجاهل الأخطاء الفردية
+          )
+        );
+      })
+      .catch(() => {}) // تجاهل الأخطاء العامة
   );
 });
 
@@ -105,46 +107,71 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // استراتيجية محسّنة للأداء: Cache First للملفات الثابتة، Network First للباقي
   event.respondWith(
-    caches.match(event.request).then(async cachedResponse => {
-      // CRITICAL FIX: Check if cached response is a redirect and don't serve it
-      if (cachedResponse) {
-        // Never serve cached redirects - let browser fetch fresh
-        if (cachedResponse.status >= 300 && cachedResponse.status < 400) {
-          // Delete the cached redirect and fetch fresh
-          const cache = await caches.open(CACHE_NAME);
-          await cache.delete(event.request);
-          // Continue to fetch fresh
-        } else {
-          // Only serve non-redirect cached responses
+    (async () => {
+      // للملفات الثابتة: Cache First (أسرع)
+      const isStaticAsset = /\.(css|js|png|jpg|jpeg|svg|gif|woff2?|ico|webp)$/i.test(url.pathname);
+      
+      if (isStaticAsset) {
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          // إرجاع من الكاش فوراً (أسرع)
           return cachedResponse;
         }
-      }
-
-      return fetch(event.request, {
-        redirect: 'follow' // Let browser handle redirects
-      })
-        .then(async response => {
-          // CRITICAL FIX: Never cache redirect responses
-          if (!response || response.status >= 300 && response.status < 400) {
-            // Don't cache redirects - return as-is and let browser handle
-            return response;
-          }
-
-          if (response.status !== 200 || response.type !== 'basic') return response;
-
-          // Cache static assets only from same origin
-          if (/\.(css|js|png|jpg|jpeg|svg|gif|woff2?)$/i.test(url.pathname)) {
+        
+        // إذا لم يكن في الكاش، جلب من الشبكة وتخزينه
+        try {
+          const response = await fetch(event.request, {
+            redirect: 'follow',
+            cache: 'reload' // التأكد من الحصول على أحدث نسخة
+          });
+          
+          if (response && response.status === 200 && response.type === 'basic') {
             const responseClone = response.clone();
             const cache = await caches.open(CACHE_NAME);
             await cache.put(event.request, responseClone);
             await limitCacheSize(CACHE_NAME, MAX_DYNAMIC_CACHE_ITEMS);
           }
-
+          
           return response;
-        })
-        .catch(() => caches.match(BASE + 'offline.html'));
-    })
+        } catch (error) {
+          // في حالة الخطأ، إرجاع offline page
+          return caches.match(BASE + 'offline.html') || new Response('', { status: 503 });
+        }
+      }
+      
+      // للباقي: Network First (للحصول على أحدث البيانات)
+      try {
+        const response = await fetch(event.request, {
+          redirect: 'follow'
+        });
+        
+        // CRITICAL FIX: Never cache redirect responses
+        if (response && response.status >= 300 && response.status < 400) {
+          return response; // إرجاع إعادة التوجيه كما هي
+        }
+        
+        return response;
+      } catch (error) {
+        // في حالة الخطأ، محاولة جلب من الكاش
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) {
+          // CRITICAL FIX: Check if cached response is a redirect and don't serve it
+          if (cachedResponse.status >= 300 && cachedResponse.status < 400) {
+            // Delete the cached redirect
+            const cache = await caches.open(CACHE_NAME);
+            await cache.delete(event.request);
+            // إرجاع offline page بدلاً من ذلك
+            return caches.match(BASE + 'offline.html') || new Response('', { status: 503 });
+          }
+          return cachedResponse;
+        }
+        
+        // إذا لم يكن في الكاش، إرجاع offline page
+        return caches.match(BASE + 'offline.html') || new Response('', { status: 503 });
+      }
+    })()
   );
 });
 

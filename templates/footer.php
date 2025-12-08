@@ -493,7 +493,7 @@ if (!defined('ACCESS_ALLOWED')) {
         }
     </script>
     
-    <!-- 🎬 Page Loading Animation Script -->
+    <!-- 🎬 Page Loading Animation Script - Optimized for Mobile -->
     <script>
         (function() {
             'use strict';
@@ -511,123 +511,51 @@ if (!defined('ACCESS_ALLOWED')) {
                 return;
             }
             
-            // PWA Splash Screen - استخدام قاعدة البيانات لإدارة الجلسات
-            let splashSessionToken = sessionStorage.getItem('pwaSplashToken');
-            let inactivityTimer = null;
-            let deleteSessionOnUnload = false;
+            // PWA Splash Screen - استخدام localStorage فقط (بدون API calls) للأداء السريع
+            const SPLASH_KEY = 'pwaSplashLastShown';
+            const SPLASH_COOLDOWN = 1500; // 1.5 ثانية فقط بين إظهارات splash screen (محسّن للموبايل)
+            const MAX_SPLASH_TIME = 500; // أقصى وقت لإظهار splash screen (500ms - محسّن للموبايل)
             
             function hideSplashScreen() {
+                if (!pageLoader) return;
+                
+                // إخفاء فوري بدون تأخير
+                pageLoader.classList.add('hidden');
+                
+                // إضافة تأثير fade-in للمحتوى
+                if (dashboardMain) {
+                    dashboardMain.classList.add('content-fade-in');
+                }
+                
+                // إزالة شاشة التحميل من DOM بعد انتهاء التأثير
                 setTimeout(function() {
-                    pageLoader.classList.add('hidden');
+                    if (pageLoader && pageLoader.style) {
+                        pageLoader.style.display = 'none';
+                    }
+                }, 300);
+            }
+            
+            // التحقق من الوقت المناسب لإظهار splash screen
+            function shouldShowSplash() {
+                try {
+                    const lastShown = localStorage.getItem(SPLASH_KEY);
+                    if (!lastShown) return true;
                     
-                    // إضافة تأثير fade-in للمحتوى
-                    if (dashboardMain) {
-                        dashboardMain.classList.add('content-fade-in');
-                    }
-                    
-                    // إزالة شاشة التحميل من DOM بعد انتهاء التأثير
-                    setTimeout(function() {
-                        if (pageLoader && pageLoader.style) {
-                            pageLoader.style.display = 'none';
-                        }
-                    }, 500);
-                }, 100); // تقليل التأخير إلى 100ms للاستجابة السريعة
-            }
-            
-            // حذف الجلسة من قاعدة البيانات
-            function deleteSplashSession(token) {
-                if (!token) return;
-                
-                fetch('<?php echo getRelativeUrl("api/pwa_splash_session.php"); ?>?action=delete&token=' + encodeURIComponent(token), {
-                    method: 'GET',
-                    credentials: 'same-origin'
-                }).catch(function(err) {
-                    console.log('Failed to delete splash session:', err);
-                });
-                
-                sessionStorage.removeItem('pwaSplashToken');
-                splashSessionToken = null;
-            }
-            
-            // إنشاء جلسة جديدة في قاعدة البيانات
-            function createSplashSession() {
-                return fetch('<?php echo getRelativeUrl("api/pwa_splash_session.php"); ?>?action=create', {
-                    method: 'GET',
-                    credentials: 'same-origin'
-                })
-                .then(function(response) {
-                    return response.json();
-                })
-                .then(function(data) {
-                    if (data.success && data.token) {
-                        splashSessionToken = data.token;
-                        sessionStorage.setItem('pwaSplashToken', data.token);
-                        return data.token;
-                    }
-                    return null;
-                })
-                .catch(function(err) {
-                    console.log('Failed to create splash session:', err);
-                    return null;
-                });
-            }
-            
-            // التحقق من وجود جلسة نشطة
-            function checkSplashSession(token) {
-                if (!token) return Promise.resolve(false);
-                
-                return fetch('<?php echo getRelativeUrl("api/pwa_splash_session.php"); ?>?action=check&token=' + encodeURIComponent(token), {
-                    method: 'GET',
-                    credentials: 'same-origin'
-                })
-                .then(function(response) {
-                    return response.json();
-                })
-                .then(function(data) {
-                    return data.exists === true;
-                })
-                .catch(function(err) {
-                    console.log('Failed to check splash session:', err);
-                    return false;
-                });
-            }
-            
-            // إعادة تعيين مؤقت الخمول
-            function resetInactivityTimer() {
-                if (inactivityTimer) {
-                    clearTimeout(inactivityTimer);
+                    const timeSinceLastShown = Date.now() - parseInt(lastShown);
+                    return timeSinceLastShown > SPLASH_COOLDOWN;
+                } catch (e) {
+                    return true; // في حالة الخطأ، أظهر splash screen
                 }
-                
-                // حذف الجلسة بعد 3 ثواني من الخمول
-                inactivityTimer = setTimeout(function() {
-                    if (splashSessionToken) {
-                        deleteSplashSession(splashSessionToken);
-                    }
-                }, 3000);
             }
             
-            // مراقبة النشاط
-            // إضافة دالة throttled للأحداث الثقيلة
-            let inactivityTimerThrottle = null;
-            function throttledResetInactivityTimer() {
-                if (inactivityTimerThrottle) {
-                    return; // تخطي إذا كان هناك استدعاء قريب
+            // حفظ وقت إظهار splash screen
+            function markSplashShown() {
+                try {
+                    localStorage.setItem(SPLASH_KEY, Date.now().toString());
+                } catch (e) {
+                    // تجاهل الأخطاء
                 }
-                inactivityTimerThrottle = setTimeout(function() {
-                    resetInactivityTimer();
-                    inactivityTimerThrottle = null;
-                }, 100); // throttle إلى 100ms
             }
-            
-            // الأحداث الثقيلة مع throttling و passive
-            ['mousemove', 'scroll'].forEach(function(event) {
-                document.addEventListener(event, throttledResetInactivityTimer, { passive: true });
-            });
-            
-            // الأحداث الأخرى بدون throttling
-            ['mousedown', 'keypress', 'touchstart'].forEach(function(event) {
-                document.addEventListener(event, resetInactivityTimer, true);
-            });
             
             // استخدام pageshow event للتحقق من أن الصفحة تم تحميلها من جديد
             window.addEventListener('pageshow', function(event) {
@@ -647,7 +575,7 @@ if (!defined('ACCESS_ALLOWED')) {
                 const isInternalNavigation = sessionStorage.getItem('internalNavigation') === 'true';
                 sessionStorage.removeItem('internalNavigation'); // تنظيف بعد الاستخدام
                 
-                // إذا كان التنقل داخلي، تخطي منطق الجلسات بالكامل
+                // إذا كان التنقل داخلي، لا تظهر splash screen
                 if (isInternalNavigation) {
                     if (pageLoader) {
                         pageLoader.classList.add('hidden');
@@ -658,147 +586,85 @@ if (!defined('ACCESS_ALLOWED')) {
                     if (dashboardMain) {
                         dashboardMain.classList.add('content-fade-in');
                     }
-                    return; // تخطي كل منطق الجلسات والـ API calls
+                    return;
                 }
                 
-                // إذا كانت الصفحة جديدة (ليست من cache)، امسح الجلسة وأظهر splash screen
-                if (splashSessionToken) {
-                    deleteSplashSession(splashSessionToken);
-                }
-                
-                // إنشاء جلسة جديدة وإظهار splash screen
-                createSplashSession().then(function(token) {
-                    if (token && pageLoader) {
+                // التحقق من الوقت المناسب لإظهار splash screen
+                if (shouldShowSplash()) {
+                    markSplashShown();
+                    
+                    if (pageLoader) {
                         pageLoader.classList.remove('hidden');
                         if (pageLoader.style) {
                             pageLoader.style.display = 'flex';
                         }
-                        resetInactivityTimer();
-                        
-                        // إخفاء الشاشة بعد تحميل الصفحة
-                        if (document.readyState === 'complete') {
-                            hideSplashScreen();
-                        } else {
-                            window.addEventListener('load', hideSplashScreen);
-                        }
-                    } else {
-                        // إذا فشل إنشاء الجلسة، أخفي splash screen
-                        hideSplashScreen();
                     }
-                }).catch(function() {
-                    // إذا فشل API، أخفي splash screen
+                    
+                    // إخفاء الشاشة بعد تحميل الصفحة أو بعد وقت أقصى
+                    const hideTimeout = setTimeout(hideSplashScreen, MAX_SPLASH_TIME);
+                    
+                    if (document.readyState === 'complete') {
+                        clearTimeout(hideTimeout);
+                        hideSplashScreen();
+                    } else {
+                        window.addEventListener('load', function() {
+                            clearTimeout(hideTimeout);
+                            hideSplashScreen();
+                        }, { once: true });
+                    }
+                } else {
+                    // لا تظهر splash screen - إخفاء فوري
                     hideSplashScreen();
-                });
+                }
             });
             
             // التحقق من الجلسة عند تحميل الصفحة لأول مرة
-            // استخدام timeout لضمان إخفاء splash screen حتى لو فشل API
+            // استخدام timeout قصير جداً لضمان إخفاء splash screen بسرعة
             let splashCheckTimeout = setTimeout(function() {
-                // إذا استغرق التحقق أكثر من 2 ثانية، أخفي splash screen تلقائياً
                 if (pageLoader && !pageLoader.classList.contains('hidden')) {
                     hideSplashScreen();
                 }
-            }, 2000);
+            }, MAX_SPLASH_TIME);
             
-            if (splashSessionToken) {
-                checkSplashSession(splashSessionToken).then(function(exists) {
-                    clearTimeout(splashCheckTimeout);
-                    
-                    if (exists && pageLoader) {
-                        // الجلسة موجودة، لا تظهر splash screen
-                        if (pageLoader.style) {
-                            pageLoader.style.display = 'none';
-                        }
-                        pageLoader.classList.add('hidden');
-                        
-                        if (dashboardMain) {
-                            dashboardMain.classList.add('content-fade-in');
-                        }
-                        
-                        resetInactivityTimer();
-                    } else {
-                        // الجلسة غير موجودة، أنشئ جلسة جديدة وأظهر splash screen
-                        createSplashSession().then(function(token) {
-                            if (token && pageLoader) {
-                                pageLoader.classList.remove('hidden');
-                                if (pageLoader.style) {
-                                    pageLoader.style.display = 'flex';
-                                }
-                                resetInactivityTimer();
-                                
-                                if (document.readyState === 'complete') {
-                                    hideSplashScreen();
-                                } else if (document.readyState === 'interactive') {
-                                    window.addEventListener('load', hideSplashScreen);
-                                } else {
-                                    window.addEventListener('load', hideSplashScreen);
-                                }
-                            } else {
-                                // إذا فشل إنشاء الجلسة، أخفي splash screen
-                                hideSplashScreen();
-                            }
-                        }).catch(function() {
-                            // إذا فشل API، أخفي splash screen
-                            hideSplashScreen();
-                        });
+            // منطق بسيط بدون API calls
+            if (shouldShowSplash()) {
+                markSplashShown();
+                
+                if (pageLoader) {
+                    pageLoader.classList.remove('hidden');
+                    if (pageLoader.style) {
+                        pageLoader.style.display = 'flex';
                     }
-                }).catch(function() {
-                    // إذا فشل API، أخفي splash screen
+                }
+                
+                // إخفاء الشاشة بعد تحميل الصفحة أو بعد وقت أقصى
+                const hideTimeout = setTimeout(function() {
                     clearTimeout(splashCheckTimeout);
                     hideSplashScreen();
-                });
-            } else {
-                // لا توجد جلسة، أنشئ جلسة جديدة وأظهر splash screen
-                createSplashSession().then(function(token) {
+                }, MAX_SPLASH_TIME);
+                
+                if (document.readyState === 'complete') {
                     clearTimeout(splashCheckTimeout);
-                    
-                    if (token && pageLoader) {
-                        pageLoader.classList.remove('hidden');
-                        if (pageLoader.style) {
-                            pageLoader.style.display = 'flex';
-                        }
-                        resetInactivityTimer();
-                        
-                        if (document.readyState === 'complete') {
-                            hideSplashScreen();
-                        } else if (document.readyState === 'interactive') {
-                            window.addEventListener('load', hideSplashScreen);
-                        } else {
-                            window.addEventListener('load', hideSplashScreen);
-                        }
-                    } else {
-                        // إذا فشل إنشاء الجلسة، أخفي splash screen
+                    clearTimeout(hideTimeout);
+                    hideSplashScreen();
+                } else if (document.readyState === 'interactive') {
+                    clearTimeout(splashCheckTimeout);
+                    window.addEventListener('load', function() {
+                        clearTimeout(hideTimeout);
                         hideSplashScreen();
-                    }
-                }).catch(function() {
-                    // إذا فشل API، أخفي splash screen
-                    clearTimeout(splashCheckTimeout);
-                    hideSplashScreen();
-                });
-            }
-            
-            // حذف الجلسة عند إغلاق التطبيق
-            window.addEventListener('beforeunload', function() {
-                if (splashSessionToken) {
-                    deleteSplashSession(splashSessionToken);
-                }
-            });
-            
-            // حذف الجلسة عند فقدان التركيز (إغلاق التطبيق)
-            document.addEventListener('visibilitychange', function() {
-                if (document.hidden) {
-                    deleteSessionOnUnload = true;
-                    // حذف الجلسة بعد 3 ثواني من فقدان التركيز
-                    setTimeout(function() {
-                        if (deleteSessionOnUnload && splashSessionToken) {
-                            deleteSplashSession(splashSessionToken);
-                        }
-                    }, 3000);
+                    }, { once: true });
                 } else {
-                    deleteSessionOnUnload = false;
-                    resetInactivityTimer();
+                    window.addEventListener('load', function() {
+                        clearTimeout(splashCheckTimeout);
+                        clearTimeout(hideTimeout);
+                        hideSplashScreen();
+                    }, { once: true });
                 }
-            });
+            } else {
+                // لا تظهر splash screen - إخفاء فوري
+                clearTimeout(splashCheckTimeout);
+                hideSplashScreen();
+            }
             
             // إخفاء شاشة التحميل عند فتح أي Modal
             document.addEventListener('show.bs.modal', function() {
