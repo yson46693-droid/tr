@@ -829,15 +829,6 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
         $createdBy = $userId;
     }
     
-    // حساب الراتب
-    $calculation = calculateSalary($userId, $month, $year, $bonus, $deductions);
-    $collectionsBonusCalc = cleanFinancialValue($calculation['collections_bonus'] ?? 0);
-    $collectionsAmountCalc = cleanFinancialValue($calculation['collections_amount'] ?? ($collectionsBonusCalc > 0 ? $collectionsBonusCalc / 0.02 : 0));
-    
-    if (!$calculation['success']) {
-        return $calculation;
-    }
-    
     // التحقق من وجود عمود year
     $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
     $hasYearColumn = !empty($yearColumnCheck);
@@ -969,6 +960,30 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
     $accumulatedColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'accumulated_amount'");
     $hasAccumulatedColumn = !empty($accumulatedColumnCheck);
     
+    // قراءة الخصومات الموجودة من قاعدة البيانات أولاً (إذا كان الراتب موجوداً)
+    // هذا يضمن أن الخصومات تبقى ثابتة ولا تتغير عند إعادة حساب الراتب
+    $existingDeductions = 0;
+    if ($existingSalary) {
+        $existingDeductionsQuery = "SELECT deductions FROM salaries WHERE id = ?";
+        $existingDeductionsData = $db->queryOne($existingDeductionsQuery, [$existingSalary['id']]);
+        $existingDeductions = floatval($existingDeductionsData['deductions'] ?? 0);
+    }
+    
+    // إذا كان $deductions الممرر = 0 وكانت هناك خصومات موجودة، استخدم الخصومات الموجودة
+    // هذا يضمن أن الخصومات تبقى ثابتة ولا يتم تصفيرها عند إعادة حساب الراتب
+    if ($deductions == 0 && $existingDeductions > 0) {
+        $deductions = $existingDeductions;
+    }
+    
+    // حساب الراتب (بعد قراءة الخصومات)
+    $calculation = calculateSalary($userId, $month, $year, $bonus, $deductions);
+    $collectionsBonusCalc = cleanFinancialValue($calculation['collections_bonus'] ?? 0);
+    $collectionsAmountCalc = cleanFinancialValue($calculation['collections_amount'] ?? ($collectionsBonusCalc > 0 ? $collectionsBonusCalc / 0.02 : 0));
+    
+    if (!$calculation['success']) {
+        return $calculation;
+    }
+    
     if ($existingSalary) {
         // تحديث الراتب الموجود
         // الحصول على المبلغ التراكمي الحالي والسلفات المخصومة والخصومات الموجودة
@@ -998,8 +1013,12 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             $existingCollectionsBonus = 0;
             if ($hasCollectionsBonusColumn) {
                 $existingCollectionsBonus = floatval($currentSalary['collections_bonus'] ?? 0);
-                // استخدام القيمة الأكبر بين الحالية والمحسوبة عند حساب total_bonus
-                $collectionsBonusCalc = max($existingCollectionsBonus, round($collectionsBonusCalc, 2));
+                // الحفاظ على collections_bonus الموجود إذا كان أكبر من المحسوب
+                // لأن collections_bonus الموجود قد يحتوي على مكافآت فورية تم إضافتها عبر applyCollectionInstantReward
+                // ولا يجب استبدالها بقيمة محسوبة من جديد (لتجنب الحساب المزدوج)
+                if ($existingCollectionsBonus > round($collectionsBonusCalc, 2)) {
+                    $collectionsBonusCalc = $existingCollectionsBonus;
+                }
                 $calculation['collections_bonus'] = $collectionsBonusCalc;
                 $calculation['total_bonus'] = $calculation['bonus'] + $collectionsBonusCalc;
             }
@@ -1038,8 +1057,12 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             // قراءة collections_bonus الحالي للمحافظة على المكافآت الفورية
             if ($hasCollectionsBonusColumn) {
                 $existingCollectionsBonus = floatval($currentSalary['collections_bonus'] ?? 0);
-                // استخدام القيمة الأكبر بين الحالية والمحسوبة عند حساب total_bonus
-                $collectionsBonusCalc = max($existingCollectionsBonus, round($collectionsBonusCalc, 2));
+                // الحفاظ على collections_bonus الموجود إذا كان أكبر من المحسوب
+                // لأن collections_bonus الموجود قد يحتوي على مكافآت فورية تم إضافتها عبر applyCollectionInstantReward
+                // ولا يجب استبدالها بقيمة محسوبة من جديد (لتجنب الحساب المزدوج)
+                if ($existingCollectionsBonus > round($collectionsBonusCalc, 2)) {
+                    $collectionsBonusCalc = $existingCollectionsBonus;
+                }
                 $calculation['collections_bonus'] = $collectionsBonusCalc;
                 $calculation['total_bonus'] = $calculation['bonus'] + $collectionsBonusCalc;
             }
@@ -1075,19 +1098,14 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             }
         }
         
-        // الحفاظ على الخصومات التراكمية: إذا كان $deductions الممرر = 0 وكانت هناك خصومات موجودة، استخدم الخصومات الموجودة
-        // هذا يضمن أن الخصومات من المرتجعات تبقى تراكمية ولا يتم تصفيرها عند إعادة البيع
-        if ($deductions == 0 && $currentDeductions > 0) {
-            // إذا كانت هناك سلفات مخصومة، تأكد من أننا نحافظ على الخصومات الأخرى (غير السلفات)
-            if ($hasDeductedAdvances && $deductedAdvancesTotal > 0) {
-                // الخصومات الحالية = خصومات أخرى + سلفات (إذا كانت مضمنة)
-                // نحتاج للحفاظ على الخصومات الأخرى فقط
-                $otherDeductionsFromDB = max(0, $currentDeductions - $deductedAdvancesTotal);
-                $calculation['deductions'] = $otherDeductionsFromDB;
-            } else {
-                // لا توجد سلفات، استخدم الخصومات الموجودة بالكامل
-                $calculation['deductions'] = $currentDeductions;
-            }
+        // الحفاظ على الخصومات: الخصومات تم قراءتها مسبقاً من قاعدة البيانات واستخدامها في calculateSalary
+        // لذلك لا حاجة لتعديلها هنا لأنها بالفعل صحيحة
+        // لكن إذا كانت هناك سلفات مخصومة، يجب التأكد من أن الخصومات لا تحتوي على السلفات
+        if ($hasDeductedAdvances && $deductedAdvancesTotal > 0) {
+            // الخصومات الحالية = خصومات أخرى + سلفات (إذا كانت مضمنة)
+            // نحتاج للحفاظ على الخصومات الأخرى فقط
+            $otherDeductionsFromDB = max(0, $calculation['deductions'] - $deductedAdvancesTotal);
+            $calculation['deductions'] = $otherDeductionsFromDB;
         }
         
         // إذا كانت هناك سلفات مخصومة، احسب total_amount بشكل صحيح
