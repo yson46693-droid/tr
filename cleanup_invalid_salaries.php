@@ -7,6 +7,9 @@
  * أو من المتصفح: http://yoursite.com/cleanup_invalid_salaries.php
  */
 
+// تعريف ثابت الوصول للسماح بتشغيل السكريبت
+define('ACCESS_ALLOWED', true);
+
 // تضمين ملفات النظام
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/db.php';

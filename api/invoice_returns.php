@@ -423,19 +423,101 @@ function handleSubmitReturn(): void
             
             $db->execute($sql, $values);
 
-            $inventoryRow = $db->queryOne(
-                "SELECT id, quantity FROM vehicle_inventory WHERE vehicle_id = ? AND product_id = ? FOR UPDATE",
-                [$vehicleId, $item['product_id']]
-            );
+            // البحث عن batch_number_id في finished_products إذا كان موجوداً
+            $finishedProductId = null;
+            if ($batchNumberId) {
+                $finishedProduct = $db->queryOne(
+                    "SELECT id FROM finished_products WHERE batch_id = ?",
+                    [$batchNumberId]
+                );
+                if ($finishedProduct) {
+                    $finishedProductId = (int)$finishedProduct['id'];
+                }
+            }
+
+            // البحث عن السجل في vehicle_inventory مع مراعاة batch_number_id
+            $inventoryRow = null;
+            if ($batchNumberId && $finishedProductId) {
+                $inventoryRow = $db->queryOne(
+                    "SELECT id, quantity, finished_batch_id FROM vehicle_inventory 
+                     WHERE vehicle_id = ? AND product_id = ? AND finished_batch_id = ? FOR UPDATE",
+                    [$vehicleId, $item['product_id'], $finishedProductId]
+                );
+            }
+            
+            // إذا لم نجد سجل مع batch_number_id، نبحث بدون batch
+            if (!$inventoryRow) {
+                $inventoryRow = $db->queryOne(
+                    "SELECT id, quantity, finished_batch_id FROM vehicle_inventory 
+                     WHERE vehicle_id = ? AND product_id = ? 
+                     AND (finished_batch_id IS NULL OR finished_batch_id = 0) FOR UPDATE",
+                    [$vehicleId, $item['product_id']]
+                );
+            }
 
             $currentQuantity = (float)($inventoryRow['quantity'] ?? 0);
             $newQuantity = round($currentQuantity + $item['quantity'], 3);
 
-            $updateResult = updateVehicleInventory($vehicleId, $item['product_id'], $newQuantity, $userId);
-            if (empty($updateResult['success'])) {
-                throw new RuntimeException($updateResult['message'] ?? 'تعذر تحديث مخزون السيارة');
+            // تحديث vehicle_inventory مع مراعاة batch_number_id
+            if ($inventoryRow) {
+                // تحديث السجل الموجود
+                if ($batchNumberId && $finishedProductId && !$inventoryRow['finished_batch_id']) {
+                    // تحديث finished_batch_id إذا لم يكن موجوداً
+                    $db->execute(
+                        "UPDATE vehicle_inventory SET quantity = ?, finished_batch_id = ?, last_updated_by = ?, last_updated_at = NOW() WHERE id = ?",
+                        [$newQuantity, $finishedProductId, $userId, (int)$inventoryRow['id']]
+                    );
+                } else {
+                    $db->execute(
+                        "UPDATE vehicle_inventory SET quantity = ?, last_updated_by = ?, last_updated_at = NOW() WHERE id = ?",
+                        [$newQuantity, $userId, (int)$inventoryRow['id']]
+                    );
+                }
+            } else {
+                // إنشاء سجل جديد
+                $product = $db->queryOne(
+                    "SELECT name, category, unit FROM products WHERE id = ?",
+                    [$item['product_id']]
+                );
+                
+                if ($product) {
+                    $batchInfo = null;
+                    if ($batchNumberId) {
+                        $batchInfo = $db->queryOne(
+                            "SELECT bn.id, bn.batch_number, fp.production_date, fp.quantity_produced, fp.workers
+                             FROM batch_numbers bn
+                             LEFT JOIN finished_products fp ON bn.id = fp.batch_id
+                             WHERE bn.id = ?",
+                            [$batchNumberId]
+                        );
+                    }
+                    
+                    $db->execute(
+                        "INSERT INTO vehicle_inventory 
+                        (vehicle_id, warehouse_id, product_id, product_name, product_category, product_unit,
+                         finished_batch_id, finished_batch_number, finished_production_date,
+                         finished_quantity_produced, finished_workers, quantity, last_updated_by) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        [
+                            $vehicleId,
+                            $warehouseId,
+                            $item['product_id'],
+                            $product['name'] ?? null,
+                            $product['category'] ?? null,
+                            $product['unit'] ?? null,
+                            $finishedProductId,
+                            $batchInfo ? ($batchInfo['batch_number'] ?? null) : null,
+                            $batchInfo ? ($batchInfo['production_date'] ?? null) : null,
+                            $batchInfo ? ($batchInfo['quantity_produced'] ?? null) : null,
+                            $batchInfo ? ($batchInfo['workers'] ?? null) : null,
+                            $item['quantity'],
+                            $userId
+                        ]
+                    );
+                }
             }
 
+            // تمرير finishedProductId (id من finished_products) إلى recordInventoryMovement
             $movementResult = recordInventoryMovement(
                 $item['product_id'],
                 $warehouseId,
@@ -444,7 +526,8 @@ function handleSubmitReturn(): void
                 'invoice_return',
                 $returnId,
                 'إرجاع فاتورة #' . $invoiceNumber,
-                $userId
+                $userId,
+                $finishedProductId // تمرير finishedProductId كـ batchId
             );
 
             if (empty($movementResult['success'])) {

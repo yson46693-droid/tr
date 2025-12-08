@@ -164,10 +164,10 @@ function recordInventoryMovement($productId, $warehouseId, $type, $quantity, $re
         $quantityBefore = 0.0;
         $usingFinishedProductQuantity = false;
         
-        // إذا كان batch_id موجوداً ونوع الحركة 'out' أو 'transfer'، نستخدم finished_products مباشرة
-        // هذا يضمن الخصم من مكان واحد فقط - لا نقرأ أو نحدث products.quantity أبداً
+        // إذا كان batch_id موجوداً ونوع الحركة 'out' أو 'transfer' أو 'in'، نستخدم finished_products مباشرة
+        // هذا يضمن الخصم/الإضافة من/إلى مكان واحد فقط - لا نقرأ أو نحدث products.quantity أبداً
         error_log("recordInventoryMovement: Checking conditions - batchId: " . ($batchId ?? 'NULL') . ", type: $type, usingVehicleInventory: " . ($usingVehicleInventory ? 'true' : 'false'));
-        if ($batchId && ($type === 'out' || $type === 'transfer') && !$usingVehicleInventory) {
+        if ($batchId && ($type === 'out' || $type === 'transfer' || $type === 'in') && !$usingVehicleInventory) {
             // استخدام FOR UPDATE لضمان قراءة الكمية الصحيحة ومنع race conditions
             // محاولة البحث باستخدام id أولاً
             $finishedProduct = $db->queryOne(
@@ -229,8 +229,8 @@ function recordInventoryMovement($productId, $warehouseId, $type, $quantity, $re
                 error_log("recordInventoryMovement: No batch_id provided for product_id: $productId, type: $type. Will use products.quantity.");
             }
         } else {
-            // إذا لم يكن batch_id موجوداً أو نوع الحركة ليس 'out' أو 'transfer'، نستخدم products.quantity
-            if (!$batchId || ($batchId && ($type !== 'out' && $type !== 'transfer'))) {
+            // إذا لم يكن batch_id موجوداً أو نوع الحركة ليس 'out' أو 'transfer' أو 'in'، نستخدم products.quantity
+            if (!$batchId || ($batchId && ($type !== 'out' && $type !== 'transfer' && $type !== 'in'))) {
                 if (!$usingVehicleInventory) {
                     if (!$product) {
                         // نحاول قراءة products مرة أخرى إذا لم نكن قد قرأناها
@@ -328,7 +328,7 @@ function recordInventoryMovement($productId, $warehouseId, $type, $quantity, $re
             $db->execute($updateSql, [$quantityAfter, $warehouseId ?? $product['warehouse_id'], $productId]);
         } else {
             // إذا كنا نستخدم finished_products، نحتاج تحديث quantity_produced
-            if ($usingFinishedProductQuantity && ($type === 'out' || $type === 'transfer')) {
+            if ($usingFinishedProductQuantity && ($type === 'out' || $type === 'transfer' || $type === 'in')) {
                 // التحقق من الكمية الحالية قبل التحديث (للتشخيص)
                 $currentCheck = $db->queryOne(
                     "SELECT quantity_produced FROM finished_products WHERE id = ?",
@@ -349,7 +349,7 @@ function recordInventoryMovement($productId, $warehouseId, $type, $quantity, $re
                 );
                 $afterQuantity = $afterCheck ? (float)($afterCheck['quantity_produced'] ?? 0) : 0;
                 
-                error_log("recordInventoryMovement: Updated finished_products.quantity_produced - batch_id: $batchId, quantity_before: $quantityBefore, quantity_requested: $quantity, quantity_after_calculated: $quantityAfter, current_before_update: $currentQuantity, current_after_update: $afterQuantity");
+                error_log("recordInventoryMovement: Updated finished_products.quantity_produced - batch_id: $batchId, type: $type, quantity_before: $quantityBefore, quantity_requested: $quantity, quantity_after_calculated: $quantityAfter, current_before_update: $currentQuantity, current_after_update: $afterQuantity");
             } else {
                 error_log("recordInventoryMovement: Skipping products.quantity update for batch_id: $batchId, using finished_products.quantity_produced instead");
             }

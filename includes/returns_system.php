@@ -612,15 +612,27 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
                 $batchNumberId = isset($item['batch_number_id']) && $item['batch_number_id'] ? (int)$item['batch_number_id'] : null;
                 $batchNumber = $item['batch_number'] ?? null;
                 
+                // البحث عن finished_products.id من batch_number_id
+                $finishedProductId = null;
+                if ($batchNumberId) {
+                    $finishedProduct = $db->queryOne(
+                        "SELECT id FROM finished_products WHERE batch_id = ?",
+                        [$batchNumberId]
+                    );
+                    if ($finishedProduct) {
+                        $finishedProductId = (int)$finishedProduct['id'];
+                    }
+                }
+                
                 // البحث عن Batch Number في المخزون
                 $inventoryRow = null;
-                if ($batchNumberId) {
+                if ($finishedProductId) {
                     $inventoryRow = $db->queryOne(
                         "SELECT id, quantity, finished_batch_id, finished_batch_number 
                          FROM vehicle_inventory 
                          WHERE vehicle_id = ? AND product_id = ? AND finished_batch_id = ?
                          FOR UPDATE",
-                        [$vehicleId, $productId, $batchNumberId]
+                        [$vehicleId, $productId, $finishedProductId]
                     );
                 }
                 
@@ -632,10 +644,10 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
                          FOR UPDATE",
                         [$vehicleId, $productId, $batchNumber]
                     );
-                    if ($inventoryRow && $batchNumberId && !$inventoryRow['finished_batch_id']) {
+                    if ($inventoryRow && $finishedProductId && !$inventoryRow['finished_batch_id']) {
                         $db->execute(
                             "UPDATE vehicle_inventory SET finished_batch_id = ? WHERE id = ?",
-                            [$batchNumberId, (int)$inventoryRow['id']]
+                            [$finishedProductId, (int)$inventoryRow['id']]
                         );
                     }
                 }
@@ -703,7 +715,7 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
                             $product['name'] ?? null,
                             $product['category'] ?? null,
                             $product['unit'] ?? null,
-                            $batchNumberId,
+                            $finishedProductId,
                             $batchInfo ? ($batchInfo['batch_number'] ?? null) : null,
                             $batchInfo ? ($batchInfo['production_date'] ?? null) : null,
                             $batchInfo ? ($batchInfo['quantity_produced'] ?? null) : null,
@@ -724,12 +736,11 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
                         $warehouseId,
                         'in',
                         $quantity,
-                        $quantityBefore,
-                        $quantityAfter,
                         'return',
                         $returnId,
                         "إرجاع منتج من مرتجع رقم: {$return['return_number']}",
-                        $approvedBy
+                        $approvedBy,
+                        $finishedProductId // تمرير finishedProductId كـ batchId
                     );
                 }
             }
