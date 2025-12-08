@@ -475,16 +475,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $productName = '';
                 if ($productType === 'factory' && $batchId) {
+                    // منتج مصنع - جلب product_name من finished_products أولاً، ثم من products
                     $fp = $db->queryOne("
-                        SELECT COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name, 'غير محدد') AS product_name,
-                               fp.batch_number
+                        SELECT 
+                            fp.product_name as fp_product_name,
+                            fp.batch_number,
+                            fp.product_id as fp_product_id,
+                            pr.name as pr_name,
+                            bn.product_id as bn_product_id,
+                            pr2.name as pr2_name
                         FROM finished_products fp
                         LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
-                        LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
+                        LEFT JOIN products pr ON fp.product_id = pr.id
+                        LEFT JOIN products pr2 ON COALESCE(bn.product_id, fp.product_id) = pr2.id
                         WHERE fp.id = ?
+                        LIMIT 1
                     ", [$batchId]);
-                    $productName = ($fp['product_name'] ?? 'غير محدد') . ($fp['batch_number'] ? ' (' . $fp['batch_number'] . ')' : '');
+                    
+                    // تحديد اسم المنتج بالترتيب: fp.product_name > pr.name (من fp.product_id) > pr2.name (من bn.product_id)
+                    if ($fp) {
+                        if (!empty($fp['fp_product_name']) && trim($fp['fp_product_name']) !== '' && $fp['fp_product_name'] !== 'منتج رقم' . $batchId) {
+                            $productName = trim($fp['fp_product_name']);
+                        } elseif (!empty($fp['pr_name']) && trim($fp['pr_name']) !== '' && $fp['pr_name'] !== 'منتج رقم' . $productId) {
+                            $productName = trim($fp['pr_name']);
+                        } elseif (!empty($fp['pr2_name']) && trim($fp['pr2_name']) !== '' && $fp['pr2_name'] !== 'منتج رقم' . $productId) {
+                            $productName = trim($fp['pr2_name']);
+                        } else {
+                            $productName = 'منتج رقم ' . $productId;
+                        }
+                        
+                        // إضافة رقم التشغيلة إلى اسم المنتج إذا كان موجوداً
+                        if (!empty($fp['batch_number'])) {
+                            $productName .= ' (' . trim($fp['batch_number']) . ')';
+                        }
+                    } else {
+                        // إذا لم يُعثر على finished_product، جلب من products
+                        $product = $db->queryOne("SELECT name FROM products WHERE id = ?", [$productId]);
+                        $productName = $product['name'] ?? 'غير محدد';
+                    }
                 } else {
+                    // منتج خارجي - جلب اسم المنتج من products
                     $productRow = $db->queryOne("SELECT name FROM products WHERE id = ?", [$productId]);
                     $productName = $productRow['name'] ?? 'غير محدد';
                 }
