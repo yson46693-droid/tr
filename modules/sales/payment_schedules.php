@@ -930,8 +930,9 @@ function validateReminderForm(form) {
 function showReminderModal(scheduleId) {
     const scheduleIdInput = document.getElementById('reminderScheduleId');
     const daysInput = document.getElementById('daysBeforeDueInput');
+    const modalElement = document.getElementById('reminderModal');
     
-    if (!scheduleIdInput || !daysInput) {
+    if (!scheduleIdInput || !daysInput || !modalElement) {
         console.error('Required elements not found');
         return;
     }
@@ -944,30 +945,8 @@ function showReminderModal(scheduleId) {
     
     scheduleIdInput.value = scheduleId;
     
-    // جلب القيمة المحفوظة فقط إذا لم يقم المستخدم بتغييرها
-    if (!userChangedDays) {
-        fetch('?page=payment_schedules&action=get_reminder_days&schedule_id=' + scheduleId)
-            .then(response => response.json())
-            .then(data => {
-                // تحديث القيمة فقط إذا لم يقم المستخدم بتغييرها
-                if (!userChangedDays) {
-                    if (data.success && data.days_before_due) {
-                        daysInput.value = data.days_before_due;
-                    } else {
-                        daysInput.value = '3';
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching reminder days:', error);
-                // في حالة الخطأ، نستخدم القيمة الافتراضية فقط إذا لم يقم المستخدم بتغييرها
-                if (!userChangedDays) {
-                    daysInput.value = '3';
-                }
-            });
-    }
-    
-    const modal = new bootstrap.Modal(document.getElementById('reminderModal'));
+    // فتح المودال مباشرة - event listener سيجلب القيمة تلقائياً
+    const modal = new bootstrap.Modal(modalElement);
     modal.show();
 }
 
@@ -1036,13 +1015,44 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
         
+        // عند فتح المودال، جلب القيمة المحفوظة
+        reminderModal.addEventListener('show.bs.modal', function () {
+            const scheduleIdInput = document.getElementById('reminderScheduleId');
+            const daysInputEl = document.getElementById('daysBeforeDueInput');
+            
+            if (scheduleIdInput && scheduleIdInput.value && daysInputEl) {
+                const scheduleId = scheduleIdInput.value;
+                
+                // إعادة تعيين userChangedDays عند فتح المودال
+                userChangedDays = false;
+                
+                // جلب القيمة المحفوظة عند فتح المودال
+                fetch('?page=payment_schedules&action=get_reminder_days&schedule_id=' + scheduleId)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.days_before_due) {
+                            // تحديث القيمة بالقيمة المحفوظة
+                            daysInputEl.value = data.days_before_due;
+                            console.log('Loaded saved days_before_due:', data.days_before_due);
+                        } else {
+                            // إذا لم تكن هناك قيمة محفوظة، نستخدم القيمة الافتراضية
+                            daysInputEl.value = '3';
+                            console.log('No saved value, using default: 3');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching reminder days on modal show:', error);
+                        // في حالة الخطأ، نستخدم القيمة الافتراضية
+                        daysInputEl.value = '3';
+                    });
+            }
+        });
+        
         reminderModal.addEventListener('hidden.bs.modal', function () {
             // إعادة تعيين المتغيرات عند إغلاق المودال
             userChangedDays = false;
             lastScheduleId = null;
-            if (daysInput) {
-                daysInput.value = '3'; // إعادة تعيين القيمة الافتراضية
-            }
+            // لا نعيد تعيين القيمة إلى 3 - سنجلبها من السيرفر عند فتح المودال مرة أخرى
         });
     }
 });
