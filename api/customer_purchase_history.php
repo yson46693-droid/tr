@@ -161,20 +161,41 @@ function handleGetHistory(): void
             if ($hasSalesBatchNumbers && $hasInvoicesTable && $hasInvoiceItemsTable) {
                 // محاولة ربط local_invoices مع invoices من خلال invoice_number
                 // ثم ربط invoice_items مع sales_batch_numbers للحصول على رقم التشغيلة
-                $batchSelect = "COALESCE(
-                    NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.batch_number ORDER BY bn.batch_number SEPARATOR ', ')), ''),
-                    COALESCE(NULLIF(TRIM(ii.batch_number), ''), ''),
-                    ''
-                ) as batch_numbers,
-                COALESCE(
-                    NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.id ORDER BY bn.id SEPARATOR ',')), ''),
-                    CASE 
-                        WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
-                        THEN CAST(ii.batch_id AS CHAR)
-                        ELSE ''
-                    END,
-                    ''
-                ) as batch_number_ids";
+                
+                // بناء batch_numbers بناءً على وجود العمود
+                if ($hasBatchNumber) {
+                    $batchNumbersExpr = "COALESCE(
+                        NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.batch_number ORDER BY bn.batch_number SEPARATOR ', ')), ''),
+                        COALESCE(NULLIF(TRIM(ii.batch_number), ''), ''),
+                        ''
+                    )";
+                } else {
+                    $batchNumbersExpr = "COALESCE(
+                        NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.batch_number ORDER BY bn.batch_number SEPARATOR ', ')), ''),
+                        ''
+                    )";
+                }
+                
+                // بناء batch_number_ids بناءً على وجود العمود
+                if ($hasBatchId) {
+                    $batchNumberIdsExpr = "COALESCE(
+                        NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.id ORDER BY bn.id SEPARATOR ',')), ''),
+                        CASE 
+                            WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
+                            THEN CAST(ii.batch_id AS CHAR)
+                            ELSE ''
+                        END,
+                        ''
+                    )";
+                } else {
+                    $batchNumberIdsExpr = "COALESCE(
+                        NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.id ORDER BY bn.id SEPARATOR ',')), ''),
+                        ''
+                    )";
+                }
+                
+                $batchSelect = "$batchNumbersExpr as batch_numbers,
+                               $batchNumberIdsExpr as batch_number_ids";
                 
                 $batchJoin = "LEFT JOIN invoices inv ON inv.invoice_number = REPLACE(i.invoice_number, 'LOC-', '')
                              LEFT JOIN invoice_items inv_ii ON inv.id = inv_ii.invoice_id 
