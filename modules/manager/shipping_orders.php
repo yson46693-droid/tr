@@ -1424,6 +1424,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                     [$invoiceItemId, $batchNumberId, $quantity]
                                                 );
                                                 error_log("shipping_orders: Linked batch on delivery - invoice_item_id=$invoiceItemId, batch_number_id=$batchNumberId, batch_number=$batchNumber, quantity=$quantity, product_id=$productId, batch_id=$batchId");
+                                                
+                                                // التحقق من أن الربط تم بشكل صحيح
+                                                $verifyLink = $db->queryOne(
+                                                    "SELECT sbn.id, sbn.invoice_item_id, sbn.batch_number_id, bn.batch_number, 
+                                                            fp.product_name, pr.name as product_name_from_products
+                                                     FROM sales_batch_numbers sbn
+                                                     INNER JOIN batch_numbers bn ON sbn.batch_number_id = bn.id
+                                                     LEFT JOIN finished_products fp ON fp.batch_number = bn.batch_number
+                                                     LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
+                                                     WHERE sbn.invoice_item_id = ? AND sbn.batch_number_id = ?
+                                                     LIMIT 1",
+                                                    [$invoiceItemId, $batchNumberId]
+                                                );
+                                                if ($verifyLink) {
+                                                    error_log("shipping_orders: VERIFIED link - invoice_item_id=$invoiceItemId, batch_number=" . ($verifyLink['batch_number'] ?? 'N/A') . ", product_name=" . ($verifyLink['product_name'] ?? $verifyLink['product_name_from_products'] ?? 'N/A'));
+                                                } else {
+                                                    error_log("shipping_orders: WARNING - Could not verify link for invoice_item_id=$invoiceItemId, batch_number_id=$batchNumberId");
+                                                }
                                             }
                                         } else {
                                             error_log("shipping_orders: WARNING - batch_number '$batchNumber' not found in batch_numbers table when completing delivery for batch_id=$batchId");

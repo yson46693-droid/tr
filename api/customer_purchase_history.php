@@ -290,6 +290,7 @@ function handleGetHistory(): void
         }
     } else {
         // Get purchase history from invoices with batch numbers
+        // استعلام محسّن يضمن جلب اسم المنتج ورقم التشغيلة بشكل صحيح
         $purchaseHistory = $db->query(
             "SELECT 
                 i.id as invoice_id,
@@ -311,6 +312,8 @@ function handleGetHistory(): void
                      INNER JOIN finished_products fp2 ON fp2.batch_number = bn2.batch_number
                      LEFT JOIN products pr2 ON COALESCE(fp2.product_id, bn2.product_id) = pr2.id
                      WHERE sbn2.invoice_item_id = ii.id
+                       AND bn2.batch_number IS NOT NULL 
+                       AND TRIM(bn2.batch_number) != ''
                        AND (
                            (pr2.name IS NOT NULL AND TRIM(pr2.name) != '' AND pr2.name NOT LIKE 'منتج رقم%')
                            OR (fp2.product_name IS NOT NULL AND TRIM(fp2.product_name) != '' AND fp2.product_name NOT LIKE 'منتج رقم%')
@@ -319,6 +322,7 @@ function handleGetHistory(): void
                        CASE WHEN COALESCE(fp2.product_id, bn2.product_id) = ii.product_id THEN 0 ELSE 1 END,
                        CASE WHEN fp2.product_name IS NOT NULL AND TRIM(fp2.product_name) != '' AND fp2.product_name NOT LIKE 'منتج رقم%' THEN 0 ELSE 1 END,
                        CASE WHEN pr2.name IS NOT NULL AND TRIM(pr2.name) != '' AND pr2.name NOT LIKE 'منتج رقم%' THEN 0 ELSE 1 END,
+                       sbn2.id DESC,
                        fp2.id DESC 
                      LIMIT 1),
                     NULLIF(TRIM(p.name), ''),
@@ -328,15 +332,21 @@ function handleGetHistory(): void
                 ii.quantity,
                 ii.unit_price,
                 ii.total_price,
-                GROUP_CONCAT(DISTINCT bn.batch_number ORDER BY bn.batch_number SEPARATOR ', ') as batch_numbers,
-                GROUP_CONCAT(DISTINCT bn.id ORDER BY bn.id SEPARATOR ',') as batch_number_ids
+                COALESCE(
+                    NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.batch_number ORDER BY bn.batch_number SEPARATOR ', ')), ''),
+                    ''
+                ) as batch_numbers,
+                COALESCE(
+                    NULLIF(TRIM(GROUP_CONCAT(DISTINCT bn.id ORDER BY bn.id SEPARATOR ',')), ''),
+                    ''
+                ) as batch_number_ids
             FROM invoices i
             INNER JOIN invoice_items ii ON i.id = ii.invoice_id
             LEFT JOIN products p ON ii.product_id = p.id
             LEFT JOIN sales_batch_numbers sbn ON ii.id = sbn.invoice_item_id
-            LEFT JOIN batch_numbers bn ON sbn.batch_number_id = bn.id
+            LEFT JOIN batch_numbers bn ON sbn.batch_number_id = bn.id AND bn.batch_number IS NOT NULL AND TRIM(bn.batch_number) != ''
             WHERE i.customer_id = ?
-            GROUP BY i.id, ii.id
+            GROUP BY i.id, ii.id, ii.product_id, ii.quantity, ii.unit_price, ii.total_price, p.name, p.unit
             ORDER BY i.date DESC, i.id DESC, ii.id ASC",
             [$customerId]
         );
@@ -406,6 +416,29 @@ function handleGetHistory(): void
     // Format results
     $result = [];
     foreach ($purchaseHistory as $item) {
+        // تسجيل تشخيصي للتحقق من البيانات
+        if (empty($item['batch_numbers']) || empty($item['product_name']) || ($item['product_name'] ?? '') === 'غير معروف') {
+            $invoiceItemId = (int)$item['invoice_item_id'];
+            $debugInfo = $db->queryOne(
+                "SELECT 
+                    ii.id as invoice_item_id,
+                    ii.product_id,
+                    p.name as product_name_from_products,
+                    GROUP_CONCAT(DISTINCT bn.batch_number ORDER BY bn.batch_number SEPARATOR ', ') as batch_numbers_debug,
+                    GROUP_CONCAT(DISTINCT fp.product_name ORDER BY fp.id DESC SEPARATOR ', ') as product_names_from_fp
+                FROM invoice_items ii
+                LEFT JOIN products p ON ii.product_id = p.id
+                LEFT JOIN sales_batch_numbers sbn ON ii.id = sbn.invoice_item_id
+                LEFT JOIN batch_numbers bn ON sbn.batch_number_id = bn.id
+                LEFT JOIN finished_products fp ON fp.batch_number = bn.batch_number
+                WHERE ii.id = ?
+                GROUP BY ii.id",
+                [$invoiceItemId]
+            );
+            if ($debugInfo) {
+                error_log("customer_purchase_history: DEBUG for invoice_item_id=$invoiceItemId - batch_numbers_debug=" . ($debugInfo['batch_numbers_debug'] ?? 'NULL') . ", product_name_from_products=" . ($debugInfo['product_name_from_products'] ?? 'NULL') . ", product_names_from_fp=" . ($debugInfo['product_names_from_fp'] ?? 'NULL'));
+            }
+        }
         $invoiceItemId = (int)$item['invoice_item_id'];
         $quantity = (float)$item['quantity'];
         $batchNumberIds = [];
@@ -431,8 +464,33 @@ function handleGetHistory(): void
                 $batchNumbers = [];
             }
         } else {
-            $batchNumberIds = !empty($item['batch_number_ids']) && $item['batch_number_ids'] !== '' ? explode(',', $item['batch_number_ids']) : [];
-            $batchNumbers = !empty($item['batch_numbers']) && $item['batch_numbers'] !== '' ? explode(', ', $item['batch_numbers']) : [];
+            // للعملاء العاديين - معالجة batch_numbers و batch_number_ids
+            if (!empty($item['batch_number_ids']) && trim($item['batch_number_ids']) !== '') {
+                $batchNumberIdsStr = trim($item['batch_number_ids']);
+                $batchNumberIds = array_filter(array_map('intval', explode(',', $batchNumberIdsStr)));
+            } else {
+                $batchNumberIds = [];
+            }
+            
+            if (!empty($item['batch_numbers']) && trim($item['batch_numbers']) !== '') {
+                $batchNumbersStr = trim($item['batch_numbers']);
+                // تقسيم بناءً على الفاصلة مع مسافة أو بدون
+                $batchNumbers = array_filter(array_map('trim', preg_split('/,\s*/', $batchNumbersStr)));
+            } else {
+                $batchNumbers = [];
+            }
+            
+            // إذا كان batch_numbers فارغاً لكن batch_number_ids موجود، نحاول جلب batch_numbers من قاعدة البيانات
+            if (empty($batchNumbers) && !empty($batchNumberIds)) {
+                $batchNumbersFromDb = $db->query(
+                    "SELECT batch_number FROM batch_numbers WHERE id IN (" . implode(',', array_map('intval', $batchNumberIds)) . ") ORDER BY batch_number"
+                );
+                if ($batchNumbersFromDb) {
+                    $batchNumbers = array_filter(array_map(function($row) {
+                        return trim($row['batch_number'] ?? '');
+                    }, $batchNumbersFromDb));
+                }
+            }
         }
         
         // Calculate returned quantity - مجموع الكميات المرتجعة لكل invoice_item_id
