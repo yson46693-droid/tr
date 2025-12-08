@@ -439,7 +439,12 @@ function approveRequest($approvalId, $approvedBy, $notes = null) {
         
     } catch (Exception $e) {
         error_log("Approval Error: " . $e->getMessage());
-        return ['success' => false, 'message' => 'حدث خطأ في الموافقة'];
+        error_log("Approval Error - Stack trace: " . $e->getTraceAsString());
+        return ['success' => false, 'message' => 'حدث خطأ في الموافقة: ' . $e->getMessage()];
+    } catch (Throwable $e) {
+        error_log("Approval Fatal Error: " . $e->getMessage());
+        error_log("Approval Fatal Error - Stack trace: " . $e->getTraceAsString());
+        return ['success' => false, 'message' => 'حدث خطأ فادح في الموافقة'];
     }
 }
 
@@ -635,14 +640,10 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                 $entityColumnName = getApprovalsEntityColumn();
                 $salaryId = $entityId;
                 
-                // البحث عن الموافقة باستخدام salary_id
-                $approval = $db->queryOne("SELECT * FROM approvals WHERE {$entityColumnName} = ? AND type = 'salary_modification' AND status = 'pending'", [$salaryId]);
+                // البحث عن الموافقة باستخدام salary_id (بدون شرط status لأن الموافقة تم تحديثها بالفعل)
+                $approval = $db->queryOne("SELECT * FROM approvals WHERE {$entityColumnName} = ? AND type = 'salary_modification' ORDER BY id DESC LIMIT 1", [$salaryId]);
                 if (!$approval) {
-                    // محاولة البحث عن أي موافقة (حتى لو كانت approved) في حالة وجود مشكلة
-                    $approval = $db->queryOne("SELECT * FROM approvals WHERE {$entityColumnName} = ? AND type = 'salary_modification' ORDER BY id DESC LIMIT 1", [$salaryId]);
-                    if (!$approval) {
-                        throw new Exception('طلب الموافقة غير موجود');
-                    }
+                    throw new Exception('طلب الموافقة غير موجود');
                 }
                 
                 // استخراج بيانات التعديل من notes أو approval_notes
@@ -766,6 +767,7 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                     }
                 } else {
                     // التحقق من وجود عمود total_hours
+                    $columns = $db->query("SHOW COLUMNS FROM salaries") ?? [];
                     $hasTotalHoursColumn = false;
                     foreach ($columns as $column) {
                         if (($column['Field'] ?? '') === 'total_hours') {

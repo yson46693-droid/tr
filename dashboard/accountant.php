@@ -156,6 +156,51 @@ function ensureAccountantTransactionsTable() {
 // التأكد من وجود الجدول
 ensureAccountantTransactionsTable();
 
+// معالجة طلبات AJAX لـ my_salary قبل إرسال أي HTML
+$isAjaxRequest = (
+    (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') ||
+    (!empty($_POST['is_ajax'])) ||
+    (isset($_SERVER['HTTP_ACCEPT']) && stripos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false)
+);
+
+if ($isAjaxRequest && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'request_advance') {
+    $pageParam = $_GET['page'] ?? 'dashboard';
+    if ($pageParam === 'my_salary') {
+        // تنظيف أي output buffer
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        
+        // تحميل الملفات الأساسية
+        require_once __DIR__ . '/../includes/config.php';
+        require_once __DIR__ . '/../includes/db.php';
+        require_once __DIR__ . '/../includes/auth.php';
+        
+        // التحقق من تسجيل الدخول
+        if (!isLoggedIn()) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'message' => 'يجب تسجيل الدخول أولاً'
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        
+        // تضمين وحدة my_salary
+        $modulePath = __DIR__ . '/../modules/user/my_salary.php';
+        if (file_exists($modulePath)) {
+            include $modulePath;
+        } else {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'message' => 'صفحة الراتب غير متاحة.'
+            ], JSON_UNESCAPED_UNICODE);
+        }
+        exit;
+    }
+}
+
 // معالجة AJAX لجلب عملاء المندوب من صفحة orders
 if ($page === 'orders' && isset($_GET['ajax']) && $_GET['ajax'] === 'get_customers' && isset($_GET['sales_rep_id'])) {
     // تنظيف أي output buffer قبل أي شيء
