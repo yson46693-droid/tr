@@ -193,6 +193,23 @@ try {
         $totalReturns += (float)($returnItem['refund_amount'] ?? 0.0);
     }
     
+    // حساب عدد الفواتير
+    $invoiceCount = 0;
+    try {
+        $invoicesTableCheck = $db->queryOne("SHOW TABLES LIKE 'invoices'");
+        if (!empty($invoicesTableCheck)) {
+            $invoiceCountResult = $db->queryOne(
+                "SELECT COUNT(*) as invoice_count 
+                 FROM invoices 
+                 WHERE sales_rep_id = ? AND status != 'cancelled'",
+                [$repId]
+            );
+            $invoiceCount = (int)($invoiceCountResult['invoice_count'] ?? 0);
+        }
+    } catch (Throwable $e) {
+        error_log('Invoice count query error: ' . $e->getMessage());
+    }
+    
     echo json_encode([
         'success' => true,
         'rep' => $rep,
@@ -202,6 +219,7 @@ try {
             'debtor_count' => (int)($stats['debtor_count'] ?? 0),
             'total_collections' => $totalCollections,
             'total_returns' => $totalReturns,
+            'invoice_count' => $invoiceCount,
         ],
         'customers' => $customers,
         'collections' => $collections,

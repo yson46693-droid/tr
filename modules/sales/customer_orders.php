@@ -1287,43 +1287,43 @@ if (isset($_GET['id'])) {
     
     .dashboard-table--compact tbody tr {
         display: block;
-        margin-bottom: 0.3rem !important;
+        margin-bottom: 0.25rem !important;
         margin-top: 0 !important;
         border: 1px solid #dee2e6;
         border-radius: 4px;
-        padding: 0.3rem !important;
+        padding: 0.25rem 0.4rem !important;
         background: #fff;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
     }
     
     .dashboard-table--compact tbody tr:first-child {
         margin-top: 0 !important;
-        padding-top: 0.3rem !important;
+        padding-top: 0.25rem !important;
     }
     
     .dashboard-table--compact tbody tr:last-child {
         margin-bottom: 0 !important;
-        padding-bottom: 0.3rem !important;
+        padding-bottom: 0.25rem !important;
     }
     
     .dashboard-table--compact tbody td {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.2rem 0 !important;
-        border: none;
+        padding: 0.15rem 0 !important;
+        border: none !important;
         border-bottom: 1px solid #f0f0f0;
         margin: 0 !important;
     }
     
     .dashboard-table--compact tbody td:first-child {
-        padding-top: 0 !important;
+        padding-top: 0.15rem !important;
         margin-top: 0 !important;
     }
     
     .dashboard-table--compact tbody td:last-child {
-        border-bottom: none;
-        padding-bottom: 0 !important;
+        border-bottom: none !important;
+        padding-bottom: 0.15rem !important;
         margin-bottom: 0 !important;
     }
     
@@ -1337,13 +1337,28 @@ if (isset($_GET['id'])) {
         font-size: 0.8rem;
     }
     
-    /* تحسين عرض تفاصيل الطلب */
+    /* تحسين عرض تفاصيل الطلب - إزالة جميع المسافات */
+    .card-body {
+        padding: 0.75rem !important;
+    }
+    
+    .card-body .row {
+        margin: 0 !important;
+    }
+    
     .card-body .row > .col-md-6 {
-        margin-bottom: 0.75rem;
+        margin-bottom: 0 !important;
+        padding: 0.5rem !important;
     }
     
     .card-body .row > .col-md-6:last-child {
-        margin-bottom: 0;
+        margin-bottom: 0 !important;
+    }
+    
+    /* إزالة المسافات من dashboard-table-wrapper */
+    .dashboard-table-wrapper {
+        margin: 0 !important;
+        padding: 0 !important;
     }
     
     /* تحسين النموذج في Modal */
@@ -1370,11 +1385,13 @@ if (isset($_GET['id'])) {
     padding: 0 !important;
     border-spacing: 0 !important;
     border-collapse: collapse !important;
+    width: 100% !important;
 }
 
 .dashboard-table-details tr {
     border-bottom: 1px solid #e9ecef;
     margin-bottom: 0 !important;
+    margin-top: 0 !important;
     padding: 0 !important;
 }
 
@@ -1390,17 +1407,19 @@ if (isset($_GET['id'])) {
 }
 
 .dashboard-table-details th {
-    padding: 0.3rem 0.5rem 0.3rem 0 !important;
+    padding: 0.25rem 0.5rem 0.25rem 0 !important;
     font-weight: 600;
     color: #495057;
     white-space: nowrap;
     margin: 0 !important;
+    border: none !important;
 }
 
 .dashboard-table-details td {
-    padding: 0.3rem 0.5rem 0.3rem 0 !important;
+    padding: 0.25rem 0.5rem 0.25rem 0 !important;
     word-break: break-word;
     margin: 0 !important;
+    border: none !important;
 }
 
 /* تحسينات إضافية لجدول عناصر الطلب على جميع الشاشات - تقليل المسافات */
@@ -1408,6 +1427,22 @@ if (isset($_GET['id'])) {
     margin: 0 !important;
     padding: 0 !important;
     border-spacing: 0 !important;
+    border-collapse: collapse !important;
+}
+
+.dashboard-table--compact thead {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.dashboard-table--compact thead tr {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.dashboard-table--compact thead th {
+    padding: 0.4rem 0.5rem !important;
+    margin: 0 !important;
 }
 
 .dashboard-table--compact tbody {
@@ -1416,7 +1451,7 @@ if (isset($_GET['id'])) {
 }
 
 .dashboard-table--compact tbody tr {
-    margin-bottom: 0.3rem !important;
+    margin-bottom: 0.25rem !important;
     margin-top: 0 !important;
 }
 
@@ -1431,18 +1466,32 @@ if (isset($_GET['id'])) {
 }
 
 .dashboard-table--compact tbody td {
-    padding: 0.2rem 0 !important;
+    padding: 0.15rem 0 !important;
     margin: 0 !important;
+    border: none !important;
 }
 
 .dashboard-table--compact tbody td:first-child {
-    padding-top: 0 !important;
+    padding-top: 0.15rem !important;
     margin-top: 0 !important;
 }
 
 .dashboard-table--compact tbody td:last-child {
-    padding-bottom: 0 !important;
+    padding-bottom: 0.15rem !important;
     margin-bottom: 0 !important;
+}
+
+/* إزالة المسافات من dashboard-table-wrapper */
+.dashboard-table-wrapper {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.dashboard-table-wrapper .table {
+    margin: 0 !important;
+    padding: 0 !important;
 }
 </style>
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
@@ -1478,16 +1527,16 @@ if (isset($_GET['id'])) {
 <?php if ($selectedOrder): ?>
     <!-- عرض طلب محدد -->
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">طلب رقم: <?php echo htmlspecialchars($selectedOrder['order_number']); ?></h5>
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center" style="padding: 0.75rem 1rem !important;">
+            <h5 class="mb-0" style="margin: 0 !important;">طلب رقم: <?php echo htmlspecialchars($selectedOrder['order_number']); ?></h5>
             <a href="?page=orders" class="btn btn-light btn-sm">
                 <i class="bi bi-x"></i>
             </a>
         </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-12 col-md-6">
-                    <table class="table dashboard-table-details">
+        <div class="card-body" style="padding: 0.75rem 1rem !important;">
+            <div class="row" style="margin: 0 !important; --bs-gutter-x: 0.5rem; --bs-gutter-y: 0;">
+                <div class="col-12 col-md-6" style="padding: 0.5rem !important; margin-bottom: 0 !important;">
+                    <table class="table dashboard-table-details" style="margin: 0 !important; padding: 0 !important; width: 100% !important;">
                         <tr>
                             <th width="40%">العميل:</th>
                             <td><?php echo htmlspecialchars($selectedOrder['customer_name'] ?? '-'); ?></td>
@@ -1534,8 +1583,8 @@ if (isset($_GET['id'])) {
                         </tr>
                     </table>
                 </div>
-                <div class="col-12 col-md-6">
-                    <table class="table dashboard-table-details">
+                <div class="col-12 col-md-6" style="padding: 0.5rem !important; margin-bottom: 0 !important;">
+                    <table class="table dashboard-table-details" style="margin: 0 !important; padding: 0 !important; width: 100% !important;">
                         <tr>
                             <th width="40%">الحالة:</th>
                             <td>
@@ -1563,22 +1612,29 @@ if (isset($_GET['id'])) {
             </div>
             
             <?php if (!empty($selectedOrder['items'])): ?>
-                <h6 class="mt-3 mb-2">عناصر الطلب:</h6>
-                <div class="table-responsive dashboard-table-wrapper" style="margin: 0; padding: 0;">
-                    <table class="table dashboard-table dashboard-table--compact align-middle" style="margin: 0 !important; padding: 0 !important;">
-                        <thead>
+                <h6 class="mt-2 mb-1" style="margin-top: 0.5rem !important; margin-bottom: 0.25rem !important; padding: 0 !important;">عناصر الطلب:</h6>
+                <div class="table-responsive dashboard-table-wrapper" style="margin: 0 !important; padding: 0 !important; border: none !important; box-shadow: none !important; border-radius: 0 !important;">
+                    <table class="table dashboard-table dashboard-table--compact align-middle" style="margin: 0 !important; padding: 0 !important; border-spacing: 0 !important; border-collapse: collapse !important;">
+                        <thead style="display: none !important;">
                             <tr>
                                 <th>المنتج</th>
                                 <th>الكمية</th>
                                 <th>حالة الإنتاج</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody style="margin: 0 !important; padding: 0 !important; display: block !important;">
                             <?php foreach ($selectedOrder['items'] as $item): ?>
-                                <tr>
-                                    <td data-label="المنتج"><?php echo htmlspecialchars($item['product_name'] ?? '-'); ?></td>
-                                    <td data-label="الكمية"><?php echo number_format($item['quantity'], 2); ?></td>
-                                    <td data-label="حالة الإنتاج">
+                                <tr style="margin: 0 0 0.25rem 0 !important; padding: 0.25rem 0.4rem !important; display: block !important; border: 1px solid #dee2e6; border-radius: 4px; background: #fff;">
+                                    <td data-label="المنتج" style="margin: 0 !important; padding: 0.15rem 0 !important; display: flex !important; justify-content: space-between !important; align-items: center !important; border-bottom: 1px solid #f0f0f0;">
+                                        <span style="font-weight: 600; color: #495057; margin-left: 0.4rem; flex-shrink: 0; font-size: 0.8rem;">المنتج:</span>
+                                        <span><?php echo htmlspecialchars($item['product_name'] ?? '-'); ?></span>
+                                    </td>
+                                    <td data-label="الكمية" style="margin: 0 !important; padding: 0.15rem 0 !important; display: flex !important; justify-content: space-between !important; align-items: center !important; border-bottom: 1px solid #f0f0f0;">
+                                        <span style="font-weight: 600; color: #495057; margin-left: 0.4rem; flex-shrink: 0; font-size: 0.8rem;">الكمية:</span>
+                                        <span><?php echo number_format($item['quantity'], 2); ?></span>
+                                    </td>
+                                    <td data-label="حالة الإنتاج" style="margin: 0 !important; padding: 0.15rem 0 !important; display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                                        <span style="font-weight: 600; color: #495057; margin-left: 0.4rem; flex-shrink: 0; font-size: 0.8rem;">حالة الإنتاج:</span>
                                         <span class="badge bg-<?php 
                                             $productionStatus = $item['production_status'] ?? 'pending';
                                             echo $productionStatus === 'completed' ? 'success' : 
@@ -1602,9 +1658,9 @@ if (isset($_GET['id'])) {
             <?php endif; ?>
             
             <?php if ($selectedOrder['notes']): ?>
-                <div class="mt-3">
-                    <h6>ملاحظات:</h6>
-                    <p><?php echo nl2br(htmlspecialchars($selectedOrder['notes'])); ?></p>
+                <div class="mt-2" style="margin-top: 0.5rem !important; padding-top: 0.5rem !important; border-top: 1px solid #e9ecef;">
+                    <h6 style="margin-bottom: 0.25rem !important;">ملاحظات:</h6>
+                    <p style="margin: 0 !important; padding: 0 !important;"><?php echo nl2br(htmlspecialchars($selectedOrder['notes'])); ?></p>
                 </div>
             <?php endif; ?>
         </div>

@@ -701,6 +701,34 @@ renderRepresentativeCards($representatives, [
                     <p class="mt-3 text-muted">جاري تحميل البيانات...</p>
                 </div>
                 <div id="repDetailsContent" style="display: none;">
+                    <!-- معلومات المندوب الأساسية -->
+                    <div class="card border-0 shadow-sm mb-4">
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <div class="mb-2">
+                                        <span class="text-muted small">اسم المندوب:</span>
+                                        <div class="fw-semibold" id="repFullName">—</div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <span class="text-muted small">اسم المستخدم:</span>
+                                        <div class="fw-semibold" id="repUsername">—</div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <div class="mb-2">
+                                        <span class="text-muted small">الهاتف:</span>
+                                        <div class="fw-semibold" id="repPhone">—</div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <span class="text-muted small">عدد الفواتير:</span>
+                                        <div class="fw-semibold" id="repInvoiceCount">—</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- الإحصائيات -->
                     <div class="row g-3 mb-4">
                         <div class="col-6 col-md-3">
@@ -873,6 +901,14 @@ function loadRepDetails(repId, repName) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                // تحديث معلومات المندوب الأساسية
+                if (data.rep) {
+                    document.getElementById('repFullName').textContent = data.rep.full_name || data.rep.username || '—';
+                    document.getElementById('repUsername').textContent = data.rep.username || '—';
+                    document.getElementById('repPhone').textContent = data.rep.phone || '—';
+                    document.getElementById('repInvoiceCount').textContent = data.stats.invoice_count || 0;
+                }
+                
                 // تحديث الإحصائيات
                 document.getElementById('repCustomerCount').textContent = data.stats.customer_count || 0;
                 document.getElementById('repTotalDebt').textContent = formatCurrency(data.stats.total_debt || 0);
