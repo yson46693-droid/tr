@@ -936,12 +936,8 @@ if (isset($_GET['month']) && isset($_GET['year'])) {
             
             <!-- ملخص مطابق لبطاقة الموظف -->
             <?php if (isset($employee['accumulated_amount']) || isset($employee['paid_amount']) || isset($employee['actual_salary'])): ?>
-            <div class="summary-row" style="background: #eff6ff; padding: 16px; border-radius: 8px; margin-bottom: 12px; border: 2px solid #3b82f6;">
-                <span class="summary-label" style="font-weight: 700; color: #1e40af;">المبلغ التراكمي</span>
-                <span class="summary-value amount-positive" style="font-size: 18px; font-weight: 700; color: #2563eb;"><?php echo formatCurrency($employee['accumulated_amount'] ?? 0); ?></span>
-            </div>
             <div class="summary-row" style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin-bottom: 12px; border: 2px solid #10b981;">
-                <span class="summary-label" style="font-weight: 700; color: #065f46;">المبلغ المدفوع</span>
+                <span class="summary-label" style="font-weight: 700; color: #065f46;"> التسويات المدفوعة</span>
                 <span class="summary-value amount-positive" style="font-size: 18px; font-weight: 700; color: #059669;"><?php echo formatCurrency($employee['paid_amount'] ?? 0); ?></span>
             </div>
             <div class="summary-row" style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin-bottom: 12px; border: 2px solidrgb(156, 15, 10);">
