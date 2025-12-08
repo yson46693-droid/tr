@@ -1556,14 +1556,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $productName = '';
                                     
                                     if ($batchId) {
-                                        // منتج مصنع - جلب product_name من finished_products
+                                        // منتج مصنع - جلب product_name من products أولاً، ثم من finished_products
                                         $fp = $db->queryOne("
-                                            SELECT COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name, 'غير محدد') AS product_name,
-                                                   fp.batch_number
+                                            SELECT COALESCE(
+                                                NULLIF(TRIM(pr.name), ''),
+                                                NULLIF(TRIM(fp.product_name), ''),
+                                                'غير محدد'
+                                            ) AS product_name,
+                                            fp.batch_number
                                             FROM finished_products fp
                                             LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
                                             LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
                                             WHERE fp.id = ?
+                                              AND (
+                                                  (pr.name IS NOT NULL AND TRIM(pr.name) != '' AND pr.name NOT LIKE 'منتج رقم%')
+                                                  OR (fp.product_name IS NOT NULL AND TRIM(fp.product_name) != '' AND fp.product_name NOT LIKE 'منتج رقم%')
+                                              )
                                         ", [$batchId]);
                                         $productName = ($fp['product_name'] ?? 'غير محدد');
                                     } else {
