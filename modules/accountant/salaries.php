@@ -3101,7 +3101,7 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                     </div>
                     
                     <div class="salary-amount">
-                        <?php echo formatCurrency($totalAmount); ?>
+                        <?php echo formatCurrency($remaining); ?>
                     </div>
                     
                     <div>

@@ -806,6 +806,9 @@ renderRepresentativeCards($representatives, [
                 </div>
             </div>
             <div class="modal-footer">
+                <a href="#" id="repPrintStatementBtn" target="_blank" class="btn btn-primary">
+                    <i class="bi bi-printer me-2"></i>طباعة كشف حساب شامل
+                </a>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
             </div>
         </div>
@@ -848,6 +851,13 @@ function loadRepDetails(repId, repName) {
     const viewCustomersLink = document.getElementById('repViewCustomersLink');
     if (viewCustomersLink) {
         viewCustomersLink.href = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'page=rep_customers_view&rep_id=' + repId;
+    }
+    
+    // تحديث رابط زر طباعة كشف الحساب الشامل
+    const printStatementBtn = document.getElementById('repPrintStatementBtn');
+    if (printStatementBtn) {
+        const printUrl = '<?php echo getRelativeUrl("print_cash_register_statement.php"); ?>?sales_rep_id=' + repId;
+        printStatementBtn.href = printUrl;
     }
     
     // جلب البيانات من API
