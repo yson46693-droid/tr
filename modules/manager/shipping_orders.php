@@ -1752,25 +1752,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $batchId = isset($item['batch_id']) && $item['batch_id'] ? (int)$item['batch_id'] : null;
                                     $productName = '';
                                     
+                                    $batchNumber = null; // تهيئة batch_number
                                     if ($batchId) {
-                                        // منتج مصنع - جلب product_name من products أولاً، ثم من finished_products
+                                        // منتج مصنع - جلب product_name و batch_number من finished_products أولاً، ثم من products
                                         $fp = $db->queryOne("
-                                            SELECT COALESCE(
-                                                NULLIF(TRIM(pr.name), ''),
-                                                NULLIF(TRIM(fp.product_name), ''),
-                                                'غير محدد'
-                                            ) AS product_name,
-                                            fp.batch_number
+                                            SELECT 
+                                                fp.product_name as fp_product_name,
+                                                fp.batch_number,
+                                                fp.product_id as fp_product_id,
+                                                pr.name as pr_name,
+                                                bn.product_id as bn_product_id,
+                                                pr2.name as pr2_name
                                             FROM finished_products fp
                                             LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
-                                            LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
+                                            LEFT JOIN products pr ON fp.product_id = pr.id
+                                            LEFT JOIN products pr2 ON COALESCE(bn.product_id, fp.product_id) = pr2.id
                                             WHERE fp.id = ?
-                                              AND (
-                                                  (pr.name IS NOT NULL AND TRIM(pr.name) != '' AND pr.name NOT LIKE 'منتج رقم%')
-                                                  OR (fp.product_name IS NOT NULL AND TRIM(fp.product_name) != '' AND fp.product_name NOT LIKE 'منتج رقم%')
-                                              )
+                                            LIMIT 1
                                         ", [$batchId]);
-                                        $productName = ($fp['product_name'] ?? 'غير محدد');
+                                        
+                                        // تحديد اسم المنتج بالترتيب: fp.product_name > pr.name (من fp.product_id) > pr2.name (من bn.product_id)
+                                        if ($fp) {
+                                            // جلب batch_number
+                                            if (!empty($fp['batch_number'])) {
+                                                $batchNumber = trim($fp['batch_number']);
+                                            }
+                                            
+                                            // تحديد اسم المنتج
+                                            if (!empty($fp['fp_product_name']) && trim($fp['fp_product_name']) !== '' && $fp['fp_product_name'] !== 'منتج رقم' . $batchId) {
+                                                $productName = trim($fp['fp_product_name']);
+                                            } elseif (!empty($fp['pr_name']) && trim($fp['pr_name']) !== '' && $fp['pr_name'] !== 'منتج رقم' . $productId) {
+                                                $productName = trim($fp['pr_name']);
+                                            } elseif (!empty($fp['pr2_name']) && trim($fp['pr2_name']) !== '' && $fp['pr2_name'] !== 'منتج رقم' . $productId) {
+                                                $productName = trim($fp['pr2_name']);
+                                            } else {
+                                                $productName = 'منتج رقم ' . $productId;
+                                            }
+                                        } else {
+                                            // إذا لم يُعثر على finished_product، جلب من products
+                                            $product = $db->queryOne("SELECT name FROM products WHERE id = ?", [$productId]);
+                                            $productName = $product['name'] ?? 'منتج رقم ' . $productId;
+                                        }
                                     } else {
                                         // منتج خارجي - جلب اسم المنتج من products
                                         $product = $db->queryOne("SELECT name FROM products WHERE id = ?", [$productId]);
@@ -1791,59 +1813,153 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     ];
                                     
                                     if ($hasBatchNumber) {
-                                        $batchNumber = null;
-                                        if (!empty($item['batch_id'])) {
-                                            // جلب batch_number من finished_products مباشرة
-                                            $batchInfo = $db->queryOne(
-                                                "SELECT fp.batch_number
-                                                 FROM finished_products fp
-                                                 WHERE fp.id = ?
-                                                 LIMIT 1",
-                                                [$item['batch_id']]
-                                            );
-                                            if ($batchInfo && !empty($batchInfo['batch_number'])) {
-                                                $batchNumber = trim($batchInfo['batch_number']);
-                                                error_log("shipping_orders: Found batch_number from finished_products: $batchNumber for batch_id: " . $item['batch_id']);
-                                            } else {
-                                                // إذا لم يكن موجوداً في finished_products، نحاول من batch_numbers
-                                                $batchInfo2 = $db->queryOne(
-                                                    "SELECT bn.batch_number
-                                                     FROM finished_products fp
-                                                     INNER JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
-                                                     WHERE fp.id = ?
-                                                     LIMIT 1",
-                                                    [$item['batch_id']]
-                                                );
-                                                if ($batchInfo2 && !empty($batchInfo2['batch_number'])) {
-                                                    $batchNumber = trim($batchInfo2['batch_number']);
-                                                    error_log("shipping_orders: Found batch_number from batch_numbers: $batchNumber for batch_id: " . $item['batch_id']);
-                                                } else {
-                                                    error_log("shipping_orders: WARNING - batch_number not found for batch_id: " . $item['batch_id']);
-                                                }
-                                            }
-                                        } else {
-                                            error_log("shipping_orders: batch_id is empty for product_id: $productId");
-                                        }
+                                        // batch_number تم جلبه مسبقاً من finished_products في الكود أعلاه
+                                        // إذا كان فارغاً ولم يكن هناك batch_id، نتركه null
                                         $columns[] = 'batch_number';
                                         $values[] = $batchNumber;
-                                        error_log("shipping_orders: Adding batch_number to local_invoice_items: " . ($batchNumber ?? 'NULL') . " for product_id: $productId");
+                                        error_log("shipping_orders: Adding batch_number to local_invoice_items: " . ($batchNumber ?? 'NULL') . " for product_id: $productId, batch_id: " . ($batchId ?? 'NULL'));
                                     }
                                     
                                     if ($hasBatchId) {
                                         $columns[] = 'batch_id';
-                                        $values[] = isset($item['batch_id']) && $item['batch_id'] ? (int)$item['batch_id'] : null;
+                                        $values[] = $batchId;
                                     }
                                     
                                     $placeholders = str_repeat('?,', count($values) - 1) . '?';
                                     $sql = "INSERT INTO local_invoice_items (" . implode(', ', $columns) . ") VALUES ($placeholders)";
                                     
-                                    $db->execute($sql, $values);
+                                    $insertResult = $db->execute($sql, $values);
+                                    
+                                    // ربط local_invoice_item مع sales_batch_numbers عبر invoice_items (إذا كان هناك invoice_id)
+                                    // هذا يضمن ظهور رقم التشغيلة في سجل مشتريات العميل المحلي
+                                    if (!empty($order['invoice_id']) && $batchId && !empty($batchNumber)) {
+                                        try {
+                                            $localInvoiceItemId = (int)($insertResult['insert_id'] ?? $db->getLastInsertId());
+                                            
+                                            // البحث عن invoice_item_id المطابق من الفاتورة الأصلية
+                                            // المطابقة بناءً على product_id و quantity و unit_price
+                                            $matchingInvoiceItem = $db->queryOne(
+                                                "SELECT id FROM invoice_items 
+                                                 WHERE invoice_id = ? 
+                                                   AND product_id = ? 
+                                                   AND ABS(quantity - ?) < 0.001 
+                                                   AND ABS(unit_price - ?) < 0.001
+                                                 ORDER BY id ASC
+                                                 LIMIT 1",
+                                                [$order['invoice_id'], $productId, $quantity, $unitPrice]
+                                            );
+                                            
+                                            if ($matchingInvoiceItem && !empty($matchingInvoiceItem['id'])) {
+                                                $invoiceItemId = (int)$matchingInvoiceItem['id'];
+                                                
+                                                // جلب batch_number_id من batch_numbers
+                                                $batchNumberIdCheck = $db->queryOne(
+                                                    "SELECT id FROM batch_numbers WHERE batch_number = ?",
+                                                    [$batchNumber]
+                                                );
+                                                
+                                                if ($batchNumberIdCheck) {
+                                                    $batchNumberId = (int)$batchNumberIdCheck['id'];
+                                                    
+                                                    // التحقق من وجود سجل في sales_batch_numbers لهذا invoice_item_id
+                                                    $existingSalesBatchLink = $db->queryOne(
+                                                        "SELECT id FROM sales_batch_numbers WHERE invoice_item_id = ? AND batch_number_id = ?",
+                                                        [$invoiceItemId, $batchNumberId]
+                                                    );
+                                                    
+                                                    if (!$existingSalesBatchLink) {
+                                                        // إنشاء سجل في sales_batch_numbers إذا لم يكن موجوداً
+                                                        $db->execute(
+                                                            "INSERT INTO sales_batch_numbers (invoice_item_id, batch_number_id, quantity) 
+                                                             VALUES (?, ?, ?)
+                                                             ON DUPLICATE KEY UPDATE quantity = quantity",
+                                                            [$invoiceItemId, $batchNumberId, $quantity]
+                                                        );
+                                                        error_log("shipping_orders: Created sales_batch_numbers link for local_invoice_item_id=$localInvoiceItemId via invoice_item_id=$invoiceItemId, batch_number=$batchNumber");
+                                                    } else {
+                                                        error_log("shipping_orders: sales_batch_numbers link already exists for invoice_item_id=$invoiceItemId, batch_number=$batchNumber");
+                                                    }
+                                                } else {
+                                                    error_log("shipping_orders: WARNING - batch_number_id not found for batch_number=$batchNumber when linking local_invoice_item");
+                                                }
+                                            } else {
+                                                error_log("shipping_orders: WARNING - Could not find matching invoice_item for local_invoice_item - product_id=$productId, quantity=$quantity, unit_price=$unitPrice");
+                                            }
+                                        } catch (Throwable $linkError) {
+                                            error_log('shipping_orders: Error linking local_invoice_item to sales_batch_numbers: ' . $linkError->getMessage());
+                                            // لا نوقف العملية
+                                        }
+                                    }
                                 }
                             }
                             error_log("Local invoice items added successfully: " . count($orderItems) . " items for invoice ID=$localInvoiceId");
                         }
                     } else {
                         error_log("Local invoice already exists: Number=$localInvoiceNumber");
+                        // حتى لو كانت الفاتورة موجودة، نحاول ربط العناصر مع sales_batch_numbers
+                        if (!empty($order['invoice_id'])) {
+                            try {
+                                $existingLocalInvoiceId = (int)$existingLocalInvoice['id'];
+                                
+                                // جلب عناصر الفاتورة المحلية
+                                $existingLocalInvoiceItems = $db->query(
+                                    "SELECT id, product_id, batch_id, quantity, unit_price, batch_number 
+                                     FROM local_invoice_items 
+                                     WHERE invoice_id = ?",
+                                    [$existingLocalInvoiceId]
+                                );
+                                
+                                foreach ($existingLocalInvoiceItems as $localItem) {
+                                    $localProductId = (int)$localItem['product_id'];
+                                    $localQuantity = (float)$localItem['quantity'];
+                                    $localUnitPrice = (float)$localItem['unit_price'];
+                                    $localBatchId = !empty($localItem['batch_id']) ? (int)$localItem['batch_id'] : null;
+                                    $localBatchNumber = !empty($localItem['batch_number']) ? trim($localItem['batch_number']) : null;
+                                    
+                                    if ($localBatchId && $localBatchNumber) {
+                                        // البحث عن invoice_item_id المطابق
+                                        $matchingInvoiceItem = $db->queryOne(
+                                            "SELECT id FROM invoice_items 
+                                             WHERE invoice_id = ? 
+                                               AND product_id = ? 
+                                               AND ABS(quantity - ?) < 0.001 
+                                               AND ABS(unit_price - ?) < 0.001
+                                             ORDER BY id ASC
+                                             LIMIT 1",
+                                            [$order['invoice_id'], $localProductId, $localQuantity, $localUnitPrice]
+                                        );
+                                        
+                                        if ($matchingInvoiceItem) {
+                                            $invoiceItemId = (int)$matchingInvoiceItem['id'];
+                                            $batchNumberIdCheck = $db->queryOne(
+                                                "SELECT id FROM batch_numbers WHERE batch_number = ?",
+                                                [$localBatchNumber]
+                                            );
+                                            
+                                            if ($batchNumberIdCheck) {
+                                                $batchNumberId = (int)$batchNumberIdCheck['id'];
+                                                $existingSalesBatchLink = $db->queryOne(
+                                                    "SELECT id FROM sales_batch_numbers WHERE invoice_item_id = ? AND batch_number_id = ?",
+                                                    [$invoiceItemId, $batchNumberId]
+                                                );
+                                                
+                                                if (!$existingSalesBatchLink) {
+                                                    $db->execute(
+                                                        "INSERT INTO sales_batch_numbers (invoice_item_id, batch_number_id, quantity) 
+                                                         VALUES (?, ?, ?)
+                                                         ON DUPLICATE KEY UPDATE quantity = quantity",
+                                                        [$invoiceItemId, $batchNumberId, $localQuantity]
+                                                    );
+                                                    error_log("shipping_orders: Linked existing local_invoice_item_id=" . $localItem['id'] . " via invoice_item_id=$invoiceItemId");
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (Throwable $existingLinkError) {
+                                error_log('shipping_orders: Error linking existing local invoice items: ' . $existingLinkError->getMessage());
+                            }
+                        }
                     }
                 } catch (Throwable $localInvoiceError) {
                     // لا نوقف العملية إذا فشل إنشاء الفاتورة المحلية، فقط نسجل الخطأ

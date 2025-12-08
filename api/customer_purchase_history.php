@@ -229,26 +229,29 @@ function handleGetHistory(): void
                 }
             }
             
-            // بناء استعلام لجلب اسم المنتج الصحيح - الأولوية لاسم المنتج من products، ثم من finished_products
+            // بناء استعلام لجلب اسم المنتج الصحيح - الأولوية لاسم المنتج من finished_products، ثم من products
             $productNameSelect = '';
             if ($hasBatchId) {
-                // إذا كان batch_id موجوداً، نستخدم اسم المنتج من products أولاً، ثم من finished_products
+                // إذا كان batch_id موجوداً، نستخدم اسم المنتج من finished_products أولاً، ثم من products
                 $productNameSelect = "COALESCE(
                     CASE 
                         WHEN ii.batch_id IS NOT NULL AND ii.batch_id > 0 
                         THEN (
                             SELECT COALESCE(
-                                NULLIF(TRIM(pr.name), ''),
                                 NULLIF(TRIM(fp.product_name), ''),
+                                NULLIF(TRIM(pr.name), ''),
+                                NULLIF(TRIM(pr2.name), ''),
                                 NULL
                             )
                             FROM finished_products fp
                             LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
-                            LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
+                            LEFT JOIN products pr ON fp.product_id = pr.id
+                            LEFT JOIN products pr2 ON COALESCE(bn.product_id, fp.product_id) = pr2.id
                             WHERE fp.id = ii.batch_id
                               AND (
-                                  (pr.name IS NOT NULL AND TRIM(pr.name) != '' AND pr.name NOT LIKE 'منتج رقم%')
-                                  OR (fp.product_name IS NOT NULL AND TRIM(fp.product_name) != '' AND fp.product_name NOT LIKE 'منتج رقم%')
+                                  (fp.product_name IS NOT NULL AND TRIM(fp.product_name) != '' AND fp.product_name NOT LIKE 'منتج رقم%')
+                                  OR (pr.name IS NOT NULL AND TRIM(pr.name) != '' AND pr.name NOT LIKE 'منتج رقم%')
+                                  OR (pr2.name IS NOT NULL AND TRIM(pr2.name) != '' AND pr2.name NOT LIKE 'منتج رقم%')
                               )
                             LIMIT 1
                         )
