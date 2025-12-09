@@ -1533,9 +1533,9 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                 // بدء transaction
                 $db->execute("START TRANSACTION");
                 
-                // SELECT FOR UPDATE للحصول على lock
+                // SELECT FOR UPDATE للحصول على lock (LIMIT يجب أن يكون قبل FOR UPDATE)
                 $finalCheck = $db->queryOne(
-                    "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? FOR UPDATE LIMIT 1",
+                    "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? LIMIT 1 FOR UPDATE",
                     [$userId, $month, $year]
                 );
                 
@@ -1574,8 +1574,9 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                                 bonus = VALUES(bonus),
                                 deductions = VALUES(deductions),
                                 total_amount = VALUES(total_amount),
-                                notes = VALUES(notes),
-                                updated_at = NOW()",
+                                notes = VALUES(notes)" . ($hasUpdatedAtColumn ? ",
+                                updated_at = NOW()" : "") . "
+                            ",
                             [
                                 $userId,
                                 $month,
@@ -1601,8 +1602,9 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                                 bonus = VALUES(bonus),
                                 deductions = VALUES(deductions),
                                 total_amount = VALUES(total_amount),
-                                notes = VALUES(notes),
-                                updated_at = NOW()",
+                                notes = VALUES(notes)" . ($hasUpdatedAtColumn ? ",
+                                updated_at = NOW()" : "") . "
+                            ",
                             [
                                 $userId,
                                 $month,
@@ -1628,8 +1630,9 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                                 base_amount = VALUES(base_amount),
                                 bonus = VALUES(bonus),
                                 deductions = VALUES(deductions),
-                                total_amount = VALUES(total_amount),
-                                updated_at = NOW()",
+                                total_amount = VALUES(total_amount)" . ($hasUpdatedAtColumn ? ",
+                                updated_at = NOW()" : "") . "
+                            ",
                             [
                                 $userId,
                                 $month,
@@ -1653,8 +1656,9 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                                 base_amount = VALUES(base_amount),
                                 bonus = VALUES(bonus),
                                 deductions = VALUES(deductions),
-                                total_amount = VALUES(total_amount),
-                                updated_at = NOW()",
+                                total_amount = VALUES(total_amount)" . ($hasUpdatedAtColumn ? ",
+                                updated_at = NOW()" : "") . "
+                            ",
                             [
                                 $userId,
                                 $month,
@@ -1681,8 +1685,9 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                                 base_amount = VALUES(base_amount),
                                 deductions = VALUES(deductions),
                                 total_amount = VALUES(total_amount),
-                                notes = VALUES(notes),
-                                updated_at = NOW()",
+                                notes = VALUES(notes)" . ($hasUpdatedAtColumn ? ",
+                                updated_at = NOW()" : "") . "
+                            ",
                             [
                                 $userId,
                                 $month,
@@ -1706,8 +1711,9 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                                 base_amount = VALUES(base_amount),
                                 deductions = VALUES(deductions),
                                 total_amount = VALUES(total_amount),
-                                notes = VALUES(notes),
-                                updated_at = NOW()",
+                                notes = VALUES(notes)" . ($hasUpdatedAtColumn ? ",
+                                updated_at = NOW()" : "") . "
+                            ",
                             [
                                 $userId,
                                 $month,
@@ -1731,8 +1737,9 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                                 total_hours = VALUES(total_hours),
                                 base_amount = VALUES(base_amount),
                                 deductions = VALUES(deductions),
-                                total_amount = VALUES(total_amount),
-                                updated_at = NOW()",
+                                total_amount = VALUES(total_amount)" . ($hasUpdatedAtColumn ? ",
+                                updated_at = NOW()" : "") . "
+                            ",
                             [
                                 $userId,
                                 $month,
@@ -1754,8 +1761,9 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                                 total_hours = VALUES(total_hours),
                                 base_amount = VALUES(base_amount),
                                 deductions = VALUES(deductions),
-                                total_amount = VALUES(total_amount),
-                                updated_at = NOW()",
+                                total_amount = VALUES(total_amount)" . ($hasUpdatedAtColumn ? ",
+                                updated_at = NOW()" : "") . "
+                            ",
                             [
                                 $userId,
                                 $month,
