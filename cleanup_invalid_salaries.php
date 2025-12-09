@@ -45,10 +45,20 @@ try {
     $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
     $hasYearColumn = !empty($yearColumnCheck);
     
+    // التحقق من وجود جدول salary_payments (يُستخدم في عدة أماكن)
+    $hasPaymentsTable = false;
+    try {
+        $tableCheck = $db->queryOne("SHOW TABLES LIKE 'salary_payments'");
+        $hasPaymentsTable = !empty($tableCheck);
+    } catch (Exception $e) {
+        $hasPaymentsTable = false;
+    }
+    
     echo "<div class='info'>";
     echo "<strong>معلومات الجدول:</strong><br>";
     echo "نوع عمود month: " . ($isMonthDate ? 'DATE' : 'INT') . "<br>";
-    echo "عمود year: " . ($hasYearColumn ? 'موجود ✅' : 'غير موجود ❌');
+    echo "عمود year: " . ($hasYearColumn ? 'موجود ✅' : 'غير موجود ❌') . "<br>";
+    echo "جدول salary_payments: " . ($hasPaymentsTable ? 'موجود ✅' : 'غير موجود ❌');
     echo "</div>";
     
     // 1. البحث عن السجلات ذات التواريخ الخاطئة
@@ -132,15 +142,6 @@ try {
             
             $deletedCount = 0;
             $errors = [];
-            
-            // التحقق من وجود جدول salary_payments
-            $hasPaymentsTable = false;
-            try {
-                $tableCheck = $db->queryOne("SHOW TABLES LIKE 'salary_payments'");
-                $hasPaymentsTable = !empty($tableCheck);
-            } catch (Exception $e) {
-                $hasPaymentsTable = false;
-            }
             
             foreach ($invalidRecords as $record) {
                 try {

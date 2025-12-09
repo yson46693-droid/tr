@@ -792,32 +792,27 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
     $month = (int)$month;
     $year = (int)$year;
     
+    // التحقق الصارم من القيم - منع التواريخ الصفرية والقيم غير الصحيحة
     if ($userId <= 0) {
+        error_log("createOrUpdateSalary: Invalid user_id: {$userId}");
         return [
             'success' => false,
             'message' => 'معرف المستخدم غير صالح'
         ];
     }
     
+    // تصحيح الشهر إذا كان غير صحيح - استخدام الشهر الحالي كبديل
     if ($month < 1 || $month > 12) {
-        return [
-            'success' => false,
-            'message' => 'الشهر يجب أن يكون بين 1 و 12. القيمة المستلمة: ' . $month
-        ];
+        error_log("createOrUpdateSalary: Invalid month: {$month} for user: {$userId}");
+        $month = (int)date('n');
+        error_log("createOrUpdateSalary: Using current month: {$month}");
     }
     
+    // تصحيح السنة إذا كانت غير صحيحة - استخدام السنة الحالية كبديل
     if ($year < 2000 || $year > 2100) {
-        return [
-            'success' => false,
-            'message' => 'السنة يجب أن تكون بين 2000 و 2100. القيمة المستلمة: ' . $year
-        ];
-    }
-    
-    if ($year < 2000 || $year > 2100) {
-        return [
-            'success' => false,
-            'message' => 'السنة غير صحيحة. يجب أن تكون بين 2000 و 2100. القيمة المستلمة: ' . $year
-        ];
+        error_log("createOrUpdateSalary: Invalid year: {$year} for user: {$userId}");
+        $year = (int)date('Y');
+        error_log("createOrUpdateSalary: Using current year: {$year}");
     }
     
     $db = db();
@@ -932,29 +927,51 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
         $monthType = $monthColumnCheck['Type'] ?? '';
     }
     
-    // التحقق من وجود راتب موجود
-    // ملاحظة: نتحقق أيضاً من السجلات ذات التواريخ الصفرية لتجنب التكرار
+    // التحقق من وجود راتب موجود - تحقق شامل لمنع التكرار
+    // نتحقق من جميع السجلات الموجودة للمستخدم في نفس الشهر/السنة أو بتواريخ صفرية
     if ($hasYearColumn) {
-        // البحث عن راتب موجود بنفس الشهر والسنة
+        // 1. البحث الأول: البحث عن راتب موجود بنفس الشهر والسنة
         $existingSalary = $db->queryOne(
-            "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ?",
+            "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? LIMIT 1",
             [$userId, $month, $year]
         );
         
-        // إذا لم نجد، نبحث أيضاً عن سجلات بتواريخ صفرية لنفس المستخدم (قد تكون مكررة)
+        // 2. إذا لم نجد، نبحث عن سجلات بتواريخ صفرية لنفس المستخدم في نفس الشهر (إذا كان محدد)
         if (empty($existingSalary)) {
             $zeroDateSalary = $db->queryOne(
-                "SELECT id FROM salaries WHERE user_id = ? AND (year IS NULL OR year = 0 OR month = 0)",
+                "SELECT id FROM salaries WHERE user_id = ? AND (
+                    year IS NULL OR year = 0 OR year < 2000 OR year > 2100 OR
+                    month IS NULL OR month = 0 OR month < 1 OR month > 12
+                ) ORDER BY base_amount DESC, id DESC LIMIT 1",
                 [$userId]
             );
+            
             // إذا وجدنا سجل بتاريخ صفري، نقوم بتحديثه بدلاً من إنشاء سجل جديد
             if (!empty($zeroDateSalary)) {
                 $existingSalary = $zeroDateSalary;
-                // تحديث الشهر والسنة للسجل الصفري
-                $db->execute(
-                    "UPDATE salaries SET month = ?, year = ? WHERE id = ?",
-                    [$month, $year, $existingSalary['id']]
-                );
+                try {
+                    $db->execute(
+                        "UPDATE salaries SET month = ?, year = ? WHERE id = ?",
+                        [$month, $year, $existingSalary['id']]
+                    );
+                    error_log("Fixed zero-date salary record ID: {$existingSalary['id']} for user: {$userId}, set to {$month}/{$year}");
+                } catch (Exception $e) {
+                    error_log("Failed to fix zero-date salary ID {$existingSalary['id']}: " . $e->getMessage());
+                    // إذا فشل التحديث، نستمر في البحث عن سجل آخر أو إنشاء واحد جديد
+                    $existingSalary = null;
+                }
+            }
+        }
+        
+        // 3. تحقق إضافي: البحث عن أي سجل آخر للمستخدم في نفس الشهر/السنة (للمعالجة المسبقة)
+        if (empty($existingSalary)) {
+            $duplicateCheck = $db->queryOne(
+                "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? ORDER BY base_amount DESC, id DESC LIMIT 1",
+                [$userId, $month, $year]
+            );
+            if (!empty($duplicateCheck)) {
+                $existingSalary = $duplicateCheck;
+                error_log("Found duplicate salary record ID: {$existingSalary['id']} for user: {$userId}, month: {$month}, year: {$year}");
             }
         }
     } else {
@@ -970,31 +987,81 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             }
             $targetDate = sprintf('%04d-%02d-01', $year, $month);
             $existingSalary = $db->queryOne(
-                "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ?",
+                "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ? AND month != '0000-00-00' AND month != '1970-01-01' LIMIT 1",
                 [$userId, sprintf('%04d-%02d', $year, $month)]
             );
             
-            // البحث عن سجلات بتواريخ صفرية
+            // البحث عن سجلات بتواريخ صفرية لنفس المستخدم
             if (empty($existingSalary)) {
                 $zeroDateSalary = $db->queryOne(
-                    "SELECT id FROM salaries WHERE user_id = ? AND (month IS NULL OR month = '0000-00-00' OR month = '1970-01-01')",
+                    "SELECT id FROM salaries WHERE user_id = ? AND (month IS NULL OR month = '0000-00-00' OR month = '1970-01-01' OR YEAR(month) < 2000 OR YEAR(month) > 2100) ORDER BY base_amount DESC, id DESC LIMIT 1",
                     [$userId]
                 );
                 if (!empty($zeroDateSalary)) {
                     $existingSalary = $zeroDateSalary;
                     // تحديث التاريخ للسجل الصفري
-                    $db->execute(
-                        "UPDATE salaries SET month = ? WHERE id = ?",
-                        [$targetDate, $existingSalary['id']]
-                    );
+                    try {
+                        $db->execute(
+                            "UPDATE salaries SET month = ? WHERE id = ?",
+                            [$targetDate, $existingSalary['id']]
+                        );
+                        error_log("Fixed zero-date salary record ID: {$existingSalary['id']} for user: {$userId}, set to {$targetDate}");
+                    } catch (Exception $e) {
+                        error_log("Failed to fix zero-date salary ID {$existingSalary['id']}: " . $e->getMessage());
+                        $existingSalary = null;
+                    }
+                }
+            }
+            
+            // تحقق إضافي: البحث عن أي سجل آخر للمستخدم في نفس الشهر/السنة
+            if (empty($existingSalary)) {
+                $duplicateCheck = $db->queryOne(
+                    "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ? ORDER BY base_amount DESC, id DESC LIMIT 1",
+                    [$userId, sprintf('%04d-%02d', $year, $month)]
+                );
+                if (!empty($duplicateCheck)) {
+                    $existingSalary = $duplicateCheck;
+                    error_log("Found duplicate salary record ID: {$existingSalary['id']} for user: {$userId}, date: {$targetDate}");
                 }
             }
         } else {
             // إذا كان month من نوع INT فقط
             $existingSalary = $db->queryOne(
-                "SELECT id FROM salaries WHERE user_id = ? AND month = ?",
+                "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND (month >= 1 AND month <= 12) LIMIT 1",
                 [$userId, $month]
             );
+            
+            // البحث عن سجلات بتواريخ صفرية أو غير صحيحة
+            if (empty($existingSalary)) {
+                $zeroDateSalary = $db->queryOne(
+                    "SELECT id FROM salaries WHERE user_id = ? AND (month IS NULL OR month = 0 OR month < 1 OR month > 12) ORDER BY base_amount DESC, id DESC LIMIT 1",
+                    [$userId]
+                );
+                if (!empty($zeroDateSalary)) {
+                    $existingSalary = $zeroDateSalary;
+                    try {
+                        $db->execute(
+                            "UPDATE salaries SET month = ? WHERE id = ?",
+                            [$month, $existingSalary['id']]
+                        );
+                        error_log("Fixed zero-date salary record ID: {$existingSalary['id']} for user: {$userId}, set month to: {$month}");
+                    } catch (Exception $e) {
+                        error_log("Failed to fix zero-date salary ID {$existingSalary['id']}: " . $e->getMessage());
+                        $existingSalary = null;
+                    }
+                }
+            }
+            
+            // تحقق إضافي من التكرار
+            if (empty($existingSalary)) {
+                $duplicateCheck = $db->queryOne(
+                    "SELECT id FROM salaries WHERE user_id = ? AND month = ? ORDER BY base_amount DESC, id DESC LIMIT 1",
+                    [$userId, $month]
+                );
+                if (!empty($duplicateCheck)) {
+                    $existingSalary = $duplicateCheck;
+                }
+            }
         }
     }
     
@@ -1444,6 +1511,19 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             
             // إضافة المبلغ التراكمي للراتب الإجمالي
             $calculation['total_amount'] = round($calculation['total_amount'] + $previousAccumulatedAmount, 2);
+        }
+        
+        // تحقق نهائي قبل الإدراج: التأكد من عدم وجود سجل مكرر
+        // (في حالة فشل التحقق السابق أو race condition)
+        if (empty($existingSalary) && $hasYearColumn) {
+            $finalCheck = $db->queryOne(
+                "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? LIMIT 1",
+                [$userId, $month, $year]
+            );
+            if (!empty($finalCheck)) {
+                $existingSalary = $finalCheck;
+                error_log("Final duplicate check: Found existing salary ID: {$existingSalary['id']} for user: {$userId}, month: {$month}, year: {$year}");
+            }
         }
         
         if ($hasYearColumn) {
@@ -1902,6 +1982,22 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
         }
         
         $salaryId = $result['insert_id'] ?? null;
+        
+        // تسجيل إنشاء الراتب الجديد
+        if ($salaryId) {
+            $creatorInfo = $createdBy ? "created_by: {$createdBy}" : "auto-created";
+            $callerInfo = "";
+            
+            // محاولة تتبع من استدعى الدالة
+            $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
+            if (isset($backtrace[1]['file']) && isset($backtrace[1]['function'])) {
+                $callerFile = basename($backtrace[1]['file']);
+                $callerFunction = $backtrace[1]['function'];
+                $callerInfo = " | Called from: {$callerFile}::{$callerFunction}";
+            }
+            
+            error_log("NEW SALARY CREATED - ID: {$salaryId}, User: {$userId}, Month: {$month}, Year: {$year}, {$creatorInfo}{$callerInfo}");
+        }
         
         // تحديث accumulated_amount بعد إنشاء الراتب
         // المبلغ التراكمي الجديد = المتبقي من الراتب الحالي (total_amount - paid_amount)
