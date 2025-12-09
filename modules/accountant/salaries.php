@@ -187,6 +187,36 @@ if (empty($paidAmountColumnCheck)) {
     }
 }
 
+// إنشاء جدول salary_payments لتسجيل المدفوعات (اختياري - يُستخدم للتحقق من المدفوعات المرتبطة)
+$paymentsTableCheck = $db->queryOne("SHOW TABLES LIKE 'salary_payments'");
+if (empty($paymentsTableCheck)) {
+    try {
+        $db->execute("
+            CREATE TABLE IF NOT EXISTS `salary_payments` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `salary_id` int(11) NOT NULL COMMENT 'معرف الراتب',
+              `user_id` int(11) NOT NULL COMMENT 'معرف الموظف',
+              `payment_amount` decimal(10,2) NOT NULL COMMENT 'مبلغ الدفعة',
+              `payment_date` date NOT NULL COMMENT 'تاريخ الدفعة',
+              `payment_method` varchar(50) DEFAULT NULL COMMENT 'طريقة الدفع',
+              `notes` text DEFAULT NULL COMMENT 'ملاحظات',
+              `created_by` int(11) DEFAULT NULL COMMENT 'من قام بالتسجيل',
+              `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              KEY `salary_id` (`salary_id`),
+              KEY `user_id` (`user_id`),
+              KEY `payment_date` (`payment_date`),
+              KEY `created_by` (`created_by`),
+              CONSTRAINT `salary_payments_ibfk_1` FOREIGN KEY (`salary_id`) REFERENCES `salaries` (`id`) ON DELETE CASCADE,
+              CONSTRAINT `salary_payments_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+              CONSTRAINT `salary_payments_ibfk_3` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (Exception $e) {
+        error_log("Error creating salary_payments table: " . $e->getMessage());
+    }
+}
+
 // إنشاء جدول salary_settlements لتسجيل عمليات التسوية
 $settlementsTableCheck = $db->queryOne("SHOW TABLES LIKE 'salary_settlements'");
 if (empty($settlementsTableCheck)) {
