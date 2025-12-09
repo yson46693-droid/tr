@@ -1314,8 +1314,40 @@ unset($salary);
 foreach ($salariesFromDb as &$salary) {
     $userId = intval($salary['user_id'] ?? 0);
     if ($userId > 0 && !empty($salary['id'])) {
-        // حساب الساعات الفعلية من attendance_records
-        $actualHours = calculateMonthlyHours($userId, $selectedMonth, $selectedYear);
+        // استخراج شهر وسنة الراتب من بيانات الراتب نفسه (وليس من الفلترة)
+        $salaryMonth = null;
+        $salaryYear = null;
+        
+        // التحقق من نوع عمود month
+        $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+        $monthType = $monthColumnCheck['Type'] ?? '';
+        $isMonthDate = stripos($monthType, 'date') !== false;
+        
+        if ($isMonthDate && !empty($salary['month'])) {
+            // إذا كان month من نوع DATE، استخراج الشهر والسنة منه
+            $monthDate = DateTime::createFromFormat('Y-m-d', $salary['month']);
+            if ($monthDate) {
+                $salaryMonth = (int)$monthDate->format('n');
+                $salaryYear = (int)$monthDate->format('Y');
+            }
+        } else {
+            // إذا كان month من نوع INT، استخدمه مباشرة
+            $salaryMonth = isset($salary['month']) ? (int)$salary['month'] : null;
+        }
+        
+        // استخراج السنة من عمود year إذا كان موجوداً
+        if (isset($salary['year']) && !empty($salary['year'])) {
+            $salaryYear = (int)$salary['year'];
+        }
+        
+        // إذا لم نتمكن من استخراج الشهر والسنة، استخدم القيم من الفلترة كبديل
+        if (!$salaryMonth || !$salaryYear) {
+            $salaryMonth = $selectedMonth;
+            $salaryYear = $selectedYear;
+        }
+        
+        // حساب الساعات الفعلية من attendance_records باستخدام شهر وسنة الراتب
+        $actualHours = calculateMonthlyHours($userId, $salaryMonth, $salaryYear);
         $savedTotalHours = floatval($salary['total_hours'] ?? 0);
         
         // إذا كانت القيمة مختلفة، قم بالتحديث
@@ -2703,8 +2735,40 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                                 <td data-label="سعر الساعة"><?php echo formatCurrency($salary['hourly_rate']); ?></td>
                                 <td data-label="عدد الساعات">
                                     <?php 
+                                    // استخراج شهر وسنة الراتب من بيانات الراتب نفسه
+                                    $salaryMonthForTable = null;
+                                    $salaryYearForTable = null;
+                                    
+                                    // التحقق من نوع عمود month
+                                    $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+                                    $monthType = $monthColumnCheck['Type'] ?? '';
+                                    $isMonthDate = stripos($monthType, 'date') !== false;
+                                    
+                                    if ($isMonthDate && !empty($salary['month'])) {
+                                        // إذا كان month من نوع DATE، استخراج الشهر والسنة منه
+                                        $monthDate = DateTime::createFromFormat('Y-m-d', $salary['month']);
+                                        if ($monthDate) {
+                                            $salaryMonthForTable = (int)$monthDate->format('n');
+                                            $salaryYearForTable = (int)$monthDate->format('Y');
+                                        }
+                                    } else {
+                                        // إذا كان month من نوع INT، استخدمه مباشرة
+                                        $salaryMonthForTable = isset($salary['month']) ? (int)$salary['month'] : null;
+                                    }
+                                    
+                                    // استخراج السنة من عمود year إذا كان موجوداً
+                                    if (isset($salary['year']) && !empty($salary['year'])) {
+                                        $salaryYearForTable = (int)$salary['year'];
+                                    }
+                                    
+                                    // إذا لم نتمكن من استخراج الشهر والسنة، استخدم القيم من الفلترة كبديل
+                                    if (!$salaryMonthForTable || !$salaryYearForTable) {
+                                        $salaryMonthForTable = $selectedMonth;
+                                        $salaryYearForTable = $selectedYear;
+                                    }
+                                    
                                     // حساب الساعات مباشرة من الحضور لضمان الدقة (مطابقة مع صفحة الحضور)
-                                    $actualHoursForTable = calculateMonthlyHours($salary['user_id'], $selectedMonth, $selectedYear);
+                                    $actualHoursForTable = calculateMonthlyHours($salary['user_id'], $salaryMonthForTable, $salaryYearForTable);
                                     ?>
                                     <strong><?php echo formatHours($actualHoursForTable); ?></strong>
                                 </td>
@@ -3257,9 +3321,41 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                     
                     <div class="collapse salary-details-collapse" id="<?php echo $collapseId; ?>">
                         <?php
+                        // استخراج شهر وسنة الراتب من بيانات الراتب نفسه
+                        $salaryMonthForDetails = null;
+                        $salaryYearForDetails = null;
+                        
+                        // التحقق من نوع عمود month
+                        $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+                        $monthType = $monthColumnCheck['Type'] ?? '';
+                        $isMonthDate = stripos($monthType, 'date') !== false;
+                        
+                        if ($isMonthDate && !empty($salary['month'])) {
+                            // إذا كان month من نوع DATE، استخراج الشهر والسنة منه
+                            $monthDate = DateTime::createFromFormat('Y-m-d', $salary['month']);
+                            if ($monthDate) {
+                                $salaryMonthForDetails = (int)$monthDate->format('n');
+                                $salaryYearForDetails = (int)$monthDate->format('Y');
+                            }
+                        } else {
+                            // إذا كان month من نوع INT، استخدمه مباشرة
+                            $salaryMonthForDetails = isset($salary['month']) ? (int)$salary['month'] : null;
+                        }
+                        
+                        // استخراج السنة من عمود year إذا كان موجوداً
+                        if (isset($salary['year']) && !empty($salary['year'])) {
+                            $salaryYearForDetails = (int)$salary['year'];
+                        }
+                        
+                        // إذا لم نتمكن من استخراج الشهر والسنة، استخدم القيم من الفلترة كبديل
+                        if (!$salaryMonthForDetails || !$salaryYearForDetails) {
+                            $salaryMonthForDetails = $selectedMonth;
+                            $salaryYearForDetails = $selectedYear;
+                        }
+                        
                         // حساب بيانات التأخير
                         $userId = intval($salary['user_id'] ?? 0);
-                        $delaySummary = calculateMonthlyDelaySummary($userId, $selectedMonth, $selectedYear);
+                        $delaySummary = calculateMonthlyDelaySummary($userId, $salaryMonthForDetails, $salaryYearForDetails);
                         
                         // الحصول على سعر الساعة
                         $hourlyRate = cleanFinancialValue($salary['hourly_rate'] ?? $salary['current_hourly_rate'] ?? 0);
@@ -3324,7 +3420,7 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                                     // في حالة الخطأ، سجل الخطأ واستخدم الطريقة البديلة
                                     error_log('Error calculating cash balance for user ' . $userId . ' in salary card: ' . $e->getMessage());
                                     require_once __DIR__ . '/../../includes/salary_calculator.php';
-                                    $recalculatedCollectionsAmount = calculateSalesCollections($userId, $selectedMonth, $selectedYear);
+                                    $recalculatedCollectionsAmount = calculateSalesCollections($userId, $salaryMonthForDetails, $salaryYearForDetails);
                                     $recalculatedCollectionsBonus = round($recalculatedCollectionsAmount * 0.02, 2);
                                     $displayCashBalance = (float)$recalculatedCollectionsAmount;
                                     
@@ -3340,7 +3436,7 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                             } else {
                                 // إذا لم تكن الدالة موجودة، نستخدم الطريقة القديمة
                                 require_once __DIR__ . '/../../includes/salary_calculator.php';
-                                $recalculatedCollectionsAmount = calculateSalesCollections($userId, $selectedMonth, $selectedYear);
+                                $recalculatedCollectionsAmount = calculateSalesCollections($userId, $salaryMonthForDetails, $salaryYearForDetails);
                                 $recalculatedCollectionsBonus = round($recalculatedCollectionsAmount * 0.02, 2);
                                 $displayCashBalance = (float)$recalculatedCollectionsAmount;
                                 
@@ -3413,8 +3509,40 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                         <div class="detail-row">
                             <span class="detail-label">عدد الساعات:</span>
                             <?php 
+                            // استخراج شهر وسنة الراتب من بيانات الراتب نفسه
+                            $salaryMonthForModal = null;
+                            $salaryYearForModal = null;
+                            
+                            // التحقق من نوع عمود month
+                            $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+                            $monthType = $monthColumnCheck['Type'] ?? '';
+                            $isMonthDate = stripos($monthType, 'date') !== false;
+                            
+                            if ($hasSalaryId && $isMonthDate && !empty($salary['month'])) {
+                                // إذا كان month من نوع DATE، استخراج الشهر والسنة منه
+                                $monthDate = DateTime::createFromFormat('Y-m-d', $salary['month']);
+                                if ($monthDate) {
+                                    $salaryMonthForModal = (int)$monthDate->format('n');
+                                    $salaryYearForModal = (int)$monthDate->format('Y');
+                                }
+                            } elseif ($hasSalaryId && isset($salary['month'])) {
+                                // إذا كان month من نوع INT، استخدمه مباشرة
+                                $salaryMonthForModal = (int)$salary['month'];
+                            }
+                            
+                            // استخراج السنة من عمود year إذا كان موجوداً
+                            if ($hasSalaryId && isset($salary['year']) && !empty($salary['year'])) {
+                                $salaryYearForModal = (int)$salary['year'];
+                            }
+                            
+                            // إذا لم نتمكن من استخراج الشهر والسنة، استخدم القيم من الفلترة كبديل
+                            if (!$salaryMonthForModal || !$salaryYearForModal) {
+                                $salaryMonthForModal = $selectedMonth;
+                                $salaryYearForModal = $selectedYear;
+                            }
+                            
                             // حساب الساعات مباشرة من الحضور لضمان الدقة (مطابقة مع صفحة الحضور)
-                            $actualHoursForModal = calculateMonthlyHours($userId, $selectedMonth, $selectedYear);
+                            $actualHoursForModal = calculateMonthlyHours($userId, $salaryMonthForModal, $salaryYearForModal);
                             
                             // تحديث total_hours تلقائياً إذا كان مختلفاً عن القيمة الفعلية
                             if ($hasSalaryId) {
