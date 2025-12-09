@@ -1155,31 +1155,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         
                         $settlementId = $db->getLastInsertId();
                         
-                        // إضافة تسوية الراتب كـ expense في accountant_transactions
-                        $employeeName = $salary['full_name'] ?? $salary['username'];
-                        $settlementDescription = 'تسوية راتب موظف: ' . $employeeName . 
-                                                 ' (الراتب #' . $salaryId . 
-                                                 ' - ' . $salaryMonth . '/' . $salaryYear . ')';
-                        $referenceNumber = 'SAL-SETTLE-' . $salaryId . '-' . date('YmdHis');
-                        
-                        // التأكد من وجود جدول accountant_transactions
-                        $accountantTableCheck = $db->queryOne("SHOW TABLES LIKE 'accountant_transactions'");
-                        if (!empty($accountantTableCheck)) {
-                            $db->execute(
-                                "INSERT INTO accountant_transactions 
-                                    (transaction_type, amount, description, reference_number, 
-                                     status, approved_by, created_by, approved_at)
-                                 VALUES (?, ?, ?, ?, 'approved', ?, ?, NOW())",
-                                [
-                                    'expense',
-                                    $settlementAmount,
-                                    $settlementDescription,
-                                    $referenceNumber,
-                                    $currentUser['id'],
-                                    $currentUser['id']
-                                ]
-                            );
-                        }
+                        // ملاحظة: لا يتم تسجيل تسوية الراتب في المصروفات (accountant_transactions)
+                        // لأنها تُسجل فقط في جدول salary_settlements لتجنب التسجيل المزدوج
                         
                         // إنشاء فاتورة PDF
                         require_once __DIR__ . '/../../includes/invoices.php';
