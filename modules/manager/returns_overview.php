@@ -29,7 +29,10 @@ $offset = ($pageNum - 1) * $perPage;
 $salesRepFilter = isset($_GET['sales_rep_id']) ? (int)$_GET['sales_rep_id'] : 0;
 $customerFilter = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
 
-// Build query
+// التحقق من وجود جدول local_returns
+$localReturnsTableExists = $db->queryOne("SHOW TABLES LIKE 'local_returns'");
+
+// Build query for delegate returns
 $sql = "SELECT 
         r.id,
         r.return_number,
@@ -43,7 +46,8 @@ $sql = "SELECT
         u.id as sales_rep_id,
         u.full_name as sales_rep_name,
         i.invoice_number,
-        GROUP_CONCAT(DISTINCT ri.batch_number ORDER BY ri.batch_number SEPARATOR ', ') as batch_numbers
+        GROUP_CONCAT(DISTINCT ri.batch_number ORDER BY ri.batch_number SEPARATOR ', ') as batch_numbers,
+        'delegate' as return_type
     FROM returns r
     LEFT JOIN customers c ON r.customer_id = c.id
     LEFT JOIN users u ON r.sales_rep_id = u.id
@@ -64,63 +68,120 @@ if ($customerFilter > 0) {
     $params[] = $customerFilter;
 }
 
-$sql .= " GROUP BY r.id
-          ORDER BY r.created_at DESC
-          LIMIT ? OFFSET ?";
+$sql .= " GROUP BY r.id";
 
-$params[] = $perPage;
-$params[] = $offset;
+// تنفيذ استعلام مرتجعات المندوبين
+$returns = $db->query($sql, $params) ?: [];
 
-$returns = $db->query($sql, $params);
-
-// Get total count
-$countSql = "SELECT COUNT(DISTINCT r.id) as total
-             FROM returns r
-             LEFT JOIN customers c ON r.customer_id = c.id
-             LEFT JOIN return_items ri ON r.id = ri.return_id
-             WHERE 1=1";
-
-$countParams = [];
-
-if ($salesRepFilter > 0) {
-    $countSql .= " AND r.sales_rep_id = ?";
-    $countParams[] = $salesRepFilter;
+// جلب مرتجعات العملاء المحليين
+$localReturns = [];
+if (!empty($localReturnsTableExists)) {
+    $localSql = "SELECT 
+            lr.id,
+            lr.return_number,
+            lr.return_date,
+            lr.refund_amount,
+            lr.status,
+            COALESCE(SUM(lri.quantity), 0) as return_quantity,
+            lr.notes as reason,
+            lc.id as customer_id,
+            lc.name as customer_name,
+            NULL as sales_rep_id,
+            NULL as sales_rep_name,
+            (SELECT li.invoice_number 
+             FROM local_return_items lri2 
+             LEFT JOIN local_invoices li ON lri2.invoice_id = li.id 
+             WHERE lri2.return_id = lr.id 
+             LIMIT 1) as invoice_number,
+            GROUP_CONCAT(DISTINCT lri.batch_number ORDER BY lri.batch_number SEPARATOR ', ') as batch_numbers,
+            'local' as return_type
+        FROM local_returns lr
+        LEFT JOIN local_customers lc ON lr.customer_id = lc.id
+        LEFT JOIN local_return_items lri ON lr.id = lri.return_id
+        WHERE 1=1";
+    
+    $localParams = [];
+    
+    // Apply customer filter for local returns
+    if ($customerFilter > 0) {
+        $localSql .= " AND lr.customer_id = ?";
+        $localParams[] = $customerFilter;
+    }
+    
+    $localSql .= " GROUP BY lr.id";
+    
+    $localReturns = $db->query($localSql, $localParams) ?: [];
 }
 
-if ($customerFilter > 0) {
-    $countSql .= " AND r.customer_id = ?";
-    $countParams[] = $customerFilter;
-}
+// دمج المرتجعات
+$allReturns = array_merge($returns ?: [], $localReturns);
 
-$totalResult = $db->queryOne($countSql, $countParams);
-$totalCount = (int)($totalResult['total'] ?? 0);
+// ترتيب حسب التاريخ
+usort($allReturns, function($a, $b) {
+    $dateA = $a['created_at'] ?? $a['return_date'] ?? '';
+    $dateB = $b['created_at'] ?? $b['return_date'] ?? '';
+    return strtotime($dateB) - strtotime($dateA);
+});
+
+// تطبيق pagination
+$totalCount = count($allReturns);
 $totalPages = ceil($totalCount / $perPage);
+$returns = array_slice($allReturns, $offset, $perPage);
+
+// Total count is already calculated from merged results above
 
 // Get sales reps for filter
 $salesReps = $db->query(
     "SELECT id, full_name FROM users WHERE role = 'sales' AND status = 'active' ORDER BY full_name"
 );
 
-// Get customers for filter
+// Get customers for filter (both delegate and local)
 $customers = $db->query(
     "SELECT id, name FROM customers WHERE status = 'active' ORDER BY name LIMIT 100"
-);
+) ?: [];
 
-// Statistics
+// Get local customers for filter
+if (!empty($localReturnsTableExists)) {
+    $localCustomers = $db->query(
+        "SELECT id, name FROM local_customers WHERE status = 'active' ORDER BY name LIMIT 100"
+    ) ?: [];
+    // دمج العملاء
+    foreach ($localCustomers as $lc) {
+        $customers[] = ['id' => 'local_' . $lc['id'], 'name' => $lc['name'] . ' (محلي)'];
+    }
+}
+
+// Statistics (including local returns)
 $stats = [
-    'pending' => (int)$db->queryOne(
-        "SELECT COUNT(*) as total FROM returns WHERE status = 'pending'"
-    )['total'] ?? 0,
-    'approved_today' => (int)$db->queryOne(
-        "SELECT COUNT(*) as total FROM returns WHERE status = 'approved' AND DATE(approved_at) = CURDATE()"
-    )['total'] ?? 0,
-    'total_pending_amount' => (float)$db->queryOne(
-        "SELECT COALESCE(SUM(refund_amount), 0) as total FROM returns WHERE status = 'pending'"
-    )['total'] ?? 0,
-    'total_approved_today' => (float)$db->queryOne(
-        "SELECT COALESCE(SUM(refund_amount), 0) as total FROM returns WHERE status = 'approved' AND DATE(approved_at) = CURDATE()"
-    )['total'] ?? 0,
+    'pending' => 0,
+    'approved_today' => 0,
+    'total_pending_amount' => 0.0,
+    'total_approved_today' => 0.0,
 ];
+
+// إحصائيات مرتجعات المندوبين
+$delegatePending = (int)$db->queryOne("SELECT COUNT(*) as total FROM returns WHERE status = 'pending'")['total'] ?? 0;
+$delegateApprovedToday = (int)$db->queryOne("SELECT COUNT(*) as total FROM returns WHERE status = 'approved' AND DATE(approved_at) = CURDATE()")['total'] ?? 0;
+$delegatePendingAmount = (float)$db->queryOne("SELECT COALESCE(SUM(refund_amount), 0) as total FROM returns WHERE status = 'pending'")['total'] ?? 0;
+$delegateApprovedTodayAmount = (float)$db->queryOne("SELECT COALESCE(SUM(refund_amount), 0) as total FROM returns WHERE status = 'approved' AND DATE(approved_at) = CURDATE()")['total'] ?? 0;
+
+$stats['pending'] += $delegatePending;
+$stats['approved_today'] += $delegateApprovedToday;
+$stats['total_pending_amount'] += $delegatePendingAmount;
+$stats['total_approved_today'] += $delegateApprovedTodayAmount;
+
+// إحصائيات مرتجعات العملاء المحليين
+if (!empty($localReturnsTableExists)) {
+    $localPending = (int)$db->queryOne("SELECT COUNT(*) as total FROM local_returns WHERE status = 'pending'")['total'] ?? 0;
+    $localApprovedToday = (int)$db->queryOne("SELECT COUNT(*) as total FROM local_returns WHERE status = 'approved' AND DATE(approved_at) = CURDATE()")['total'] ?? 0;
+    $localPendingAmount = (float)$db->queryOne("SELECT COALESCE(SUM(refund_amount), 0) as total FROM local_returns WHERE status = 'pending'")['total'] ?? 0;
+    $localApprovedTodayAmount = (float)$db->queryOne("SELECT COALESCE(SUM(refund_amount), 0) as total FROM local_returns WHERE status = 'approved' AND DATE(approved_at) = CURDATE()")['total'] ?? 0;
+    
+    $stats['pending'] += $localPending;
+    $stats['approved_today'] += $localApprovedToday;
+    $stats['total_pending_amount'] += $localPendingAmount;
+    $stats['total_approved_today'] += $localApprovedTodayAmount;
+}
 
 ?>
 
@@ -221,9 +282,12 @@ $stats = [
                             <label class="form-label">العميل</label>
                             <select name="customer_id" class="form-select">
                                 <option value="">جميع العملاء</option>
-                                <?php foreach ($customers as $customer): ?>
-                                    <option value="<?php echo $customer['id']; ?>" <?php echo $customerFilter === $customer['id'] ? 'selected' : ''; ?>>
-                                        <?php echo htmlspecialchars($customer['name']); ?>
+                                <?php foreach ($customers as $customer): 
+                                    $customerId = is_array($customer) ? $customer['id'] : $customer;
+                                    $customerName = is_array($customer) ? $customer['name'] : $customer;
+                                ?>
+                                    <option value="<?php echo htmlspecialchars($customerId); ?>" <?php echo $customerFilter == $customerId ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($customerName); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -290,9 +354,20 @@ $stats = [
                                         <tr>
                                             <td>
                                                 <strong class="text-primary"><?php echo htmlspecialchars($return['return_number']); ?></strong>
+                                                <?php if ($return['return_type'] === 'local'): ?>
+                                                    <br><small class="badge bg-success">عميل محلي</small>
+                                                <?php else: ?>
+                                                    <br><small class="badge bg-primary">مندوب</small>
+                                                <?php endif; ?>
                                             </td>
                                             <td><?php echo htmlspecialchars($return['customer_name'] ?? '-'); ?></td>
-                                            <td><?php echo htmlspecialchars($return['sales_rep_name'] ?? '-'); ?></td>
+                                            <td>
+                                                <?php if ($return['return_type'] === 'local'): ?>
+                                                    <span class="text-muted">-</span>
+                                                <?php else: ?>
+                                                    <?php echo htmlspecialchars($return['sales_rep_name'] ?? '-'); ?>
+                                                <?php endif; ?>
+                                            </td>
                                             <td><?php echo htmlspecialchars($return['invoice_number'] ?? '-'); ?></td>
                                             <td><?php echo htmlspecialchars($return['batch_numbers'] ?? '-'); ?></td>
                                             <td><?php echo number_format((float)$return['return_quantity'], 2); ?></td>
@@ -306,12 +381,21 @@ $stats = [
                                                 </span>
                                             </td>
                                             <td>
-                                                <a href="<?php echo getRelativeUrl('print_return_invoice.php?id=' . $return['id']); ?>" 
-                                                   target="_blank" 
-                                                   class="btn btn-sm btn-outline-primary" 
-                                                   title="طباعة فاتورة المرتجع">
-                                                    <i class="bi bi-printer me-1"></i>طباعة
-                                                </a>
+                                                <?php if ($return['return_type'] === 'local'): ?>
+                                                    <a href="<?php echo getRelativeUrl('print_local_return.php?id=' . $return['id']); ?>" 
+                                                       target="_blank" 
+                                                       class="btn btn-sm btn-outline-primary" 
+                                                       title="طباعة فاتورة المرتجع">
+                                                        <i class="bi bi-printer me-1"></i>طباعة
+                                                    </a>
+                                                <?php else: ?>
+                                                    <a href="<?php echo getRelativeUrl('print_return_invoice.php?id=' . $return['id']); ?>" 
+                                                       target="_blank" 
+                                                       class="btn btn-sm btn-outline-primary" 
+                                                       title="طباعة فاتورة المرتجع">
+                                                        <i class="bi bi-printer me-1"></i>طباعة
+                                                    </a>
+                                                <?php endif; ?>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
