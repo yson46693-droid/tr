@@ -85,6 +85,11 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/path_helper.php';
 
+// تحميل ملف إنشاء الرواتب التلقائي (يتم تنفيذه تلقائياً عند تحميل الملف)
+if (file_exists(__DIR__ . '/includes/auto_salary_init.php')) {
+    require_once __DIR__ . '/includes/auto_salary_init.php';
+}
+
 // ============================================
 // تحميل باقي التحسينات الأمنية (بعد db.php و auth.php)
 // ============================================
