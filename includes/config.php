@@ -657,7 +657,7 @@ if (!defined('ENABLE_DAILY_CONSUMPTION_REPORT')) {
     define('ENABLE_DAILY_CONSUMPTION_REPORT', false);
 }
 if (!defined('ENABLE_PAGE_LOADER')) {
-    define('ENABLE_PAGE_LOADER', false);
+    define('ENABLE_PAGE_LOADER', true);
 }
 if (!defined('ENABLE_DAILY_BACKUP_DELIVERY')) {
     define('ENABLE_DAILY_BACKUP_DELIVERY', true);
