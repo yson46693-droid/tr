@@ -1265,7 +1265,6 @@ if (!empty($advanceRequests)) {
 // حساب المتبقي من الراتب (نفس المنطق المستخدم في صفحة salaries)
 $remainingAmount = 0;
 $accumulatedAmount = 0;
-$paidAmount = 0;
 
 if ($salaryData['exists'] && isset($currentSalary) && isset($currentSalary['id'])) {
     $salaryId = intval($currentSalary['id'] ?? 0);
@@ -1285,23 +1284,12 @@ if ($salaryData['exists'] && isset($currentSalary) && isset($currentSalary['id']
         
         $accumulatedAmount = $accumulatedData['accumulated'];
         
-        // حساب المبلغ المدفوع من جميع التسويات حتى نهاية الشهر
-        $toDate = date('Y-m-t', mktime(0, 0, 0, $salaryMonth, 1, $salaryYear));
-        $allSettlements = $db->query(
-            "SELECT settlement_amount FROM salary_settlements 
-             WHERE user_id = ? 
-             AND DATE(settlement_date) <= ?
-             ORDER BY settlement_date ASC",
-            [$currentUser['id'], $toDate]
-        );
+        // حساب المتبقي بناءً على settlements_advances وليس من جدول salary_settlements
+        // لتطابق حساب المتبقي في بطاقة الموظف
+        $currentSettlementsAdvances = cleanFinancialValue($currentSalary['settlements_advances'] ?? 0);
         
-        foreach ($allSettlements as $settlement) {
-            $setAmount = cleanFinancialValue($settlement['settlement_amount'] ?? 0);
-            $paidAmount += max(0, $setAmount);
-        }
-        
-        // حساب المتبقي = المبلغ التراكمي - المبلغ المدفوع
-        $remainingAmount = max(0, $accumulatedAmount - $paidAmount);
+        // حساب المتبقي = المبلغ التراكمي - التسويات والسلف
+        $remainingAmount = max(0, $accumulatedAmount - $currentSettlementsAdvances);
     }
 }
 
