@@ -1015,7 +1015,19 @@ if (ob_get_level() > 0) {
     <?php endif; ?>
     
     <!-- Loading Overlay HTML - فقط إذا كان المستخدم مسجل دخول -->
-    <?php if (isLoggedIn() && (!defined('ENABLE_PAGE_LOADER') || ENABLE_PAGE_LOADER)): ?>
+    <?php 
+    $showLoadingOverlay = false;
+    if (isLoggedIn()) {
+        // التحقق من أن ENABLE_PAGE_LOADER معرّف وقيمته true
+        if (defined('ENABLE_PAGE_LOADER')) {
+            $showLoadingOverlay = ENABLE_PAGE_LOADER === true;
+        } else {
+            // إذا لم يتم تعريفه، نشغّله افتراضياً
+            $showLoadingOverlay = true;
+        }
+    }
+    ?>
+    <?php if ($showLoadingOverlay): ?>
     <div id="pageLoadingOverlay" aria-hidden="true" role="status" aria-label="جاري التحميل">
         <div class="loading-content">
             <div class="loading-spinner"></div>

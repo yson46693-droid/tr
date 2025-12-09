@@ -548,7 +548,19 @@ if (!defined('ACCESS_ALLOWED')) {
     </script>
     
     <!-- Page Loading Overlay Script - لإظهار دائرة التحميل بين التنقلات -->
-    <?php if (isLoggedIn() && (!defined('ENABLE_PAGE_LOADER') || ENABLE_PAGE_LOADER)): ?>
+    <?php 
+    $showLoadingScript = false;
+    if (isLoggedIn()) {
+        // التحقق من أن ENABLE_PAGE_LOADER معرّف وقيمته true
+        if (defined('ENABLE_PAGE_LOADER')) {
+            $showLoadingScript = ENABLE_PAGE_LOADER === true;
+        } else {
+            // إذا لم يتم تعريفه، نشغّله افتراضياً
+            $showLoadingScript = true;
+        }
+    }
+    ?>
+    <?php if ($showLoadingScript): ?>
     <script>
         (function() {
             'use strict';
