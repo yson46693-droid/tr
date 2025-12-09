@@ -87,8 +87,8 @@ switch ($role) {
             [
                 'title' => 'المرتجعات',
                 'icon' => 'bi-arrow-return-left',
-                'url' => $baseUrl . 'manager.php?page=returns',
-                'active' => (isset($_GET['page']) && $_GET['page'] === 'returns'),
+                'url' => $baseUrl . 'manager.php?page=returns_overview',
+                'active' => (isset($_GET['page']) && $_GET['page'] === 'returns_overview'),
                 'badge' => null
             ]
         ];
