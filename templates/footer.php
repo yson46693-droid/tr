@@ -567,8 +567,12 @@ if (!defined('ACCESS_ALLOWED')) {
             
             const loadingOverlay = document.getElementById('pageLoadingOverlay');
             if (!loadingOverlay) {
-                return; // لا يوجد overlay - ربما في صفحة login
+                // لا يوجد overlay - ربما في صفحة login أو تم تعطيله
+                console.log('Page Loading Overlay: غير متاح (قد تكون في صفحة login أو تم تعطيله)');
+                return;
             }
+            
+            console.log('Page Loading Overlay: تم التفعيل بنجاح');
             
             let loadingTimeout = null;
             let activeRequests = 0;

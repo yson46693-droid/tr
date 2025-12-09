@@ -573,7 +573,13 @@ if (ob_get_level() > 0) {
     <link rel="manifest" href="<?php echo getRelativeUrl('manifest.php'); ?>">
     
     <!-- 🎬 Page Loading Animation CSS -->
-    <?php if (!defined('ENABLE_PAGE_LOADER') || ENABLE_PAGE_LOADER): ?>
+    <?php 
+    $enablePageLoaderCSS = true;
+    if (defined('ENABLE_PAGE_LOADER')) {
+        $enablePageLoaderCSS = ENABLE_PAGE_LOADER === true;
+    }
+    ?>
+    <?php if ($enablePageLoaderCSS): ?>
     <style>
         /* شاشة التحميل الرئيسية - ألوان التطبيق */
         #pageLoader {
@@ -2646,7 +2652,13 @@ if (ob_get_level() > 0) {
         <?php echo isset($lang['skip_to_main']) ? $lang['skip_to_main'] : 'تخطي إلى المحتوى الرئيسي'; ?>
     </a>
     <!-- 🎬 PWA Splash Screen -->
-    <?php if (!defined('ENABLE_PAGE_LOADER') || ENABLE_PAGE_LOADER): ?>
+    <?php 
+    $enablePageLoaderSplash = true;
+    if (defined('ENABLE_PAGE_LOADER')) {
+        $enablePageLoaderSplash = ENABLE_PAGE_LOADER === true;
+    }
+    ?>
+    <?php if ($enablePageLoaderSplash): ?>
     <div id="pageLoader" role="status" aria-live="polite" aria-label="<?php echo isset($lang['loading']) ? $lang['loading'] : 'جاري التحميل'; ?>">
         <img src="<?php echo ASSETS_URL; ?>icons/icon-192x192.png" 
              alt="<?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?>" 
