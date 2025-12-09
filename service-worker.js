@@ -1,4 +1,4 @@
-const CACHE_VERSION = '1.0.3'; // Updated for fast navigation
+const CACHE_VERSION = '1.0.4'; // Fixed redirect handling to prevent service worker errors
 const CACHE_NAME = 'company-management-v' + CACHE_VERSION;
 const NAVIGATION_CACHE_NAME = 'navigation-cache-v' + CACHE_VERSION;
 const BASE = '/v1/';
@@ -34,7 +34,37 @@ self.addEventListener('install', event => {
   );
 });
 
-// Activate event - Clean old caches
+// Helper function to check if response is a redirect
+function isRedirectResponse(response) {
+  if (!response) return false;
+  // Check status code (300-399 are redirects)
+  if (response.status >= 300 && response.status < 400) return true;
+  // Check response type (opaqueredirect is a redirect)
+  if (response.type === 'opaqueredirect') return true;
+  return false;
+}
+
+// Helper to clean redirect responses from cache
+async function cleanRedirectsFromCache(cacheName) {
+  try {
+    const cache = await caches.open(cacheName);
+    const keys = await cache.keys();
+    const deletePromises = [];
+    
+    for (const key of keys) {
+      const response = await cache.match(key);
+      if (response && isRedirectResponse(response)) {
+        deletePromises.push(cache.delete(key));
+      }
+    }
+    
+    await Promise.all(deletePromises);
+  } catch (e) {
+    // تجاهل الأخطاء
+  }
+}
+
+// Activate event - Clean old caches and remove redirects
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -45,7 +75,12 @@ self.addEventListener('activate', event => {
           }
         })
       )
-    ).then(() => self.clients.claim())
+    ).then(async () => {
+      // CRITICAL FIX: تنظيف أي redirects موجودة في الكاش
+      await cleanRedirectsFromCache(CACHE_NAME);
+      await cleanRedirectsFromCache(NAVIGATION_CACHE_NAME);
+      self.clients.claim();
+    })
   );
 });
 
@@ -134,6 +169,14 @@ self.addEventListener('fetch', event => {
             cache: 'no-store' // عدم استخدام كاش المتصفح
           });
           
+          // CRITICAL FIX: إذا كانت الاستجابة redirect، لا نعترضها - ندع المتصفح يتعامل معها
+          if (isRedirectResponse(networkResponse)) {
+            // لا نستخدم event.respondWith() للـ redirects - ندع المتصفح يتعامل معها
+            // لكن بما أننا استخدمنا event.respondWith() بالفعل، يجب إرجاع الاستجابة
+            // لكن الأفضل هو عدم الاعتراض من الأساس
+            return networkResponse;
+          }
+          
           // إذا كانت الاستجابة ناجحة وليست redirect
           if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
             // حفظ في كاش التنقل
@@ -145,11 +188,6 @@ self.addEventListener('fetch', event => {
             
             return networkResponse;
           }
-          
-          // إذا كانت redirect أو خطأ، محاولة الكاش
-          if (networkResponse.status >= 300 && networkResponse.status < 400) {
-            return networkResponse; // إرجاع redirect كما هي
-          }
         } catch (error) {
           // في حالة خطأ الشبكة، محاولة الكاش
         }
@@ -159,13 +197,19 @@ self.addEventListener('fetch', event => {
         const cachedResponse = await cache.match(event.request);
         
         if (cachedResponse) {
-          // التحقق من صلاحية الكاش
-          const isValid = await isCacheValid(event.request, NAVIGATION_CACHE_TTL);
-          if (isValid) {
-            return cachedResponse;
-          } else {
-            // حذف الكاش القديم
+          // CRITICAL FIX: التحقق من أن الكاش ليس redirect
+          if (isRedirectResponse(cachedResponse)) {
+            // حذف redirect من الكاش
             await cache.delete(event.request);
+          } else {
+            // التحقق من صلاحية الكاش
+            const isValid = await isCacheValid(event.request, NAVIGATION_CACHE_TTL);
+            if (isValid) {
+              return cachedResponse;
+            } else {
+              // حذف الكاش القديم
+              await cache.delete(event.request);
+            }
           }
         }
         
@@ -173,7 +217,12 @@ self.addEventListener('fetch', event => {
         const generalCache = await caches.open(CACHE_NAME);
         const generalCached = await generalCache.match(event.request);
         if (generalCached) {
-          return generalCached;
+          // CRITICAL FIX: التحقق من أن الكاش ليس redirect
+          if (isRedirectResponse(generalCached)) {
+            await generalCache.delete(event.request);
+          } else {
+            return generalCached;
+          }
         }
         
         // إذا فشل كل شيء، إرجاع offline page
@@ -204,21 +253,29 @@ self.addEventListener('fetch', event => {
         // محاولة الكاش أولاً (أسرع)
         const cachedResponse = await caches.match(event.request);
         if (cachedResponse) {
-          // جلب من الشبكة في الخلفية لتحديث الكاش (Stale-While-Revalidate)
-          fetch(event.request, {
-            redirect: 'follow',
-            cache: 'reload'
-          }).then(response => {
-            if (response && response.status === 200 && response.type === 'basic') {
-              const responseClone = response.clone();
-              caches.open(CACHE_NAME).then(cache => {
-                cache.put(event.request, responseClone);
-                limitCacheSize(CACHE_NAME, MAX_DYNAMIC_CACHE_ITEMS);
-              });
-            }
-          }).catch(() => {}); // تجاهل الأخطاء في التحديث
-          
-          return cachedResponse; // إرجاع من الكاش فوراً
+          // CRITICAL FIX: التحقق من أن الكاش ليس redirect
+          if (isRedirectResponse(cachedResponse)) {
+            // حذف redirect من الكاش
+            const cache = await caches.open(CACHE_NAME);
+            await cache.delete(event.request);
+          } else {
+            // جلب من الشبكة في الخلفية لتحديث الكاش (Stale-While-Revalidate)
+            fetch(event.request, {
+              redirect: 'follow',
+              cache: 'reload'
+            }).then(response => {
+              // CRITICAL FIX: لا نحفظ redirects في الكاش
+              if (response && !isRedirectResponse(response) && response.status === 200 && response.type === 'basic') {
+                const responseClone = response.clone();
+                caches.open(CACHE_NAME).then(cache => {
+                  cache.put(event.request, responseClone);
+                  limitCacheSize(CACHE_NAME, MAX_DYNAMIC_CACHE_ITEMS);
+                });
+              }
+            }).catch(() => {}); // تجاهل الأخطاء في التحديث
+            
+            return cachedResponse; // إرجاع من الكاش فوراً
+          }
         }
         
         // إذا لم يكن في الكاش، جلب من الشبكة وتخزينه
@@ -227,6 +284,11 @@ self.addEventListener('fetch', event => {
             redirect: 'follow',
             cache: 'reload'
           });
+          
+          // CRITICAL FIX: إذا كانت redirect، إرجاعها مباشرة بدون حفظ في الكاش
+          if (isRedirectResponse(response)) {
+            return response;
+          }
           
           if (response && response.status === 200 && response.type === 'basic') {
             const responseClone = response.clone();
@@ -252,6 +314,11 @@ self.addEventListener('fetch', event => {
             cache: 'no-store'
           });
           
+          // CRITICAL FIX: إذا كانت redirect، إرجاعها مباشرة
+          if (isRedirectResponse(response)) {
+            return response;
+          }
+          
           // لا نحفظ API responses في الكاش (ديناميكية)
           return response;
         } catch (error) {
@@ -272,12 +339,12 @@ self.addEventListener('fetch', event => {
           redirect: 'follow'
         });
         
-        // CRITICAL FIX: Never cache redirect responses
-        if (response && response.status >= 300 && response.status < 400) {
-          return response; // إرجاع إعادة التوجيه كما هي
+        // CRITICAL FIX: إذا كانت redirect، إرجاعها مباشرة بدون حفظ في الكاش
+        if (isRedirectResponse(response)) {
+          return response; // إرجاع إعادة التوجيه كما هي - لا نحفظها في الكاش
         }
         
-        // حفظ في الكاش إذا كانت ناجحة
+        // حفظ في الكاش إذا كانت ناجحة وليست redirect
         if (response && response.status === 200 && response.type === 'basic') {
           const responseClone = response.clone();
           const cache = await caches.open(CACHE_NAME);
@@ -290,9 +357,9 @@ self.addEventListener('fetch', event => {
         // في حالة الخطأ، محاولة جلب من الكاش
         const cachedResponse = await caches.match(event.request);
         if (cachedResponse) {
-          // CRITICAL FIX: Check if cached response is a redirect and don't serve it
-          if (cachedResponse.status >= 300 && cachedResponse.status < 400) {
-            // Delete the cached redirect
+          // CRITICAL FIX: التحقق من أن الكاش ليس redirect
+          if (isRedirectResponse(cachedResponse)) {
+            // حذف redirect من الكاش
             const cache = await caches.open(CACHE_NAME);
             await cache.delete(event.request);
             // إرجاع offline page بدلاً من ذلك
