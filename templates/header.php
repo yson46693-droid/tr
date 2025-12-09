@@ -1138,20 +1138,13 @@ if (ob_get_level() > 0) {
     (function() {
         'use strict';
         
-        // منع الضغط بالزر الأيمن (Context Menu)
+        // منع الضغط بالزر الأيمن
         document.addEventListener('contextmenu', function(e) {
             e.preventDefault();
-            e.stopPropagation();
             return false;
         }, true);
         
-        // منع اختيار النص (اختياري - يمكن إزالته إذا كان يسبب مشاكل)
-        document.addEventListener('selectstart', function(e) {
-            e.preventDefault();
-            return false;
-        }, true);
-        
-        // منع اختصارات لوحة المفاتيح لفتح أدوات المطور
+        // منع اختصارات لوحة المفاتيح
         document.addEventListener('keydown', function(e) {
             // F12 - فتح أدوات المطور
             if (e.keyCode === 123) {
@@ -1694,14 +1687,6 @@ if (ob_get_level() > 0) {
         var originalCreateEventObject = document.createEventObject;
         if (originalCreateEventObject) {
             document.createEventObject = function() {
-                return null;
-            };
-        }
-        
-        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
-        var originalCreateEventNS = document.createEventNS;
-        if (originalCreateEventNS) {
-            document.createEventNS = function() {
                 return null;
             };
         }
