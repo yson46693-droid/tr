@@ -1118,6 +1118,8 @@ $hourlyRate = cleanFinancialValue($currentSalary['hourly_rate'] ?? $currentUser[
 // استخدام اسم العمود الصحيح (bonus أو bonuses)
 $bonus = cleanFinancialValue($currentSalary[$bonusColumnName] ?? $currentSalary['bonus'] ?? $currentSalary['bonuses'] ?? 0);
 $deductions = cleanFinancialValue($currentSalary['deductions'] ?? 0);
+// التسويات والسلف (من العمود الجديد)
+$settlementsAdvances = cleanFinancialValue($currentSalary['settlements_advances'] ?? 0);
 
 // حساب إجمالي التحصيلات من جدول collections فقط (مثل cash_register.php)
 // لضمان أن نسبة التحصيلات = 2% من إجمالي التحصيلات من العملاء
@@ -1185,8 +1187,8 @@ if ($currentSalary && isset($currentSalary['base_amount'])) {
     }
     
     // إعادة حساب الراتب الإجمالي من المكونات لضمان الدقة
-    // الراتب الإجمالي = الراتب الأساسي + المكافآت + نسبة التحصيلات - الخصومات
-    $totalSalary = round($baseAmount + $bonus + $collectionsBonus - $deductions, 2);
+    // الراتب الإجمالي = الراتب الأساسي + المكافآت + نسبة التحصيلات - الخصومات - التسويات والسلف
+    $totalSalary = round($baseAmount + $bonus + $collectionsBonus - $deductions - $settlementsAdvances, 2);
     
     // تحديث $monthStats بالقيم المحسوبة
     $monthStats['total_salary'] = $totalSalary;
@@ -1201,6 +1203,7 @@ if ($currentSalary && isset($currentSalary['base_amount'])) {
     // إذا لم يكن هناك راتب محفوظ، استخدم القيم من $monthStats
     $baseAmount = 0;
     $totalSalary = $monthStats['total_salary'] ?? 0;
+    $settlementsAdvances = 0;
     
     // حساب نسبة التحصيلات بناءً على إجمالي التحصيلات من جدول collections فقط
     if ($currentUser['role'] === 'sales') {
@@ -1213,9 +1216,9 @@ if ($currentSalary && isset($currentSalary['base_amount'])) {
     
     // إعادة حساب الراتب الإجمالي من المكونات
     if ($currentUser['role'] === 'sales') {
-        $totalSalary = round($baseAmount + $bonus + $collectionsBonus - $deductions, 2);
+        $totalSalary = round($baseAmount + $bonus + $collectionsBonus - $deductions - $settlementsAdvances, 2);
     } else {
-        $totalSalary = round($baseAmount + $bonus - $deductions, 2);
+        $totalSalary = round($baseAmount + $bonus - $deductions - $settlementsAdvances, 2);
     }
 }
 
@@ -1612,6 +1615,12 @@ if ($showSuccessFromSession): ?>
                 <td>الخصومات</td>
                 <td><?php echo formatCurrency($deductions); ?></td>
             </tr>
+            <?php if ($settlementsAdvances > 0): ?>
+            <tr>
+                <td>التسويات والسلف</td>
+                <td class="text-danger"><?php echo formatCurrency($settlementsAdvances); ?></td>
+            </tr>
+            <?php endif; ?>
             <tr>
                 <td><strong>الراتب الإجمالي</strong></td>
                 <td><strong><?php echo formatCurrency($totalSalary); ?></strong></td>

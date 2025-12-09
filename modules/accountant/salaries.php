@@ -119,6 +119,20 @@ if (empty($advancesColumnCheck)) {
     }
 }
 
+// إضافة عمود settlements_advances في جدول salaries (التسويات والسلف)
+$settlementsAdvancesColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'settlements_advances'");
+if (empty($settlementsAdvancesColumnCheck)) {
+    try {
+        $db->execute("
+            ALTER TABLE `salaries` 
+            ADD COLUMN `settlements_advances` DECIMAL(10,2) DEFAULT 0.00 COMMENT 'التسويات والسلف' 
+            AFTER `advances_deduction`
+        ");
+    } catch (Exception $e) {
+        error_log("Error adding settlements_advances column: " . $e->getMessage());
+    }
+}
+
 // إضافة عمود notes في جدول salaries إذا لم يكن موجوداً
 $notesColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'notes'");
 if (empty($notesColumnCheck)) {
@@ -1125,12 +1139,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             throw new Exception('خطأ في الحساب: المبلغ المدفوع (' . formatCurrency($newPaidAmount) . ') يتجاوز المبلغ التراكمي (' . formatCurrency($currentAccumulated) . ')');
                         }
                         
-                        // تحديث paid_amount فقط (accumulated_amount يبقى كما هو)
+                        // تحديث paid_amount و settlements_advances (accumulated_amount يبقى كما هو)
+                        // الحصول على القيمة الحالية للتسويات والسلف
+                        $currentSettlementsAdvances = cleanFinancialValue($salary['settlements_advances'] ?? 0);
+                        $newSettlementsAdvances = $currentSettlementsAdvances + $settlementAmount;
+                        
                         $db->execute(
                             "UPDATE salaries SET 
-                                paid_amount = ?
+                                paid_amount = ?,
+                                settlements_advances = ?
                              WHERE id = ?",
-                            [$newPaidAmount, $salaryId]
+                            [$newPaidAmount, $newSettlementsAdvances, $salaryId]
                         );
                         
                         // إنشاء سجل التسوية

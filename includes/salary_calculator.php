@@ -2436,7 +2436,6 @@ function salaryAdvanceApplyDeduction(array $advance, array $salaryData, ?Databas
     $columns = salaryAdvanceGetSalaryColumns($db);
     if (
         $columns['advances_deduction'] === null
-        && $columns['deductions'] === null
         && $columns['total_amount'] === null
     ) {
         return ['success' => false, 'message' => 'لا يمكن تنفيذ الخصم لعدم توفر الأعمدة المطلوبة.'];
@@ -2450,15 +2449,26 @@ function salaryAdvanceApplyDeduction(array $advance, array $salaryData, ?Databas
     $updates = [];
     $params = [];
 
+    // تسجيل السلفة في عمود advances_deduction فقط
     if ($columns['advances_deduction'] !== null) {
         $updates[] = "{$columns['advances_deduction']} = COALESCE({$columns['advances_deduction']}, 0) + ?";
         $params[] = $amount;
     }
 
-    if ($columns['deductions'] !== null) {
-        $updates[] = "{$columns['deductions']} = COALESCE({$columns['deductions']}, 0) + ?";
-        $params[] = $amount;
+    // تسجيل السلفة في عمود settlements_advances (التسويات والسلف)
+    // التحقق من وجود العمود أولاً
+    try {
+        $settlementsAdvancesCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'settlements_advances'");
+        if (!empty($settlementsAdvancesCheck)) {
+            $updates[] = "settlements_advances = COALESCE(settlements_advances, 0) + ?";
+            $params[] = $amount;
+        }
+    } catch (Throwable $e) {
+        error_log('Error checking settlements_advances column: ' . $e->getMessage());
     }
+
+    // ملاحظة: لا يتم تسجيل السلفة في عمود deductions لتجنب التسجيل المزدوج
+    // السلفة تُسجل فقط في advances_deduction و settlements_advances
 
     if ($columns['total_amount'] !== null) {
         $updates[] = "{$columns['total_amount']} = GREATEST(COALESCE({$columns['total_amount']}, 0) - ?, 0)";
