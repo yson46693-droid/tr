@@ -12,8 +12,9 @@ header('Content-Type: text/html; charset=utf-8');
 echo "<html dir='rtl'><head><title>تنظيف سجلات الرواتب</title>";
 echo "<style>
     body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
-    .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
     h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+    h2 { color: #555; margin-top: 30px; }
     .success { color: green; background: #d4edda; padding: 10px; border-radius: 4px; margin: 10px 0; }
     .warning { color: #856404; background: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0; }
     .error { color: red; background: #f8d7da; padding: 10px; border-radius: 4px; margin: 10px 0; }
@@ -22,11 +23,15 @@ echo "<style>
     th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
     th { background: #007bff; color: white; }
     tr:nth-child(even) { background: #f9f9f9; }
-    .btn { display: inline-block; padding: 10px 20px; background: #dc3545; color: white; text-decoration: none; border-radius: 4px; margin: 10px 0; }
+    .btn { display: inline-block; padding: 10px 20px; background: #dc3545; color: white; text-decoration: none; border-radius: 4px; margin: 10px 5px; }
     .btn-success { background: #28a745; }
+    .btn-warning { background: #ffc107; color: #212529; }
+    .btn-info { background: #17a2b8; }
+    .duplicate-row { background: #ffe6e6 !important; }
+    .keep-row { background: #e6ffe6 !important; }
 </style></head><body>";
 echo "<div class='container'>";
-echo "<h1>🧹 تنظيف سجلات الرواتب ذات التواريخ الخاطئة</h1>";
+echo "<h1>🧹 تنظيف وإصلاح سجلات الرواتب</h1>";
 
 try {
     $db = db();
@@ -204,16 +209,316 @@ try {
         }
     }
     
-    // 3. إحصائيات
-    echo "<h3>📊 إحصائيات الرواتب</h3>";
+    // 3. البحث عن السجلات المكررة (نفس الموظف ونفس الشهر والسنة)
+    echo "<h2>🔄 السجلات المكررة</h2>";
+    
+    $duplicates = [];
+    
+    if ($hasYearColumn) {
+        // البحث عن التكرارات باستخدام month و year
+        $duplicates = $db->query(
+            "SELECT s.user_id, s.month, s.year, u.full_name, u.username,
+                    COUNT(*) as duplicate_count,
+                    GROUP_CONCAT(s.id ORDER BY s.id) as salary_ids,
+                    GROUP_CONCAT(s.total_amount ORDER BY s.id) as amounts,
+                    GROUP_CONCAT(s.base_amount ORDER BY s.id) as base_amounts
+             FROM salaries s
+             LEFT JOIN users u ON s.user_id = u.id
+             WHERE s.year IS NOT NULL AND s.year > 0
+             GROUP BY s.user_id, s.month, s.year
+             HAVING COUNT(*) > 1
+             ORDER BY s.user_id, s.year, s.month"
+        );
+    } elseif ($isMonthDate) {
+        // البحث عن التكرارات باستخدام DATE_FORMAT
+        $duplicates = $db->query(
+            "SELECT s.user_id, DATE_FORMAT(s.month, '%Y-%m') as month_year, u.full_name, u.username,
+                    COUNT(*) as duplicate_count,
+                    GROUP_CONCAT(s.id ORDER BY s.id) as salary_ids,
+                    GROUP_CONCAT(s.total_amount ORDER BY s.id) as amounts,
+                    GROUP_CONCAT(s.base_amount ORDER BY s.id) as base_amounts
+             FROM salaries s
+             LEFT JOIN users u ON s.user_id = u.id
+             WHERE s.month IS NOT NULL AND s.month != '0000-00-00'
+             GROUP BY s.user_id, DATE_FORMAT(s.month, '%Y-%m')
+             HAVING COUNT(*) > 1
+             ORDER BY s.user_id, month_year"
+        );
+    }
+    
+    $duplicateCount = count($duplicates);
+    
+    if ($duplicateCount === 0) {
+        echo "<div class='success'>✅ لا توجد سجلات رواتب مكررة!</div>";
+    } else {
+        echo "<div class='warning'>⚠️ تم العثور على <strong>{$duplicateCount}</strong> حالة تكرار</div>";
+        
+        // عرض التكرارات
+        echo "<table>";
+        echo "<tr><th>الموظف</th><th>الشهر/السنة</th><th>عدد التكرارات</th><th>IDs</th><th>المبالغ</th><th>المبالغ الأساسية</th></tr>";
+        
+        foreach ($duplicates as $dup) {
+            $userName = $dup['full_name'] ?? $dup['username'] ?? 'غير معروف';
+            $monthYear = $hasYearColumn ? "{$dup['month']}/{$dup['year']}" : $dup['month_year'];
+            
+            echo "<tr>";
+            echo "<td>{$userName}</td>";
+            echo "<td>{$monthYear}</td>";
+            echo "<td>{$dup['duplicate_count']}</td>";
+            echo "<td>{$dup['salary_ids']}</td>";
+            echo "<td>{$dup['amounts']}</td>";
+            echo "<td>{$dup['base_amounts']}</td>";
+            echo "</tr>";
+        }
+        echo "</table>";
+        
+        // حذف التكرارات (الاحتفاظ بالسجل الذي يحتوي على أعلى base_amount أو أحدث تاريخ)
+        if (isset($_GET['fix_duplicates']) && $_GET['fix_duplicates'] === 'yes') {
+            echo "<h3>🔧 جاري إصلاح التكرارات...</h3>";
+            
+            $fixedCount = 0;
+            $fixErrors = [];
+            
+            foreach ($duplicates as $dup) {
+                try {
+                    $salaryIds = explode(',', $dup['salary_ids']);
+                    $baseAmounts = explode(',', $dup['base_amounts']);
+                    
+                    // تحديد السجل الذي سيتم الاحتفاظ به (الأعلى في base_amount)
+                    $maxBaseAmount = 0;
+                    $keepId = $salaryIds[0]; // افتراضياً الأول
+                    
+                    foreach ($salaryIds as $index => $id) {
+                        $baseAmount = floatval($baseAmounts[$index] ?? 0);
+                        if ($baseAmount > $maxBaseAmount) {
+                            $maxBaseAmount = $baseAmount;
+                            $keepId = $id;
+                        }
+                    }
+                    
+                    // حذف السجلات المكررة ما عدا السجل المحتفظ به
+                    foreach ($salaryIds as $id) {
+                        if ($id != $keepId) {
+                            // التحقق من وجود مدفوعات مرتبطة
+                            $hasPayments = false;
+                            if ($hasPaymentsTable) {
+                                $paymentCheck = $db->queryOne(
+                                    "SELECT COUNT(*) as cnt FROM salary_payments WHERE salary_id = ?",
+                                    [$id]
+                                );
+                                $hasPayments = ($paymentCheck['cnt'] ?? 0) > 0;
+                            }
+                            
+                            if (!$hasPayments) {
+                                $db->execute("DELETE FROM salaries WHERE id = ?", [$id]);
+                                $fixedCount++;
+                            } else {
+                                $fixErrors[] = "السجل ID:{$id} له مدفوعات مرتبطة - تم تخطيه";
+                            }
+                        }
+                    }
+                    
+                } catch (Exception $e) {
+                    $fixErrors[] = "خطأ في معالجة التكرار: " . $e->getMessage();
+                }
+            }
+            
+            if ($fixedCount > 0) {
+                echo "<div class='success'>✅ تم حذف <strong>{$fixedCount}</strong> سجل مكرر!</div>";
+            }
+            
+            if (!empty($fixErrors)) {
+                echo "<div class='warning'>";
+                echo "<strong>تنبيهات:</strong><br>";
+                foreach ($fixErrors as $err) {
+                    echo "- {$err}<br>";
+                }
+                echo "</div>";
+            }
+            
+        } else {
+            echo "<a href='?fix_duplicates=yes' class='btn btn-warning' onclick='return confirm(\"سيتم الاحتفاظ بالسجل ذو أعلى مبلغ أساسي وحذف البقية. هل أنت متأكد؟\");'>🔧 إصلاح التكرارات تلقائياً</a>";
+            echo "<p style='color: gray; font-size: 12px;'>ملاحظة: سيتم الاحتفاظ بالسجل الذي يحتوي على أعلى مبلغ أساسي (base_amount) وحذف البقية</p>";
+        }
+    }
+    
+    // 4. إصلاح التواريخ الصفرية (تحويلها لتاريخ الشهر الحالي)
+    echo "<h2>📅 السجلات بتواريخ صفرية (0000-00-00)</h2>";
+    
+    $zeroDateRecords = [];
+    if ($isMonthDate) {
+        $zeroDateRecords = $db->query(
+            "SELECT s.*, u.full_name, u.username 
+             FROM salaries s 
+             LEFT JOIN users u ON s.user_id = u.id 
+             WHERE s.month = '0000-00-00' OR s.month = '1970-01-01'
+             ORDER BY s.id"
+        );
+    }
+    
+    $zeroDateCount = count($zeroDateRecords);
+    
+    if ($zeroDateCount === 0) {
+        echo "<div class='success'>✅ لا توجد سجلات بتواريخ صفرية!</div>";
+    } else {
+        echo "<div class='warning'>⚠️ تم العثور على <strong>{$zeroDateCount}</strong> سجل بتاريخ صفري</div>";
+        
+        echo "<table>";
+        echo "<tr><th>ID</th><th>الموظف</th><th>التاريخ الحالي</th><th>المبلغ الأساسي</th><th>المبلغ الإجمالي</th><th>الساعات</th></tr>";
+        
+        foreach ($zeroDateRecords as $record) {
+            $userName = $record['full_name'] ?? $record['username'] ?? 'غير معروف';
+            echo "<tr>";
+            echo "<td>{$record['id']}</td>";
+            echo "<td>{$userName}</td>";
+            echo "<td>{$record['month']}</td>";
+            echo "<td>" . number_format($record['base_amount'] ?? 0, 2) . "</td>";
+            echo "<td>" . number_format($record['total_amount'] ?? 0, 2) . "</td>";
+            echo "<td>" . number_format($record['total_hours'] ?? 0, 2) . "</td>";
+            echo "</tr>";
+        }
+        echo "</table>";
+        
+        // خيار تحديث التواريخ الصفرية للشهر الحالي
+        if (isset($_GET['fix_zero_dates']) && $_GET['fix_zero_dates'] === 'yes') {
+            $currentMonth = date('Y-m-01');
+            $currentMonthNum = (int)date('n');
+            $currentYear = (int)date('Y');
+            
+            try {
+                if ($hasYearColumn) {
+                    // تحديث month و year
+                    $db->execute(
+                        "UPDATE salaries SET month = ?, year = ? WHERE month = '0000-00-00' OR month = '1970-01-01'",
+                        [$currentMonthNum, $currentYear]
+                    );
+                } else {
+                    // تحديث month فقط كتاريخ
+                    $db->execute(
+                        "UPDATE salaries SET month = ? WHERE month = '0000-00-00' OR month = '1970-01-01'",
+                        [$currentMonth]
+                    );
+                }
+                echo "<div class='success'>✅ تم تحديث التواريخ الصفرية إلى الشهر الحالي ({$currentMonth})!</div>";
+            } catch (Exception $e) {
+                echo "<div class='error'>❌ خطأ في التحديث: " . $e->getMessage() . "</div>";
+            }
+        } else {
+            $currentMonth = date('Y-m-01');
+            echo "<a href='?fix_zero_dates=yes' class='btn btn-info' onclick='return confirm(\"سيتم تحديث التواريخ الصفرية إلى {$currentMonth}. هل أنت متأكد؟\");'>📅 تحديث التواريخ للشهر الحالي</a>";
+        }
+    }
+    
+    // 5. إحصائيات
+    echo "<h2>📊 إحصائيات الرواتب</h2>";
     
     $totalSalaries = $db->queryOne("SELECT COUNT(*) as cnt FROM salaries");
     $uniqueUsers = $db->queryOne("SELECT COUNT(DISTINCT user_id) as cnt FROM salaries");
     
+    // عرض جميع سجلات الرواتب الحالية
     echo "<div class='info'>";
     echo "إجمالي سجلات الرواتب: <strong>" . ($totalSalaries['cnt'] ?? 0) . "</strong><br>";
     echo "عدد الموظفين: <strong>" . ($uniqueUsers['cnt'] ?? 0) . "</strong>";
     echo "</div>";
+    
+    // عرض جدول بجميع الرواتب
+    echo "<h3>جميع سجلات الرواتب:</h3>";
+    
+    if ($hasYearColumn) {
+        $allSalaries = $db->query(
+            "SELECT s.*, u.full_name, u.username 
+             FROM salaries s 
+             LEFT JOIN users u ON s.user_id = u.id 
+             ORDER BY s.year DESC, s.month DESC, s.user_id"
+        );
+    } else {
+        $allSalaries = $db->query(
+            "SELECT s.*, u.full_name, u.username 
+             FROM salaries s 
+             LEFT JOIN users u ON s.user_id = u.id 
+             ORDER BY s.month DESC, s.user_id"
+        );
+    }
+    
+    echo "<table>";
+    echo "<tr><th>ID</th><th>الموظف</th><th>الشهر</th><th>السنة</th><th>الساعات</th><th>المبلغ الأساسي</th><th>المكافآت</th><th>الخصومات</th><th>الإجمالي</th><th>الحالة</th></tr>";
+    
+    foreach ($allSalaries as $salary) {
+        $userName = $salary['full_name'] ?? $salary['username'] ?? 'غير معروف';
+        $monthVal = $salary['month'] ?? 'N/A';
+        $yearVal = $hasYearColumn ? ($salary['year'] ?? 'N/A') : '-';
+        
+        // تحديد لون الصف
+        $rowClass = '';
+        if ($monthVal == '0000-00-00' || $monthVal == '1970-01-01' || $yearVal == 0 || $yearVal === null) {
+            $rowClass = 'class="duplicate-row"';
+        }
+        
+        echo "<tr {$rowClass}>";
+        echo "<td>{$salary['id']}</td>";
+        echo "<td>{$userName}</td>";
+        echo "<td>{$monthVal}</td>";
+        echo "<td>{$yearVal}</td>";
+        echo "<td>" . number_format($salary['total_hours'] ?? 0, 2) . "</td>";
+        echo "<td>" . number_format($salary['base_amount'] ?? 0, 2) . "</td>";
+        echo "<td>" . number_format($salary['bonus'] ?? $salary['bonuses'] ?? 0, 2) . "</td>";
+        echo "<td>" . number_format($salary['deductions'] ?? 0, 2) . "</td>";
+        echo "<td>" . number_format($salary['total_amount'] ?? 0, 2) . "</td>";
+        echo "<td>" . ($salary['status'] ?? 'N/A') . "</td>";
+        echo "</tr>";
+    }
+    echo "</table>";
+    
+    // 6. رابط لتنظيف كل شيء دفعة واحدة
+    echo "<h2>🚀 تنظيف شامل</h2>";
+    
+    if (isset($_GET['clean_all']) && $_GET['clean_all'] === 'yes') {
+        echo "<div class='info'>جاري التنظيف الشامل...</div>";
+        
+        $totalCleaned = 0;
+        
+        // 1. حذف السجلات بتواريخ خاطئة
+        if ($isMonthDate) {
+            $result = $db->execute(
+                "DELETE FROM salaries WHERE month IS NULL OR month = '0000-00-00' OR month = '1970-01-01'"
+            );
+            $totalCleaned += $result['affected_rows'] ?? 0;
+        }
+        
+        // 2. حذف التكرارات (الاحتفاظ بالأعلى base_amount)
+        foreach ($duplicates as $dup) {
+            $salaryIds = explode(',', $dup['salary_ids']);
+            $baseAmounts = explode(',', $dup['base_amounts']);
+            
+            $maxBaseAmount = 0;
+            $keepId = $salaryIds[0];
+            
+            foreach ($salaryIds as $index => $id) {
+                $baseAmount = floatval($baseAmounts[$index] ?? 0);
+                if ($baseAmount > $maxBaseAmount) {
+                    $maxBaseAmount = $baseAmount;
+                    $keepId = $id;
+                }
+            }
+            
+            foreach ($salaryIds as $id) {
+                if ($id != $keepId) {
+                    try {
+                        $db->execute("DELETE FROM salaries WHERE id = ?", [$id]);
+                        $totalCleaned++;
+                    } catch (Exception $e) {
+                        // تجاهل الأخطاء
+                    }
+                }
+            }
+        }
+        
+        echo "<div class='success'>✅ تم تنظيف <strong>{$totalCleaned}</strong> سجل بنجاح! <a href='?' class='btn btn-success'>تحديث الصفحة</a></div>";
+        
+    } else {
+        echo "<a href='?clean_all=yes' class='btn' onclick='return confirm(\"سيتم حذف جميع السجلات المعطوبة والمكررة. هذا الإجراء لا يمكن التراجع عنه! هل أنت متأكد؟\");'>🧹 تنظيف شامل (حذف الكل)</a>";
+        echo "<p style='color: gray; font-size: 12px;'>سيقوم بحذف جميع السجلات ذات التواريخ الخاطئة والسجلات المكررة</p>";
+    }
     
 } catch (Exception $e) {
     echo "<div class='error'>❌ خطأ في الاتصال بقاعدة البيانات: " . $e->getMessage() . "</div>";

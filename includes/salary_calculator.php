@@ -933,27 +933,62 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
     }
     
     // التحقق من وجود راتب موجود
+    // ملاحظة: نتحقق أيضاً من السجلات ذات التواريخ الصفرية لتجنب التكرار
     if ($hasYearColumn) {
+        // البحث عن راتب موجود بنفس الشهر والسنة
         $existingSalary = $db->queryOne(
             "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ?",
             [$userId, $month, $year]
         );
-        } else {
-            // إذا لم يكن year موجوداً، تحقق من نوع month
-            if (stripos($monthType, 'date') !== false) {
-                // إذا كان month من نوع DATE
-                // التحقق من صحة year و month قبل إنشاء التاريخ
-                if ($year < 2000 || $year > 2100 || $month < 1 || $month > 12) {
-                    return [
-                        'success' => false,
-                        'message' => 'السنة أو الشهر غير صحيحين. السنة: ' . $year . ', الشهر: ' . $month
-                    ];
-                }
-                $targetDate = sprintf('%04d-%02d-01', $year, $month);
-                $existingSalary = $db->queryOne(
-                    "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ?",
-                    [$userId, sprintf('%04d-%02d', $year, $month)]
+        
+        // إذا لم نجد، نبحث أيضاً عن سجلات بتواريخ صفرية لنفس المستخدم (قد تكون مكررة)
+        if (empty($existingSalary)) {
+            $zeroDateSalary = $db->queryOne(
+                "SELECT id FROM salaries WHERE user_id = ? AND (year IS NULL OR year = 0 OR month = 0)",
+                [$userId]
+            );
+            // إذا وجدنا سجل بتاريخ صفري، نقوم بتحديثه بدلاً من إنشاء سجل جديد
+            if (!empty($zeroDateSalary)) {
+                $existingSalary = $zeroDateSalary;
+                // تحديث الشهر والسنة للسجل الصفري
+                $db->execute(
+                    "UPDATE salaries SET month = ?, year = ? WHERE id = ?",
+                    [$month, $year, $existingSalary['id']]
                 );
+            }
+        }
+    } else {
+        // إذا لم يكن year موجوداً، تحقق من نوع month
+        if (stripos($monthType, 'date') !== false) {
+            // إذا كان month من نوع DATE
+            // التحقق من صحة year و month قبل إنشاء التاريخ
+            if ($year < 2000 || $year > 2100 || $month < 1 || $month > 12) {
+                return [
+                    'success' => false,
+                    'message' => 'السنة أو الشهر غير صحيحين. السنة: ' . $year . ', الشهر: ' . $month
+                ];
+            }
+            $targetDate = sprintf('%04d-%02d-01', $year, $month);
+            $existingSalary = $db->queryOne(
+                "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ?",
+                [$userId, sprintf('%04d-%02d', $year, $month)]
+            );
+            
+            // البحث عن سجلات بتواريخ صفرية
+            if (empty($existingSalary)) {
+                $zeroDateSalary = $db->queryOne(
+                    "SELECT id FROM salaries WHERE user_id = ? AND (month IS NULL OR month = '0000-00-00' OR month = '1970-01-01')",
+                    [$userId]
+                );
+                if (!empty($zeroDateSalary)) {
+                    $existingSalary = $zeroDateSalary;
+                    // تحديث التاريخ للسجل الصفري
+                    $db->execute(
+                        "UPDATE salaries SET month = ? WHERE id = ?",
+                        [$targetDate, $existingSalary['id']]
+                    );
+                }
+            }
         } else {
             // إذا كان month من نوع INT فقط
             $existingSalary = $db->queryOne(
