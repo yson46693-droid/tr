@@ -547,6 +547,307 @@ if (!defined('ACCESS_ALLOWED')) {
         }
     </script>
     
+    <!-- Professional Loading Overlay Script - ذكي وسريع -->
+    <?php if (isLoggedIn()): ?>
+    <script>
+        (function() {
+            'use strict';
+            
+            const loadingOverlay = document.getElementById('professionalLoadingOverlay');
+            if (!loadingOverlay) return;
+            
+            let activeRequests = 0;
+            let showTimeout = null;
+            let hideTimeout = null;
+            const SHOW_DELAY = 200; // تأخير 200ms قبل الإظهار لتجنب الوميض
+            const MIN_DISPLAY_TIME = 400; // الحد الأدنى للعرض (400ms) لضمان رؤية اللوحة
+            
+            // دالة لإظهار loading overlay
+            function showLoading(immediate = false) {
+                if (!loadingOverlay) return;
+                
+                activeRequests++;
+                
+                // إلغاء أي timeout للإخفاء
+                if (hideTimeout) {
+                    clearTimeout(hideTimeout);
+                    hideTimeout = null;
+                }
+                
+                // إذا كان overlay مرئي بالفعل، لا تفعل شيء
+                if (loadingOverlay.classList.contains('show')) {
+                    return;
+                }
+                
+                // إلغاء timeout الإظهار السابق إذا كان موجوداً
+                if (showTimeout) {
+                    clearTimeout(showTimeout);
+                }
+                
+                // إظهار فوري أو بعد تأخير قصير
+                if (immediate) {
+                    loadingOverlay.classList.add('show');
+                    loadingOverlay.setAttribute('aria-hidden', 'false');
+                } else {
+                    showTimeout = setTimeout(function() {
+                        if (activeRequests > 0 && loadingOverlay) {
+                            loadingOverlay.classList.add('show');
+                            loadingOverlay.setAttribute('aria-hidden', 'false');
+                        }
+                    }, SHOW_DELAY);
+                }
+            }
+            
+            // دالة لإخفاء loading overlay
+            function hideLoading() {
+                if (!loadingOverlay) return;
+                
+                activeRequests = Math.max(0, activeRequests - 1);
+                
+                // إذا كان هناك طلبات نشطة أخرى، لا تخفي overlay
+                if (activeRequests > 0) {
+                    return;
+                }
+                
+                // إلغاء timeout الإظهار
+                if (showTimeout) {
+                    clearTimeout(showTimeout);
+                    showTimeout = null;
+                }
+                
+                // إخفاء overlay بعد تأخير قصير لضمان رؤية اللوحة
+                hideTimeout = setTimeout(function() {
+                    if (activeRequests <= 0 && loadingOverlay) {
+                        loadingOverlay.classList.remove('show');
+                        loadingOverlay.setAttribute('aria-hidden', 'true');
+                        hideTimeout = null;
+                    }
+                }, MIN_DISPLAY_TIME);
+            }
+            
+            // Intercept fetch requests
+            const originalFetch = window.fetch;
+            window.fetch = function() {
+                const args = arguments;
+                const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url ? args[0].url : '');
+                
+                // تجاهل الطلبات الخلفية التي لا تحتاج loading
+                const skipUrls = [
+                    '/api/notifications.php',
+                    '/api/check_update.php',
+                    '/api/background-tasks.php',
+                    'notification',
+                    'update',
+                    'background'
+                ];
+                const shouldSkip = skipUrls.some(skip => url.includes(skip));
+                
+                if (!shouldSkip) {
+                    showLoading();
+                }
+                
+                return originalFetch.apply(this, args)
+                    .then(function(response) {
+                        if (!shouldSkip) {
+                            hideLoading();
+                        }
+                        return response;
+                    })
+                    .catch(function(error) {
+                        if (!shouldSkip) {
+                            hideLoading();
+                        }
+                        throw error;
+                    });
+            };
+            
+            // Intercept XMLHttpRequest
+            const originalXHROpen = XMLHttpRequest.prototype.open;
+            const originalXHRSend = XMLHttpRequest.prototype.send;
+            
+            XMLHttpRequest.prototype.open = function() {
+                this._url = arguments[1];
+                this._method = arguments[0];
+                return originalXHROpen.apply(this, arguments);
+            };
+            
+            XMLHttpRequest.prototype.send = function() {
+                const url = this._url || '';
+                const method = (this._method || 'GET').toUpperCase();
+                
+                // تجاهل الطلبات الخلفية
+                const skipUrls = [
+                    '/api/notifications.php',
+                    '/api/check_update.php',
+                    '/api/background-tasks.php',
+                    'notification',
+                    'update',
+                    'background'
+                ];
+                const shouldSkip = skipUrls.some(skip => url.includes(skip));
+                
+                if (!shouldSkip) {
+                    showLoading();
+                }
+                
+                // معالجة onreadystatechange
+                const originalOnReadyStateChange = this.onreadystatechange;
+                this.onreadystatechange = function() {
+                    if (this.readyState === 4) {
+                        if (!shouldSkip) {
+                            hideLoading();
+                        }
+                    }
+                    if (originalOnReadyStateChange) {
+                        originalOnReadyStateChange.apply(this, arguments);
+                    }
+                };
+                
+                // معالجة onload و onerror
+                const originalOnLoad = this.onload;
+                const originalOnError = this.onerror;
+                
+                this.onload = function() {
+                    if (!shouldSkip) {
+                        hideLoading();
+                    }
+                    if (originalOnLoad) {
+                        originalOnLoad.apply(this, arguments);
+                    }
+                };
+                
+                this.onerror = function() {
+                    if (!shouldSkip) {
+                        hideLoading();
+                    }
+                    if (originalOnError) {
+                        originalOnError.apply(this, arguments);
+                    }
+                };
+                
+                return originalXHRSend.apply(this, arguments);
+            };
+            
+            // Intercept jQuery AJAX
+            if (typeof jQuery !== 'undefined' && typeof jQuery.ajaxSetup === 'function') {
+                jQuery.ajaxSetup({
+                    beforeSend: function(xhr, settings) {
+                        const url = settings.url || '';
+                        const skipUrls = [
+                            '/api/notifications.php',
+                            '/api/check_update.php',
+                            '/api/background-tasks.php',
+                            'notification',
+                            'update',
+                            'background'
+                        ];
+                        const shouldSkip = skipUrls.some(skip => url.includes(skip));
+                        
+                        if (!shouldSkip) {
+                            showLoading();
+                        }
+                    },
+                    complete: function(xhr, status) {
+                        hideLoading();
+                    }
+                });
+            }
+            
+            // إظهار loading عند إرسال النماذج
+            document.addEventListener('submit', function(e) {
+                const form = e.target;
+                if (form && form.tagName === 'FORM') {
+                    // تجاهل النماذج التي لديها data-no-loading
+                    if (!form.hasAttribute('data-no-loading')) {
+                        showLoading(true); // إظهار فوري للنماذج
+                    }
+                }
+            }, true);
+            
+            // إظهار loading عند النقر على روابط التنقل
+            document.addEventListener('click', function(e) {
+                const link = e.target.closest('a');
+                if (!link) return;
+                
+                const href = link.getAttribute('href');
+                if (!href) return;
+                
+                // تجاهل الروابط التي لا تحتاج loading
+                if (href.startsWith('#') || 
+                    href.startsWith('javascript:') || 
+                    href.startsWith('mailto:') || 
+                    href.startsWith('tel:') ||
+                    link.hasAttribute('data-no-loading') ||
+                    link.hasAttribute('data-bs-toggle') ||
+                    link.hasAttribute('data-bs-target') ||
+                    link.classList.contains('dropdown-item') ||
+                    link.closest('.nav-tabs') ||
+                    link.closest('.section-tabs') ||
+                    link.target === '_blank' ||
+                    link.download ||
+                    link.hasAttribute('data-no-splash')) {
+                    return;
+                }
+                
+                // تجاهل الروابط الداخلية التي تستخدم AJAX
+                if (href.includes('section=') || 
+                    href.includes('&tab=') || 
+                    (href.includes('#') && !href.match(/^[^#]*#/))) {
+                    return;
+                }
+                
+                // للروابط التي تغير الصفحة
+                const isInternalLink = link.hostname === window.location.hostname || !link.hostname;
+                const isSamePage = href === window.location.pathname || href === window.location.href.split('?')[0];
+                
+                if (isInternalLink && !isSamePage) {
+                    showLoading(true); // إظهار فوري للتنقل
+                } else if (!isInternalLink) {
+                    showLoading(true); // إظهار فوري للروابط الخارجية
+                }
+            }, true);
+            
+            // إخفاء loading عند تحميل الصفحة (fallback)
+            if (document.readyState === 'complete') {
+                setTimeout(hideLoading, 100);
+            } else {
+                window.addEventListener('load', function() {
+                    setTimeout(hideLoading, 300);
+                }, { once: true });
+                
+                // Fallback إضافي بعد 5 ثواني
+                setTimeout(function() {
+                    hideLoading();
+                }, 5000);
+            }
+            
+            // إخفاء loading عند الرجوع للخلف
+            window.addEventListener('pageshow', function(event) {
+                if (event.persisted) {
+                    activeRequests = 0;
+                    if (showTimeout) clearTimeout(showTimeout);
+                    if (hideTimeout) clearTimeout(hideTimeout);
+                    hideLoading();
+                }
+            });
+            
+            // منع التمرير أثناء عرض loading
+            loadingOverlay.addEventListener('wheel', function(e) {
+                if (loadingOverlay.classList.contains('show')) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+            
+            loadingOverlay.addEventListener('touchmove', function(e) {
+                if (loadingOverlay.classList.contains('show')) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+            
+        })();
+    </script>
+    <?php endif; ?>
+    
     <!-- 🎬 Page Loading Animation Script - Optimized for Mobile -->
     <script>
         (function() {
