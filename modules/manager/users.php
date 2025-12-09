@@ -91,11 +91,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // بناء استعلام INSERT ديناميكي بناءً على وجود عمود email
                 if ($hasEmailColumn) {
-                    // استخدام NULL بدلاً من '' لتجنب خطأ duplicate entry في عمود email الفريد
+                    // إنشاء email فريد بناءً على username لتجنب خطأ duplicate entry في عمود email الفريد
+                    // إذا كان العمود NOT NULL، يجب توفير قيمة فريدة
+                    $uniqueEmail = $username . '@' . uniqid() . '.local';
+                    
                     $result = $db->execute(
-                        "INSERT INTO users (username, password_hash, role, full_name, phone, hourly_rate, status) 
-                         VALUES (?, ?, ?, ?, ?, ?, 'active')",
-                        [$username, $passwordHash, $role, $fullName, $phone, $hourlyRate]
+                        "INSERT INTO users (username, email, password_hash, role, full_name, phone, hourly_rate, status) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 'active')",
+                        [$username, $uniqueEmail, $passwordHash, $role, $fullName, $phone, $hourlyRate]
                     );
                 } else {
                     $result = $db->execute(
