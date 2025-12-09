@@ -963,15 +963,28 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             }
         }
         
-        // 3. تحقق إضافي: البحث عن أي سجل آخر للمستخدم في نفس الشهر/السنة (للمعالجة المسبقة)
+        // 3. تحقق إضافي شامل: البحث عن أي سجل آخر للمستخدم في نفس الشهر/السنة
+        // هذا مهم جداً لمنع التكرار حتى لو فشلت الفحوصات السابقة
         if (empty($existingSalary)) {
+            // البحث مع تجاهل أي قيم NULL أو 0
             $duplicateCheck = $db->queryOne(
-                "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? ORDER BY base_amount DESC, id DESC LIMIT 1",
+                "SELECT id FROM salaries 
+                 WHERE user_id = ? 
+                 AND month = ? 
+                 AND year = ? 
+                 AND month IS NOT NULL 
+                 AND year IS NOT NULL
+                 AND month > 0 
+                 AND month <= 12
+                 AND year >= 2000 
+                 AND year <= 2100
+                 ORDER BY base_amount DESC, id DESC 
+                 LIMIT 1",
                 [$userId, $month, $year]
             );
             if (!empty($duplicateCheck)) {
                 $existingSalary = $duplicateCheck;
-                error_log("Found duplicate salary record ID: {$existingSalary['id']} for user: {$userId}, month: {$month}, year: {$year}");
+                error_log("CRITICAL: Found duplicate salary record ID: {$existingSalary['id']} for user: {$userId}, month: {$month}, year: {$year} - Will update instead of insert");
             }
         }
     } else {
@@ -1513,27 +1526,56 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             $calculation['total_amount'] = round($calculation['total_amount'] + $previousAccumulatedAmount, 2);
         }
         
-        // تحقق نهائي قبل الإدراج: التأكد من عدم وجود سجل مكرر
-        // (في حالة فشل التحقق السابق أو race condition)
+        // تحقق نهائي قبل الإدراج مع LOCK لمنع race conditions
+        // استخدام SELECT FOR UPDATE للحصول على lock على السجلات المطابقة
         if (empty($existingSalary) && $hasYearColumn) {
-            $finalCheck = $db->queryOne(
-                "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? LIMIT 1",
-                [$userId, $month, $year]
-            );
-            if (!empty($finalCheck)) {
-                $existingSalary = $finalCheck;
-                error_log("Final duplicate check: Found existing salary ID: {$existingSalary['id']} for user: {$userId}, month: {$month}, year: {$year}");
+            try {
+                // بدء transaction
+                $db->execute("START TRANSACTION");
+                
+                // SELECT FOR UPDATE للحصول على lock
+                $finalCheck = $db->queryOne(
+                    "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? FOR UPDATE LIMIT 1",
+                    [$userId, $month, $year]
+                );
+                
+                if (!empty($finalCheck)) {
+                    $existingSalary = $finalCheck;
+                    error_log("Final duplicate check with LOCK: Found existing salary ID: {$existingSalary['id']} for user: {$userId}, month: {$month}, year: {$year}");
+                }
+                
+                // Commit transaction (سنتابع مع INSERT في نفس transaction إذا لزم الأمر)
+                $db->execute("COMMIT");
+            } catch (Exception $e) {
+                // Rollback في حالة الخطأ
+                try {
+                    $db->execute("ROLLBACK");
+                } catch (Exception $rollbackEx) {
+                    error_log("Rollback failed: " . $rollbackEx->getMessage());
+                }
+                error_log("Error in final duplicate check with lock: " . $e->getMessage());
             }
         }
         
         if ($hasYearColumn) {
             // إذا كان عمود year موجوداً
+            // استخدام INSERT ... ON DUPLICATE KEY UPDATE لمنع التكرار على مستوى قاعدة البيانات
             if ($hasBonusColumn) {
                 if ($hasNotesColumn) {
                     if ($hasCreatedByColumn) {
+                        // استخدام ON DUPLICATE KEY UPDATE - إذا كان السجل موجود، يتم التحديث فقط
                         $result = $db->execute(
                             "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, notes, created_by, status) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                             ON DUPLICATE KEY UPDATE
+                                hourly_rate = VALUES(hourly_rate),
+                                total_hours = VALUES(total_hours),
+                                base_amount = VALUES(base_amount),
+                                bonus = VALUES(bonus),
+                                deductions = VALUES(deductions),
+                                total_amount = VALUES(total_amount),
+                                notes = VALUES(notes),
+                                updated_at = NOW()",
                             [
                                 $userId,
                                 $month,
@@ -1551,7 +1593,16 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                     } else {
                         $result = $db->execute(
                             "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, notes, status) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                             ON DUPLICATE KEY UPDATE
+                                hourly_rate = VALUES(hourly_rate),
+                                total_hours = VALUES(total_hours),
+                                base_amount = VALUES(base_amount),
+                                bonus = VALUES(bonus),
+                                deductions = VALUES(deductions),
+                                total_amount = VALUES(total_amount),
+                                notes = VALUES(notes),
+                                updated_at = NOW()",
                             [
                                 $userId,
                                 $month,
@@ -1570,7 +1621,15 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                     if ($hasCreatedByColumn) {
                         $result = $db->execute(
                             "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, created_by, status) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                             ON DUPLICATE KEY UPDATE
+                                hourly_rate = VALUES(hourly_rate),
+                                total_hours = VALUES(total_hours),
+                                base_amount = VALUES(base_amount),
+                                bonus = VALUES(bonus),
+                                deductions = VALUES(deductions),
+                                total_amount = VALUES(total_amount),
+                                updated_at = NOW()",
                             [
                                 $userId,
                                 $month,
@@ -1587,7 +1646,15 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                     } else {
                         $result = $db->execute(
                             "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, bonus, deductions, total_amount, status) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                             ON DUPLICATE KEY UPDATE
+                                hourly_rate = VALUES(hourly_rate),
+                                total_hours = VALUES(total_hours),
+                                base_amount = VALUES(base_amount),
+                                bonus = VALUES(bonus),
+                                deductions = VALUES(deductions),
+                                total_amount = VALUES(total_amount),
+                                updated_at = NOW()",
                             [
                                 $userId,
                                 $month,
@@ -1607,7 +1674,15 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                     if ($hasCreatedByColumn) {
                         $result = $db->execute(
                             "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, notes, created_by, status) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                             ON DUPLICATE KEY UPDATE
+                                hourly_rate = VALUES(hourly_rate),
+                                total_hours = VALUES(total_hours),
+                                base_amount = VALUES(base_amount),
+                                deductions = VALUES(deductions),
+                                total_amount = VALUES(total_amount),
+                                notes = VALUES(notes),
+                                updated_at = NOW()",
                             [
                                 $userId,
                                 $month,
@@ -1624,7 +1699,15 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                     } else {
                         $result = $db->execute(
                             "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, notes, status) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                             ON DUPLICATE KEY UPDATE
+                                hourly_rate = VALUES(hourly_rate),
+                                total_hours = VALUES(total_hours),
+                                base_amount = VALUES(base_amount),
+                                deductions = VALUES(deductions),
+                                total_amount = VALUES(total_amount),
+                                notes = VALUES(notes),
+                                updated_at = NOW()",
                             [
                                 $userId,
                                 $month,
@@ -1642,7 +1725,14 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                     if ($hasCreatedByColumn) {
                         $result = $db->execute(
                             "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, created_by, status) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                             ON DUPLICATE KEY UPDATE
+                                hourly_rate = VALUES(hourly_rate),
+                                total_hours = VALUES(total_hours),
+                                base_amount = VALUES(base_amount),
+                                deductions = VALUES(deductions),
+                                total_amount = VALUES(total_amount),
+                                updated_at = NOW()",
                             [
                                 $userId,
                                 $month,
@@ -1658,7 +1748,14 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                     } else {
                         $result = $db->execute(
                             "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, status) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                             ON DUPLICATE KEY UPDATE
+                                hourly_rate = VALUES(hourly_rate),
+                                total_hours = VALUES(total_hours),
+                                base_amount = VALUES(base_amount),
+                                deductions = VALUES(deductions),
+                                total_amount = VALUES(total_amount),
+                                updated_at = NOW()",
                             [
                                 $userId,
                                 $month,
@@ -1981,12 +2078,36 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             }
         }
         
+        // الحصول على salary_id - سواء تم الإدراج أو التحديث (ON DUPLICATE KEY UPDATE)
         $salaryId = $result['insert_id'] ?? null;
         
-        // تسجيل إنشاء الراتب الجديد
+        // إذا لم يكن هناك insert_id (مما يعني أن السجل موجود وتم التحديث فقط)
+        // نحتاج للبحث عن ID السجل الموجود
+        if (empty($salaryId)) {
+            if ($existingSalary && isset($existingSalary['id'])) {
+                $salaryId = $existingSalary['id'];
+            } else {
+                // البحث عن السجل مرة أخرى
+                if ($hasYearColumn) {
+                    $foundSalary = $db->queryOne(
+                        "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? LIMIT 1",
+                        [$userId, $month, $year]
+                    );
+                } else {
+                    $foundSalary = $db->queryOne(
+                        "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ? LIMIT 1",
+                        [$userId, sprintf('%04d-%02d', $year, $month)]
+                    );
+                }
+                $salaryId = $foundSalary['id'] ?? null;
+            }
+        }
+        
+        // تسجيل إنشاء أو تحديث الراتب
         if ($salaryId) {
             $creatorInfo = $createdBy ? "created_by: {$createdBy}" : "auto-created";
             $callerInfo = "";
+            $action = $result['insert_id'] ? "CREATED" : "UPDATED (duplicate prevented)";
             
             // محاولة تتبع من استدعى الدالة
             $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
@@ -1996,7 +2117,7 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                 $callerInfo = " | Called from: {$callerFile}::{$callerFunction}";
             }
             
-            error_log("NEW SALARY CREATED - ID: {$salaryId}, User: {$userId}, Month: {$month}, Year: {$year}, {$creatorInfo}{$callerInfo}");
+            error_log("SALARY {$action} - ID: {$salaryId}, User: {$userId}, Month: {$month}, Year: {$year}, {$creatorInfo}{$callerInfo}");
         }
         
         // تحديث accumulated_amount بعد إنشاء الراتب
