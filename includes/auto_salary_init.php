@@ -233,7 +233,13 @@ function initializeMonthSalaries() {
  */
 function runAutoSalaryInit() {
     // التحقق من أن المستخدم مسجل الدخول
-    if (!function_exists('isLoggedIn') || !isLoggedIn()) {
+    if (!function_exists('isLoggedIn')) {
+        error_log("auto_salary_init: isLoggedIn function not found");
+        return;
+    }
+    
+    if (!isLoggedIn()) {
+        error_log("auto_salary_init: User not logged in, skipping");
         return;
     }
     
@@ -242,15 +248,22 @@ function runAutoSalaryInit() {
     $isApi = strpos($_SERVER['REQUEST_URI'] ?? '', '/api/') !== false;
     
     if ($isAjax || $isApi) {
+        error_log("auto_salary_init: AJAX/API request, skipping");
         return;
     }
+    
+    error_log("auto_salary_init: Starting auto salary initialization");
     
     // تنفيذ التهيئة
     $result = initializeMonthSalaries();
     
-    // تسجيل النتيجة (فقط إذا تم إنشاء رواتب جديدة)
-    if ($result['created'] > 0) {
-        error_log("auto_salary_init: Auto-created {$result['created']} salaries for month {$result['month']}/{$result['year']}");
+    // تسجيل النتيجة
+    if (isset($result['created']) && $result['created'] > 0) {
+        error_log("auto_salary_init: SUCCESS - Auto-created {$result['created']} salaries for month {$result['month']}/{$result['year']}");
+    } elseif (isset($result['skipped']) && $result['skipped']) {
+        error_log("auto_salary_init: Skipped - Already initialized or no users to process");
+    } else {
+        error_log("auto_salary_init: Result - " . json_encode($result));
     }
 }
 
