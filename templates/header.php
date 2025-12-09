@@ -994,8 +994,14 @@ if (ob_get_level() > 0) {
         }
         
         #professionalLoadingOverlay.show {
-            display: flex;
+            display: flex !important;
             opacity: 1;
+            visibility: visible;
+        }
+        
+        /* تأكد من أن overlay مرئي عند class show */
+        #professionalLoadingOverlay.show[style*="display: none"] {
+            display: flex !important;
         }
         
         #professionalLoadingOverlay .loading-container {
