@@ -47,6 +47,7 @@ $sql = "SELECT
         u.full_name as sales_rep_name,
         i.invoice_number,
         GROUP_CONCAT(DISTINCT ri.batch_number ORDER BY ri.batch_number SEPARATOR ', ') as batch_numbers,
+        r.created_at,
         'delegate' as return_type
     FROM returns r
     LEFT JOIN customers c ON r.customer_id = c.id
@@ -102,6 +103,7 @@ if (!empty($localReturnsTableExists)) {
              WHERE lri2.return_id = lr.id 
              LIMIT 1) as invoice_number,
             GROUP_CONCAT(DISTINCT lri.batch_number ORDER BY lri.batch_number SEPARATOR ', ') as batch_numbers,
+            lr.created_at,
             'local' as return_type
         FROM local_returns lr
         LEFT JOIN local_customers lc ON lr.customer_id = lc.id
@@ -323,7 +325,11 @@ if (!empty($localReturnsTableExists)) {
         <div class="col-12">
             <div class="card">
                 <div class="card-body">
-                    <?php if (empty($returns)): ?>
+                    <?php 
+                    // Debug: تسجيل عدد المرتجعات
+                    error_log("returns_overview: Total returns count = " . count($returns));
+                    if (empty($returns)): 
+                    ?>
                         <div class="alert alert-info">
                             <i class="bi bi-info-circle me-2"></i>لا توجد مرتجعات
                         </div>
