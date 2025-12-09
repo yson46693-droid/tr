@@ -1390,7 +1390,9 @@ if ($shouldAutoCreate) {
 }
 
 // الحصول على الرواتب للشهر المحدد مع فلترة
-// (yearColumnCheck تم التحقق منه أعلاه)
+// التحقق من وجود عمود year (يجب تعريفه هنا لأنه قد لا يُعرّف في حالة عدم تنفيذ auto-create)
+$yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
+$hasYearColumn = !empty($yearColumnCheck);
 
 $whereConditions = [];
 $params = [];
