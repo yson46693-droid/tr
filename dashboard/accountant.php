@@ -1587,6 +1587,22 @@ $pageDescription = 'لوحة تحكم المحاسب - إدارة المعامل
                 }
                 ?>
                 
+            <?php elseif ($page === 'customer_credit_balances'): ?>
+                <!-- صفحة أرصدة العملاء الدائنة -->
+                <?php 
+                $modulePath = __DIR__ . '/../modules/manager/customer_credit_balances.php';
+                if (file_exists($modulePath)) {
+                    try {
+                        include $modulePath;
+                    } catch (Throwable $e) {
+                        error_log('Accountant customer credit balances module error: ' . $e->getMessage());
+                        echo '<div class="alert alert-danger">حدث خطأ أثناء تحميل صفحة أرصدة العملاء الدائنة: ' . htmlspecialchars($e->getMessage()) . '</div>';
+                    }
+                } else {
+                    echo '<div class="alert alert-warning">صفحة أرصدة العملاء الدائنة غير متاحة حالياً</div>';
+                }
+                ?>
+                
             <?php elseif ($page === 'warehouse_transfers'): ?>
                 <!-- صفحة نقل المخازن -->
                 <?php 

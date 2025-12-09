@@ -145,17 +145,21 @@ $latestReturns = $db->query(
 // مرتجعات العملاء المحليين
 $latestLocalReturns = [];
 if (!empty($localReturnsTableExists)) {
+    // جلب رقم الفاتورة من local_return_items (أول فاتورة مرتبطة)
     $latestLocalReturns = $db->query(
         "SELECT lr.*, lc.name as customer_name, lc.balance as customer_balance,
                 NULL as sales_rep_name,
                 approver.full_name as approved_by_name,
-                li.invoice_number,
+                (SELECT li.invoice_number 
+                 FROM local_return_items lri 
+                 LEFT JOIN local_invoices li ON lri.invoice_id = li.id 
+                 WHERE lri.return_id = lr.id 
+                 LIMIT 1) as invoice_number,
                 'local' as return_type,
                 lr.customer_id as local_customer_id
          FROM local_returns lr
          LEFT JOIN local_customers lc ON lr.customer_id = lc.id
          LEFT JOIN users approver ON lr.approved_by = approver.id
-         LEFT JOIN local_invoices li ON lr.invoice_id = li.id
          WHERE lr.status IN ('approved', 'rejected', 'processed', 'completed')
          ORDER BY COALESCE(lr.approved_at, lr.updated_at, lr.created_at) DESC"
     ) ?: [];

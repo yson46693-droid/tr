@@ -91,6 +91,14 @@ $baseUrl = getDashboardUrl();
             </li>
             
             <li class="nav-item">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'customer_credit_balances') ? 'active' : ''; ?>" 
+                   href="<?php echo $baseUrl; ?>accountant.php?page=customer_credit_balances">
+                    <i class="bi bi-wallet2"></i>
+                    <span>أرصدة العملاء الدائنة</span>
+                </a>
+            </li>
+            
+            <li class="nav-item">
                 <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'company_products') ? 'active' : ''; ?>" 
                    href="<?php echo $baseUrl; ?>accountant.php?page=company_products">
                     <i class="bi bi-box-seam"></i>

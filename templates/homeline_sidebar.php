@@ -332,6 +332,13 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'أرصدة العملاء الدائنة',
+                'icon' => 'bi-wallet2',
+                'url' => $baseUrl . 'accountant.php?page=customer_credit_balances',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'customer_credit_balances'),
+                'badge' => null
+            ],
+            [
                 'title' => 'منتجات الشركة',
                 'icon' => 'bi-box-seam',
                 'url' => $baseUrl . 'accountant.php?page=company_products',
