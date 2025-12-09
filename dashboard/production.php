@@ -26,6 +26,11 @@ require_once __DIR__ . '/../includes/batch_numbers.php';
 
 requireRole(['production', 'manager']);
 
+// تحميل ملف إنشاء الرواتب التلقائي
+if (file_exists(__DIR__ . '/../includes/auto_salary_init.php')) {
+    require_once __DIR__ . '/../includes/auto_salary_init.php';
+}
+
 $currentUser = getCurrentUser();
 $db = db();
 $page = $_GET['page'] ?? 'dashboard';
