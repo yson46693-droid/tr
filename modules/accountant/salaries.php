@@ -1252,22 +1252,31 @@ $users = $db->query($usersQuery);
 
 // إنشاء رواتب تلقائياً لأول مرة كل شهر للموظفين الذين لا يملكون رواتب
 // يتم ذلك مرة واحدة فقط لكل شهر باستخدام createOrUpdateSalary (تتضمن حماية من التكرار)
-require_once __DIR__ . '/../../includes/salary_calculator.php';
+// استخدام session flag لمنع التنفيذ المتكرر (infinite loop protection)
+$autoCreateKey = "auto_created_salaries_{$selectedYear}_{$selectedMonth}";
 
-// التحقق من وجود رواتب للمستخدمين في الشهر المحدد
-$yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
-$hasYearColumn = !empty($yearColumnCheck);
+// التحقق من أن هذا لم يتم تنفيذه من قبل في هذه الجلسة
+// وأيضاً التحقق من أن الطلب ليس POST (لأن POST requests قد تسبب redirects)
+$isPostRequest = ($_SERVER['REQUEST_METHOD'] === 'POST');
+$shouldAutoCreate = !isset($_SESSION[$autoCreateKey]) && !$isPostRequest;
 
-// التحقق من أن الشهر والسنة صحيحين
-if ($selectedMonth >= 1 && $selectedMonth <= 12 && $selectedYear >= 2000 && $selectedYear <= 2100) {
-    $createdCount = 0;
-    $skippedCount = 0;
-    $errorCount = 0;
-    $totalUsers = count($users);
+if ($shouldAutoCreate) {
+    require_once __DIR__ . '/../../includes/salary_calculator.php';
     
-    error_log("=== Auto-creating salaries for month {$selectedMonth}/{$selectedYear} - Total users: {$totalUsers} ===");
+    // التحقق من وجود رواتب للمستخدمين في الشهر المحدد
+    $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
+    $hasYearColumn = !empty($yearColumnCheck);
     
-    foreach ($users as $user) {
+    // التحقق من أن الشهر والسنة صحيحين - تحقق صارم لمنع التواريخ الصفرية
+    if ($selectedMonth >= 1 && $selectedMonth <= 12 && $selectedYear >= 2000 && $selectedYear <= 2100) {
+        $createdCount = 0;
+        $skippedCount = 0;
+        $errorCount = 0;
+        $totalUsers = count($users);
+        
+        error_log("=== Auto-creating salaries for month {$selectedMonth}/{$selectedYear} - Total users: {$totalUsers} ===");
+        
+        foreach ($users as $user) {
         $userId = intval($user['id']);
         $hourlyRate = cleanFinancialValue($user['hourly_rate'] ?? 0);
         $userName = $user['full_name'] ?? $user['username'] ?? "User {$userId}";
@@ -1310,9 +1319,17 @@ if ($selectedMonth >= 1 && $selectedMonth <= 12 && $selectedYear >= 2000 && $sel
             
             // إذا لم يكن للمستخدم راتب في هذا الشهر، قم بإنشائه
             if (!$hasSalary) {
+                // تحقق صارم من القيم قبل الإنشاء لمنع التواريخ الصفرية
+                if ($selectedMonth < 1 || $selectedMonth > 12 || $selectedYear < 2000 || $selectedYear > 2100) {
+                    error_log("✗ Invalid month/year for user {$userId}: month={$selectedMonth}, year={$selectedYear}");
+                    $errorCount++;
+                    continue;
+                }
+                
                 error_log("User {$userId} ({$userName}) has no salary for {$selectedMonth}/{$selectedYear}, creating...");
                 
                 // استخدام createOrUpdateSalary التي تحتوي على حماية من التكرار (ON DUPLICATE KEY UPDATE)
+                // مع التحقق من القيم مرة أخرى داخل الدالة
                 $result = createOrUpdateSalary(
                     $userId,
                     $selectedMonth,
@@ -1345,19 +1362,31 @@ if ($selectedMonth >= 1 && $selectedMonth <= 12 && $selectedYear >= 2000 && $sel
         }
     }
     
-    // تسجيل ملخص العملية
-    error_log("=== Auto-create summary: Created={$createdCount}, Skipped={$skippedCount}, Errors={$errorCount}, Total={$totalUsers} ===");
-    
-    // إظهار رسالة نجاح للمستخدم (إذا تم إنشاء رواتب)
-    // فقط إذا لم تكن هناك رسالة خطأ أو نجاح موجودة مسبقاً
-    if ($createdCount > 0 && empty($success) && empty($error)) {
-        $success = "تم إنشاء {$createdCount} راتب تلقائياً للشهر الحالي";
-    } elseif ($createdCount > 0 && !empty($success)) {
-        // إذا كانت هناك رسالة نجاح موجودة، أضف إليها
-        $success .= " | تم إنشاء {$createdCount} راتب تلقائياً";
+        // تسجيل ملخص العملية
+        error_log("=== Auto-create summary: Created={$createdCount}, Skipped={$skippedCount}, Errors={$errorCount}, Total={$totalUsers} ===");
+        
+        // تعيين session flag لمنع التنفيذ المتكرر
+        $_SESSION[$autoCreateKey] = true;
+        $_SESSION[$autoCreateKey . '_count'] = $createdCount;
+        $_SESSION[$autoCreateKey . '_time'] = time();
+        
+        // إظهار رسالة نجاح للمستخدم (إذا تم إنشاء رواتب)
+        // فقط إذا لم تكن هناك رسالة خطأ أو نجاح موجودة مسبقاً
+        if ($createdCount > 0 && empty($success) && empty($error)) {
+            $success = "تم إنشاء {$createdCount} راتب تلقائياً للشهر الحالي";
+        } elseif ($createdCount > 0 && !empty($success)) {
+            // إذا كانت هناك رسالة نجاح موجودة، أضف إليها
+            $success .= " | تم إنشاء {$createdCount} راتب تلقائياً";
+        }
+    } else {
+        error_log("Invalid month/year for auto-creation: month={$selectedMonth}, year={$selectedYear}");
     }
 } else {
-    error_log("Invalid month/year for auto-creation: month={$selectedMonth}, year={$selectedYear}");
+    // تم تنفيذ العملية من قبل في هذه الجلسة
+    $previousCount = $_SESSION[$autoCreateKey . '_count'] ?? 0;
+    if ($previousCount > 0) {
+        error_log("Auto-creation already executed for {$selectedMonth}/{$selectedYear} in this session (created {$previousCount} salaries)");
+    }
 }
 
 // الحصول على الرواتب للشهر المحدد مع فلترة
