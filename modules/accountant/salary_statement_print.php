@@ -19,6 +19,12 @@ if (!isset($employee) || !isset($periodLabel) || !isset($statementSalaries) || !
     die('بيانات غير كاملة');
 }
 
+// التحقق من نوع عمود month مرة واحدة فقط
+$db = db();
+$monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+$monthType = $monthColumnCheck['Type'] ?? '';
+$isMonthDate = stripos($monthType, 'date') !== false;
+
 $companyName = COMPANY_NAME;
 $companySubtitle = 'نظام إدارة المبيعات';
 $companyPhone = '01003533905';
@@ -765,9 +771,26 @@ if (isset($_GET['month']) && isset($_GET['year'])) {
                 <tr>
                     <td style="min-width: 140px;">
                         <?php 
-                        $month = intval($sal['month'] ?? 0);
-                        $year = intval($sal['year'] ?? date('Y'));
-                        if ($month > 0 && $month <= 12) {
+                        $month = 0;
+                        $year = date('Y');
+                        
+                        if ($isMonthDate && !empty($sal['month'])) {
+                            // عمود month من نوع DATE
+                            $monthDate = $sal['month'];
+                            if ($monthDate && $monthDate !== '0000-00-00' && $monthDate !== '1970-01-01') {
+                                $date = DateTime::createFromFormat('Y-m-d', $monthDate);
+                                if ($date) {
+                                    $month = (int)$date->format('n');
+                                    $year = (int)$date->format('Y');
+                                }
+                            }
+                        } else {
+                            // عمود month من نوع INT
+                            $month = intval($sal['month'] ?? 0);
+                            $year = intval($sal['year'] ?? date('Y'));
+                        }
+                        
+                        if ($month > 0 && $month <= 12 && $year > 0) {
                             $monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
                             echo htmlspecialchars($monthNames[$month - 1] ?? date('F', mktime(0, 0, 0, $month, 1))) . ' ' . $year;
                         } else {

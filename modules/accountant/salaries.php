@@ -1801,6 +1801,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'print_statement') {
     }
     
     // جلب الرواتب خلال الفترة
+    // التحقق من نوع عمود month أولاً - هذا مهم جداً
+    $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+    $monthType = $monthColumnCheck['Type'] ?? '';
+    $isMonthDate = stripos($monthType, 'date') !== false;
+    
+    // التحقق من وجود عمود year
     $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
     $hasYearColumn = !empty($yearColumnCheck);
     
@@ -1809,23 +1815,43 @@ if (isset($_GET['action']) && $_GET['action'] === 'print_statement') {
     $toYear = intval(date('Y', strtotime($toDate)));
     $toMonth = intval(date('n', strtotime($toDate)));
     
-    if ($hasYearColumn) {
-        // استخدام year و month للفلترة
+    // بناء الاستعلام بناءً على نوع عمود month
+    if ($isMonthDate) {
+        // عمود month من نوع DATE - استخدام DATE() للفلترة
         $statementSalaries = $db->query(
             "SELECT s.* FROM salaries s 
              WHERE s.user_id = ? 
+             AND s.month IS NOT NULL 
+             AND s.month != '0000-00-00' 
+             AND s.month != '1970-01-01'
+             AND DATE(s.month) BETWEEN ? AND ?
+             ORDER BY s.month ASC",
+            [$statementUserId, $fromDate, $toDate]
+        );
+    } elseif ($hasYearColumn) {
+        // عمود month من نوع INT مع وجود عمود year منفصل
+        $statementSalaries = $db->query(
+            "SELECT s.* FROM salaries s 
+             WHERE s.user_id = ? 
+             AND s.month > 0 
+             AND s.month <= 12 
+             AND s.year > 0
              AND ((s.year > ? OR (s.year = ? AND s.month >= ?)) AND (s.year < ? OR (s.year = ? AND s.month <= ?)))
              ORDER BY s.year ASC, s.month ASC",
             [$statementUserId, $fromYear, $fromYear, $fromMonth, $toYear, $toYear, $toMonth]
         );
     } else {
-        // استخدام month فقط (افتراض أنه تاريخ)
+        // عمود month من نوع INT بدون عمود year
+        // في هذه الحالة، نستخدم الفترة الحالية فقط
         $statementSalaries = $db->query(
             "SELECT s.* FROM salaries s 
              WHERE s.user_id = ? 
-             AND DATE(s.month) BETWEEN ? AND ?
+             AND s.month > 0 
+             AND s.month <= 12
+             AND s.month >= ? 
+             AND s.month <= ?
              ORDER BY s.month ASC",
-            [$statementUserId, $fromDate, $toDate]
+            [$statementUserId, $fromMonth, $toMonth]
         );
     }
     
@@ -1886,21 +1912,42 @@ if (isset($_GET['action']) && $_GET['action'] === 'print_statement') {
     } else {
         // إذا لم يكن هناك راتب في الفترة، نحسب من آخر راتب موجود
         $lastSalaryRecord = null;
-        if ($hasYearColumn) {
+        
+        // استخدام نفس المنطق المستخدم في الاستعلام الرئيسي
+        if ($isMonthDate) {
+            // عمود month من نوع DATE
+            $lastSalaryRecord = $db->queryOne(
+                "SELECT id, month, total_amount, accumulated_amount, paid_amount FROM salaries 
+                 WHERE user_id = ? 
+                 AND month IS NOT NULL 
+                 AND month != '0000-00-00' 
+                 AND month != '1970-01-01'
+                 AND DATE(month) < ?
+                 ORDER BY month DESC LIMIT 1",
+                [$statementUserId, $toDate]
+            );
+        } elseif ($hasYearColumn) {
+            // عمود month من نوع INT مع وجود عمود year
             $lastSalaryRecord = $db->queryOne(
                 "SELECT id, month, year, total_amount, accumulated_amount, paid_amount FROM salaries 
                  WHERE user_id = ? 
+                 AND month > 0 
+                 AND month <= 12 
+                 AND year > 0
                  AND (year < ? OR (year = ? AND month < ?))
                  ORDER BY year DESC, month DESC LIMIT 1",
                 [$statementUserId, $toYear, $toYear, $toMonth]
             );
         } else {
+            // عمود month من نوع INT بدون عمود year
             $lastSalaryRecord = $db->queryOne(
                 "SELECT id, month, total_amount, accumulated_amount, paid_amount FROM salaries 
                  WHERE user_id = ? 
-                 AND DATE(month) < ?
+                 AND month > 0 
+                 AND month <= 12
+                 AND month < ?
                  ORDER BY month DESC LIMIT 1",
-                [$statementUserId, $toDate]
+                [$statementUserId, $toMonth]
             );
         }
         
