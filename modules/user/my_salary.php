@@ -1212,8 +1212,9 @@ if ($currentSalary && isset($currentSalary['base_amount'])) {
     }
     
     // إعادة حساب الراتب الإجمالي من المكونات لضمان الدقة
-    // الراتب الإجمالي = الراتب الأساسي + المكافآت + نسبة التحصيلات - الخصومات - التسويات والسلف
-    $totalSalary = round($baseAmount + $bonus + $collectionsBonus - $deductions - $settlementsAdvances, 2);
+    // الراتب الإجمالي = الراتب الأساسي + المكافآت + نسبة التحصيلات - الخصومات
+    // ملاحظة: لا نخصم التسويات والسلف هنا لأنها تُخصم عند حساب المتبقي فقط
+    $totalSalary = round($baseAmount + $bonus + $collectionsBonus - $deductions, 2);
     
     // تحديث $monthStats بالقيم المحسوبة
     $monthStats['total_salary'] = $totalSalary;
@@ -1240,10 +1241,11 @@ if ($currentSalary && isset($currentSalary['base_amount'])) {
     }
     
     // إعادة حساب الراتب الإجمالي من المكونات
+    // ملاحظة: لا نخصم التسويات والسلف هنا لأنها تُخصم عند حساب المتبقي فقط
     if ($currentUser['role'] === 'sales') {
-        $totalSalary = round($baseAmount + $bonus + $collectionsBonus - $deductions - $settlementsAdvances, 2);
+        $totalSalary = round($baseAmount + $bonus + $collectionsBonus - $deductions, 2);
     } else {
-        $totalSalary = round($baseAmount + $bonus - $deductions - $settlementsAdvances, 2);
+        $totalSalary = round($baseAmount + $bonus - $deductions, 2);
     }
 }
 
