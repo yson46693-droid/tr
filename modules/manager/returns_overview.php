@@ -203,7 +203,7 @@ $stats = [
             <div class="card">
                 <div class="card-body">
                     <form method="GET" action="" class="row g-3">
-                        <input type="hidden" name="page" value="returns">
+                        <input type="hidden" name="page" value="returns_overview">
                         
                         <div class="col-md-4">
                             <label class="form-label">المندوب</label>
@@ -233,7 +233,7 @@ $stats = [
                             <button type="submit" class="btn btn-primary me-2">
                                 <i class="bi bi-search"></i> بحث
                             </button>
-                            <a href="?page=returns" class="btn btn-secondary">
+                            <a href="?page=returns_overview" class="btn btn-secondary">
                                 <i class="bi bi-x-circle"></i> إعادة تعيين
                             </a>
                         </div>
@@ -324,7 +324,7 @@ $stats = [
                             <nav aria-label="Page navigation" class="mt-3">
                                 <ul class="pagination justify-content-center">
                                     <li class="page-item <?php echo $pageNum <= 1 ? 'disabled' : ''; ?>">
-                                        <a class="page-link" href="?page=returns&p=<?php echo $pageNum - 1; ?>">
+                                        <a class="page-link" href="?page=returns_overview&p=<?php echo $pageNum - 1; ?>">
                                             <i class="bi bi-chevron-right"></i>
                                         </a>
                                     </li>
@@ -336,14 +336,14 @@ $stats = [
                                     for ($i = $startPage; $i <= $endPage; $i++):
                                     ?>
                                         <li class="page-item <?php echo $i === $pageNum ? 'active' : ''; ?>">
-                                            <a class="page-link" href="?page=returns&p=<?php echo $i; ?>">
+                                            <a class="page-link" href="?page=returns_overview&p=<?php echo $i; ?>">
                                                 <?php echo $i; ?>
                                             </a>
                                         </li>
                                     <?php endfor; ?>
                                     
                                     <li class="page-item <?php echo $pageNum >= $totalPages ? 'disabled' : ''; ?>">
-                                        <a class="page-link" href="?page=returns&p=<?php echo $pageNum + 1; ?>">
+                                        <a class="page-link" href="?page=returns_overview&p=<?php echo $pageNum + 1; ?>">
                                             <i class="bi bi-chevron-left"></i>
                                         </a>
                                     </li>
