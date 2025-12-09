@@ -3625,10 +3625,6 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                         <?php if ($hasSalaryId): ?>
                         <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #f3f4f6;">
                         <div class="detail-row">
-                            <span class="detail-label">المبلغ التراكمي:</span>
-                            <span class="detail-value text-primary"><?php echo formatCurrency($accumulated); ?></span>
-                        </div>
-                        <div class="detail-row">
                             <span class="detail-label">المتبقي:</span>
                             <span class="detail-value <?php echo $remaining > 0 ? 'text-warning' : 'text-success'; ?>">
                                 <?php echo formatCurrency($remaining); ?>
