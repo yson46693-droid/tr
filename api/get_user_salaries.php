@@ -123,8 +123,26 @@ try {
                      (COALESCE(s.accumulated_amount, s.total_amount, 0) - COALESCE(s.paid_amount, 0)) as remaining,
                      s.id as salary_id";
     
-    if ($hasYearColumn) {
-        // إذا كان month من نوع INT و year موجود
+    // بناء الاستعلام بناءً على نوع عمود month أولاً
+    if ($isMonthDate) {
+        // عمود month من نوع DATE - استخدام DATE_FORMAT
+        $query .= ", CASE 
+                       WHEN s.month IS NOT NULL AND s.month != '0000-00-00' AND s.month != '1970-01-01'
+                       THEN DATE_FORMAT(s.month, '%Y-%m')
+                       ELSE DATE_FORMAT(CURDATE(), '%Y-%m')
+                    END as month_label";
+        // استبعاد السجلات ذات التواريخ غير الصحيحة
+        $whereClause = "WHERE s.user_id = ? AND s.month IS NOT NULL AND s.month != '0000-00-00' AND s.month != '1970-01-01'";
+        
+        // إذا كان عمود year موجوداً، نضيفه كشرط إضافي
+        if ($hasYearColumn) {
+            $whereClause .= " AND s.year > 0";
+        }
+        
+        // الترتيب حسب month (DATE) - الأحدث أولاً
+        $orderClause = "ORDER BY s.month DESC, s.id DESC";
+    } elseif ($hasYearColumn) {
+        // عمود month من نوع INT مع وجود عمود year منفصل
         $query .= ", CASE 
                        WHEN s.month > 0 AND s.month <= 12 AND s.year > 0 AND s.year <= 9999 
                        THEN CONCAT(s.year, '-', LPAD(s.month, 2, '0'))
@@ -132,25 +150,15 @@ try {
                     END as month_label";
         // استبعاد السجلات ذات التواريخ غير الصحيحة (month = 0 أو year = 0)
         $whereClause = "WHERE s.user_id = ? AND s.month > 0 AND s.month <= 12 AND s.year > 0";
+        // الترتيب حسب year ثم month - الأحدث أولاً
         $orderClause = "ORDER BY s.year DESC, s.month DESC, s.id DESC";
     } else {
-        // إذا كان month من نوع DATE
-        if ($isMonthDate) {
-            $query .= ", CASE 
-                           WHEN s.month IS NOT NULL AND s.month != '0000-00-00' AND s.month != '1970-01-01'
-                           THEN DATE_FORMAT(s.month, '%Y-%m')
-                           ELSE DATE_FORMAT(CURDATE(), '%Y-%m')
-                        END as month_label";
-            // استبعاد السجلات ذات التواريخ غير الصحيحة
-            $whereClause = "WHERE s.user_id = ? AND s.month IS NOT NULL AND s.month != '0000-00-00' AND s.month != '1970-01-01'";
-            $orderClause = "ORDER BY s.month DESC, s.id DESC";
-        } else {
-            // إذا كان month من نوع INT بدون year
-            $query .= ", DATE_FORMAT(CONCAT(YEAR(CURDATE()), '-', LPAD(COALESCE(s.month, MONTH(CURDATE())), 2, '0'), '-01'), '%Y-%m') as month_label";
-            // استبعاد السجلات ذات التواريخ غير الصحيحة
-            $whereClause = "WHERE s.user_id = ? AND s.month IS NOT NULL AND s.month > 0 AND s.month <= 12";
-            $orderClause = "ORDER BY s.month DESC, s.id DESC";
-        }
+        // عمود month من نوع INT بدون year
+        $query .= ", DATE_FORMAT(CONCAT(YEAR(CURDATE()), '-', LPAD(COALESCE(s.month, MONTH(CURDATE())), 2, '0'), '-01'), '%Y-%m') as month_label";
+        // استبعاد السجلات ذات التواريخ غير الصحيحة
+        $whereClause = "WHERE s.user_id = ? AND s.month IS NOT NULL AND s.month > 0 AND s.month <= 12";
+        // الترتيب حسب month - الأحدث أولاً
+        $orderClause = "ORDER BY s.month DESC, s.id DESC";
     }
     
     $query .= " FROM salaries s " . $whereClause . " " . $orderClause;
