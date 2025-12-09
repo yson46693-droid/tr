@@ -1250,9 +1250,89 @@ $usersQuery .= " ORDER BY
 
 $users = $db->query($usersQuery);
 
-// الحصول على الرواتب للشهر المحدد مع فلترة
+// إنشاء رواتب تلقائياً لأول مرة كل شهر للموظفين الذين لا يملكون رواتب
+// يتم ذلك مرة واحدة فقط لكل شهر باستخدام createOrUpdateSalary (تتضمن حماية من التكرار)
+require_once __DIR__ . '/../../includes/salary_calculator.php';
+
+// التحقق من وجود رواتب للمستخدمين في الشهر المحدد
 $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
 $hasYearColumn = !empty($yearColumnCheck);
+
+// التحقق من أن الشهر والسنة صحيحين
+if ($selectedMonth >= 1 && $selectedMonth <= 12 && $selectedYear >= 2000 && $selectedYear <= 2100) {
+    $createdCount = 0;
+    $updatedCount = 0;
+    
+    foreach ($users as $user) {
+        $userId = intval($user['id']);
+        $hourlyRate = cleanFinancialValue($user['hourly_rate'] ?? 0);
+        
+        // تخطي المستخدمين بدون سعر ساعة
+        if ($hourlyRate <= 0) {
+            continue;
+        }
+        
+        // التحقق من وجود راتب للمستخدم في الشهر المحدد
+        $hasSalary = false;
+        if ($hasYearColumn) {
+            $existingSalary = $db->queryOne(
+                "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? AND month > 0 AND year > 0 LIMIT 1",
+                [$userId, $selectedMonth, $selectedYear]
+            );
+            $hasSalary = !empty($existingSalary);
+        } else {
+            $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+            $monthType = $monthColumnCheck['Type'] ?? '';
+            $isMonthDate = stripos($monthType, 'date') !== false;
+            
+            if ($isMonthDate) {
+                $targetDate = sprintf('%04d-%02d-01', $selectedYear, $selectedMonth);
+                $existingSalary = $db->queryOne(
+                    "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ? AND month != '0000-00-00' LIMIT 1",
+                    [$userId, sprintf('%04d-%02d', $selectedYear, $selectedMonth)]
+                );
+            } else {
+                $existingSalary = $db->queryOne(
+                    "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND month > 0 LIMIT 1",
+                    [$userId, $selectedMonth]
+                );
+            }
+            $hasSalary = !empty($existingSalary);
+        }
+        
+        // إذا لم يكن للمستخدم راتب في هذا الشهر، قم بإنشائه
+        if (!$hasSalary) {
+            try {
+                // استخدام createOrUpdateSalary التي تحتوي على حماية من التكرار (ON DUPLICATE KEY UPDATE)
+                $result = createOrUpdateSalary(
+                    $userId,
+                    $selectedMonth,
+                    $selectedYear,
+                    0, // bonus
+                    0, // deductions
+                    'إنشاء تلقائي عند فتح صفحة الرواتب - أول مرة في الشهر'
+                );
+                
+                if ($result['success']) {
+                    $createdCount++;
+                    error_log("Auto-created salary for user {$userId}, month: {$selectedMonth}, year: {$selectedYear}");
+                } else {
+                    error_log("Failed to auto-create salary for user {$userId}: " . ($result['message'] ?? 'Unknown error'));
+                }
+            } catch (Exception $e) {
+                error_log("Exception while auto-creating salary for user {$userId}: " . $e->getMessage());
+            }
+        }
+    }
+    
+    // تسجيل عدد الرواتب التي تم إنشاؤها (للمراقبة فقط)
+    if ($createdCount > 0) {
+        error_log("Auto-created {$createdCount} salary records for month {$selectedMonth}/{$selectedYear}");
+    }
+}
+
+// الحصول على الرواتب للشهر المحدد مع فلترة
+// (yearColumnCheck تم التحقق منه أعلاه)
 
 $whereConditions = [];
 $params = [];
