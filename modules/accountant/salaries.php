@@ -1257,8 +1257,19 @@ $autoCreateKey = "auto_created_salaries_{$selectedYear}_{$selectedMonth}";
 
 // التحقق من أن هذا لم يتم تنفيذه من قبل في هذه الجلسة
 // وأيضاً التحقق من أن الطلب ليس POST (لأن POST requests قد تسبب redirects)
+// السماح بإعادة المحاولة إذا تم تمرير retry_auto_create=1
 $isPostRequest = ($_SERVER['REQUEST_METHOD'] === 'POST');
-$shouldAutoCreate = !isset($_SESSION[$autoCreateKey]) && !$isPostRequest;
+$retryRequested = isset($_GET['retry_auto_create']) && $_GET['retry_auto_create'] == '1';
+
+// إذا طُلب إعادة المحاولة، أزل session flags
+if ($retryRequested) {
+    unset($_SESSION[$autoCreateKey]);
+    unset($_SESSION[$autoCreateKey . '_count']);
+    unset($_SESSION[$autoCreateKey . '_time']);
+    error_log("Retry requested for auto-creation of salaries for {$selectedMonth}/{$selectedYear}");
+}
+
+$shouldAutoCreate = !$isPostRequest && !isset($_SESSION[$autoCreateKey]);
 
 if ($shouldAutoCreate) {
     require_once __DIR__ . '/../../includes/salary_calculator.php';
@@ -1384,8 +1395,62 @@ if ($shouldAutoCreate) {
 } else {
     // تم تنفيذ العملية من قبل في هذه الجلسة
     $previousCount = $_SESSION[$autoCreateKey . '_count'] ?? 0;
+    $previousTime = $_SESSION[$autoCreateKey . '_time'] ?? 0;
+    
     if ($previousCount > 0) {
-        error_log("Auto-creation already executed for {$selectedMonth}/{$selectedYear} in this session (created {$previousCount} salaries)");
+        $timeAgo = time() - $previousTime;
+        $minutesAgo = round($timeAgo / 60);
+        error_log("Auto-creation already executed for {$selectedMonth}/{$selectedYear} in this session (created {$previousCount} salaries {$minutesAgo} minutes ago)");
+        
+        // التحقق من وجود عمود year للتحقق من الرواتب
+        $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
+        $hasYearColumn = !empty($yearColumnCheck);
+        
+        // التحقق من أن الرواتب موجودة فعلياً في قاعدة البيانات
+        // إذا لم تكن موجودة، قد تكون تم حذفها أو حدث خطأ - نعيد المحاولة
+        $actualCount = 0;
+        if ($hasYearColumn) {
+            $actualCount = $db->queryOne(
+                "SELECT COUNT(*) as cnt FROM salaries WHERE month = ? AND year = ? AND month > 0 AND year > 0",
+                [$selectedMonth, $selectedYear]
+            );
+        } else {
+            $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+            $monthType = $monthColumnCheck['Type'] ?? '';
+            if (stripos($monthType, 'date') !== false) {
+                $actualCount = $db->queryOne(
+                    "SELECT COUNT(*) as cnt FROM salaries WHERE DATE_FORMAT(month, '%Y-%m') = ? AND month != '0000-00-00' AND month IS NOT NULL",
+                    [sprintf('%04d-%02d', $selectedYear, $selectedMonth)]
+                );
+            } else {
+                $actualCount = $db->queryOne(
+                    "SELECT COUNT(*) as cnt FROM salaries WHERE month = ? AND month > 0",
+                    [$selectedMonth]
+                );
+            }
+        }
+        $actualCount = intval($actualCount['cnt'] ?? 0);
+        
+        // إذا كان عدد الرواتب الفعلي أقل من المتوقع، أو إذا مر أكثر من 5 دقائق، نعيد المحاولة
+        if ($actualCount < $previousCount || ($timeAgo > 300 && $actualCount == 0)) {
+            error_log("Warning: Expected {$previousCount} salaries but found {$actualCount} in database. Re-running auto-creation...");
+            // إزالة session flag للسماح بإعادة المحاولة
+            unset($_SESSION[$autoCreateKey]);
+            unset($_SESSION[$autoCreateKey . '_count']);
+            unset($_SESSION[$autoCreateKey . '_time']);
+            // إعادة توجيه الصفحة لإعادة المحاولة
+            $redirectUrl = $_SERVER['PHP_SELF'] . "?" . http_build_query(array_merge($_GET, ['retry_auto_create' => '1']));
+            header("Location: " . $redirectUrl);
+            exit;
+        } else {
+            error_log("Verified: Found {$actualCount} salaries in database (expected {$previousCount})");
+            // إذا كان العدد صفراً رغم تسجيل إنشاء رواتب، أضف رسالة تحذير
+            if ($actualCount == 0 && $previousCount > 0) {
+                $error = "تحذير: تم تسجيل إنشاء {$previousCount} راتب في الجلسة السابقة لكن لم يتم العثور عليها في قاعدة البيانات. يرجى إعادة المحاولة.";
+            }
+        }
+    } else {
+        error_log("Auto-creation already executed for {$selectedMonth}/{$selectedYear} in this session but no count was recorded");
     }
 }
 
