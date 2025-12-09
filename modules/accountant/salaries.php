@@ -1274,9 +1274,13 @@ $shouldAutoCreate = !$isPostRequest && !isset($_SESSION[$autoCreateKey]);
 if ($shouldAutoCreate) {
     require_once __DIR__ . '/../../includes/salary_calculator.php';
     
-    // التحقق من وجود رواتب للمستخدمين في الشهر المحدد
+    // التحقق من وجود عمود year و نوع عمود month
     $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
     $hasYearColumn = !empty($yearColumnCheck);
+    
+    $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+    $monthType = $monthColumnCheck['Type'] ?? '';
+    $isMonthDate = stripos($monthType, 'date') !== false;
     
     // التحقق من أن الشهر والسنة صحيحين - تحقق صارم لمنع التواريخ الصفرية
     if ($selectedMonth >= 1 && $selectedMonth <= 12 && $selectedYear >= 2000 && $selectedYear <= 2100) {
@@ -1285,170 +1289,123 @@ if ($shouldAutoCreate) {
         $errorCount = 0;
         $totalUsers = count($users);
         
-        error_log("=== Auto-creating salaries for month {$selectedMonth}/{$selectedYear} - Total users: {$totalUsers} ===");
+        // إعداد التاريخ الصحيح للبحث والإدراج
+        $targetDate = sprintf('%04d-%02d-01', $selectedYear, $selectedMonth);
+        $targetYearMonth = sprintf('%04d-%02d', $selectedYear, $selectedMonth);
+        
+        error_log("=== Auto-creating salaries for month {$selectedMonth}/{$selectedYear} (targetDate: {$targetDate}) - Total users: {$totalUsers} ===");
         
         foreach ($users as $user) {
-        $userId = intval($user['id']);
-        $hourlyRate = cleanFinancialValue($user['hourly_rate'] ?? 0);
-        $userName = $user['full_name'] ?? $user['username'] ?? "User {$userId}";
-        
-        // تخطي المستخدمين بدون سعر ساعة
-        if ($hourlyRate <= 0) {
-            error_log("Skipping user {$userId} ({$userName}): hourly_rate is 0 or empty");
-            $skippedCount++;
-            continue;
-        }
-        
-        // التحقق من وجود راتب للمستخدم في الشهر المحدد
-        $hasSalary = false;
-        try {
-            if ($hasYearColumn) {
-                $existingSalary = $db->queryOne(
-                    "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? AND month > 0 AND year > 0 LIMIT 1",
-                    [$userId, $selectedMonth, $selectedYear]
-                );
-                $hasSalary = !empty($existingSalary);
-            } else {
-                $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
-                $monthType = $monthColumnCheck['Type'] ?? '';
-                $isMonthDate = stripos($monthType, 'date') !== false;
-                
+            $userId = intval($user['id']);
+            $hourlyRate = cleanFinancialValue($user['hourly_rate'] ?? 0);
+            $userName = $user['full_name'] ?? $user['username'] ?? "User {$userId}";
+            
+            // تخطي المستخدمين بدون سعر ساعة
+            if ($hourlyRate <= 0) {
+                error_log("Skipping user {$userId} ({$userName}): hourly_rate is 0 or empty");
+                $skippedCount++;
+                continue;
+            }
+            
+            // التحقق من وجود راتب للمستخدم في الشهر المحدد
+            $hasSalary = false;
+            try {
+                // البحث بناءً على نوع عمود month
                 if ($isMonthDate) {
-                    $targetDate = sprintf('%04d-%02d-01', $selectedYear, $selectedMonth);
+                    // عمود month من نوع DATE - البحث باستخدام DATE_FORMAT
                     $existingSalary = $db->queryOne(
                         "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ? AND month != '0000-00-00' AND month IS NOT NULL LIMIT 1",
-                        [$userId, sprintf('%04d-%02d', $selectedYear, $selectedMonth)]
+                        [$userId, $targetYearMonth]
                     );
+                    $hasSalary = !empty($existingSalary);
+                } elseif ($hasYearColumn) {
+                    // عمود month من نوع INT مع وجود عمود year منفصل
+                    $existingSalary = $db->queryOne(
+                        "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? AND month > 0 AND year > 0 LIMIT 1",
+                        [$userId, $selectedMonth, $selectedYear]
+                    );
+                    $hasSalary = !empty($existingSalary);
                 } else {
+                    // عمود month من نوع INT بدون عمود year
                     $existingSalary = $db->queryOne(
                         "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND month > 0 AND month <= 12 LIMIT 1",
                         [$userId, $selectedMonth]
                     );
-                }
-                $hasSalary = !empty($existingSalary);
-            }
-            
-            // إذا لم يكن للمستخدم راتب في هذا الشهر، قم بإنشائه
-            if (!$hasSalary) {
-                // تحقق صارم من القيم قبل الإنشاء لمنع التواريخ الصفرية
-                if ($selectedMonth < 1 || $selectedMonth > 12 || $selectedYear < 2000 || $selectedYear > 2100) {
-                    error_log("✗ Invalid month/year for user {$userId}: month={$selectedMonth}, year={$selectedYear}");
-                    $errorCount++;
-                    continue;
+                    $hasSalary = !empty($existingSalary);
                 }
                 
-                error_log("User {$userId} ({$userName}) has no salary for {$selectedMonth}/{$selectedYear}, creating...");
-                
-                // استخدام createOrUpdateSalary التي تحتوي على حماية من التكرار (ON DUPLICATE KEY UPDATE)
-                // مع التحقق من القيم مرة أخرى داخل الدالة
-                $result = createOrUpdateSalary(
-                    $userId,
-                    $selectedMonth,
-                    $selectedYear,
-                    0, // bonus
-                    0, // deductions
-                    'إنشاء تلقائي عند فتح صفحة الرواتب - أول مرة في الشهر'
-                );
-                
-                if ($result['success']) {
-                    $createdCount++;
-                    $salaryId = $result['salary_id'] ?? 'N/A';
-                    error_log("✓ Successfully created salary for user {$userId} ({$userName}), salary_id: {$salaryId}");
+                // إذا لم يكن للمستخدم راتب في هذا الشهر، قم بإنشائه
+                if (!$hasSalary) {
+                    error_log("User {$userId} ({$userName}) has no salary for {$selectedMonth}/{$selectedYear}, creating...");
+                    
+                    // استخدام createOrUpdateSalary التي تحتوي على حماية من التكرار
+                    $result = createOrUpdateSalary(
+                        $userId,
+                        $selectedMonth,
+                        $selectedYear,
+                        0, // bonus
+                        0, // deductions
+                        'إنشاء تلقائي عند فتح صفحة الرواتب - أول مرة في الشهر'
+                    );
+                    
+                    if ($result['success']) {
+                        $createdCount++;
+                        $salaryId = $result['salary_id'] ?? 'N/A';
+                        error_log("✓ Successfully created salary for user {$userId} ({$userName}), salary_id: {$salaryId}");
+                    } else {
+                        $errorCount++;
+                        $errorMsg = $result['message'] ?? 'Unknown error';
+                        error_log("✗ Failed to create salary for user {$userId} ({$userName}): {$errorMsg}");
+                    }
                 } else {
-                    $errorCount++;
-                    $errorMsg = $result['message'] ?? 'Unknown error';
-                    error_log("✗ Failed to create salary for user {$userId} ({$userName}): {$errorMsg}");
+                    $salaryId = $existingSalary['id'] ?? 'N/A';
+                    error_log("User {$userId} ({$userName}) already has salary (ID: {$salaryId}) for {$selectedMonth}/{$selectedYear}, skipping");
                 }
-            } else {
-                $salaryId = $existingSalary['id'] ?? 'N/A';
-                error_log("User {$userId} ({$userName}) already has salary (ID: {$salaryId}) for {$selectedMonth}/{$selectedYear}, skipping");
+            } catch (Exception $e) {
+                $errorCount++;
+                error_log("✗ Exception while processing user {$userId} ({$userName}): " . $e->getMessage());
+            } catch (Throwable $e) {
+                $errorCount++;
+                error_log("✗ Fatal error while processing user {$userId} ({$userName}): " . $e->getMessage());
             }
-        } catch (Exception $e) {
-            $errorCount++;
-            error_log("✗ Exception while processing user {$userId} ({$userName}): " . $e->getMessage());
-            error_log("Stack trace: " . $e->getTraceAsString());
-        } catch (Throwable $e) {
-            $errorCount++;
-            error_log("✗ Fatal error while processing user {$userId} ({$userName}): " . $e->getMessage());
         }
-    }
-    
+        
         // تسجيل ملخص العملية
         error_log("=== Auto-create summary: Created={$createdCount}, Skipped={$skippedCount}, Errors={$errorCount}, Total={$totalUsers} ===");
         
-        // تعيين session flag لمنع التنفيذ المتكرر
+        // تعيين session flag لمنع التنفيذ المتكرر - مهم جداً: يتم تعيينه دائماً حتى لو كان createdCount = 0
         $_SESSION[$autoCreateKey] = true;
         $_SESSION[$autoCreateKey . '_count'] = $createdCount;
         $_SESSION[$autoCreateKey . '_time'] = time();
+        $_SESSION[$autoCreateKey . '_completed'] = true; // علامة إضافية لتأكيد اكتمال العملية
         
         // إظهار رسالة نجاح للمستخدم (إذا تم إنشاء رواتب)
-        // فقط إذا لم تكن هناك رسالة خطأ أو نجاح موجودة مسبقاً
         if ($createdCount > 0 && empty($success) && empty($error)) {
             $success = "تم إنشاء {$createdCount} راتب تلقائياً للشهر الحالي";
         } elseif ($createdCount > 0 && !empty($success)) {
-            // إذا كانت هناك رسالة نجاح موجودة، أضف إليها
             $success .= " | تم إنشاء {$createdCount} راتب تلقائياً";
         }
     } else {
         error_log("Invalid month/year for auto-creation: month={$selectedMonth}, year={$selectedYear}");
+        // تعيين session flag حتى في حالة الخطأ لمنع التكرار
+        $_SESSION[$autoCreateKey] = true;
+        $_SESSION[$autoCreateKey . '_count'] = 0;
+        $_SESSION[$autoCreateKey . '_time'] = time();
+        $_SESSION[$autoCreateKey . '_completed'] = true;
     }
 } else {
-    // تم تنفيذ العملية من قبل في هذه الجلسة
+    // تم تنفيذ العملية من قبل في هذه الجلسة - لا نعيد المحاولة تلقائياً
     $previousCount = $_SESSION[$autoCreateKey . '_count'] ?? 0;
     $previousTime = $_SESSION[$autoCreateKey . '_time'] ?? 0;
+    $isCompleted = $_SESSION[$autoCreateKey . '_completed'] ?? false;
     
-    if ($previousCount > 0) {
+    if ($previousCount > 0 || $isCompleted) {
         $timeAgo = time() - $previousTime;
         $minutesAgo = round($timeAgo / 60);
         error_log("Auto-creation already executed for {$selectedMonth}/{$selectedYear} in this session (created {$previousCount} salaries {$minutesAgo} minutes ago)");
         
-        // التحقق من وجود عمود year للتحقق من الرواتب
-        $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
-        $hasYearColumn = !empty($yearColumnCheck);
-        
-        // التحقق من أن الرواتب موجودة فعلياً في قاعدة البيانات
-        // إذا لم تكن موجودة، قد تكون تم حذفها أو حدث خطأ - نعيد المحاولة
-        $actualCount = 0;
-        if ($hasYearColumn) {
-            $actualCount = $db->queryOne(
-                "SELECT COUNT(*) as cnt FROM salaries WHERE month = ? AND year = ? AND month > 0 AND year > 0",
-                [$selectedMonth, $selectedYear]
-            );
-        } else {
-            $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
-            $monthType = $monthColumnCheck['Type'] ?? '';
-            if (stripos($monthType, 'date') !== false) {
-                $actualCount = $db->queryOne(
-                    "SELECT COUNT(*) as cnt FROM salaries WHERE DATE_FORMAT(month, '%Y-%m') = ? AND month != '0000-00-00' AND month IS NOT NULL",
-                    [sprintf('%04d-%02d', $selectedYear, $selectedMonth)]
-                );
-            } else {
-                $actualCount = $db->queryOne(
-                    "SELECT COUNT(*) as cnt FROM salaries WHERE month = ? AND month > 0",
-                    [$selectedMonth]
-                );
-            }
-        }
-        $actualCount = intval($actualCount['cnt'] ?? 0);
-        
-        // إذا كان عدد الرواتب الفعلي أقل من المتوقع، أو إذا مر أكثر من 5 دقائق، نعيد المحاولة
-        if ($actualCount < $previousCount || ($timeAgo > 300 && $actualCount == 0)) {
-            error_log("Warning: Expected {$previousCount} salaries but found {$actualCount} in database. Re-running auto-creation...");
-            // إزالة session flag للسماح بإعادة المحاولة
-            unset($_SESSION[$autoCreateKey]);
-            unset($_SESSION[$autoCreateKey . '_count']);
-            unset($_SESSION[$autoCreateKey . '_time']);
-            // إعادة توجيه الصفحة لإعادة المحاولة
-            $redirectUrl = $_SERVER['PHP_SELF'] . "?" . http_build_query(array_merge($_GET, ['retry_auto_create' => '1']));
-            header("Location: " . $redirectUrl);
-            exit;
-        } else {
-            error_log("Verified: Found {$actualCount} salaries in database (expected {$previousCount})");
-            // إذا كان العدد صفراً رغم تسجيل إنشاء رواتب، أضف رسالة تحذير
-            if ($actualCount == 0 && $previousCount > 0) {
-                $error = "تحذير: تم تسجيل إنشاء {$previousCount} راتب في الجلسة السابقة لكن لم يتم العثور عليها في قاعدة البيانات. يرجى إعادة المحاولة.";
-            }
-        }
+        // لا نقوم بإعادة التوجيه التلقائي لتجنب التكرار اللانهائي
+        // المستخدم يمكنه استخدام retry_auto_create=1 يدوياً إذا أراد
     } else {
         error_log("Auto-creation already executed for {$selectedMonth}/{$selectedYear} in this session but no count was recorded");
     }
