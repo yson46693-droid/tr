@@ -547,6 +547,236 @@ if (!defined('ACCESS_ALLOWED')) {
         }
     </script>
     
+    <!-- Page Loading Overlay Script - لإظهار دائرة التحميل بين التنقلات -->
+    <?php if (isLoggedIn() && (!defined('ENABLE_PAGE_LOADER') || ENABLE_PAGE_LOADER)): ?>
+    <script>
+        (function() {
+            'use strict';
+            
+            const loadingOverlay = document.getElementById('pageLoadingOverlay');
+            if (!loadingOverlay) {
+                return; // لا يوجد overlay - ربما في صفحة login
+            }
+            
+            let loadingTimeout = null;
+            let activeRequests = 0;
+            const MIN_LOADING_TIME = 300; // الحد الأدنى لإظهار loading (300ms)
+            
+            // دالة لإظهار loading overlay
+            function showLoading() {
+                if (!loadingOverlay) return;
+                activeRequests++;
+                
+                // إلغاء أي timeout سابق
+                if (loadingTimeout) {
+                    clearTimeout(loadingTimeout);
+                }
+                
+                // إظهار overlay بعد تأخير قصير
+                loadingTimeout = setTimeout(function() {
+                    if (activeRequests > 0) {
+                        loadingOverlay.classList.add('show');
+                        loadingOverlay.setAttribute('aria-hidden', 'false');
+                    }
+                }, 100);
+            }
+            
+            // دالة لإخفاء loading overlay
+            function hideLoading() {
+                if (!loadingOverlay) return;
+                
+                activeRequests = Math.max(0, activeRequests - 1);
+                
+                // إلغاء timeout الإظهار
+                if (loadingTimeout) {
+                    clearTimeout(loadingTimeout);
+                    loadingTimeout = null;
+                }
+                
+                // إخفاء overlay فقط إذا لم يعد هناك طلبات نشطة
+                if (activeRequests <= 0) {
+                    // التأكد من إظهار overlay لفترة كافية
+                    setTimeout(function() {
+                        if (activeRequests <= 0 && loadingOverlay) {
+                            loadingOverlay.classList.remove('show');
+                            loadingOverlay.setAttribute('aria-hidden', 'true');
+                        }
+                    }, MIN_LOADING_TIME);
+                }
+            }
+            
+            // Intercept fetch requests
+            const originalFetch = window.fetch;
+            window.fetch = function() {
+                const args = arguments;
+                const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url ? args[0].url : '');
+                
+                // تجاهل طلبات معينة (مثل notifications, updates)
+                const skipUrls = ['/api/notifications.php', '/api/check_update.php', '/api/background-tasks.php', 'notification', 'update'];
+                const shouldSkip = skipUrls.some(skip => url.includes(skip));
+                
+                if (!shouldSkip) {
+                    showLoading();
+                }
+                
+                return originalFetch.apply(this, args)
+                    .then(function(response) {
+                        if (!shouldSkip) {
+                            hideLoading();
+                        }
+                        return response;
+                    })
+                    .catch(function(error) {
+                        if (!shouldSkip) {
+                            hideLoading();
+                        }
+                        throw error;
+                    });
+            };
+            
+            // Intercept XMLHttpRequest
+            const originalXHROpen = XMLHttpRequest.prototype.open;
+            const originalXHRSend = XMLHttpRequest.prototype.send;
+            
+            XMLHttpRequest.prototype.open = function() {
+                this._url = arguments[1];
+                return originalXHROpen.apply(this, arguments);
+            };
+            
+            XMLHttpRequest.prototype.send = function() {
+                const url = this._url || '';
+                const skipUrls = ['/api/notifications.php', '/api/check_update.php', '/api/background-tasks.php', 'notification', 'update'];
+                const shouldSkip = skipUrls.some(skip => url.includes(skip));
+                
+                if (!shouldSkip) {
+                    showLoading();
+                }
+                
+                const originalOnReadyStateChange = this.onreadystatechange;
+                this.onreadystatechange = function() {
+                    if (this.readyState === 4) {
+                        if (!shouldSkip) {
+                            hideLoading();
+                        }
+                    }
+                    if (originalOnReadyStateChange) {
+                        originalOnReadyStateChange.apply(this, arguments);
+                    }
+                };
+                
+                const originalOnLoad = this.onload;
+                const originalOnError = this.onerror;
+                
+                this.onload = function() {
+                    if (!shouldSkip) {
+                        hideLoading();
+                    }
+                    if (originalOnLoad) {
+                        originalOnLoad.apply(this, arguments);
+                    }
+                };
+                
+                this.onerror = function() {
+                    if (!shouldSkip) {
+                        hideLoading();
+                    }
+                    if (originalOnError) {
+                        originalOnError.apply(this, arguments);
+                    }
+                };
+                
+                return originalXHRSend.apply(this, arguments);
+            };
+            
+            // Intercept jQuery AJAX (إذا كان jQuery متاحاً)
+            if (typeof jQuery !== 'undefined' && typeof jQuery.ajaxSetup === 'function') {
+                const originalAjax = jQuery.ajax;
+                jQuery.ajaxSetup({
+                    beforeSend: function(xhr, settings) {
+                        const url = settings.url || '';
+                        const skipUrls = ['/api/notifications.php', '/api/check_update.php', '/api/background-tasks.php', 'notification', 'update'];
+                        const shouldSkip = skipUrls.some(skip => url.includes(skip));
+                        
+                        if (!shouldSkip) {
+                            showLoading();
+                        }
+                    },
+                    complete: function(xhr, status) {
+                        hideLoading();
+                    }
+                });
+            }
+            
+            // إظهار loading عند النقر على روابط التنقل
+            document.addEventListener('click', function(e) {
+                const link = e.target.closest('a');
+                if (!link) return;
+                
+                const href = link.getAttribute('href');
+                if (!href) return;
+                
+                // تجاهل روابط معينة
+                if (href.startsWith('#') || 
+                    href.startsWith('javascript:') || 
+                    href.startsWith('mailto:') || 
+                    href.startsWith('tel:') ||
+                    link.hasAttribute('data-no-loading') ||
+                    link.hasAttribute('data-bs-toggle') ||
+                    link.hasAttribute('data-bs-target') ||
+                    link.classList.contains('dropdown-item') ||
+                    link.closest('.nav-tabs') ||
+                    link.closest('.section-tabs') ||
+                    link.target === '_blank' ||
+                    link.download) {
+                    return;
+                }
+                
+                // تجاهل الروابط الداخلية التي تستخدم AJAX أو sections
+                if (href.includes('section=') || 
+                    href.includes('&tab=') || 
+                    href.includes('#') ||
+                    link.hasAttribute('data-no-splash')) {
+                    return;
+                }
+                
+                // فقط للروابط التي تغير الصفحة
+                const isInternalLink = link.hostname === window.location.hostname || !link.hostname;
+                const isSamePage = href === window.location.pathname || href === window.location.href;
+                
+                if (isInternalLink && !isSamePage && !href.includes('?')) {
+                    // رابط داخلي لصفحة جديدة
+                    showLoading();
+                    
+                    // إخفاء loading بعد تحميل الصفحة (fallback)
+                    window.addEventListener('load', function() {
+                        setTimeout(hideLoading, 500);
+                    }, { once: true });
+                } else if (!isInternalLink) {
+                    // رابط خارجي
+                    showLoading();
+                }
+            });
+            
+            // إخفاء loading عند تحميل الصفحة (fallback)
+            if (document.readyState === 'complete') {
+                hideLoading();
+            } else {
+                window.addEventListener('load', function() {
+                    setTimeout(hideLoading, 500);
+                }, { once: true });
+            }
+            
+            // إخفاء loading عند الرجوع للخلف
+            window.addEventListener('pageshow', function(event) {
+                if (event.persisted) {
+                    hideLoading();
+                }
+            });
+            
+        })();
+    </script>
+    <?php endif; ?>
+    
     <!-- 🎬 Page Loading Animation Script - Optimized for Mobile -->
     <script>
         (function() {
