@@ -438,6 +438,163 @@ $lang = $translations;
             }
         }
     </style>
+    
+    <!-- منع الضغط بالزر الأيمن وفتح أدوات المطور -->
+    <script>
+    (function() {
+        'use strict';
+        
+        // منع الضغط بالزر الأيمن
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            return false;
+        }, true);
+        
+        // منع اختصارات لوحة المفاتيح
+        document.addEventListener('keydown', function(e) {
+            // F12 - فتح أدوات المطور
+            if (e.keyCode === 123) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+Shift+I - فتح أدوات المطور
+            if (e.ctrlKey && e.shiftKey && e.keyCode === 73) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+Shift+J - فتح Console
+            if (e.ctrlKey && e.shiftKey && e.keyCode === 74) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+Shift+C - فتح Element Inspector
+            if (e.ctrlKey && e.shiftKey && e.keyCode === 67) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+U - عرض مصدر الصفحة
+            if (e.ctrlKey && e.keyCode === 85) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+S - حفظ الصفحة
+            if (e.ctrlKey && e.keyCode === 83) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+P - طباعة
+            if (e.ctrlKey && e.keyCode === 80) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+Shift+P - Command Palette
+            if (e.ctrlKey && e.shiftKey && e.keyCode === 80) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+Shift+K - Network Monitor (Firefox)
+            if (e.ctrlKey && e.shiftKey && e.keyCode === 75) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+Shift+E - Network Panel (Chrome)
+            if (e.ctrlKey && e.shiftKey && e.keyCode === 69) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }, true);
+        
+        // منع فتح أدوات المطور عبر DevTools API
+        (function() {
+            var devtools = { open: false };
+            var threshold = 160;
+            
+            setInterval(function() {
+                if (window.outerHeight - window.innerHeight > threshold || 
+                    window.outerWidth - window.innerWidth > threshold) {
+                    if (!devtools.open) {
+                        devtools.open = true;
+                    }
+                } else {
+                    if (devtools.open) {
+                        devtools.open = false;
+                    }
+                }
+            }, 500);
+        })();
+        
+        // منع فتح أدوات المطور عبر Console API
+        (function() {
+            var noop = function() {};
+            var methods = ['log', 'debug', 'info', 'warn', 'error', 'assert', 'dir', 'dirxml', 
+                         'group', 'groupEnd', 'time', 'timeEnd', 'count', 'trace', 'profile', 'profileEnd'];
+            var length = methods.length;
+            var console = (window.console = window.console || {});
+            
+            while (length--) {
+                console[methods[length]] = noop;
+            }
+        })();
+        
+        // منع فتح أدوات المطور عبر Debugger
+        setInterval(function() {
+            (function() {
+                return false;
+            })('devtools');
+        }, 4000);
+        
+        // منع window.open, document.write, eval
+        var originalOpen = window.open;
+        window.open = function() { return null; };
+        
+        var originalWrite = document.write;
+        document.write = function() { return false; };
+        
+        var originalWriteln = document.writeln;
+        document.writeln = function() { return false; };
+        
+        var originalEval = window.eval;
+        window.eval = function() { return null; };
+        
+        var originalFunction = window.Function;
+        window.Function = function() { return function() {}; };
+        
+        var originalSetTimeout = window.setTimeout;
+        window.setTimeout = function(func, delay) {
+            if (typeof func === 'string') {
+                return originalSetTimeout(function() {}, delay);
+            }
+            return originalSetTimeout(func, delay);
+        };
+        
+        var originalSetInterval = window.setInterval;
+        window.setInterval = function(func, delay) {
+            if (typeof func === 'string') {
+                return originalSetInterval(function() {}, delay);
+            }
+            return originalSetInterval(func, delay);
+        };
+    })();
+    </script>
 </head>
 <body class="login-page">
     <!-- PWA Splash Screen -->
