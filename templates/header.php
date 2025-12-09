@@ -975,7 +975,7 @@ if (ob_get_level() > 0) {
             left: 0;
             width: 100%;
             height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #667eea 100%);
+            background: linear-gradient(135deg,rgb(11, 102, 187) 0%,rgb(19, 95, 188) 50%, rgb(22, 86, 165) 100%);
             background-size: 400% 400%;
             animation: gradientShift 8s ease infinite;
             display: none;
