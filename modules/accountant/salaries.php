@@ -3478,12 +3478,10 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                             <span class="detail-label">الخصومات:</span>
                             <span class="detail-value"><?php echo formatCurrency($deductions); ?></span>
                         </div>
-                        <?php if ($settlementsAdvances > 0): ?>
                         <div class="detail-row">
                             <span class="detail-label">التسويات والسلف:</span>
-                            <span class="detail-value text-danger"><?php echo formatCurrency($settlementsAdvances); ?></span>
+                            <span class="detail-value <?php echo $settlementsAdvances > 0 ? 'text-danger' : ''; ?>"><?php echo formatCurrency($settlementsAdvances); ?></span>
                         </div>
-                        <?php endif; ?>
                         <div class="detail-row">
                             <span class="detail-label"><strong>الراتب الإجمالي:</strong></span>
                             <span class="detail-value"><strong><?php echo formatCurrency($totalSalary); ?></strong></span>

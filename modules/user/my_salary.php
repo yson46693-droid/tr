@@ -900,6 +900,9 @@ if ($salaryData['exists']) {
     if (isset($currentSalary['deductions'])) {
         $currentSalary['deductions'] = cleanFinancialValue($currentSalary['deductions']);
     }
+    if (isset($currentSalary['settlements_advances'])) {
+        $currentSalary['settlements_advances'] = cleanFinancialValue($currentSalary['settlements_advances']);
+    }
     
     // حساب الراتب الإجمالي (قبل الخصومات)
     $baseAmountForAdvance = cleanFinancialValue($currentSalary['base_amount'] ?? 0);
@@ -952,6 +955,9 @@ if ($salaryData['exists']) {
     if (isset($currentSalary['deductions'])) {
         $currentSalary['deductions'] = cleanFinancialValue($currentSalary['deductions']);
     }
+    if (isset($currentSalary['settlements_advances'])) {
+        $currentSalary['settlements_advances'] = cleanFinancialValue($currentSalary['settlements_advances']);
+    }
     
     // حساب الراتب الإجمالي (قبل الخصومات)
     $baseAmountForAdvance = cleanFinancialValue($currentSalary['base_amount'] ?? 0);
@@ -1001,6 +1007,9 @@ if ($salaryData['exists']) {
         }
         if (isset($currentSalary['deductions'])) {
             $currentSalary['deductions'] = cleanFinancialValue($currentSalary['deductions']);
+        }
+        if (isset($currentSalary['settlements_advances'])) {
+            $currentSalary['settlements_advances'] = cleanFinancialValue($currentSalary['settlements_advances']);
         }
         
         // حساب الراتب الإجمالي (قبل الخصومات)
@@ -1119,7 +1128,23 @@ $hourlyRate = cleanFinancialValue($currentSalary['hourly_rate'] ?? $currentUser[
 $bonus = cleanFinancialValue($currentSalary[$bonusColumnName] ?? $currentSalary['bonus'] ?? $currentSalary['bonuses'] ?? 0);
 $deductions = cleanFinancialValue($currentSalary['deductions'] ?? 0);
 // التسويات والسلف (من العمود الجديد)
-$settlementsAdvances = cleanFinancialValue($currentSalary['settlements_advances'] ?? 0);
+$settlementsAdvances = 0;
+if ($currentSalary && isset($currentSalary['settlements_advances'])) {
+    $settlementsAdvances = cleanFinancialValue($currentSalary['settlements_advances']);
+} elseif ($currentSalary && isset($currentSalary['id'])) {
+    // إذا كان الراتب موجوداً لكن القيمة غير موجودة في المصفوفة، جلبها من قاعدة البيانات
+    try {
+        $settlementsValue = $db->queryOne(
+            "SELECT settlements_advances FROM salaries WHERE id = ?",
+            [$currentSalary['id']]
+        );
+        if ($settlementsValue && isset($settlementsValue['settlements_advances'])) {
+            $settlementsAdvances = cleanFinancialValue($settlementsValue['settlements_advances']);
+        }
+    } catch (Exception $e) {
+        error_log('Error fetching settlements_advances: ' . $e->getMessage());
+    }
+}
 
 // حساب إجمالي التحصيلات من جدول collections فقط (مثل cash_register.php)
 // لضمان أن نسبة التحصيلات = 2% من إجمالي التحصيلات من العملاء
@@ -1615,12 +1640,10 @@ if ($showSuccessFromSession): ?>
                 <td>الخصومات</td>
                 <td><?php echo formatCurrency($deductions); ?></td>
             </tr>
-            <?php if ($settlementsAdvances > 0): ?>
             <tr>
                 <td>التسويات والسلف</td>
-                <td class="text-danger"><?php echo formatCurrency($settlementsAdvances); ?></td>
+                <td class="<?php echo $settlementsAdvances > 0 ? 'text-danger' : ''; ?>"><?php echo formatCurrency($settlementsAdvances); ?></td>
             </tr>
-            <?php endif; ?>
             <tr>
                 <td><strong>الراتب الإجمالي</strong></td>
                 <td><strong><?php echo formatCurrency($totalSalary); ?></strong></td>

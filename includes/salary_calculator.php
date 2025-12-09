@@ -2289,6 +2289,9 @@ function getSalarySummary($userId, $month, $year) {
     if (isset($salary['collections_amount'])) {
         $salary['collections_amount'] = cleanFinancialValue($salary['collections_amount']);
     }
+    if (isset($salary['settlements_advances'])) {
+        $salary['settlements_advances'] = cleanFinancialValue($salary['settlements_advances']);
+    }
     
     return [
         'exists' => true,
