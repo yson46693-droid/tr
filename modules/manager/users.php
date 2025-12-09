@@ -91,9 +91,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // بناء استعلام INSERT ديناميكي بناءً على وجود عمود email
                 if ($hasEmailColumn) {
+                    // استخدام NULL بدلاً من '' لتجنب خطأ duplicate entry في عمود email الفريد
                     $result = $db->execute(
                         "INSERT INTO users (username, email, password_hash, role, full_name, phone, hourly_rate, status) 
-                         VALUES (?, '', ?, ?, ?, ?, ?, 'active')",
+                         VALUES (?, NULL, ?, ?, ?, ?, ?, 'active')",
                         [$username, $passwordHash, $role, $fullName, $phone, $hourlyRate]
                     );
                 } else {
