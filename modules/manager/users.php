@@ -93,8 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($hasEmailColumn) {
                     // استخدام NULL بدلاً من '' لتجنب خطأ duplicate entry في عمود email الفريد
                     $result = $db->execute(
-                        "INSERT INTO users (username, email, password_hash, role, full_name, phone, hourly_rate, status) 
-                         VALUES (?, NULL, ?, ?, ?, ?, ?, 'active')",
+                        "INSERT INTO users (username, password_hash, role, full_name, phone, hourly_rate, status) 
+                         VALUES (?, ?, ?, ?, ?, ?, 'active')",
                         [$username, $passwordHash, $role, $fullName, $phone, $hourlyRate]
                     );
                 } else {
