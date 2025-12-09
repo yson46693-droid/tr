@@ -967,79 +967,7 @@ if (ob_get_level() > 0) {
         a {
             transition: all 0.3s ease;
         }
-        
-        /* Loading Overlay - دائرة تحميل بين التنقلات */
-        #pageLoadingOverlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 9998;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            pointer-events: all;
-        }
-        
-        #pageLoadingOverlay.show {
-            display: flex;
-            opacity: 1;
-        }
-        
-        #pageLoadingOverlay .loading-spinner {
-            width: 60px;
-            height: 60px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top-color: #f1c40f;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* Loading text */
-        #pageLoadingOverlay .loading-text {
-            color: white;
-            margin-top: 20px;
-            font-size: 16px;
-            font-weight: 500;
-        }
-        
-        #pageLoadingOverlay .loading-content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
     </style>
-    <?php endif; ?>
-    
-    <!-- Loading Overlay HTML - فقط إذا كان المستخدم مسجل دخول -->
-    <?php 
-    $showLoadingOverlay = false;
-    if (isLoggedIn()) {
-        // التحقق من أن ENABLE_PAGE_LOADER معرّف وقيمته true
-        if (defined('ENABLE_PAGE_LOADER')) {
-            $showLoadingOverlay = ENABLE_PAGE_LOADER === true;
-        } else {
-            // إذا لم يتم تعريفه، نشغّله افتراضياً
-            $showLoadingOverlay = true;
-        }
-    }
-    ?>
-    <?php if ($showLoadingOverlay): ?>
-    <div id="pageLoadingOverlay" aria-hidden="true" role="status" aria-label="جاري التحميل">
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <div class="loading-text">جاري التحميل...</div>
-        </div>
-    </div>
     <?php endif; ?>
     
     <!-- Service Worker Registration with Auto-Update -->
