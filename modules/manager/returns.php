@@ -35,44 +35,87 @@ $latestPageNum = isset($_GET['latest_p']) ? max(1, intval($_GET['latest_p'])) : 
 $latestPerPage = 20;
 $latestOffset = ($latestPageNum - 1) * $latestPerPage;
 
-// Get pending return requests from delegates
+// Get pending return requests from delegates and local customers
 $entityColumn = getApprovalsEntityColumn();
+
+// التحقق من وجود جدول local_returns
+$localReturnsTableExists = $db->queryOne("SHOW TABLES LIKE 'local_returns'");
+
+// جلب مرتجعات المندوبين المعلقة
 $pendingReturns = $db->query(
     "SELECT r.*, c.name as customer_name, c.balance as customer_balance,
             u.full_name as sales_rep_name,
             a.id as approval_id, a.created_at as request_date,
-            req.full_name as requested_by_name
+            req.full_name as requested_by_name,
+            'delegate' as return_type,
+            NULL as local_customer_id
      FROM returns r
      INNER JOIN approvals a ON a.type = 'return_request' AND a.{$entityColumn} = r.id
      LEFT JOIN customers c ON r.customer_id = c.id
      LEFT JOIN users u ON r.sales_rep_id = u.id
      LEFT JOIN users req ON a.requested_by = req.id
      WHERE r.status = 'pending' AND a.status = 'pending'
-     ORDER BY r.created_at DESC
-     LIMIT ? OFFSET ?",
-    [$pendingPerPage, $pendingOffset]
+     ORDER BY r.created_at DESC"
 );
 
-$totalPending = $db->queryOne(
-    "SELECT COUNT(*) as total
-     FROM returns r
-     INNER JOIN approvals a ON a.type = 'return_request' AND a.{$entityColumn} = r.id
-     WHERE r.status = 'pending' AND a.status = 'pending'"
-);
+// جلب مرتجعات العملاء المحليين المعلقة (إذا كان الجدول موجوداً)
+$pendingLocalReturns = [];
+if (!empty($localReturnsTableExists)) {
+    $pendingLocalReturns = $db->query(
+        "SELECT lr.*, lc.name as customer_name, lc.balance as customer_balance,
+                NULL as sales_rep_name,
+                NULL as approval_id,
+                lr.created_at as request_date,
+                creator.full_name as requested_by_name,
+                'local' as return_type,
+                lr.customer_id as local_customer_id
+         FROM local_returns lr
+         LEFT JOIN local_customers lc ON lr.customer_id = lc.id
+         LEFT JOIN users creator ON lr.created_by = creator.id
+         WHERE lr.status = 'pending'
+         ORDER BY lr.created_at DESC"
+    ) ?: [];
+}
 
-$totalPendingCount = (int)($totalPending['total'] ?? 0);
+// دمج المرتجعات وترتيبها حسب التاريخ
+$allPendingReturns = array_merge($pendingReturns ?: [], $pendingLocalReturns);
+usort($allPendingReturns, function($a, $b) {
+    return strtotime($b['request_date'] ?? $b['created_at']) - strtotime($a['request_date'] ?? $a['created_at']);
+});
+
+// تطبيق pagination
+$totalPendingCount = count($allPendingReturns);
 $totalPendingPages = ceil($totalPendingCount / $pendingPerPage);
+$allPendingReturns = array_slice($allPendingReturns, $pendingOffset, $pendingPerPage);
 
 // Get return items for each pending return
-foreach ($pendingReturns as &$return) {
-    $return['items'] = $db->query(
-        "SELECT ri.*, p.name as product_name, p.unit
-         FROM return_items ri
-         LEFT JOIN products p ON ri.product_id = p.id
-         WHERE ri.return_id = ?
-         ORDER BY ri.id",
-        [(int)$return['id']]
-    );
+foreach ($allPendingReturns as &$return) {
+    if ($return['return_type'] === 'local') {
+        // مرتجعات العملاء المحليين
+        $returnItemsTableExists = $db->queryOne("SHOW TABLES LIKE 'local_return_items'");
+        if (!empty($returnItemsTableExists)) {
+            $return['items'] = $db->query(
+                "SELECT lri.*, p.name as product_name, p.unit
+                 FROM local_return_items lri
+                 LEFT JOIN products p ON lri.product_id = p.id
+                 WHERE lri.return_id = ?
+                 ORDER BY lri.id",
+                [(int)$return['id']]
+            ) ?: [];
+        } else {
+            $return['items'] = [];
+        }
+    } else {
+        // مرتجعات المندوبين
+        $return['items'] = $db->query(
+            "SELECT ri.*, p.name as product_name, p.unit
+             FROM return_items ri
+             LEFT JOIN products p ON ri.product_id = p.id
+             WHERE ri.return_id = ?
+             ORDER BY ri.id",
+            [(int)$return['id']]
+        ) ?: [];
+    }
     
     // Calculate customer debt/credit
     $balance = (float)($return['customer_balance'] ?? 0);
@@ -82,41 +125,83 @@ foreach ($pendingReturns as &$return) {
 unset($return);
 
 // Get latest return operations (approved, rejected, completed)
+// مرتجعات المندوبين
 $latestReturns = $db->query(
     "SELECT r.*, c.name as customer_name, c.balance as customer_balance,
             u.full_name as sales_rep_name,
             approver.full_name as approved_by_name,
-            i.invoice_number
+            i.invoice_number,
+            'delegate' as return_type,
+            NULL as local_customer_id
      FROM returns r
      LEFT JOIN customers c ON r.customer_id = c.id
      LEFT JOIN users u ON r.sales_rep_id = u.id
      LEFT JOIN users approver ON r.approved_by = approver.id
      LEFT JOIN invoices i ON r.invoice_id = i.id
      WHERE r.status IN ('approved', 'rejected', 'processed', 'completed')
-     ORDER BY COALESCE(r.approved_at, r.updated_at, r.created_at) DESC
-     LIMIT ? OFFSET ?",
-    [$latestPerPage, $latestOffset]
-);
+     ORDER BY COALESCE(r.approved_at, r.updated_at, r.created_at) DESC"
+) ?: [];
 
-$totalLatest = $db->queryOne(
-    "SELECT COUNT(*) as total
-     FROM returns r
-     WHERE r.status IN ('approved', 'rejected', 'processed', 'completed')"
-);
+// مرتجعات العملاء المحليين
+$latestLocalReturns = [];
+if (!empty($localReturnsTableExists)) {
+    $latestLocalReturns = $db->query(
+        "SELECT lr.*, lc.name as customer_name, lc.balance as customer_balance,
+                NULL as sales_rep_name,
+                approver.full_name as approved_by_name,
+                li.invoice_number,
+                'local' as return_type,
+                lr.customer_id as local_customer_id
+         FROM local_returns lr
+         LEFT JOIN local_customers lc ON lr.customer_id = lc.id
+         LEFT JOIN users approver ON lr.approved_by = approver.id
+         LEFT JOIN local_invoices li ON lr.invoice_id = li.id
+         WHERE lr.status IN ('approved', 'rejected', 'processed', 'completed')
+         ORDER BY COALESCE(lr.approved_at, lr.updated_at, lr.created_at) DESC"
+    ) ?: [];
+}
 
-$totalLatestCount = (int)($totalLatest['total'] ?? 0);
+// دمج المرتجعات وترتيبها حسب التاريخ
+$allLatestReturns = array_merge($latestReturns, $latestLocalReturns);
+usort($allLatestReturns, function($a, $b) {
+    $dateA = $a['approved_at'] ?? $a['updated_at'] ?? $a['created_at'];
+    $dateB = $b['approved_at'] ?? $b['updated_at'] ?? $b['created_at'];
+    return strtotime($dateB) - strtotime($dateA);
+});
+
+// تطبيق pagination
+$totalLatestCount = count($allLatestReturns);
 $totalLatestPages = ceil($totalLatestCount / $latestPerPage);
+$allLatestReturns = array_slice($allLatestReturns, $latestOffset, $latestPerPage);
 
 // Get return items for each latest return
-foreach ($latestReturns as &$return) {
-    $return['items'] = $db->query(
-        "SELECT ri.*, p.name as product_name, p.unit
-         FROM return_items ri
-         LEFT JOIN products p ON ri.product_id = p.id
-         WHERE ri.return_id = ?
-         ORDER BY ri.id",
-        [(int)$return['id']]
-    );
+foreach ($allLatestReturns as &$return) {
+    if ($return['return_type'] === 'local') {
+        // مرتجعات العملاء المحليين
+        $returnItemsTableExists = $db->queryOne("SHOW TABLES LIKE 'local_return_items'");
+        if (!empty($returnItemsTableExists)) {
+            $return['items'] = $db->query(
+                "SELECT lri.*, p.name as product_name, p.unit
+                 FROM local_return_items lri
+                 LEFT JOIN products p ON lri.product_id = p.id
+                 WHERE lri.return_id = ?
+                 ORDER BY lri.id",
+                [(int)$return['id']]
+            ) ?: [];
+        } else {
+            $return['items'] = [];
+        }
+    } else {
+        // مرتجعات المندوبين
+        $return['items'] = $db->query(
+            "SELECT ri.*, p.name as product_name, p.unit
+             FROM return_items ri
+             LEFT JOIN products p ON ri.product_id = p.id
+             WHERE ri.return_id = ?
+             ORDER BY ri.id",
+            [(int)$return['id']]
+        ) ?: [];
+    }
     
     // Calculate customer debt/credit
     $balance = (float)($return['customer_balance'] ?? 0);
@@ -125,26 +210,62 @@ foreach ($latestReturns as &$return) {
 }
 unset($return);
 
-// Get statistics
+// Get statistics (including local returns)
 $stats = [
     'pending' => $totalPendingCount,
-    'approved_today' => (int)$db->queryOne(
-        "SELECT COUNT(*) as total
-         FROM returns r
-         WHERE r.status = 'approved' AND DATE(r.approved_at) = CURDATE()"
-    )['total'] ?? 0,
-    'total_amount_pending' => (float)$db->queryOne(
-        "SELECT COALESCE(SUM(r.refund_amount), 0) as total
-         FROM returns r
-         INNER JOIN approvals a ON a.type = 'return_request' AND a.{$entityColumn} = r.id
-         WHERE r.status = 'pending' AND a.status = 'pending'"
-    )['total'] ?? 0,
-    'total_amount_approved_today' => (float)$db->queryOne(
-        "SELECT COALESCE(SUM(r.refund_amount), 0) as total
-         FROM returns r
-         WHERE r.status = 'approved' AND DATE(r.approved_at) = CURDATE()"
-    )['total'] ?? 0,
+    'approved_today' => 0,
+    'total_amount_pending' => 0.0,
+    'total_amount_approved_today' => 0.0,
 ];
+
+// إحصائيات مرتجعات المندوبين
+$delegateApprovedToday = (int)$db->queryOne(
+    "SELECT COUNT(*) as total
+     FROM returns r
+     WHERE r.status = 'approved' AND DATE(r.approved_at) = CURDATE()"
+)['total'] ?? 0;
+
+$delegateAmountPending = (float)$db->queryOne(
+    "SELECT COALESCE(SUM(r.refund_amount), 0) as total
+     FROM returns r
+     INNER JOIN approvals a ON a.type = 'return_request' AND a.{$entityColumn} = r.id
+     WHERE r.status = 'pending' AND a.status = 'pending'"
+)['total'] ?? 0;
+
+$delegateAmountApprovedToday = (float)$db->queryOne(
+    "SELECT COALESCE(SUM(r.refund_amount), 0) as total
+     FROM returns r
+     WHERE r.status = 'approved' AND DATE(r.approved_at) = CURDATE()"
+)['total'] ?? 0;
+
+$stats['approved_today'] += $delegateApprovedToday;
+$stats['total_amount_pending'] += $delegateAmountPending;
+$stats['total_amount_approved_today'] += $delegateAmountApprovedToday;
+
+// إحصائيات مرتجعات العملاء المحليين
+if (!empty($localReturnsTableExists)) {
+    $localApprovedToday = (int)$db->queryOne(
+        "SELECT COUNT(*) as total
+         FROM local_returns lr
+         WHERE lr.status = 'approved' AND DATE(lr.approved_at) = CURDATE()"
+    )['total'] ?? 0;
+    
+    $localAmountPending = (float)$db->queryOne(
+        "SELECT COALESCE(SUM(lr.refund_amount), 0) as total
+         FROM local_returns lr
+         WHERE lr.status = 'pending'"
+    )['total'] ?? 0;
+    
+    $localAmountApprovedToday = (float)$db->queryOne(
+        "SELECT COALESCE(SUM(lr.refund_amount), 0) as total
+         FROM local_returns lr
+         WHERE lr.status = 'approved' AND DATE(lr.approved_at) = CURDATE()"
+    )['total'] ?? 0;
+    
+    $stats['approved_today'] += $localApprovedToday;
+    $stats['total_amount_pending'] += $localAmountPending;
+    $stats['total_amount_approved_today'] += $localAmountApprovedToday;
+}
 
 ?>
 
@@ -228,7 +349,7 @@ $stats = [
                 <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
                         <i class="bi bi-exclamation-triangle me-2"></i>
-                        طلبات المرتجعات المعلقة من المندوبين (<?php echo $totalPendingCount; ?>)
+                        طلبات المرتجعات المعلقة (<?php echo $totalPendingCount; ?>)
                     </h5>
                     <span class="badge bg-light text-dark">يتطلب مراجعة</span>
                 </div>
@@ -243,6 +364,7 @@ $stats = [
                                 <thead class="table-light">
                                     <tr>
                                         <th style="width: 120px;">رقم المرتجع</th>
+                                        <th>النوع</th>
                                         <th>العميل</th>
                                         <th>المندوب</th>
                                         <th>المبلغ</th>
@@ -252,10 +374,21 @@ $stats = [
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($pendingReturns as $return): ?>
+                                    <?php foreach ($allPendingReturns as $return): ?>
                                         <tr>
                                             <td>
                                                 <strong class="text-primary"><?php echo htmlspecialchars($return['return_number']); ?></strong>
+                                            </td>
+                                            <td>
+                                                <?php if ($return['return_type'] === 'local'): ?>
+                                                    <span class="badge bg-success">
+                                                        <i class="bi bi-shop me-1"></i>عميل محلي
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-primary">
+                                                        <i class="bi bi-person-badge me-1"></i>مندوب
+                                                    </span>
+                                                <?php endif; ?>
                                             </td>
                                             <td>
                                                 <div>
@@ -266,10 +399,14 @@ $stats = [
                                                 </div>
                                             </td>
                                             <td>
-                                                <span class="badge bg-info">
-                                                    <i class="bi bi-person me-1"></i>
-                                                    <?php echo htmlspecialchars($return['sales_rep_name'] ?? 'غير معروف'); ?>
-                                                </span>
+                                                <?php if ($return['return_type'] === 'local'): ?>
+                                                    <span class="badge bg-secondary">-</span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-info">
+                                                        <i class="bi bi-person me-1"></i>
+                                                        <?php echo htmlspecialchars($return['sales_rep_name'] ?? 'غير معروف'); ?>
+                                                    </span>
+                                                <?php endif; ?>
                                             </td>
                                             <td>
                                                 <strong class="text-primary fs-5">
@@ -391,6 +528,7 @@ $stats = [
                                 <thead class="table-light">
                                     <tr>
                                         <th style="width: 120px;">رقم المرتجع</th>
+                                        <th>النوع</th>
                                         <th>العميل</th>
                                         <th>المندوب</th>
                                         <th>المبلغ</th>
@@ -401,7 +539,7 @@ $stats = [
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($latestReturns as $return): ?>
+                                    <?php foreach ($allLatestReturns as $return): ?>
                                         <?php
                                         $statusClass = '';
                                         $statusText = '';
@@ -435,6 +573,17 @@ $stats = [
                                                 <strong class="text-primary"><?php echo htmlspecialchars($return['return_number']); ?></strong>
                                             </td>
                                             <td>
+                                                <?php if ($return['return_type'] === 'local'): ?>
+                                                    <span class="badge bg-success">
+                                                        <i class="bi bi-shop me-1"></i>عميل محلي
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-primary">
+                                                        <i class="bi bi-person-badge me-1"></i>مندوب
+                                                    </span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
                                                 <div>
                                                     <strong><?php echo htmlspecialchars($return['customer_name'] ?? 'غير معروف'); ?></strong>
                                                     <?php if (!empty($return['invoice_number'])): ?>
@@ -443,10 +592,14 @@ $stats = [
                                                 </div>
                                             </td>
                                             <td>
-                                                <span class="badge bg-info">
-                                                    <i class="bi bi-person me-1"></i>
-                                                    <?php echo htmlspecialchars($return['sales_rep_name'] ?? 'غير معروف'); ?>
-                                                </span>
+                                                <?php if ($return['return_type'] === 'local'): ?>
+                                                    <span class="badge bg-secondary">-</span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-info">
+                                                        <i class="bi bi-person me-1"></i>
+                                                        <?php echo htmlspecialchars($return['sales_rep_name'] ?? 'غير معروف'); ?>
+                                                    </span>
+                                                <?php endif; ?>
                                             </td>
                                             <td>
                                                 <strong class="text-primary">
