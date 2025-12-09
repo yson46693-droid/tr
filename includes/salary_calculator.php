@@ -2378,43 +2378,55 @@ function getSalarySummary($userId, $month, $year) {
         ];
     }
     
+    // التحقق من نوع عمود month أولاً - هذا مهم جداً
+    $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+    $monthType = $monthColumnCheck['Type'] ?? '';
+    $isMonthDate = stripos($monthType, 'date') !== false;
+    
     // التحقق من وجود عمود year
     $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
     $hasYearColumn = !empty($yearColumnCheck);
     
-    // بناء الاستعلام بناءً على وجود عمود year
-    if ($hasYearColumn) {
+    // إعداد التاريخ الصحيح للبحث
+    $targetYearMonth = sprintf('%04d-%02d', $year, $month);
+    
+    // بناء الاستعلام بناءً على نوع عمود month ووجود عمود year
+    if ($isMonthDate) {
+        // عمود month من نوع DATE - البحث باستخدام DATE_FORMAT
+        $whereClause = "s.user_id = ? AND DATE_FORMAT(s.month, '%Y-%m') = ? AND s.month != '0000-00-00' AND s.month IS NOT NULL";
+        $params = [$userId, $targetYearMonth];
+        
+        // إذا كان عمود year موجوداً، نضيفه كشرط إضافي للتحقق
+        if ($hasYearColumn) {
+            $whereClause .= " AND s.year = ? AND s.year > 0";
+            $params[] = $year;
+        }
+        
         $salary = $db->queryOne(
             "SELECT s.*, u.full_name, u.username, u.hourly_rate as current_hourly_rate
              FROM salaries s
              LEFT JOIN users u ON s.user_id = u.id
-             WHERE s.user_id = ? AND s.month = ? AND s.year = ?",
+             WHERE {$whereClause}",
+            $params
+        );
+    } elseif ($hasYearColumn) {
+        // عمود month من نوع INT مع وجود عمود year منفصل
+        $salary = $db->queryOne(
+            "SELECT s.*, u.full_name, u.username, u.hourly_rate as current_hourly_rate
+             FROM salaries s
+             LEFT JOIN users u ON s.user_id = u.id
+             WHERE s.user_id = ? AND s.month = ? AND s.year = ? AND s.month > 0 AND s.year > 0",
             [$userId, $month, $year]
         );
     } else {
-        // إذا لم يكن year موجوداً، استخدم month فقط أو DATE_FORMAT
-        $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
-        $monthType = $monthColumnCheck['Type'] ?? '';
-        
-        if (stripos($monthType, 'date') !== false) {
-            // إذا كان month من نوع DATE
-            $salary = $db->queryOne(
-                "SELECT s.*, u.full_name, u.username, u.hourly_rate as current_hourly_rate
-                 FROM salaries s
-                 LEFT JOIN users u ON s.user_id = u.id
-                 WHERE s.user_id = ? AND DATE_FORMAT(s.month, '%Y-%m') = ?",
-                [$userId, sprintf('%04d-%02d', $year, $month)]
-            );
-        } else {
-            // إذا كان month من نوع INT فقط
-            $salary = $db->queryOne(
-                "SELECT s.*, u.full_name, u.username, u.hourly_rate as current_hourly_rate
-                 FROM salaries s
-                 LEFT JOIN users u ON s.user_id = u.id
-                 WHERE s.user_id = ? AND s.month = ?",
-                [$userId, $month]
-            );
-        }
+        // عمود month من نوع INT بدون عمود year
+        $salary = $db->queryOne(
+            "SELECT s.*, u.full_name, u.username, u.hourly_rate as current_hourly_rate
+             FROM salaries s
+             LEFT JOIN users u ON s.user_id = u.id
+             WHERE s.user_id = ? AND s.month = ? AND s.month > 0",
+            [$userId, $month]
+        );
     }
     
     if (!$salary) {
