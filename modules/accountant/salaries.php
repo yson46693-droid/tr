@@ -1442,31 +1442,41 @@ if ($shouldAutoCreate) {
 }
 
 // الحصول على الرواتب للشهر المحدد مع فلترة
-// التحقق من وجود عمود year (يجب تعريفه هنا لأنه قد لا يُعرّف في حالة عدم تنفيذ auto-create)
+// التحقق من نوع عمود month أولاً - هذا مهم جداً
+$monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+$monthType = $monthColumnCheck['Type'] ?? '';
+$isMonthDate = stripos($monthType, 'date') !== false;
+
+// التحقق من وجود عمود year
 $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
 $hasYearColumn = !empty($yearColumnCheck);
 
 $whereConditions = [];
 $params = [];
 
-if ($hasYearColumn) {
-    // استبعاد السجلات ذات التواريخ غير الصحيحة
+// إعداد التاريخ الصحيح للبحث
+$targetYearMonth = sprintf('%04d-%02d', $selectedYear, $selectedMonth);
+
+// بناء استعلام WHERE بناءً على نوع عمود month
+if ($isMonthDate) {
+    // عمود month من نوع DATE - البحث باستخدام DATE_FORMAT
+    $whereConditions[] = "DATE_FORMAT(s.month, '%Y-%m') = ? AND s.month != '0000-00-00' AND s.month IS NOT NULL";
+    $params[] = $targetYearMonth;
+    
+    // إذا كان عمود year موجوداً، نضيفه كشرط إضافي للتحقق
+    if ($hasYearColumn) {
+        $whereConditions[] = "s.year = ? AND s.year > 0";
+        $params[] = $selectedYear;
+    }
+} elseif ($hasYearColumn) {
+    // عمود month من نوع INT مع وجود عمود year منفصل
     $whereConditions[] = "s.month = ? AND s.year = ? AND s.month > 0 AND s.year > 0";
     $params[] = $selectedMonth;
     $params[] = $selectedYear;
 } else {
-    $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'month'");
-    $monthType = $monthColumnCheck['Type'] ?? '';
-    
-    if (stripos($monthType, 'date') !== false) {
-        // استبعاد السجلات ذات التواريخ غير الصحيحة
-        $whereConditions[] = "DATE_FORMAT(s.month, '%Y-%m') = ? AND s.month != '0000-00-00' AND s.month != '1970-01-01'";
-        $params[] = sprintf('%04d-%02d', $selectedYear, $selectedMonth);
-    } else {
-        // استبعاد السجلات ذات التواريخ غير الصحيحة
-        $whereConditions[] = "s.month = ? AND s.month > 0";
-        $params[] = $selectedMonth;
-    }
+    // عمود month من نوع INT بدون عمود year
+    $whereConditions[] = "s.month = ? AND s.month > 0";
+    $params[] = $selectedMonth;
 }
 
 if ($selectedUserId > 0) {
@@ -1586,19 +1596,26 @@ foreach ($users as $user) {
     } else {
         // المستخدم ليس لديه راتب مسجل - التحقق أولاً قبل الإنشاء
         // التحقق من وجود راتب لهذا المستخدم والشهر والسنة
-        $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
-        $hasYearColumn = !empty($yearColumnCheck);
-        
+        // استخدام نفس المنطق المستخدم في الاستعلام الرئيسي
         $existingSalary = null;
-        if ($hasYearColumn) {
+        
+        if ($isMonthDate) {
+            // عمود month من نوع DATE
+            $targetYearMonth = sprintf('%04d-%02d', $selectedYear, $selectedMonth);
             $existingSalary = $db->queryOne(
-                "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ?",
+                "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ? AND month != '0000-00-00' AND month IS NOT NULL",
+                [$userId, $targetYearMonth]
+            );
+        } elseif ($hasYearColumn) {
+            // عمود month من نوع INT مع وجود عمود year
+            $existingSalary = $db->queryOne(
+                "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? AND month > 0 AND year > 0",
                 [$userId, $selectedMonth, $selectedYear]
             );
         } else {
-            // إذا لم يكن year موجوداً، تحقق من month فقط
+            // عمود month من نوع INT بدون عمود year
             $existingSalary = $db->queryOne(
-                "SELECT id FROM salaries WHERE user_id = ? AND month = ?",
+                "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND month > 0",
                 [$userId, $selectedMonth]
             );
         }
