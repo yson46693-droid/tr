@@ -63,9 +63,17 @@ if ($salesRepFilter > 0) {
     $params[] = $salesRepFilter;
 }
 
+// معالجة فلتر العميل (قد يكون محلياً)
+$isLocalCustomerFilter = false;
+$localCustomerId = 0;
 if ($customerFilter > 0) {
-    $sql .= " AND r.customer_id = ?";
-    $params[] = $customerFilter;
+    if (is_string($customerFilter) && strpos($customerFilter, 'local_') === 0) {
+        $isLocalCustomerFilter = true;
+        $localCustomerId = (int)str_replace('local_', '', $customerFilter);
+    } else {
+        $sql .= " AND r.customer_id = ?";
+        $params[] = $customerFilter;
+    }
 }
 
 $sql .= " GROUP BY r.id";
@@ -103,9 +111,12 @@ if (!empty($localReturnsTableExists)) {
     $localParams = [];
     
     // Apply customer filter for local returns
-    if ($customerFilter > 0) {
+    if ($isLocalCustomerFilter && $localCustomerId > 0) {
         $localSql .= " AND lr.customer_id = ?";
-        $localParams[] = $customerFilter;
+        $localParams[] = $localCustomerId;
+    } elseif (!$isLocalCustomerFilter && $customerFilter > 0) {
+        // إذا كان الفلتر للعملاء العاديين، لا نعرض مرتجعات العملاء المحليين
+        $localReturns = [];
     }
     
     $localSql .= " GROUP BY lr.id";
