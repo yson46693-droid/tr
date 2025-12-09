@@ -1133,6 +1133,1453 @@ if (ob_get_level() > 0) {
             });
         }
     </script>
+    <!-- منع الضغط بالزر الأيمن وفتح أدوات المطور -->
+    <script>
+    (function() {
+        'use strict';
+        
+        // منع الضغط بالزر الأيمن (Context Menu)
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        }, true);
+        
+        // منع اختيار النص (اختياري - يمكن إزالته إذا كان يسبب مشاكل)
+        document.addEventListener('selectstart', function(e) {
+            e.preventDefault();
+            return false;
+        }, true);
+        
+        // منع اختصارات لوحة المفاتيح لفتح أدوات المطور
+        document.addEventListener('keydown', function(e) {
+            // F12 - فتح أدوات المطور
+            if (e.keyCode === 123) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+Shift+I - فتح أدوات المطور
+            if (e.ctrlKey && e.shiftKey && e.keyCode === 73) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+Shift+J - فتح Console
+            if (e.ctrlKey && e.shiftKey && e.keyCode === 74) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+Shift+C - فتح Element Inspector
+            if (e.ctrlKey && e.shiftKey && e.keyCode === 67) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+U - عرض مصدر الصفحة
+            if (e.ctrlKey && e.keyCode === 85) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+S - حفظ الصفحة
+            if (e.ctrlKey && e.keyCode === 83) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+P - طباعة
+            if (e.ctrlKey && e.keyCode === 80) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+Shift+P - Command Palette (في بعض المتصفحات)
+            if (e.ctrlKey && e.shiftKey && e.keyCode === 80) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+Shift+K - Network Monitor (في Firefox)
+            if (e.ctrlKey && e.shiftKey && e.keyCode === 75) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+            
+            // Ctrl+Shift+E - Network Panel (في Chrome)
+            if (e.ctrlKey && e.shiftKey && e.keyCode === 69) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }, true);
+        
+        // منع فتح أدوات المطور عبر DevTools API
+        (function() {
+            var devtools = {
+                open: false,
+                orientation: null
+            };
+            var threshold = 160;
+            
+            setInterval(function() {
+                if (window.outerHeight - window.innerHeight > threshold || 
+                    window.outerWidth - window.innerWidth > threshold) {
+                    if (!devtools.open) {
+                        devtools.open = true;
+                        // يمكن إضافة إجراء هنا مثل إعادة تحميل الصفحة
+                        // window.location.reload();
+                    }
+                } else {
+                    if (devtools.open) {
+                        devtools.open = false;
+                    }
+                }
+            }, 500);
+        })();
+        
+        // منع فحص العناصر (Inspect Element)
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+Shift+C
+            if (e.ctrlKey && e.shiftKey && (e.keyCode === 67 || e.keyCode === 73)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }, true);
+        
+        // منع فتح أدوات المطور عبر Console API
+        (function() {
+            var noop = function() {};
+            var methods = ['log', 'debug', 'info', 'warn', 'error', 'assert', 'dir', 'dirxml', 
+                         'group', 'groupEnd', 'time', 'timeEnd', 'count', 'trace', 'profile', 'profileEnd'];
+            var length = methods.length;
+            var console = (window.console = window.console || {});
+            
+            while (length--) {
+                console[methods[length]] = noop;
+            }
+        })();
+        
+        // منع فتح أدوات المطور عبر Debugger
+        setInterval(function() {
+            (function() {
+                return false;
+            })('devtools');
+        }, 4000);
+        
+        // منع فتح أدوات المطور عبر Console.clear
+        if (window.console && window.console.clear) {
+            window.console.clear = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.log
+        if (window.console && window.console.log) {
+            window.console.log = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.debug
+        if (window.console && window.console.debug) {
+            window.console.debug = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.info
+        if (window.console && window.console.info) {
+            window.console.info = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.warn
+        if (window.console && window.console.warn) {
+            window.console.warn = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.error
+        if (window.console && window.console.error) {
+            window.console.error = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.trace
+        if (window.console && window.console.trace) {
+            window.console.trace = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.table
+        if (window.console && window.console.table) {
+            window.console.table = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.group
+        if (window.console && window.console.group) {
+            window.console.group = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.groupEnd
+        if (window.console && window.console.groupEnd) {
+            window.console.groupEnd = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.time
+        if (window.console && window.console.time) {
+            window.console.time = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.timeEnd
+        if (window.console && window.console.timeEnd) {
+            window.console.timeEnd = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.count
+        if (window.console && window.console.count) {
+            window.console.count = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.dir
+        if (window.console && window.console.dir) {
+            window.console.dir = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.dirxml
+        if (window.console && window.console.dirxml) {
+            window.console.dirxml = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.profile
+        if (window.console && window.console.profile) {
+            window.console.profile = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.profileEnd
+        if (window.console && window.console.profileEnd) {
+            window.console.profileEnd = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.assert
+        if (window.console && window.console.assert) {
+            window.console.assert = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Console.trace
+        if (window.console && window.console.trace) {
+            window.console.trace = function() {};
+        }
+        
+        // منع فتح أدوات المطور عبر Debugger Statement
+        setInterval(function() {
+            try {
+                eval('debugger');
+            } catch (e) {
+                // تجاهل الأخطاء
+            }
+        }, 1000);
+        
+        // منع فتح أدوات المطور عبر window.open
+        var originalOpen = window.open;
+        window.open = function() {
+            return null;
+        };
+        
+        // منع فتح أدوات المطور عبر document.write
+        var originalWrite = document.write;
+        document.write = function() {
+            return false;
+        };
+        
+        // منع فتح أدوات المطور عبر document.writeln
+        var originalWriteln = document.writeln;
+        document.writeln = function() {
+            return false;
+        };
+        
+        // منع فتح أدوات المطور عبر eval
+        var originalEval = window.eval;
+        window.eval = function() {
+            return null;
+        };
+        
+        // منع فتح أدوات المطور عبر Function constructor
+        var originalFunction = window.Function;
+        window.Function = function() {
+            return function() {};
+        };
+        
+        // منع فتح أدوات المطور عبر setTimeout مع eval
+        var originalSetTimeout = window.setTimeout;
+        window.setTimeout = function(func, delay) {
+            if (typeof func === 'string') {
+                return originalSetTimeout(function() {}, delay);
+            }
+            return originalSetTimeout(func, delay);
+        };
+        
+        // منع فتح أدوات المطور عبر setInterval مع eval
+        var originalSetInterval = window.setInterval;
+        window.setInterval = function(func, delay) {
+            if (typeof func === 'string') {
+                return originalSetInterval(function() {}, delay);
+            }
+            return originalSetInterval(func, delay);
+        };
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty
+        try {
+            Object.defineProperty(document, 'hidden', {
+                get: function() {
+                    return false;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ visibilityState
+        try {
+            Object.defineProperty(document, 'visibilityState', {
+                get: function() {
+                    return 'visible';
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ webkitVisibilityState
+        try {
+            Object.defineProperty(document, 'webkitVisibilityState', {
+                get: function() {
+                    return 'visible';
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ mozVisibilityState
+        try {
+            Object.defineProperty(document, 'mozVisibilityState', {
+                get: function() {
+                    return 'visible';
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ msVisibilityState
+        try {
+            Object.defineProperty(document, 'msVisibilityState', {
+                get: function() {
+                    return 'visible';
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ hasFocus
+        try {
+            Object.defineProperty(document, 'hasFocus', {
+                get: function() {
+                    return true;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ activeElement
+        try {
+            Object.defineProperty(document, 'activeElement', {
+                get: function() {
+                    return document.body;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ focused
+        try {
+            Object.defineProperty(document, 'focused', {
+                get: function() {
+                    return true;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ mozHidden
+        try {
+            Object.defineProperty(document, 'mozHidden', {
+                get: function() {
+                    return false;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ webkitHidden
+        try {
+            Object.defineProperty(document, 'webkitHidden', {
+                get: function() {
+                    return false;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ msHidden
+        try {
+            Object.defineProperty(document, 'msHidden', {
+                get: function() {
+                    return false;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ hidden
+        try {
+            Object.defineProperty(document, 'hidden', {
+                get: function() {
+                    return false;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ visibilitychange
+        try {
+            Object.defineProperty(document, 'visibilitychange', {
+                get: function() {
+                    return null;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ webkitvisibilitychange
+        try {
+            Object.defineProperty(document, 'webkitvisibilitychange', {
+                get: function() {
+                    return null;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ mozvisibilitychange
+        try {
+            Object.defineProperty(document, 'mozvisibilitychange', {
+                get: function() {
+                    return null;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ msvisibilitychange
+        try {
+            Object.defineProperty(document, 'msvisibilitychange', {
+                get: function() {
+                    return null;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ onvisibilitychange
+        try {
+            Object.defineProperty(document, 'onvisibilitychange', {
+                get: function() {
+                    return null;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ onwebkitvisibilitychange
+        try {
+            Object.defineProperty(document, 'onwebkitvisibilitychange', {
+                get: function() {
+                    return null;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ onmozvisibilitychange
+        try {
+            Object.defineProperty(document, 'onmozvisibilitychange', {
+                get: function() {
+                    return null;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ onmsvisibilitychange
+        try {
+            Object.defineProperty(document, 'onmsvisibilitychange', {
+                get: function() {
+                    return null;
+                }
+            });
+        } catch (e) {
+            // تجاهل الأخطاء
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ addEventListener
+        var originalAddEventListener = document.addEventListener;
+        document.addEventListener = function(type, listener, options) {
+            if (type === 'visibilitychange' || type === 'webkitvisibilitychange' || 
+                type === 'mozvisibilitychange' || type === 'msvisibilitychange') {
+                return;
+            }
+            return originalAddEventListener.call(this, type, listener, options);
+        };
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ removeEventListener
+        var originalRemoveEventListener = document.removeEventListener;
+        document.removeEventListener = function(type, listener, options) {
+            if (type === 'visibilitychange' || type === 'webkitvisibilitychange' || 
+                type === 'mozvisibilitychange' || type === 'msvisibilitychange') {
+                return;
+            }
+            return originalRemoveEventListener.call(this, type, listener, options);
+        };
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ dispatchEvent
+        var originalDispatchEvent = document.dispatchEvent;
+        document.dispatchEvent = function(event) {
+            if (event.type === 'visibilitychange' || event.type === 'webkitvisibilitychange' || 
+                event.type === 'mozvisibilitychange' || event.type === 'msvisibilitychange') {
+                return false;
+            }
+            return originalDispatchEvent.call(this, event);
+        };
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEvent
+        var originalCreateEvent = document.createEvent;
+        document.createEvent = function(type) {
+            if (type === 'VisibilityChangeEvent' || type === 'webkitVisibilityChangeEvent' || 
+                type === 'mozVisibilityChangeEvent' || type === 'msVisibilityChangeEvent') {
+                return null;
+            }
+            return originalCreateEvent.call(this, type);
+        };
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventObject
+        var originalCreateEventObject = document.createEventObject;
+        if (originalCreateEventObject) {
+            document.createEventObject = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+        // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
+        var originalCreateEventNS = document.createEventNS;
+        if (originalCreateEventNS) {
+            document.createEventNS = function() {
+                return null;
+            };
+        }
+        
+    })();
+    </script>
 </head>
 <body class="dashboard-body"
       data-user-role="<?php echo htmlspecialchars(isset($currentUser['role']) ? $currentUser['role'] : ''); ?>"
