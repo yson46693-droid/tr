@@ -1428,152 +1428,32 @@ foreach ($users as $user) {
             }
         }
         
-        // فقط إذا لم يكن هناك راتب موجود، أنشئ واحداً جديداً
-        // التحقق من صحة الشهر والسنة قبل الإنشاء - حماية من التواريخ الصفرية
-        if ($selectedMonth < 1 || $selectedMonth > 12 || $selectedYear < 2000 || $selectedYear > 2100) {
-            error_log("Skipping salary creation for user {$userId}: Invalid month ({$selectedMonth}) or year ({$selectedYear})");
-            continue; // تخطي إنشاء سجل بتاريخ خاطئ
-        }
+        // لا نقوم بإنشاء رواتب تلقائياً عند فتح الصفحة لمنع التكرار
+        // يجب على المستخدم استخدام زر "حساب جميع الرواتب" لإنشاء الرواتب بشكل صريح
+        // هذا يمنع إنشاء رواتب مكررة عند فتح الصفحة أو تحديثها
         
-        $hourlyRate = cleanFinancialValue($user['hourly_rate'] ?? 0);
-        // حساب الساعات المكتملة فقط (التي تم تسجيل الانصراف لها)
-        require_once __DIR__ . '/../../includes/salary_calculator.php';
-        $completedHours = calculateCompletedMonthlyHours($userId, $selectedMonth, $selectedYear);
-        // حساب إجمالي الساعات (المكتملة وغير المكتملة)
-        $monthHours = calculateMonthlyHours($userId, $selectedMonth, $selectedYear);
-        $baseAmount = round($completedHours * $hourlyRate, 2);
-        
-        // حساب نسبة التحصيلات إذا كان مندوب
-        $collectionsAmount = 0;
-        $collectionsBonus = 0;
-        if ($user['role'] === 'sales') {
-            $collectionsAmount = calculateSalesCollections($userId, $selectedMonth, $selectedYear);
-            $collectionsBonus = round($collectionsAmount * 0.02, 2);
-        }
-        
-        $totalAmount = round($baseAmount + $collectionsBonus, 2);
-        
-        // إنشاء راتب محسوب تلقائياً في قاعدة البيانات
-        try {
-            // التحقق من وجود عمود bonus أو bonuses
-            $bonusColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field IN ('bonus', 'bonuses')");
-            $hasBonusColumn = !empty($bonusColumnCheck);
-            $bonusColumnName = $hasBonusColumn ? $bonusColumnCheck['Field'] : null;
-            $hasCollectionsBonusColumn = !empty($db->queryOne("SHOW COLUMNS FROM salaries LIKE 'collections_bonus'"));
-            $hasCreatedByColumn = !empty($db->queryOne("SHOW COLUMNS FROM salaries LIKE 'created_by'"));
-            
-            // إذا لم يكن عمود year موجوداً، أضفه تلقائياً
-            if (!$hasYearColumn) {
-                try {
-                    $db->execute("ALTER TABLE salaries ADD COLUMN year INT(4) DEFAULT NULL AFTER month");
-                    $hasYearColumn = true;
-                    error_log("Added missing 'year' column to salaries table");
-                } catch (Exception $alterEx) {
-                    // إذا فشل إضافة العمود، سجل الخطأ واستمر
-                    error_log("Could not add year column: " . $alterEx->getMessage());
-                }
-            }
-            
-            // التحقق من نوع عمود month - إذا كان DATE، يجب تحويل القيم إلى تاريخ
-            $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
-            $monthType = $monthColumnCheck['Type'] ?? '';
-            $isMonthDate = stripos($monthType, 'date') !== false;
-            
-            // تحديد قيمة month للإدراج
-            $monthValue = $selectedMonth;
-            if ($isMonthDate) {
-                // إذا كان month من نوع DATE، يجب تحويل الشهر والسنة إلى تاريخ
-                if ($selectedMonth < 1 || $selectedMonth > 12 || $selectedYear < 2000 || $selectedYear > 2100) {
-                    error_log("Invalid month/year for DATE column: month={$selectedMonth}, year={$selectedYear}");
-                    // استخدام التاريخ الحالي كبديل آمن
-                    $monthValue = date('Y-m-01');
-                    $selectedYear = (int)date('Y');
-                } else {
-                    $monthValue = sprintf('%04d-%02d-01', $selectedYear, $selectedMonth);
-                }
-            }
-            
-            // دائماً استخدم الإدراج مع year لضمان صحة البيانات
-            if ($hasBonusColumn && $hasCollectionsBonusColumn) {
-                if ($hasCreatedByColumn) {
-                    $db->execute(
-                        "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, {$bonusColumnName}, collections_bonus, deductions, total_amount, status, created_by) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'calculated', ?)",
-                        [$userId, $monthValue, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $collectionsBonus, 0, $totalAmount, $currentUser['id']]
-                    );
-                } else {
-                    $db->execute(
-                        "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, {$bonusColumnName}, collections_bonus, deductions, total_amount, status) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'calculated')",
-                        [$userId, $monthValue, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $collectionsBonus, 0, $totalAmount]
-                    );
-                }
-            } else {
-                if ($hasCreatedByColumn) {
-                    $db->execute(
-                        "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, status, created_by) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'calculated', ?)",
-                        [$userId, $monthValue, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $totalAmount, $currentUser['id']]
-                    );
-                } else {
-                    $db->execute(
-                        "INSERT INTO salaries (user_id, month, year, hourly_rate, total_hours, base_amount, deductions, total_amount, status) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'calculated')",
-                        [$userId, $monthValue, $selectedYear, $hourlyRate, $monthHours, $baseAmount, 0, $totalAmount]
-                    );
-                }
-            }
-            
-            // جلب الراتب المحفوظ حديثاً
-            $newSalaryId = (int)$db->getLastInsertId();
-            if ($newSalaryId > 0) {
-                $newSalary = $db->queryOne(
-                    "SELECT s.*, u.full_name, u.username, u.role, u.hourly_rate as current_hourly_rate,
-                            approver.full_name as approver_name
-                     FROM salaries s
-                     LEFT JOIN users u ON s.user_id = u.id
-                     LEFT JOIN users approver ON s.approved_by = approver.id
-                     WHERE s.id = ?",
-                    [$newSalaryId]
-                );
-                if ($newSalary) {
-                    // إضافة bonus_standardized للسجل الجديد
-                    $newSalary['bonus_standardized'] = $newSalary[$bonusColumnName] ?? 0;
-                    $salaries[] = $newSalary;
-                    continue; // تخطي إنشاء السجل الافتراضي
-                }
-            }
-        } catch (Throwable $e) {
-            error_log("Error auto-creating salary for user {$userId}: " . $e->getMessage());
-        }
-        
-        // في حالة فشل الحفظ، استخدم السجل الافتراضي مع status = 'calculated'
-        $defaultSalary = [
+        // بدلاً من ذلك، نضيف سجل فارغ للعرض فقط (بدون حفظ في قاعدة البيانات)
+        // المستخدم سيرى أن المستخدم ليس لديه راتب ويمكنه إنشاؤه يدوياً
+        $emptySalary = [
             'id' => null,
             'user_id' => $userId,
-            'full_name' => $user['full_name'] ?? $user['username'],
-            'username' => $user['username'],
-            'role' => $user['role'],
-            'hourly_rate' => $hourlyRate,
-            'current_hourly_rate' => $hourlyRate,
-            'total_hours' => $monthHours,
-            'base_amount' => $baseAmount,
-            'collections_bonus' => round($collectionsBonus, 2),
-            'collections_amount' => $collectionsAmount,
+            'month' => $selectedMonth,
+            'year' => $selectedYear,
+            'hourly_rate' => cleanFinancialValue($user['hourly_rate'] ?? 0),
+            'total_hours' => 0,
+            'base_amount' => 0,
+            'bonus' => 0,
             'deductions' => 0,
-            'total_amount' => $totalAmount,
-            'status' => 'calculated',
-            'approved_by' => null,
-            'approver_name' => null,
-            'created_at' => null,
-            'updated_at' => null
+            'total_amount' => 0,
+            'status' => 'none',
+            'full_name' => $user['full_name'] ?? $user['username'] ?? '',
+            'username' => $user['username'] ?? '',
+            'role' => $user['role'] ?? '',
+            'current_hourly_rate' => cleanFinancialValue($user['hourly_rate'] ?? 0),
+            'bonus_standardized' => 0
         ];
-        // إضافة bonus_standardized وbonus/bonuses حسب اسم العمود
-        $defaultSalary['bonus_standardized'] = 0;
-        if ($bonusColumnName) {
-            $defaultSalary[$bonusColumnName] = 0;
-        }
-        $salaries[] = $defaultSalary;
+        $salaries[] = $emptySalary;
+        continue; // تخطي باقي الكود وانتقل للمستخدم التالي
     }
 }
 
