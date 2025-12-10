@@ -74,11 +74,7 @@ if (!isset($GLOBALS[$cacheKey])) {
         
         $GLOBALS[$cacheKey] = !empty($todayExecution);
         
-        // Log للتحقق - فقط مرة واحدة لكل يوم
-        if ($GLOBALS[$cacheKey] && !isset($GLOBALS[$cacheKey . '_logged'])) {
-            error_log("auto_salary_init: Found execution for today - skipping all further execution");
-            $GLOBALS[$cacheKey . '_logged'] = true;
-        }
+        // لا نطبع رسائل عند التخطي - هذا سلوك طبيعي وليس خطأ
     } catch (Exception $e) {
         // في حالة الخطأ، نعتبر أنه لم يتم التنفيذ
         $GLOBALS[$cacheKey] = false;
