@@ -47,7 +47,7 @@ function calculateCompanyCashBalance($db) {
     $approvedPayment = (float) ($treasurySummary['approved_payment'] ?? 0);
     
     // حساب صافي الرصيد
-    // ملاحظة: تسويات الرواتب تُحسب كـ expenses في accountant_transactions، لذلك تُخصم تلقائياً
+    // ملاحظة: تسويات الرواتب تُحسب كـ payments في accountant_transactions، لذلك تُخصم تلقائياً
     $netBalance = $approvedIncome - $approvedExpense - $approvedPayment;
     
     return $netBalance; // يمكن أن يكون سالباً إذا كانت المصروفات أكبر من الإيرادات
@@ -1200,7 +1200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         
                         $settlementId = $db->getLastInsertId();
                         
-                        // تسجيل تسوية الراتب في accountant_transactions كـ expense (مصروف معتمد)
+                        // تسجيل تسوية الراتب في accountant_transactions كـ payment (دفعة معتمدة)
                         $user = $db->queryOne("SELECT full_name, username FROM users WHERE id = ?", [$salary['user_id']]);
                         $employeeName = $user['full_name'] ?? $user['username'] ?? 'غير محدد';
                         $settlementDescription = 'تسوية راتب موظف: ' . $employeeName . 
@@ -1216,7 +1216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                      status, approved_by, created_by, approved_at)
                                  VALUES (?, ?, ?, ?, 'approved', ?, ?, NOW())",
                                 [
-                                    'expense',
+                                    'payment',
                                     $settlementAmount,
                                     $settlementDescription,
                                     $referenceNumber,
