@@ -128,6 +128,10 @@ $delayStats = calculateMonthlyDelaySummary($currentUser['id'], date('Y-m'));
 require_once __DIR__ . '/includes/lang/' . getCurrentLanguage() . '.php';
 $lang = isset($translations) ? $translations : [];
 $pageTitle = isset($lang['attendance']) ? $lang['attendance'] : 'الحضور والانصراف';
+
+// إضافة ملف CSS الخاص بصفحة الحضور
+$pageStylesheets = isset($pageStylesheets) ? $pageStylesheets : [];
+$pageStylesheets[] = 'assets/css/attendance.css';
 ?>
 <?php include __DIR__ . '/templates/header.php'; ?>
 

@@ -1,0 +1,174 @@
+/**
+ * Attendance Page Styles
+ * أنماط صفحة تسجيل الحضور
+ * ضمان التمرير العمودي على الهواتف
+ */
+
+/* ===== Mobile Scroll Fix ===== */
+@media (max-width: 768px) {
+    /* ضمان أن body و html قابلان للتمرير */
+    html,
+    body {
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        height: auto !important;
+        min-height: 100vh;
+        position: relative;
+    }
+    
+    /* ضمان أن dashboard-wrapper قابل للتمرير */
+    .dashboard-wrapper {
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+        min-height: 100vh;
+        height: auto !important;
+    }
+    
+    /* ضمان أن dashboard-main قابل للتمرير */
+    .dashboard-main {
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+        height: auto !important;
+        min-height: auto;
+        padding-bottom: 2rem !important;
+    }
+    
+    /* ضمان أن container-fluid قابل للتمرير */
+    .container-fluid {
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+        height: auto !important;
+        min-height: auto;
+        padding-bottom: 1rem;
+    }
+    
+    /* تحسين عرض البطاقات على الموبايل */
+    .card {
+        margin-bottom: 1rem;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+    
+    /* تحسين المسافات بين العناصر */
+    .row {
+        margin-left: 0;
+        margin-right: 0;
+    }
+    
+    .row > * {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+    
+    /* تحسين عرض الإحصائيات على الموبايل */
+    .col-md-3,
+    .col-sm-6 {
+        margin-bottom: 1rem;
+    }
+    
+    /* تحسين عرض الأزرار */
+    .btn-lg {
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+    }
+    
+    /* تحسين Modal الكاميرا على الموبايل */
+    #cameraModal .modal-dialog {
+        margin: 1rem;
+        max-width: calc(100% - 2rem);
+    }
+    
+    #cameraModal .modal-content {
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+    }
+    
+    #cameraModal .modal-body {
+        padding: 1rem;
+        max-height: calc(100vh - 200px);
+        overflow-y: auto;
+    }
+    
+    /* تحسين عرض الفيديو في Modal */
+    #cameraModal #video {
+        max-width: 100%;
+        height: auto;
+        min-height: 250px;
+    }
+    
+    /* تحسين الجداول */
+    .table-responsive {
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* ضمان أن page-header لا يمنع التمرير */
+    .page-header {
+        position: relative;
+        z-index: 1;
+        margin-bottom: 1rem;
+    }
+}
+
+/* ===== Extra Small Devices ===== */
+@media (max-width: 576px) {
+    /* تحسين المسافات على الشاشات الصغيرة جداً */
+    .container-fluid {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+    }
+    
+    .card-body {
+        padding: 0.75rem !important;
+    }
+    
+    .card-header {
+        padding: 0.5rem 0.75rem !important;
+    }
+    
+    /* تحسين حجم النصوص */
+    .h4 {
+        font-size: 1.25rem;
+    }
+    
+    .h5 {
+        font-size: 1rem;
+    }
+    
+    /* تحسين الأزرار */
+    .btn-lg {
+        padding: 0.625rem 0.875rem;
+        font-size: 0.9375rem;
+    }
+}
+
+/* ===== Landscape Orientation Fix ===== */
+@media (max-width: 768px) and (orientation: landscape) {
+    /* تحسين العرض في الوضع الأفقي */
+    .dashboard-main {
+        padding-top: calc(var(--topbar-height) + var(--spacing-sm));
+    }
+    
+    #cameraModal .modal-body {
+        max-height: calc(100vh - 150px);
+    }
+}
+
+/* ===== Touch Device Optimizations ===== */
+@media (hover: none) and (pointer: coarse) {
+    /* تحسين التمرير على الأجهزة اللمسية */
+    .container-fluid,
+    .dashboard-main,
+    .dashboard-wrapper {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* تحسين حجم الأزرار للمس */
+    .btn-lg {
+        min-height: 48px;
+        min-width: 48px;
+    }
+}
+
