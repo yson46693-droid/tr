@@ -614,6 +614,11 @@ if (ob_get_level() > 0) {
             display: none !important;
         }
         
+        /* إزالة أي transitions قديمة قد تسبب lag */
+        .modal:not(.show) .modal-dialog {
+            transition: none !important;
+        }
+        
         .modal-backdrop {
             position: fixed !important;
             top: 0 !important;
@@ -784,59 +789,50 @@ if (ob_get_level() > 0) {
             overflow: visible !important;
         }
         
-        /* تأثير انسدال (slide down) للـ modals عند فتحها */
-        .modal.fade .modal-dialog {
-            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
-            transform: translateY(-50px);
-            opacity: 0;
+        /* تأثير انسدال سلس (slide down) للـ modals عند فتحها - يطبق على جميع الـ modals */
+        /* استخدام GPU acceleration لتحسين الأداء وإزالة الـ lag */
+        .modal .modal-dialog {
+            will-change: transform, opacity;
+            backface-visibility: hidden;
+            perspective: 1000px;
+            transform: translate3d(0, -30px, 0) !important;
+            opacity: 0 !important;
+            transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease-out !important;
         }
         
-        .modal.fade.show .modal-dialog {
-            transform: translateY(0);
-            opacity: 1;
+        /* حالة الـ modal عند الفتح - animation سلس */
+        .modal.show .modal-dialog,
+        .modal.fade.show .modal-dialog,
+        .modal.showing .modal-dialog {
+            transform: translate3d(0, 0, 0) !important;
+            opacity: 1 !important;
         }
         
-        /* تأثير انسدال للـ modals بدون class fade (للتوافق) */
-        .modal:not(.fade) .modal-dialog {
-            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+        /* حالة البداية - قبل إظهار الـ modal (لا transition هنا لتجنب lag) */
+        .modal:not(.show):not(.showing) .modal-dialog {
+            transform: translate3d(0, -30px, 0) !important;
+            opacity: 0 !important;
+            transition: none !important;
         }
         
-        .modal:not(.fade):not(.show) .modal-dialog {
-            transform: translateY(-50px);
-            opacity: 0;
-        }
-        
-        .modal:not(.fade).show .modal-dialog {
-            transform: translateY(0);
-            opacity: 1;
-        }
-        
-        /* تأثير fade in للـ backdrop */
+        /* تأثير fade in سلس للـ backdrop */
         .modal-backdrop {
-            transition: opacity 0.15s linear;
+            will-change: opacity;
+            transition: opacity 0.2s ease-out !important;
         }
         
         .modal-backdrop.fade {
-            opacity: 0;
+            opacity: 0 !important;
         }
         
         .modal-backdrop.show {
-            opacity: 0.5;
+            opacity: 0.5 !important;
         }
         
-        /* تأثير إضافي للـ modal-content نفسه */
-        .modal.fade .modal-content {
-            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
-        }
-        
-        .modal.fade:not(.show) .modal-content {
-            transform: translateY(-30px);
-            opacity: 0;
-        }
-        
-        .modal.fade.show .modal-content {
-            transform: translateY(0);
-            opacity: 1;
+        /* تحسين الأداء - منع reflow/repaint غير الضروري */
+        .modal.show .modal-dialog,
+        .modal.fade.show .modal-dialog {
+            will-change: auto;
         }
         
         /* لوجو PWA */

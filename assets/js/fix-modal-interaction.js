@@ -30,18 +30,22 @@
         }
     }
 
-    // عند بدء فتح الـ modal
+    // عند بدء فتح الـ modal - إعداد الـ animation بشكل سلس
     document.addEventListener('show.bs.modal', function (event) {
         const modal = event.target;
         ensureFadeClass(modal);
         enableModal(modal);
         
-        // التأكد من أن الـ animation جاهز
+        // إزالة أي styles inline قد تتعارض مع CSS
         const modalDialog = modal.querySelector('.modal-dialog');
         if (modalDialog) {
-            // إعادة تعيين الـ transform لضمان عمل الـ animation
-            modalDialog.style.transform = 'translateY(-50px)';
-            modalDialog.style.opacity = '0';
+            // استخدام requestAnimationFrame لضمان سلاسة الـ animation
+            requestAnimationFrame(function() {
+                // إزالة أي styles inline للسماح لـ CSS بالتحكم
+                modalDialog.style.transform = '';
+                modalDialog.style.opacity = '';
+                modalDialog.style.transition = '';
+            });
         }
     });
 
@@ -50,25 +54,29 @@
         const modal = event.target;
         enableModal(modal);
         
-        // التأكد من أن الـ animation اكتمل
+        // التأكد من إزالة أي styles inline بعد اكتمال الـ animation
         const modalDialog = modal.querySelector('.modal-dialog');
         if (modalDialog) {
-            // إزالة أي styles inline قد تتعارض مع CSS
+            // استخدام setTimeout مع مدة أقل لتتناسب مع CSS (0.25s)
             setTimeout(function() {
                 modalDialog.style.transform = '';
                 modalDialog.style.opacity = '';
-            }, 300);
+                modalDialog.style.transition = '';
+            }, 250);
         }
     });
 
-    // عند بدء إغلاق الـ modal
+    // عند بدء إغلاق الـ modal - السماح لـ CSS بالتحكم في الـ animation
     document.addEventListener('hide.bs.modal', function (event) {
         const modal = event.target;
         const modalDialog = modal.querySelector('.modal-dialog');
         if (modalDialog) {
-            // إعادة تعيين الـ transform للإغلاق
-            modalDialog.style.transform = 'translateY(-50px)';
-            modalDialog.style.opacity = '0';
+            // إزالة أي styles inline للسماح لـ CSS بالتحكم في animation الإغلاق
+            requestAnimationFrame(function() {
+                modalDialog.style.transform = '';
+                modalDialog.style.opacity = '';
+                modalDialog.style.transition = '';
+            });
         }
     });
 

@@ -1965,6 +1965,68 @@ if (isset($_GET['action']) && $_GET['action'] === 'print_statement') {
                         ORDER BY ss.settlement_date ASC";
     $statementSettlements = $db->query($settlementsQuery, [$statementUserId, $fromDate, $toDate]);
     
+    // إعادة حساب القيم لكل راتب بنفس منطق بطاقة الموظف
+    require_once __DIR__ . '/../../includes/salary_calculator.php';
+    $userRole = $employee['role'] ?? 'production';
+    $hourlyRate = cleanFinancialValue($employee['hourly_rate'] ?? 0);
+    
+    // التحقق من وجود عمود bonus أو bonuses
+    $bonusColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field IN ('bonus', 'bonuses')");
+    $bonusColumnName = $bonusColumnCheck ? $bonusColumnCheck['Field'] : 'bonus';
+    
+    foreach ($statementSalaries as &$sal) {
+        // استخراج شهر وسنة الراتب
+        $salaryMonth = null;
+        $salaryYear = null;
+        
+        if ($isMonthDate && !empty($sal['month'])) {
+            $monthDate = $sal['month'];
+            if ($monthDate && $monthDate !== '0000-00-00' && $monthDate !== '1970-01-01') {
+                $date = DateTime::createFromFormat('Y-m-d', $monthDate);
+                if ($date) {
+                    $salaryMonth = (int)$date->format('n');
+                    $salaryYear = (int)$date->format('Y');
+                }
+            }
+        } else {
+            $salaryMonth = isset($sal['month']) ? (int)$sal['month'] : null;
+            $salaryYear = isset($sal['year']) ? (int)$sal['year'] : null;
+        }
+        
+        if (!$salaryMonth || !$salaryYear) {
+            continue; // تخطي إذا لم نتمكن من استخراج الشهر والسنة
+        }
+        
+        // حساب الساعات من الحضور مباشرة لضمان الدقة (مطابق لبطاقة الموظف)
+        $actualHours = calculateMonthlyHours($statementUserId, $salaryMonth, $salaryYear);
+        $sal['total_hours'] = $actualHours;
+        
+        // حساب الراتب الأساسي دائماً من الساعات × سعر الساعة (مطابق لبطاقة الموظف)
+        $completedHours = calculateCompletedMonthlyHours($statementUserId, $salaryMonth, $salaryYear);
+        $sal['base_amount'] = round($completedHours * $hourlyRate, 2);
+        
+        // حساب نسبة التحصيلات الخاصة بالشهر المحدد فقط (للمندوبين)
+        if ($userRole === 'sales') {
+            $collectionsAmount = calculateSalesCollections($statementUserId, $salaryMonth, $salaryYear);
+            $collectionsBonus = round($collectionsAmount * 0.02, 2);
+            $sal['collections_bonus'] = $collectionsBonus;
+            $sal['collections_amount'] = $collectionsAmount;
+        } else {
+            $sal['collections_bonus'] = 0;
+            $sal['collections_amount'] = 0;
+        }
+        
+        // حساب الراتب الإجمالي من المكونات (مطابق لبطاقة الموظف)
+        $bonus = cleanFinancialValue($sal[$bonusColumnName] ?? $sal['bonus'] ?? $sal['bonuses'] ?? 0);
+        $deductions = cleanFinancialValue($sal['deductions'] ?? 0);
+        $sal['total_amount'] = round($sal['base_amount'] + $bonus + $sal['collections_bonus'] - $deductions, 2);
+        $sal['total_amount'] = max(0, $sal['total_amount']);
+        
+        // إضافة bonus_standardized للعرض
+        $sal['bonus_standardized'] = $bonus;
+    }
+    unset($sal);
+    
     // حساب الإجماليات
     $totalSalaries = 0;
     $totalAdvances = 0;
