@@ -311,7 +311,8 @@ self.addEventListener('fetch', event => {
         try {
           const response = await fetch(event.request, {
             redirect: 'follow',
-            cache: 'no-store'
+            cache: 'no-store',
+            credentials: 'same-origin'
           });
           
           // CRITICAL FIX: إذا كانت redirect، إرجاعها مباشرة
@@ -319,16 +320,26 @@ self.addEventListener('fetch', event => {
             return response;
           }
           
+          // التحقق من أن الاستجابة صالحة
+          if (!response.ok && response.status >= 500) {
+            throw new Error('Server error');
+          }
+          
           // لا نحفظ API responses في الكاش (ديناميكية)
           return response;
         } catch (error) {
-          // في حالة الخطأ، إرجاع response خطأ
+          // في حالة الخطأ، إرجاع response خطأ JSON بدلاً من offline.html
           return new Response(JSON.stringify({
             success: false,
-            message: 'لا يوجد اتصال بالشبكة'
+            error: 'لا يوجد اتصال بالشبكة',
+            message: 'لا يوجد اتصال بالإنترنت. يرجى التحقق من الاتصال والمحاولة مرة أخرى.'
           }), {
             status: 503,
-            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+            statusText: 'Service Unavailable',
+            headers: { 
+              'Content-Type': 'application/json; charset=utf-8',
+              'Cache-Control': 'no-store'
+            }
           });
         }
       }

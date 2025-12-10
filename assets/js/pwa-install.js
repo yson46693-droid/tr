@@ -21,7 +21,7 @@ function isIOS() {
 
 // التحقق من Android
 function isAndroid() {
-    return /Android/.test(navigator.userAgent);
+    return /android/i.test(navigator.userAgent);
 }
 
 // التحقق من التثبيت
@@ -109,32 +109,27 @@ window.addEventListener('beforeinstallprompt', (e) => {
     // Stash the event so it can be triggered later
     deferredPrompt = e;
     
-    // التحقق من حالة تحميل الصفحة
-    if (document.readyState === 'loading') {
-        // إذا كانت الصفحة لا تزال تحمّل، انتظر حتى يتم تحميل DOM
-        document.addEventListener('DOMContentLoaded', function() {
-            handleInstallPrompt(e);
-        });
-    } else {
-        // إذا كانت الصفحة محملة بالفعل، معالجة مباشرة
-        handleInstallPrompt(e);
-    }
+    // معالجة فورية (لا ننتظر DOMContentLoaded)
+    // لأن beforeinstallprompt يُطلق بعد تحميل الصفحة
+    handleInstallPrompt(e);
 });
 
 // دالة معالجة beforeinstallprompt
 function handleInstallPrompt(e) {
-    // التحقق من حالة إخفاء الإشعار أولاً
-    if (!shouldShowBanner()) {
-        console.log('Install banner was dismissed, not showing prompt');
-        return; // لا نمنع البانر الأصلي إذا كان المستخدم قد أخفى البانر
-    }
-    
     // التحقق من وجود زر التثبيت والبانر في الصفحة
     const installButton = document.getElementById('installButton');
     const installBanner = document.getElementById('installBanner');
     
+    // إذا كان هناك زر تثبيت وبانر، منع البانر التلقائي وعرض البانر الخاص بنا
     if (installButton && installBanner) {
-        // إذا كان هناك زر تثبيت وبانر، منع البانر التلقائي وعرض البانر الخاص بنا
+        // التحقق من حالة إخفاء الإشعار
+        if (!shouldShowBanner()) {
+            console.log('Install banner was dismissed, allowing default prompt');
+            // لا نمنع البانر الأصلي إذا كان المستخدم قد أخفى البانر
+            return;
+        }
+        
+        // منع البانر التلقائي وعرض البانر الخاص بنا
         e.preventDefault();
         console.log('Prevented default install prompt, showing custom banner');
         // Show install banner (سيتم التحقق من حالة الإخفاء داخلياً)
@@ -180,42 +175,63 @@ document.addEventListener('DOMContentLoaded', function() {
     const canShowBanner = shouldShowBanner();
     
     // إظهار البانر على الهواتف حتى لو لم يكن beforeinstallprompt متاحاً
-    if (canShowBanner) {
-        // انتظر قليلاً قبل إظهار البانر
-        setTimeout(() => {
-            if (isMobileDevice() && !isInstalled()) {
-                // على Android، إظهار البانر دائماً (حتى لو لم يكن هناك deferredPrompt)
-                if (isAndroid()) {
-                    // إظهار البانر بعد 3 ثوان من تحميل الصفحة
-                    setTimeout(() => {
-                        showInstallBanner();
-                    }, 3000);
-                }
-                
-                // على iOS، إظهار البانر دائماً مع تعليمات خاصة
-                if (isIOS()) {
-                    // إظهار البانر بعد 3 ثوان
-                    setTimeout(() => {
-                        showInstallBanner();
-                        // تحديث نص البانر لـ iOS
-                        const banner = document.getElementById('installBanner');
-                        if (banner) {
-                            const bannerContent = banner.querySelector('div > div.flex-grow-1');
-                            if (bannerContent) {
-                                bannerContent.innerHTML = `
-                                    <strong><i class="bi bi-download me-2"></i>تثبيت التطبيق</strong>
-                                    <p class="mb-0 small">اضغط على زر المشاركة <i class="bi bi-share"></i> ثم اختر "إضافة إلى الشاشة الرئيسية"</p>
-                                `;
-                            }
-                            const installBtn = document.getElementById('installButton');
-                            if (installBtn) {
-                                installBtn.innerHTML = '<i class="bi bi-info-circle me-1"></i>كيفية التثبيت';
-                            }
-                        }
-                    }, 3000);
+    if (canShowBanner && isMobileDevice() && !isInstalled()) {
+        // على Android، إظهار البانر دائماً (حتى لو لم يكن هناك deferredPrompt)
+        if (isAndroid()) {
+            console.log('Android device detected, scheduling install banner');
+            
+            // دالة لإظهار البانر مع التحقق المتكرر
+            function tryShowBanner() {
+                const banner = document.getElementById('installBanner');
+                if (banner) {
+                    console.log('Banner element found, showing install banner on Android');
+                    showInstallBanner();
+                } else {
+                    console.log('Banner element not found yet, retrying...');
+                    // إعادة المحاولة بعد 500ms
+                    setTimeout(tryShowBanner, 500);
                 }
             }
-        }, 1000);
+            
+            // محاولة إظهار البانر بعد تحميل الصفحة
+            // نستخدم window.load للتأكد من تحميل جميع الموارد
+            if (document.readyState === 'complete') {
+                // الصفحة محملة بالفعل
+                setTimeout(tryShowBanner, 1000);
+            } else {
+                // انتظر تحميل الصفحة بالكامل
+                window.addEventListener('load', function() {
+                    setTimeout(tryShowBanner, 1000);
+                }, { once: true });
+            }
+            
+            // أيضاً محاولة بعد DOMContentLoaded (للموارد السريعة)
+            setTimeout(tryShowBanner, 2000);
+        }
+        
+        // على iOS، إظهار البانر دائماً مع تعليمات خاصة
+        if (isIOS()) {
+            console.log('iOS device detected, scheduling install banner');
+            setTimeout(() => {
+                console.log('Showing install banner on iOS');
+                showInstallBanner();
+                // تحديث نص البانر لـ iOS
+                const banner = document.getElementById('installBanner');
+                if (banner) {
+                    const bannerContent = banner.querySelector('div > div.flex-grow-1');
+                    if (bannerContent) {
+                        bannerContent.innerHTML = `
+                            <strong><i class="bi bi-download me-2"></i>تثبيت التطبيق</strong>
+                            <p class="mb-0 small">اضغط على زر المشاركة <i class="bi bi-share"></i> ثم اختر "إضافة إلى الشاشة الرئيسية"</p>
+                        `;
+                    }
+                    const installBtn = document.getElementById('installButton');
+                    if (installBtn) {
+                        installBtn.innerHTML = '<i class="bi bi-info-circle me-1"></i>كيفية التثبيت';
+                    }
+                }
+            }, 2000);
+        }
     }
     
     if (installButton) {

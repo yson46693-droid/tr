@@ -6575,10 +6575,24 @@ document.addEventListener('DOMContentLoaded', function () {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
-                    }
+                    },
+                    cache: 'no-store'
                 });
                 
-                const data = await response.json();
+                // Check if response is JSON before parsing
+                const contentType = response.headers.get('content-type') || '';
+                let data;
+                
+                if (contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    // If not JSON, might be offline.html or other HTML
+                    const text = await response.text();
+                    if (text.includes('لا يوجد اتصال بالإنترنت') || text.includes('offline')) {
+                        throw new Error('لا يوجد اتصال بالإنترنت. يرجى التحقق من الاتصال والمحاولة مرة أخرى.');
+                    }
+                    throw new Error('استجابة غير صحيحة من الخادم. يرجى المحاولة مرة أخرى.');
+                }
                 
                 if (data.success) {
                     // Update button attributes with new report URLs
@@ -6605,7 +6619,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             } catch (error) {
                 console.error('Error generating report:', error);
-                alert('حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+                const errorMessage = error.message || 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.';
+                alert(errorMessage);
             } finally {
                 // Restore button state
                 reportButton.disabled = false;
