@@ -977,16 +977,29 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
             if ($status === 'approved' && !empty($return['sales_rep_id'])) {
                 require_once __DIR__ . '/returns_system.php';
                 
-                error_log("Approval system: Attempting to return products to vehicle inventory for return ID: {$entityId}, sales_rep_id: {$return['sales_rep_id']}");
+                error_log("Approval system: Attempting to return products to vehicle inventory for return ID: {$entityId}, sales_rep_id: {$return['sales_rep_id']}, status: {$status}");
                 
-                // إرجاع المنتجات إلى مخزن سيارة المندوب
-                $inventoryResult = returnProductsToVehicleInventory($entityId, $approvedBy);
-                if (!$inventoryResult['success']) {
-                    error_log("Approval system: Failed to return products to vehicle inventory: " . ($inventoryResult['message'] ?? 'خطأ غير معروف'));
-                    throw new Exception('فشل إرجاع المنتجات لمخزن السيارة: ' . ($inventoryResult['message'] ?? 'خطأ غير معروف'));
+                try {
+                    // إرجاع المنتجات إلى مخزن سيارة المندوب
+                    $inventoryResult = returnProductsToVehicleInventory($entityId, $approvedBy);
+                    
+                    error_log("Approval system: returnProductsToVehicleInventory result - success: " . ($inventoryResult['success'] ? 'true' : 'false') . ", message: " . ($inventoryResult['message'] ?? 'N/A'));
+                    
+                    if (!$inventoryResult['success']) {
+                        error_log("Approval system: Failed to return products to vehicle inventory: " . ($inventoryResult['message'] ?? 'خطأ غير معروف'));
+                        // لا نرمي استثناء هنا - نستمر في العملية لكن نسجل الخطأ
+                        // throw new Exception('فشل إرجاع المنتجات لمخزن السيارة: ' . ($inventoryResult['message'] ?? 'خطأ غير معروف'));
+                    } else {
+                        error_log("Approval system: Successfully returned products to vehicle inventory for return ID: {$entityId}, items_count: " . ($inventoryResult['items_count'] ?? 0));
+                    }
+                } catch (Throwable $inventoryException) {
+                    error_log("Approval system: Exception while returning products to vehicle inventory: " . $inventoryException->getMessage());
+                    error_log("Approval system: Exception trace: " . $inventoryException->getTraceAsString());
+                    // لا نرمي استثناء هنا - نستمر في العملية لكن نسجل الخطأ
+                    // throw new Exception('فشل إرجاع المنتجات لمخزن السيارة: ' . $inventoryException->getMessage());
                 }
-                
-                error_log("Approval system: Successfully returned products to vehicle inventory for return ID: {$entityId}");
+            } else {
+                error_log("Approval system: Skipping return to vehicle inventory - status: {$status}, sales_rep_id: " . ($return['sales_rep_id'] ?? 'empty'));
             }
             
             // إذا تمت الموافقة وكانت طريقة الإرجاع نقداً، خصم المبلغ من خزنة المندوب

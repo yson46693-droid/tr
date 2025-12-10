@@ -521,8 +521,11 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
         );
         
         if (!$return) {
+            error_log("returnProductsToVehicleInventory: Return not found - Return ID: {$returnId}");
             return ['success' => false, 'message' => 'المرتجع غير موجود'];
         }
+        
+        error_log("returnProductsToVehicleInventory: Return found - Return ID: {$returnId}, Sales Rep ID: " . ($return['sales_rep_id'] ?? 'NULL') . ", Status: " . ($return['status'] ?? 'NULL'));
         
         // ملاحظة: لا نحتاج للتحقق من الحالة هنا لأن الدالة تُستدعى بعد تحديث الحالة إلى approved
         // if ($return['status'] !== 'approved') {
@@ -531,6 +534,7 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
         
         $salesRepId = (int)($return['sales_rep_id'] ?? 0);
         if ($salesRepId <= 0) {
+            error_log("returnProductsToVehicleInventory: Sales rep ID is missing or invalid - Return ID: {$returnId}");
             return ['success' => false, 'message' => 'المندوب غير محدد للمرتجع'];
         }
         
@@ -541,21 +545,26 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
         );
         
         if (!$vehicle) {
+            error_log("returnProductsToVehicleInventory: No active vehicle found for sales rep ID: {$salesRepId}");
             return ['success' => false, 'message' => 'لا توجد سيارة نشطة للمندوب'];
         }
         
         $vehicleId = (int)$vehicle['id'];
+        error_log("returnProductsToVehicleInventory: Found vehicle ID: {$vehicleId} for sales rep ID: {$salesRepId}");
         
         // الحصول على مخزن السيارة
         $vehicleWarehouse = getVehicleWarehouse($vehicleId);
         if (!$vehicleWarehouse) {
+            error_log("returnProductsToVehicleInventory: Vehicle warehouse not found, creating new one for vehicle ID: {$vehicleId}");
             $createResult = createVehicleWarehouse($vehicleId);
             if (!$createResult['success']) {
+                error_log("returnProductsToVehicleInventory: Failed to create vehicle warehouse for vehicle ID: {$vehicleId}");
                 return ['success' => false, 'message' => 'تعذر تجهيز مخزن السيارة'];
             }
             $vehicleWarehouse = getVehicleWarehouse($vehicleId);
         }
         $warehouseId = $vehicleWarehouse ? (int)$vehicleWarehouse['id'] : null;
+        error_log("returnProductsToVehicleInventory: Using warehouse ID: {$warehouseId} for vehicle ID: {$vehicleId}");
         
         // جلب عناصر المرتجع (استثناء التالف)
         // التحقق من وجود عمود is_damaged أولاً
@@ -588,7 +597,10 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
             );
         }
         
+        error_log("returnProductsToVehicleInventory: Found " . count($returnItems) . " return items for return ID: {$returnId}");
+        
         if (empty($returnItems)) {
+            error_log("returnProductsToVehicleInventory: No items to return (all items may be damaged) - Return ID: {$returnId}");
             return ['success' => true, 'message' => 'لا توجد منتجات سليمة للإرجاع للمخزون'];
         }
         
@@ -599,10 +611,13 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
         
         // التحقق من وجود transaction
         $transactionStarted = false;
-        if (!$db->inTransaction()) {
+        $wasInTransaction = $db->inTransaction();
+        if (!$wasInTransaction) {
             $db->beginTransaction();
             $transactionStarted = true;
         }
+        
+        error_log("returnProductsToVehicleInventory: transaction status - wasInTransaction: " . ($wasInTransaction ? 'true' : 'false') . ", transactionStarted: " . ($transactionStarted ? 'true' : 'false') . ", items_count: " . count($returnItems));
         
         try {
             foreach ($returnItems as $item) {
@@ -832,8 +847,15 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
                 'details' => 'تم إرجاع جميع المنتجات المرتجعة إلى مخزن سيارة المندوب'
             ]);
             
+            error_log("returnProductsToVehicleInventory: Successfully processed " . count($returnItems) . " items, transactionStarted: " . ($transactionStarted ? 'true' : 'false'));
+            
+            // إذا بدأنا transaction، نقوم بـ commit
+            // إذا كان هناك transaction موجودة مسبقاً، لا نقوم بـ commit (سيتم commit من الخارج)
             if ($transactionStarted) {
                 $db->commit();
+                error_log("returnProductsToVehicleInventory: Committed transaction");
+            } else {
+                error_log("returnProductsToVehicleInventory: Skipping commit (transaction was already active)");
             }
             
             return [
@@ -843,10 +865,16 @@ function returnProductsToVehicleInventory(int $returnId, ?int $approvedBy = null
             ];
             
         } catch (Throwable $e) {
+            // إذا بدأنا transaction، نقوم بـ rollback
+            // إذا كان هناك transaction موجودة مسبقاً، لا نقوم بـ rollback (سيتم rollback من الخارج)
             if ($transactionStarted) {
                 $db->rollback();
+                error_log("returnProductsToVehicleInventory: Rolled back transaction due to error");
+            } else {
+                error_log("returnProductsToVehicleInventory: Skipping rollback (transaction was already active)");
             }
             error_log("returnProductsToVehicleInventory error: " . $e->getMessage());
+            error_log("returnProductsToVehicleInventory error trace: " . $e->getTraceAsString());
             return [
                 'success' => false,
                 'message' => 'حدث خطأ أثناء إرجاع المنتجات للمخزون: ' . $e->getMessage()
