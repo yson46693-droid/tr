@@ -113,6 +113,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'role' => $role
                 ]);
                 
+                // استدعاء auto_salary_init بعد إنشاء المستخدم الجديد
+                // يتم استدعاؤه مرة واحدة فقط بفضل الفحص الأولي في الملف
+                if (file_exists(__DIR__ . '/../../includes/auto_salary_init.php')) {
+                    try {
+                        require_once __DIR__ . '/../../includes/auto_salary_init.php';
+                    } catch (Exception $e) {
+                        error_log("auto_salary_init: Error after user creation: " . $e->getMessage());
+                    }
+                }
+                
                 // تطبيق PRG pattern لمنع التكرار
                 preventDuplicateSubmission('تم إضافة المستخدم بنجاح', ['page' => 'users'], null, $currentUser['role']);
             }
