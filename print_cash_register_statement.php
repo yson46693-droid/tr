@@ -62,6 +62,44 @@ if (!empty($invoicesTableExists)) {
     $customerId = isset($_GET['customer_id']) ? intval($_GET['customer_id']) : 0;
     $invoiceNumber = isset($_GET['invoice_number']) ? trim($_GET['invoice_number']) : '';
     
+    // التحقق من وجود عمود invoice_id في collections
+    $hasInvoiceIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM collections LIKE 'invoice_id'"));
+    $statusColumnCheck = $db->queryOne("SHOW COLUMNS FROM collections LIKE 'status'");
+    $hasCollectionsStatusColumn = !empty($statusColumnCheck);
+    
+    // حساب مجموع التحصيلات لكل فاتورة
+    $collectionsSubquery = "";
+    if ($hasInvoiceIdColumn) {
+        if ($hasCollectionsStatusColumn) {
+            $collectionsSubquery = "(SELECT COALESCE(SUM(amount), 0) 
+                                    FROM collections 
+                                    WHERE invoice_id = i.id 
+                                    AND collected_by = i.sales_rep_id 
+                                    AND status IN ('pending', 'approved'))";
+        } else {
+            $collectionsSubquery = "(SELECT COALESCE(SUM(amount), 0) 
+                                    FROM collections 
+                                    WHERE invoice_id = i.id 
+                                    AND collected_by = i.sales_rep_id)";
+        }
+    } else {
+        // إذا لم يكن هناك عمود invoice_id، نستخدم notes للبحث
+        if ($hasCollectionsStatusColumn) {
+            $collectionsSubquery = "(SELECT COALESCE(SUM(amount), 0) 
+                                    FROM collections 
+                                    WHERE customer_id = i.customer_id 
+                                    AND collected_by = i.sales_rep_id 
+                                    AND (notes LIKE CONCAT('%فاتورة ', i.invoice_number, '%') OR notes LIKE CONCAT('%', i.invoice_number, '%'))
+                                    AND status IN ('pending', 'approved'))";
+        } else {
+            $collectionsSubquery = "(SELECT COALESCE(SUM(amount), 0) 
+                                    FROM collections 
+                                    WHERE customer_id = i.customer_id 
+                                    AND collected_by = i.sales_rep_id 
+                                    AND (notes LIKE CONCAT('%فاتورة ', i.invoice_number, '%') OR notes LIKE CONCAT('%', i.invoice_number, '%')))";
+        }
+    }
+    
     // بناء استعلام مطابق لـ my_records (تجميع الفواتير)
     $sql = "SELECT 
                    i.id as invoice_id,
@@ -76,6 +114,8 @@ if (!empty($invoicesTableExists)) {
                    i.total_amount,
                    i.paid_amount,
                    i.amount_added_to_sales,
+                   COALESCE(" . $collectionsSubquery . ", 0) as collections_total,
+                   (COALESCE(i.paid_amount, 0) + COALESCE(" . $collectionsSubquery . ", 0)) as total_paid,
                    COUNT(ii.id) as items_count,
                    GROUP_CONCAT(
                        CONCAT(
@@ -251,7 +291,10 @@ $totalCollectedFromRep = 0.0;
 foreach ($invoices as $inv) {
     // استخدام total من SUM (مثل my_records) بدلاً من total_amount
     $totalSales += (float)($inv['total'] ?? $inv['total_amount'] ?? 0);
-    $totalPaid += (float)($inv['paid_amount'] ?? 0);
+    // حساب المدفوع: paid_amount + collections_total
+    $paidFromInvoice = (float)($inv['paid_amount'] ?? 0);
+    $collectionsForInvoice = (float)($inv['collections_total'] ?? 0);
+    $totalPaid += (float)($inv['total_paid'] ?? ($paidFromInvoice + $collectionsForInvoice));
 }
 
 foreach ($collections as $col) {
@@ -1008,20 +1051,32 @@ $statementTime = date('H:i:s');
                         <?php
                         // استخدام total من SUM (مثل my_records) بدلاً من total_amount
                         $totalAmount = (float)($invoice['total'] ?? $invoice['total_amount'] ?? 0);
-                        $paidAmount = (float)($invoice['paid_amount'] ?? 0);
+                        // حساب المدفوع: paid_amount من الفاتورة + مجموع التحصيلات المرتبطة
+                        $paidAmountFromInvoice = (float)($invoice['paid_amount'] ?? 0);
+                        $collectionsTotal = (float)($invoice['collections_total'] ?? 0);
+                        $totalPaid = (float)($invoice['total_paid'] ?? ($paidAmountFromInvoice + $collectionsTotal));
                         $creditUsed = (float)($invoice['credit_used'] ?? 0);
-                        $remaining = $totalAmount - $paidAmount - $creditUsed;
+                        $remaining = $totalAmount - $totalPaid - $creditUsed;
                         ?>
                         <tr>
                             <td><?php echo htmlspecialchars($invoice['invoice_number']); ?></td>
                             <td><?php echo htmlspecialchars($invoice['customer_name'] ?? '-'); ?></td>
                             <td><?php echo formatDate($invoice['date']); ?></td>
                             <td class="amount-positive"><?php echo formatCurrency($totalAmount); ?></td>
-                            <td><?php echo formatCurrency($paidAmount); ?></td>
+                            <td><?php echo formatCurrency($totalPaid); ?></td>
                             <td><?php echo formatCurrency($creditUsed); ?></td>
                             <td class="amount-negative"><?php echo formatCurrency($remaining); ?></td>
                             <td>
-                                <span class="status-badge status-<?php echo $invoice['status']; ?>">
+                                <?php
+                                // تحديث الحالة بناءً على المدفوع الفعلي
+                                $actualStatus = $invoice['status'];
+                                if ($remaining <= 0.01 && $totalAmount > 0) {
+                                    $actualStatus = 'paid';
+                                } elseif ($totalPaid > 0 && $remaining > 0.01) {
+                                    $actualStatus = 'partial';
+                                }
+                                ?>
+                                <span class="status-badge status-<?php echo $actualStatus; ?>">
                                     <?php 
                                     $statusLabels = [
                                         'paid' => 'مدفوعة',
@@ -1030,7 +1085,7 @@ $statementTime = date('H:i:s');
                                         'sent' => 'مرسلة',
                                         'draft' => 'مسودة'
                                     ];
-                                    echo $statusLabels[$invoice['status']] ?? $invoice['status'];
+                                    echo $statusLabels[$actualStatus] ?? $actualStatus;
                                     ?>
                                 </span>
                             </td>
