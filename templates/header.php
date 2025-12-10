@@ -784,6 +784,61 @@ if (ob_get_level() > 0) {
             overflow: visible !important;
         }
         
+        /* تأثير انسدال (slide down) للـ modals عند فتحها */
+        .modal.fade .modal-dialog {
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+            transform: translateY(-50px);
+            opacity: 0;
+        }
+        
+        .modal.fade.show .modal-dialog {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        /* تأثير انسدال للـ modals بدون class fade (للتوافق) */
+        .modal:not(.fade) .modal-dialog {
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+        }
+        
+        .modal:not(.fade):not(.show) .modal-dialog {
+            transform: translateY(-50px);
+            opacity: 0;
+        }
+        
+        .modal:not(.fade).show .modal-dialog {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        /* تأثير fade in للـ backdrop */
+        .modal-backdrop {
+            transition: opacity 0.15s linear;
+        }
+        
+        .modal-backdrop.fade {
+            opacity: 0;
+        }
+        
+        .modal-backdrop.show {
+            opacity: 0.5;
+        }
+        
+        /* تأثير إضافي للـ modal-content نفسه */
+        .modal.fade .modal-content {
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+        }
+        
+        .modal.fade:not(.show) .modal-content {
+            transform: translateY(-30px);
+            opacity: 0;
+        }
+        
+        .modal.fade.show .modal-content {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
         /* لوجو PWA */
         .loader-logo {
             width: 180px;
