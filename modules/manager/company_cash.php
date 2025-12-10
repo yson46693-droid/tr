@@ -511,7 +511,7 @@ if (!empty($accountantTableExists)) {
          FROM accountant_transactions
          WHERE transaction_type = 'expense' 
          AND status = 'approved'
-         AND description LIKE '%تسوية رصيد دائن لعميل%'"
+         AND (description LIKE '%تسوية رصيد دائن لعميل محلي%' OR description LIKE '%تسوية رصيد دائن لعميل مندوب%')"
     );
     $totalCustomerCreditSettlements = (float) ($customerSettlementsResult['total_settlements'] ?? 0);
 }
@@ -521,7 +521,8 @@ $netApprovedBalance =
     - ($treasurySummary['approved_expense'] ?? 0)
     - ($treasurySummary['approved_payment'] ?? 0)
     - $totalSalaries
-    - $totalSalaryAdjustments;
+    - $totalSalaryAdjustments
+    - $totalCustomerCreditSettlements;
 
 $approvedIncome = (float) ($treasurySummary['approved_income'] ?? 0);
 $approvedExpense = (float) ($treasurySummary['approved_expense'] ?? 0);
