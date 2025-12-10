@@ -323,8 +323,9 @@ function recordInventoryMovement($productId, $warehouseId, $type, $quantity, $re
         // تحديث finished_products.quantity_produced إذا كان batchId موجوداً ونوع الحركة 'in'
         // ملاحظة: يتم تحديث finished_products.quantity_produced مباشرة في api/invoice_returns.php و includes/returns_system.php
         // لذلك لا نحتاج لتحديثه هنا مرة أخرى لتجنب التحديث المزدوج
-        // نتحقق من referenceType - إذا كان 'return'، نتخطى التحديث لأن returnProductsToMainWarehouse قام به بالفعل
-        if ($batchId && $type === 'in' && !$usingVehicleInventory && $referenceType !== 'return') {
+        // نتحقق من referenceType - إذا كان 'return' أو 'warehouse_transfer'، نتخطى التحديث
+        // لأن returnProductsToMainWarehouse أو createWarehouseTransfer/approveWarehouseTransfer قام به بالفعل
+        if ($batchId && $type === 'in' && !$usingVehicleInventory && $referenceType !== 'return' && $referenceType !== 'warehouse_transfer') {
             error_log("recordInventoryMovement: Processing return (non-vehicle, non-return reference) - batchId: $batchId, productId: $productId, quantity: $quantity, referenceType: " . ($referenceType ?? 'NULL'));
             
             // البحث عن finished_products باستخدام batchId (finished_products.id)
@@ -350,6 +351,9 @@ function recordInventoryMovement($productId, $warehouseId, $type, $quantity, $re
         } else if ($batchId && $type === 'in' && $referenceType === 'return') {
             // عند referenceType === 'return'، يتم تحديث finished_products.quantity_produced مباشرة في returnProductsToMainWarehouse
             error_log("recordInventoryMovement: Skipping finished_products.quantity_produced update (return reference) - batchId: $batchId, productId: $productId, quantity: $quantity. Update already done in returnProductsToMainWarehouse.");
+        } else if ($batchId && $type === 'in' && $referenceType === 'warehouse_transfer') {
+            // عند referenceType === 'warehouse_transfer'، يتم تحديث finished_products.quantity_produced مباشرة في createWarehouseTransfer/approveWarehouseTransfer
+            error_log("recordInventoryMovement: Skipping finished_products.quantity_produced update (warehouse_transfer reference) - batchId: $batchId, productId: $productId, quantity: $quantity. Update already done in createWarehouseTransfer/approveWarehouseTransfer.");
         } else if ($batchId && $type === 'in' && $usingVehicleInventory) {
             // عند usingVehicleInventory=true، يتم تحديث finished_products.quantity_produced مباشرة في api/invoice_returns.php و includes/returns_system.php
             error_log("recordInventoryMovement: Skipping finished_products.quantity_produced update (vehicle inventory) - batchId: $batchId, productId: $productId, quantity: $quantity. Update should be done directly in return functions.");

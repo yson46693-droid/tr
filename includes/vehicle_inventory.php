@@ -2128,29 +2128,82 @@ function executeWarehouseTransferDirectly($transferId, $executedBy = null) {
                 }
 
                 if ($batchId && ($toWarehouse['warehouse_type'] ?? '') === 'main') {
-                    $db->execute(
-                        "UPDATE finished_products SET quantity_produced = quantity_produced + ? WHERE id = ?",
-                        [$requestedQuantity, $batchId]
+                    // التحقق من الكمية الحالية قبل التحديث
+                    $existingFinishedProd = $db->queryOne(
+                        "SELECT id, quantity_produced FROM finished_products WHERE id = ?",
+                        [$batchId]
                     );
+                    
+                    if ($existingFinishedProd) {
+                        $currentQtyProduced = (float)($existingFinishedProd['quantity_produced'] ?? 0);
+                        $newQtyProduced = $currentQtyProduced + $requestedQuantity;
+                        
+                        $db->execute(
+                            "UPDATE finished_products SET quantity_produced = quantity_produced + ? WHERE id = ?",
+                            [$requestedQuantity, $batchId]
+                        );
+                        
+                        error_log("createWarehouseTransfer: Updated finished_products.quantity_produced for batch_id=$batchId: $currentQtyProduced + $requestedQuantity = $newQtyProduced (transfer from vehicle to main warehouse)");
+                    } else {
+                        error_log("Warning: Attempted to update finished_products with batch_id $batchId but record does not exist. Transfer ID: $transferId");
+                    }
                 }
             }
             
             // تسجيل حركة دخول
             if (!($toWarehouse && $toWarehouse['vehicle_id'])) {
-                $movementIn = recordInventoryMovement(
-                    $item['product_id'],
-                    $transfer['to_warehouse_id'],
-                    'in',
-                    $requestedQuantity,
-                    'warehouse_transfer',
-                    $transferId,
-                    "نقل من مخزن آخر{$batchNote}",
-                    $executedBy
-                );
-
-                if (empty($movementIn['success'])) {
-                    $message = $movementIn['message'] ?? 'تعذر تسجيل حركة الدخول إلى المخزن الوجهة.';
-                    throw new Exception($message);
+                // ملاحظة: لا نستدعي recordInventoryMovement مع type='in' إذا كان هناك batchId
+                // لأن تحديث finished_products.quantity_produced تم بالفعل أعلاه في السطر 2131
+                // استدعاء recordInventoryMovement سيؤدي إلى إضافة الكمية مرتين!
+                // نسجل الحركة فقط دون تحديث الكمية
+                try {
+                    $product = $db->queryOne(
+                        "SELECT quantity, warehouse_id FROM products WHERE id = ?",
+                        [$item['product_id']]
+                    );
+                    
+                    // جلب الكمية الحالية من finished_products بعد التحديث
+                    $currentQuantity = 0.0;
+                    if ($batchId) {
+                        $fpCheck = $db->queryOne(
+                            "SELECT quantity_produced FROM finished_products WHERE id = ?",
+                            [$batchId]
+                        );
+                        $currentQuantity = (float)($fpCheck['quantity_produced'] ?? 0);
+                    }
+                    
+                    if ($product) {
+                        $quantityBefore = $batchId ? ($currentQuantity - $requestedQuantity) : (float)($product['quantity'] ?? 0);
+                        $quantityAfter = $batchId ? $currentQuantity : ($quantityBefore + $requestedQuantity);
+                        
+                        $db->execute(
+                            "INSERT INTO inventory_movements 
+                             (product_id, warehouse_id, type, quantity, quantity_before, quantity_after, 
+                              reference_type, reference_id, notes, created_by) 
+                             VALUES (?, ?, 'in', ?, ?, ?, 'warehouse_transfer', ?, ?, ?)",
+                            [
+                                $item['product_id'],
+                                $transfer['to_warehouse_id'],
+                                $requestedQuantity,
+                                $quantityBefore,
+                                $quantityAfter,
+                                $transferId,
+                                "نقل من مخزن آخر{$batchNote}",
+                                $executedBy
+                            ]
+                        );
+                        
+                        // تحديث products.quantity فقط إذا لم يكن هناك batchId (منتج خارجي)
+                        if (!$batchId) {
+                            $db->execute(
+                                "UPDATE products SET quantity = quantity + ? WHERE id = ?",
+                                [$requestedQuantity, $item['product_id']]
+                            );
+                        }
+                    }
+                } catch (Exception $e) {
+                    error_log("Failed to record inventory movement for transfer to main warehouse: " . $e->getMessage());
+                    throw new Exception('تعذر تسجيل حركة الدخول إلى المخزن الوجهة: ' . $e->getMessage());
                 }
             } else {
                 try {
