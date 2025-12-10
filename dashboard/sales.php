@@ -2533,11 +2533,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                 loadingOverlay.classList.remove('show');
                                 loadingOverlay.setAttribute('aria-hidden', 'true');
                             }
-                            const pageLoader = document.getElementById('pageLoader');
-                            if (pageLoader) {
-                                pageLoader.classList.add('hidden');
-                                pageLoader.style.display = 'none';
-                            }
                         }
                     })();
                 </script>

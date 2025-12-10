@@ -574,39 +574,6 @@ try {
 
 ?>
 
-<style>
-    html #pageLoader,
-    body #pageLoader,
-    #pageLoader {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-    }
-
-</style>
-<script>
-(function () {
-    function removePageLoader() {
-        const loader = document.getElementById('pageLoader');
-        if (!loader) {
-            return;
-        }
-        loader.classList.add('hidden');
-        loader.setAttribute('aria-hidden', 'true');
-        loader.style.display = 'none';
-        loader.style.visibility = 'hidden';
-        loader.style.opacity = '0';
-        loader.style.pointerEvents = 'none';
-    }
-
-    removePageLoader();
-    document.addEventListener('readystatechange', removePageLoader);
-    document.addEventListener('DOMContentLoaded', removePageLoader);
-    window.addEventListener('load', removePageLoader);
-    window.addEventListener('pageshow', removePageLoader);
-})();
-</script>
 
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">

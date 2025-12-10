@@ -1547,11 +1547,6 @@ $pageDescription = 'لوحة تحكم المحاسب - إدارة المعامل
                                 loadingOverlay.classList.remove('show');
                                 loadingOverlay.setAttribute('aria-hidden', 'true');
                             }
-                            const pageLoader = document.getElementById('pageLoader');
-                            if (pageLoader) {
-                                pageLoader.classList.add('hidden');
-                                pageLoader.style.display = 'none';
-                            }
                         }
                     })();
                 </script>

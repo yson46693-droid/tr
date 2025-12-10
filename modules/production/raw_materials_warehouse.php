@@ -6761,23 +6761,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // إخفاء شاشة التحميل فوراً
-    const pageLoader = document.getElementById('pageLoader');
-    if (pageLoader) {
-        pageLoader.style.display = 'none';
-        pageLoader.style.visibility = 'hidden';
-        pageLoader.classList.add('hidden');
-    }
-});
-
-// إخفاء شاشة التحميل عند فتح أي نافذة منبثقة
-document.addEventListener('show.bs.modal', function() {
-    const pageLoader = document.getElementById('pageLoader');
-    if (pageLoader) {
-        pageLoader.style.display = 'none';
-        pageLoader.style.visibility = 'hidden';
-        pageLoader.classList.add('hidden');
-    }
 });
 
 // التحقق من رسالة الخطأ الخاصة بالطلب المكرر وتحديث الصفحة تلقائياً

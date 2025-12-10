@@ -970,34 +970,16 @@ if (!defined('ACCESS_ALLOWED')) {
                     // للصفحات الخاصة (chat, batch_reader)، لا نعرض loading overlay
                     if (isSpecialPage) {
                         sessionStorage.setItem('internalNavigation', 'true');
-                        // إخفاء pageLoader فوراً عند التنقل
-                        const pageLoader = document.getElementById('pageLoader');
-                        if (pageLoader) {
-                            pageLoader.classList.add('hidden');
-                            pageLoader.style.display = 'none';
-                        }
                         return; // لا نعرض professionalLoadingOverlay للصفحات الخاصة
                     }
                     
                     // للروابط الداخلية في نفس dashboard (production.php, manager.php, etc.)
                     // نعرض loading overlay بشكل طبيعي
                     isNavigating = true;
-                    // إخفاء pageLoader فوراً عند التنقل
-                    const pageLoader = document.getElementById('pageLoader');
-                    if (pageLoader) {
-                        pageLoader.classList.add('hidden');
-                        pageLoader.style.display = 'none';
-                    }
                     // إظهار professionalLoadingOverlay للتنقل بين الصفحات
                     // سيتم إظهاره في beforeunload
                 } else if (!isInternalLink) {
                     isNavigating = true;
-                    // إخفاء pageLoader فوراً عند التنقل
-                    const pageLoader = document.getElementById('pageLoader');
-                    if (pageLoader) {
-                        pageLoader.classList.add('hidden');
-                        pageLoader.style.display = 'none';
-                    }
                     // إظهار professionalLoadingOverlay للروابط الخارجية
                     // سيتم إظهاره في beforeunload
                 }
@@ -1025,12 +1007,6 @@ if (!defined('ACCESS_ALLOWED')) {
                         loadingOverlay.classList.add('show');
                         loadingOverlay.setAttribute('aria-hidden', 'false');
                     }
-                    // إخفاء pageLoader فوراً
-                    const pageLoader = document.getElementById('pageLoader');
-                    if (pageLoader) {
-                        pageLoader.classList.add('hidden');
-                        pageLoader.style.display = 'none';
-                    }
                 }
             });
             
@@ -1038,17 +1014,6 @@ if (!defined('ACCESS_ALLOWED')) {
             function ensureLoadingHidden() {
                 isNavigating = false;
                 beforeUnloadTriggered = false; // إعادة تعيين عند تحميل الصفحة
-                
-                // إخفاء pageLoader عند اكتمال تحميل الصفحة
-                const pageLoader = document.getElementById('pageLoader');
-                if (pageLoader && !pageLoader.classList.contains('hidden')) {
-                    pageLoader.classList.add('hidden');
-                    setTimeout(function() {
-                        if (pageLoader) {
-                            pageLoader.style.display = 'none';
-                        }
-                    }, 150);
-                }
                 
                 if (document.readyState === 'complete') {
                     // الصفحة محملة بالفعل - إخفاء فوري
@@ -1121,13 +1086,6 @@ if (!defined('ACCESS_ALLOWED')) {
                 if (showTimeout) clearTimeout(showTimeout);
                 if (hideTimeout) clearTimeout(hideTimeout);
                 
-                // إخفاء pageLoader
-                const pageLoader = document.getElementById('pageLoader');
-                if (pageLoader) {
-                    pageLoader.classList.add('hidden');
-                    pageLoader.style.display = 'none';
-                }
-                
                 if (loadingOverlay) {
                     loadingOverlay.classList.remove('show');
                     setTimeout(function() {
@@ -1161,293 +1119,6 @@ if (!defined('ACCESS_ALLOWED')) {
             } else {
                 initLoadingOverlay();
             }
-            
-        })();
-    </script>
-    <?php endif; ?>
-    
-    <!-- 🎬 Page Loading Animation Script - Optimized for Mobile -->
-    <script>
-        (function() {
-            'use strict';
-            
-            const pageLoader = document.getElementById('pageLoader');
-            const dashboardMain = document.querySelector('.dashboard-main');
-            
-            if (!pageLoader) {
-                return;
-            }
-            
-            // التأكد من أن pageLoader.style موجود
-            if (!pageLoader.style) {
-                console.warn('pageLoader element found but style property is not available');
-                return;
-            }
-            
-            // PWA Splash Screen - استخدام localStorage فقط (بدون API calls) للأداء السريع
-            const SPLASH_KEY = 'pwaSplashLastShown';
-            const SPLASH_COOLDOWN = 3000; // 3 ثواني بين إظهارات splash screen (للصفحة الأولى فقط)
-            const MAX_SPLASH_TIME = 100; // أقصى وقت لإظهار splash screen (100ms - محسّن للسرعة)
-            const INTERNAL_NAVIGATION_DELAY = 0; // لا تأخير للتنقل الداخلي
-            
-            function hideSplashScreen(immediate = false) {
-                if (!pageLoader) return;
-                
-                // إخفاء فوري بدون تأخير للتنقل الداخلي
-                if (immediate) {
-                    pageLoader.classList.add('hidden');
-                    if (pageLoader.style) {
-                        pageLoader.style.display = 'none';
-                    }
-                    if (dashboardMain) {
-                        dashboardMain.classList.add('content-fade-in');
-                    }
-                    return;
-                }
-                
-                // إخفاء مع انتقال سلس للصفحة الأولى فقط
-                pageLoader.classList.add('hidden');
-                
-                // إضافة تأثير fade-in للمحتوى
-                if (dashboardMain) {
-                    dashboardMain.classList.add('content-fade-in');
-                }
-                
-                // إزالة شاشة التحميل من DOM بعد انتهاء التأثير (مختصر)
-                setTimeout(function() {
-                    if (pageLoader && pageLoader.style) {
-                        pageLoader.style.display = 'none';
-                    }
-                }, 150); // تقليل من 300ms إلى 150ms
-            }
-            
-            // التحقق من الوقت المناسب لإظهار splash screen
-            function shouldShowSplash() {
-                try {
-                    const lastShown = localStorage.getItem(SPLASH_KEY);
-                    if (!lastShown) return true;
-                    
-                    const timeSinceLastShown = Date.now() - parseInt(lastShown);
-                    return timeSinceLastShown > SPLASH_COOLDOWN;
-                } catch (e) {
-                    return true; // في حالة الخطأ، أظهر splash screen
-                }
-            }
-            
-            // حفظ وقت إظهار splash screen
-            function markSplashShown() {
-                try {
-                    localStorage.setItem(SPLASH_KEY, Date.now().toString());
-                } catch (e) {
-                    // تجاهل الأخطاء
-                }
-            }
-            
-            // إخفاء pageLoader عند اكتمال تحميل الصفحة (مرة واحدة فقط)
-            let pageLoaderHidden = false;
-            function hidePageLoaderOnLoad() {
-                if (pageLoaderHidden || !pageLoader) return;
-                pageLoaderHidden = true;
-                hideSplashScreen(false);
-            }
-            
-            // إخفاء فوري عند DOMContentLoaded (أسرع)
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', hidePageLoaderOnLoad, { once: true });
-            } else {
-                hidePageLoaderOnLoad();
-            }
-            
-            // إخفاء عند window.load (للتأكد - فقط إذا لم يتم الإخفاء بعد)
-            if (document.readyState !== 'complete') {
-                window.addEventListener('load', hidePageLoaderOnLoad, { once: true });
-            } else if (!pageLoaderHidden) {
-                hidePageLoaderOnLoad();
-            }
-            
-            // استخدام pageshow event للتحقق من أن الصفحة تم تحميلها من جديد
-            window.addEventListener('pageshow', function(event) {
-                // إعادة تعيين flag عند تحميل صفحة جديدة
-                pageLoaderHidden = false;
-                
-                // التحقق من الصفحات الخاصة (chat, batch_reader)
-                const isSpecialPage = window.location.href.includes('page=chat') || window.location.href.includes('page=batch_reader');
-                if (isSpecialPage) {
-                    pageLoaderHidden = true;
-                    hideSplashScreen(true); // إخفاء فوري للصفحات الخاصة
-                    return;
-                }
-                
-                // إذا كانت الصفحة من cache (back/forward)، لا تظهر splash screen
-                if (event.persisted && pageLoader) {
-                    pageLoaderHidden = true;
-                    if (pageLoader.style) {
-                        pageLoader.style.display = 'none';
-                    }
-                    pageLoader.classList.add('hidden');
-                    if (dashboardMain) {
-                        dashboardMain.classList.add('content-fade-in');
-                    }
-                    return;
-                }
-                
-                // التحقق من أن الصفحة قادمة من رابط داخلي
-                const isInternalNavigation = sessionStorage.getItem('internalNavigation') === 'true';
-                sessionStorage.removeItem('internalNavigation'); // تنظيف بعد الاستخدام
-                
-                // إذا كان التنقل داخلي، لا تظهر splash screen - إخفاء فوري
-                if (isInternalNavigation) {
-                    pageLoaderHidden = true;
-                    hideSplashScreen(true); // إخفاء فوري
-                    return;
-                }
-                
-                // التحقق من الوقت المناسب لإظهار splash screen (للصفحة الأولى فقط)
-                if (shouldShowSplash()) {
-                    markSplashShown();
-                    
-                    if (pageLoader) {
-                        pageLoader.classList.remove('hidden');
-                        if (pageLoader.style) {
-                            pageLoader.style.display = 'flex';
-                        }
-                        // إخفاء بعد وقت قصير (سيتم إخفاؤه تلقائياً عند اكتمال التحميل)
-                        setTimeout(hidePageLoaderOnLoad, MAX_SPLASH_TIME);
-                    }
-                } else {
-                    // لا تظهر splash screen - إخفاء فوري
-                    pageLoaderHidden = true;
-                    hideSplashScreen(true);
-                }
-            });
-            
-            // التحقق من الجلسة عند تحميل الصفحة لأول مرة
-            // استخدام timeout قصير جداً لضمان إخفاء splash screen بسرعة
-            let splashCheckTimeout = setTimeout(function() {
-                if (pageLoader && !pageLoader.classList.contains('hidden')) {
-                    hideSplashScreen();
-                }
-            }, MAX_SPLASH_TIME);
-            
-            // منطق بسيط بدون API calls - محسّن للسرعة
-            if (shouldShowSplash()) {
-                markSplashShown();
-                
-                if (pageLoader) {
-                    pageLoader.classList.remove('hidden');
-                    if (pageLoader.style) {
-                        pageLoader.style.display = 'flex';
-                    }
-                }
-                
-                // إخفاء الشاشة بعد تحميل الصفحة أو بعد وقت أقصى (مختصر جداً)
-                const hideTimeout = setTimeout(function() {
-                    clearTimeout(splashCheckTimeout);
-                    hideSplashScreen();
-                }, MAX_SPLASH_TIME);
-                
-                if (document.readyState === 'complete' || document.readyState === 'interactive') {
-                    clearTimeout(splashCheckTimeout);
-                    clearTimeout(hideTimeout);
-                    hideSplashScreen();
-                } else {
-                    window.addEventListener('load', function() {
-                        clearTimeout(splashCheckTimeout);
-                        clearTimeout(hideTimeout);
-                        hideSplashScreen();
-                    }, { once: true });
-                    
-                    // إخفاء تلقائي بعد وقت قصير جداً حتى لو لم يتم التحميل
-                    setTimeout(function() {
-                        clearTimeout(splashCheckTimeout);
-                        clearTimeout(hideTimeout);
-                        hideSplashScreen();
-                    }, MAX_SPLASH_TIME * 2);
-                }
-            } else {
-                // لا تظهر splash screen - إخفاء فوري
-                clearTimeout(splashCheckTimeout);
-                hideSplashScreen(true);
-            }
-            
-            // إخفاء شاشة التحميل عند فتح أي Modal
-            document.addEventListener('show.bs.modal', function() {
-                if (pageLoader) {
-                    pageLoader.classList.add('hidden');
-                    if (pageLoader.style) {
-                        pageLoader.style.display = 'none';
-                    }
-                }
-            });
-            
-            // تعطيل شاشة التحميل عند التنقل بين الأقسام لتجنب التجميد
-            // فقط للروابط الخارجية التي تغير الصفحة بالكامل
-            let isNavigating = false;
-            document.addEventListener('click', function(e) {
-                const link = e.target.closest('a');
-                
-                // تخطي الروابط التي لديها data-no-splash (روابط الشريط الجانبي)
-                if (link && link.hasAttribute('data-no-splash')) {
-                    // تسجيل أن هذا تنقل داخلي لتخطي منطق الجلسات في pageshow
-                    sessionStorage.setItem('internalNavigation', 'true');
-                    // إخفاء فوري لشاشة التحميل
-                    hideSplashScreen(true);
-                    return; // لا تعرض شاشة التحميل للروابط الداخلية
-                }
-                
-                // تحقق من أن الرابط يؤدي لتغيير الصفحة الكامل (ليس tabs أو sections)
-                // تحسين: لا تظهر شاشة التحميل للروابط الداخلية
-                const isInternalLink = link && 
-                    link.href && 
-                    link.hostname === window.location.hostname &&
-                    !link.href.includes('section=') && // تجاهل روابط الأقسام
-                    !link.href.includes('&tab=') && 
-                    !link.href.includes('#') &&
-                    !link.href.startsWith('javascript:') &&
-                    !link.href.startsWith('mailto:') &&
-                    !link.href.startsWith('tel:') &&
-                    !link.target &&
-                    !link.download &&
-                    !link.hasAttribute('data-bs-toggle') && 
-                    !link.hasAttribute('data-bs-target') &&
-                    !link.classList.contains('dropdown-item') &&
-                    !link.closest('.nav-tabs') && // تجاهل روابط التبويبات
-                    !link.closest('.section-tabs'); // تجاهل روابط أقسام المخزن
-                
-                // فقط للروابط الخارجية أو الصفحات الجديدة تماماً
-                const isExternalOrNewPage = link && 
-                    link.href && 
-                    (link.hostname !== window.location.hostname || 
-                     link.href.includes('?page=') && !link.href.includes('section='));
-                
-                if (isExternalOrNewPage && !isNavigating) {
-                    isNavigating = true;
-                    // إظهار شاشة التحميل فقط للصفحات الجديدة (وليس الروابط الداخلية)
-                    if (pageLoader && !isInternalLink) {
-                        pageLoader.classList.remove('hidden');
-                        if (pageLoader.style) {
-                            pageLoader.style.display = 'flex';
-                        }
-                    } else if (isInternalLink) {
-                        // للروابط الداخلية: تسجيل التنقل وإخفاء فوري
-                        sessionStorage.setItem('internalNavigation', 'true');
-                        hideSplashScreen(true);
-                    }
-                }
-            });
-            
-            // إخفاء شاشة التحميل عند الرجوع للصفحة
-            window.addEventListener('pageshow', function(event) {
-                isNavigating = false;
-                if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
-                    if (pageLoader) {
-                        pageLoader.classList.add('hidden');
-                        if (pageLoader.style) {
-                            pageLoader.style.display = 'none';
-                        }
-                    }
-                }
-            });
             
         })();
     </script>

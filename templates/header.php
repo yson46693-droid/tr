@@ -572,61 +572,8 @@ if (ob_get_level() > 0) {
     <!-- Manifest -->
     <link rel="manifest" href="<?php echo getRelativeUrl('manifest.php'); ?>">
     
-    <!-- 🎬 Page Loading Animation CSS -->
-    <?php 
-    $enablePageLoaderCSS = true;
-    if (defined('ENABLE_PAGE_LOADER')) {
-        $enablePageLoaderCSS = ENABLE_PAGE_LOADER === true;
-    }
-    ?>
-    <?php if ($enablePageLoaderCSS): ?>
+    <!-- Modal Fix CSS -->
     <style>
-        /* شاشة التحميل الرئيسية - ألوان التطبيق */
-        #pageLoader {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #f4d03f 0%, #f1c40f 50%, #f4d03f 100%);
-            background-size: 400% 400%;
-            animation: gradientShift 8s ease infinite;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-            transition: opacity 0.5s ease, visibility 0.5s ease;
-            pointer-events: none;
-        }
-        
-        @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-        
-        #pageLoader.hidden {
-            opacity: 0 !important;
-            visibility: hidden !important;
-            pointer-events: none !important;
-            z-index: -1 !important;
-            display: none !important;
-        }
-        
-        #pageLoader:not(.hidden) {
-            pointer-events: all;
-        }
-        
-        /* التأكد من أن pageLoader لا يمنع النقرات بعد إخفائه */
-        #pageLoader[style*="display: none"],
-        #pageLoader.hidden[style*="display: none"],
-        #pageLoader[style*="display:none"] {
-            pointer-events: none !important;
-            z-index: -1 !important;
-            display: none !important;
-        }
-        
         /* التأكد من أن الأزرار والعناصر التفاعلية قابلة للنقر */
         .topbar-action,
         .topbar-action *,
@@ -968,7 +915,6 @@ if (ob_get_level() > 0) {
             transition: all 0.3s ease;
         }
     </style>
-    <?php endif; ?>
     
     <!-- Service Worker Registration with Auto-Update -->
     <script>
@@ -2579,25 +2525,6 @@ if (ob_get_level() > 0) {
     <a href="#main-content" class="skip-link visually-hidden-focusable">
         <?php echo isset($lang['skip_to_main']) ? $lang['skip_to_main'] : 'تخطي إلى المحتوى الرئيسي'; ?>
     </a>
-    <!-- 🎬 PWA Splash Screen -->
-    <?php 
-    $enablePageLoaderSplash = true;
-    if (defined('ENABLE_PAGE_LOADER')) {
-        $enablePageLoaderSplash = ENABLE_PAGE_LOADER === true;
-    }
-    ?>
-    <?php if ($enablePageLoaderSplash): ?>
-    <div id="pageLoader" role="status" aria-live="polite" aria-label="<?php echo isset($lang['loading']) ? $lang['loading'] : 'جاري التحميل'; ?>" style="display: flex; opacity: 1;">
-        <img src="<?php echo ASSETS_URL; ?>icons/icon-192x192.png" 
-             alt="<?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?>" 
-             class="loader-logo"
-             width="192"
-             height="192"
-             loading="eager"
-             decoding="async">
-        <div class="loader-title"><?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?></div>
-    </div>
-    <?php endif; ?>
     
     <div id="sessionEndOverlay"
          class="session-end-overlay"

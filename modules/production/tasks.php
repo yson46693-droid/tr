@@ -1050,11 +1050,7 @@ function tasksHtml(string $value): string
     const taskActionForm = document.getElementById('taskActionForm');
 
     function hideLoader() {
-        const loader = document.getElementById('pageLoader');
-        if (loader) {
-            loader.style.display = 'none';
-            loader.classList.add('d-none');
-        }
+        // تم حذف pageLoader
     }
 
     function sanitizeText(value) {
