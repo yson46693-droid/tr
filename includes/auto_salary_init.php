@@ -13,6 +13,9 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
+// متغير static لمنع التنفيذ المتكرر في نفس الطلب
+static $autoSalaryInitExecuted = false;
+
 /**
  * التأكد من وجود جدول سجلات استدعاءات auto_salary_init
  */
@@ -59,8 +62,15 @@ function ensureAutoSalaryInitLogsTable($db) {
 
 /**
  * تسجيل محاولة استدعاء auto_salary_init
+ * يتم تسجيل الاستدعاءات المهمة فقط (executed و error) لتقليل عدد السجلات
  */
 function logAutoSalaryInitCall($db, $status, $reason = null, $createdCount = 0, $skippedCount = 0, $errorCount = 0, $month = null, $year = null) {
+    // تسجيل الاستدعاءات المهمة فقط (executed و error)
+    // تخطي تسجيل skipped لتقليل عدد السجلات
+    if ($status === 'skipped') {
+        return true;
+    }
+    
     try {
         ensureAutoSalaryInitLogsTable($db);
         
