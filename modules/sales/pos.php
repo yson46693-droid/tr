@@ -1860,6 +1860,29 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         //   - إذا كان هناك خصم من رصيد دائن لعميل ليس لديه سجل مشتريات: لا تُحسب نسبة
                         //   - إذا لم يكن هناك خصم من رصيد دائن: لا تُحسب نسبة (بيع بالآجل فقط)
                         //   - لا يتم استدعاء refreshSalesCommissionForUser هنا لتجنب إضافة المبلغ المدفوع من الرصيد الدائن
+                        
+                        // استدعاء refreshSalesCommissionForUser في جميع الحالات لضمان حساب نسبة التحصيلات من الفواتير المدفوعة بالكامل
+                        // هذه الدالة تحسب نسبة 2% فقط من الفواتير المدفوعة بالكامل (status='paid' و paid_amount = total_amount)
+                        // وتستبعد تلقائياً:
+                        //   - الفواتير المدفوعة من الرصيد الدائن (paid_from_credit > 0)
+                        //   - الفواتير التي أصبحت paid بعد تحصيلات جزئية في نفس الشهر
+                        // لذا يمكن استدعاؤها بأمان دون حدوث حساب مزدوج
+                        try {
+                            refreshSalesCommissionForUser(
+                                $currentUser['id'],
+                                $saleDate,
+                                'تحديث تلقائي بعد بيع من نقطة البيع (حساب نسبة التحصيلات من الفواتير المدفوعة بالكامل)'
+                            );
+                            error_log(sprintf(
+                                'Called refreshSalesCommissionForUser after POS sale: paymentType=%s, invoiceId=%d, userId=%d',
+                                $paymentType ?? 'unknown',
+                                $invoiceId,
+                                $currentUser['id']
+                            ));
+                        } catch (Throwable $refreshError) {
+                            error_log('Error calling refreshSalesCommissionForUser after POS sale: ' . $refreshError->getMessage());
+                            // لا نوقف العملية إذا فشل تحديث نسبة التحصيلات
+                        }
                     } catch (Throwable $commissionError) {
                         error_log('Error updating sales commission after POS sale: ' . $commissionError->getMessage());
                         // لا نوقف العملية إذا فشل تحديث العمولة

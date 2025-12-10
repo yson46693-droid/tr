@@ -1489,11 +1489,9 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
         // هذا مهم جداً لمنع إنشاء رواتب مكررة في حالة الاستدعاءات المتزامنة
         if (empty($existingSalary)) {
             try {
-                $conn = $db->getConnection();
-                
                 // بدء transaction
-                if (!$conn->in_transaction) {
-                    $conn->begin_transaction();
+                if (!$db->inTransaction()) {
+                    $db->beginTransaction();
                 }
                 
                 // SELECT FOR UPDATE بناءً على نوع عمود month
@@ -1521,8 +1519,8 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                     
                     // إذا وُجد راتب موجود، نرجع بدون إنشاء راتب جديد
                     // سنقوم بتحديث الراتب الموجود بدلاً من إنشاء راتب جديد
-                    if ($conn->in_transaction) {
-                        $conn->commit();
+                    if ($db->inTransaction()) {
+                        $db->commit();
                     }
                 } else {
                     // لا يوجد راتب موجود - نستمر في إنشاء راتب جديد
@@ -1531,9 +1529,8 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                 }
             } catch (Exception $e) {
                 try {
-                    $conn = $db->getConnection();
-                    if ($conn->in_transaction) {
-                        $conn->rollback();
+                    if ($db->inTransaction()) {
+                        $db->rollback();
                     }
                 } catch (Exception $rollbackEx) {
                     error_log("Rollback failed: " . $rollbackEx->getMessage());
@@ -2006,9 +2003,8 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
         if (isset($result) && $result) {
             // Commit transaction إذا كنا في transaction
             try {
-                $conn = $db->getConnection();
-                if ($conn->in_transaction) {
-                    $conn->commit();
+                if ($db->inTransaction()) {
+                    $db->commit();
                     error_log("createOrUpdateSalary: Committed transaction after inserting salary for user: {$userId}");
                 }
             } catch (Exception $commitEx) {
@@ -2057,9 +2053,8 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
         } else {
             // Rollback في حالة فشل الإدراج
             try {
-                $conn = $db->getConnection();
-                if ($conn->in_transaction) {
-                    $conn->rollback();
+                if ($db->inTransaction()) {
+                    $db->rollback();
                 }
             } catch (Exception $rollbackEx) {
                 error_log("createOrUpdateSalary: Failed to rollback transaction: " . $rollbackEx->getMessage());
