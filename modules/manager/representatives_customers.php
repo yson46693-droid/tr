@@ -107,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $db->execute("
                     CREATE TABLE IF NOT EXISTS `accountant_transactions` (
                       `id` int(11) NOT NULL AUTO_INCREMENT,
-                      `transaction_type` enum('collection_from_sales_rep','expense','income','transfer','other') NOT NULL,
+                      `transaction_type` enum('collection_from_sales_rep','expense','income','transfer','payment','other') NOT NULL,
                       `amount` decimal(15,2) NOT NULL,
                       `sales_rep_id` int(11) DEFAULT NULL,
                       `description` text NOT NULL,

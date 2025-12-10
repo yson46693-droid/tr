@@ -36,7 +36,7 @@ function ensureAccountantTransactionsTable() {
             $db->execute("
                 CREATE TABLE IF NOT EXISTS `accountant_transactions` (
                   `id` int(11) NOT NULL AUTO_INCREMENT,
-                  `transaction_type` enum('collection_from_sales_rep','expense','income','transfer','other') NOT NULL COMMENT 'نوع المعاملة',
+                  `transaction_type` enum('collection_from_sales_rep','expense','income','transfer','payment','other') NOT NULL COMMENT 'نوع المعاملة',
                   `amount` decimal(15,2) NOT NULL COMMENT 'المبلغ',
                   `sales_rep_id` int(11) DEFAULT NULL COMMENT 'معرف المندوب (للتحصيل)',
                   `description` text NOT NULL COMMENT 'الوصف',
@@ -62,6 +62,20 @@ function ensureAccountantTransactionsTable() {
                   CONSTRAINT `accountant_transactions_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='جدول المعاملات المحاسبية'
             ");
+        } else {
+            // تحديث enum إذا كان الجدول موجوداً ولكن لا يحتوي على 'payment'
+            try {
+                $columnInfo = $db->queryOne("SHOW COLUMNS FROM accountant_transactions WHERE Field = 'transaction_type'");
+                if (!empty($columnInfo) && stripos($columnInfo['Type'], "'payment'") === false) {
+                    $db->execute("
+                        ALTER TABLE `accountant_transactions` 
+                        MODIFY COLUMN `transaction_type` enum('collection_from_sales_rep','expense','income','transfer','payment','other') NOT NULL COMMENT 'نوع المعاملة'
+                    ");
+                    error_log('Updated accountant_transactions.transaction_type enum to include payment');
+                }
+            } catch (Throwable $updateError) {
+                error_log('Error updating accountant_transactions enum: ' . $updateError->getMessage());
+            }
         }
     } catch (Throwable $e) {
         error_log('Error creating accountant_transactions table: ' . $e->getMessage());
@@ -477,7 +491,7 @@ if (!empty($accountantTableExists)) {
     $adjustmentsResult = $db->queryOne(
         "SELECT COALESCE(SUM(amount), 0) as total_adjustments
          FROM accountant_transactions
-         WHERE transaction_type = 'expense' 
+         WHERE transaction_type = 'payment' 
          AND status = 'approved'
          AND description LIKE '%تسوية راتب%'"
     );
