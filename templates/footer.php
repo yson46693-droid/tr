@@ -578,8 +578,20 @@ if (!defined('ACCESS_ALLOWED')) {
             let showTimeout = null;
             let hideTimeout = null;
             let isNavigating = false;
-            const SHOW_DELAY = 50; // تأخير قصير جداً (50ms) فقط للطلبات السريعة
-            const MIN_DISPLAY_TIME = 200; // الحد الأدنى للعرض (200ms) لضمان الرؤية
+            let pageLoadStarted = false;
+            const SHOW_DELAY = 0; // بدون تأخير - إظهار فوري
+            const MIN_DISPLAY_TIME = 100; // الحد الأدنى للعرض (100ms) - محسّن للسرعة
+            
+            // إظهار overlay فوراً عند بداية تحميل الصفحة
+            if (document.readyState === 'loading') {
+                pageLoadStarted = true;
+                if (loadingOverlay) {
+                    loadingOverlay.style.display = 'flex';
+                    loadingOverlay.style.opacity = '1';
+                    loadingOverlay.classList.add('show');
+                    loadingOverlay.setAttribute('aria-hidden', 'false');
+                }
+            }
             
             // دالة لإظهار loading overlay
             function showLoading(immediate = false) {
@@ -603,24 +615,11 @@ if (!defined('ACCESS_ALLOWED')) {
                     clearTimeout(showTimeout);
                 }
                 
-                // إظهار فوري أو بعد تأخير قصير جداً
-                if (immediate || isNavigating) {
-                    // إظهار فوري للتنقل أو الطلبات المهمة
-                    loadingOverlay.style.display = 'flex';
-                    loadingOverlay.style.opacity = '1';
-                    loadingOverlay.classList.add('show');
-                    loadingOverlay.setAttribute('aria-hidden', 'false');
-                } else {
-                    // تأخير قصير جداً للطلبات العادية
-                    showTimeout = setTimeout(function() {
-                        if (activeRequests > 0 && loadingOverlay) {
-                            loadingOverlay.style.display = 'flex';
-                            loadingOverlay.style.opacity = '1';
-                            loadingOverlay.classList.add('show');
-                            loadingOverlay.setAttribute('aria-hidden', 'false');
-                        }
-                    }, SHOW_DELAY);
-                }
+                // إظهار فوري دائماً
+                loadingOverlay.style.display = 'flex';
+                loadingOverlay.style.opacity = '1';
+                loadingOverlay.classList.add('show');
+                loadingOverlay.setAttribute('aria-hidden', 'false');
             }
             
             // دالة لإخفاء loading overlay
@@ -645,18 +644,51 @@ if (!defined('ACCESS_ALLOWED')) {
                     hideTimeout = setTimeout(function() {
                         if (activeRequests <= 0 && loadingOverlay) {
                             loadingOverlay.classList.remove('show');
-                            // إخفاء فوري بعد transition قصير
+                            // إخفاء فوري بعد transition قصير جداً
                             setTimeout(function() {
                                 if (loadingOverlay && activeRequests <= 0 && !isNavigating) {
                                     loadingOverlay.style.display = 'none';
                                     loadingOverlay.style.opacity = '0';
                                     loadingOverlay.setAttribute('aria-hidden', 'true');
                                 }
-                            }, 300); // وقت transition
+                            }, 150); // وقت transition محسّن (150ms بدلاً من 300ms)
                             hideTimeout = null;
                         }
                     }, MIN_DISPLAY_TIME);
                 }
+            }
+            
+            // إخفاء overlay فوراً عند اكتمال تحميل الصفحة
+            let pageLoadHidden = false;
+            function hidePageLoadOverlay() {
+                if (!loadingOverlay || !pageLoadStarted || pageLoadHidden) return;
+                
+                // إخفاء فوري عند اكتمال تحميل الصفحة
+                if (activeRequests <= 0) {
+                    pageLoadHidden = true;
+                    loadingOverlay.classList.remove('show');
+                    setTimeout(function() {
+                        if (loadingOverlay && activeRequests <= 0) {
+                            loadingOverlay.style.display = 'none';
+                            loadingOverlay.style.opacity = '0';
+                            loadingOverlay.setAttribute('aria-hidden', 'true');
+                        }
+                    }, 150);
+                }
+            }
+            
+            // إخفاء عند DOMContentLoaded (أسرع)
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', hidePageLoadOverlay, { once: true });
+            } else {
+                hidePageLoadOverlay();
+            }
+            
+            // إخفاء عند window.load (للتأكد - فقط إذا لم يتم الإخفاء بعد)
+            if (document.readyState !== 'complete') {
+                window.addEventListener('load', hidePageLoadOverlay, { once: true });
+            } else if (!pageLoadHidden) {
+                hidePageLoadOverlay();
             }
             
             // Intercept fetch requests

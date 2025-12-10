@@ -983,7 +983,7 @@ if (ob_get_level() > 0) {
             align-items: center;
             z-index: 99999;
             opacity: 0;
-            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1);
             pointer-events: all;
         }
         
@@ -1133,6 +1133,20 @@ if (ob_get_level() > 0) {
             <div class="loading-subtext">يرجى الانتظار...</div>
         </div>
     </div>
+    <script>
+        // إظهار شاشة التحميل فوراً عند بداية تحميل الصفحة
+        (function() {
+            'use strict';
+            const loadingOverlay = document.getElementById('professionalLoadingOverlay');
+            if (loadingOverlay && document.readyState === 'loading') {
+                // إظهار فوري بدون أي تأخير
+                loadingOverlay.style.display = 'flex';
+                loadingOverlay.style.opacity = '1';
+                loadingOverlay.classList.add('show');
+                loadingOverlay.setAttribute('aria-hidden', 'false');
+            }
+        })();
+    </script>
     <?php endif; ?>
     
     <!-- Service Worker Registration with Auto-Update -->
