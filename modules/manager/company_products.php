@@ -52,6 +52,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         if ($name === '') {
             $error = 'يرجى إدخال اسم المنتج.';
+            // في حالة وجود خطأ في التحقق، إعادة التوجيه مع رسالة الخطأ
+            preventDuplicateSubmission(
+                null,
+                ['page' => 'company_products'],
+                null,
+                'manager',
+                $error
+            );
         } else {
             try {
                 // التأكد من وجود الأعمدة المطلوبة
@@ -94,15 +102,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'تعذر إضافة المنتج الخارجي. يرجى المحاولة لاحقاً.'
                 );
             }
-        } else {
-            // في حالة وجود خطأ في التحقق، إعادة التوجيه مع رسالة الخطأ
-            preventDuplicateSubmission(
-                null,
-                ['page' => 'company_products'],
-                null,
-                'manager',
-                $error
-            );
         }
     } elseif ($action === 'update_external_product') {
         // منع المحاسب من التعديل على المنتجات الخارجية
