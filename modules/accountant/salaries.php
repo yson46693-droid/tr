@@ -1200,8 +1200,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         
                         $settlementId = $db->getLastInsertId();
                         
-                        // ملاحظة: لا يتم تسجيل تسوية الراتب في المصروفات (accountant_transactions)
-                        // لأنها تُسجل فقط في جدول salary_settlements لتجنب التسجيل المزدوج
+                        // تسجيل تسوية الراتب في accountant_transactions كـ expense (مصروف معتمد)
+                        $user = $db->queryOne("SELECT full_name, username FROM users WHERE id = ?", [$salary['user_id']]);
+                        $employeeName = $user['full_name'] ?? $user['username'] ?? 'غير محدد';
+                        $settlementDescription = 'تسوية راتب موظف: ' . $employeeName . 
+                                                 ' (تسوية #' . $settlementId . ' - راتب #' . $salaryId . ')';
+                        $referenceNumber = 'SAL-SETTLE-' . $settlementId . '-' . date('YmdHis');
+                        
+                        // التأكد من وجود جدول accountant_transactions
+                        $accountantTableCheck = $db->queryOne("SHOW TABLES LIKE 'accountant_transactions'");
+                        if (!empty($accountantTableCheck)) {
+                            $db->execute(
+                                "INSERT INTO accountant_transactions 
+                                    (transaction_type, amount, description, reference_number, 
+                                     status, approved_by, created_by, approved_at)
+                                 VALUES (?, ?, ?, ?, 'approved', ?, ?, NOW())",
+                                [
+                                    'expense',
+                                    $settlementAmount,
+                                    $settlementDescription,
+                                    $referenceNumber,
+                                    $currentUser['id'],
+                                    $currentUser['id']
+                                ]
+                            );
+                        }
                         
                         // إنشاء فاتورة PDF
                         require_once __DIR__ . '/../../includes/invoices.php';
