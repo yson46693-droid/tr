@@ -107,6 +107,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // منع المحاسب من التعديل على المنتجات الخارجية
         if ($currentUser['role'] === 'accountant') {
             $error = 'ليس لديك صلاحية لتعديل المنتجات الخارجية.';
+            // في حالة عدم وجود صلاحية، إعادة التوجيه مع رسالة الخطأ
+            preventDuplicateSubmission(
+                null,
+                ['page' => 'company_products'],
+                null,
+                'manager',
+                $error
+            );
         } else {
             $productId = intval($_POST['product_id'] ?? 0);
             $name = trim($_POST['product_name'] ?? '');
@@ -116,6 +124,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if ($productId <= 0 || $name === '') {
                 $error = 'بيانات غير صحيحة.';
+                // في حالة وجود خطأ في التحقق، إعادة التوجيه مع رسالة الخطأ
+                preventDuplicateSubmission(
+                    null,
+                    ['page' => 'company_products'],
+                    null,
+                    'manager',
+                    $error
+                );
             } else {
                 try {
                     $db->execute(
@@ -147,17 +163,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'تعذر تحديث المنتج الخارجي. يرجى المحاولة لاحقاً.'
                     );
                 }
-            } else {
-                // في حالة وجود خطأ في التحقق، إعادة التوجيه مع رسالة الخطأ
-                preventDuplicateSubmission(
-                    null,
-                    ['page' => 'company_products'],
-                    null,
-                    'manager',
-                    $error
-                );
             }
-        } else {
+        }
+    } elseif ($action === 'delete_external_product') {
+        // منع المحاسب من الحذف على المنتجات الخارجية
+        if ($currentUser['role'] === 'accountant') {
+            $error = 'ليس لديك صلاحية لحذف المنتجات الخارجية.';
             // في حالة عدم وجود صلاحية، إعادة التوجيه مع رسالة الخطأ
             preventDuplicateSubmission(
                 null,
@@ -166,16 +177,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'manager',
                 $error
             );
-        }
-    } elseif ($action === 'delete_external_product') {
-        // منع المحاسب من الحذف على المنتجات الخارجية
-        if ($currentUser['role'] === 'accountant') {
-            $error = 'ليس لديك صلاحية لحذف المنتجات الخارجية.';
         } else {
             $productId = intval($_POST['product_id'] ?? 0);
             
             if ($productId <= 0) {
                 $error = 'بيانات غير صحيحة.';
+                // في حالة وجود خطأ في التحقق، إعادة التوجيه مع رسالة الخطأ
+                preventDuplicateSubmission(
+                    null,
+                    ['page' => 'company_products'],
+                    null,
+                    'manager',
+                    $error
+                );
             } else {
                 try {
                     $db->execute(
@@ -202,25 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'تعذر حذف المنتج الخارجي. يرجى المحاولة لاحقاً.'
                     );
                 }
-            } else {
-                // في حالة وجود خطأ في التحقق، إعادة التوجيه مع رسالة الخطأ
-                preventDuplicateSubmission(
-                    null,
-                    ['page' => 'company_products'],
-                    null,
-                    'manager',
-                    $error
-                );
             }
-        } else {
-            // في حالة عدم وجود صلاحية، إعادة التوجيه مع رسالة الخطأ
-            preventDuplicateSubmission(
-                null,
-                ['page' => 'company_products'],
-                null,
-                'manager',
-                $error
-            );
         }
     }
 }
