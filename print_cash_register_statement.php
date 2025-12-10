@@ -1054,7 +1054,18 @@ $statementTime = date('H:i:s');
                         // حساب المدفوع: paid_amount من الفاتورة + مجموع التحصيلات المرتبطة
                         $paidAmountFromInvoice = (float)($invoice['paid_amount'] ?? 0);
                         $collectionsTotal = (float)($invoice['collections_total'] ?? 0);
-                        $totalPaid = (float)($invoice['total_paid'] ?? ($paidAmountFromInvoice + $collectionsTotal));
+                        
+                        // حساب المدفوع يدوياً دائماً لضمان الدقة
+                        // total_paid من الاستعلام قد يكون 0 حتى لو كان هناك مدفوعات
+                        $totalPaid = $paidAmountFromInvoice + $collectionsTotal;
+                        
+                        // إذا كان total_paid من الاستعلام أكبر من الحساب اليدوي، نستخدمه
+                        // (قد يكون هناك مدفوعات إضافية لم تُحسب في collections_total)
+                        $totalPaidFromQuery = (float)($invoice['total_paid'] ?? 0);
+                        if ($totalPaidFromQuery > $totalPaid) {
+                            $totalPaid = $totalPaidFromQuery;
+                        }
+                        
                         $creditUsed = (float)($invoice['credit_used'] ?? 0);
                         $remaining = $totalAmount - $totalPaid - $creditUsed;
                         ?>
