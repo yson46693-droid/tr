@@ -10,9 +10,40 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/audit_log.php';
 
+// التأكد من أن الجلسة نشطة وتحديث الـ cookie قبل أي عملية
+if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
+    $isHttps = (
+        (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+        (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
+    );
+    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+    setcookie(session_name(), session_id(), [
+        'expires' => time() + $sessionLifetime,
+        'path' => '/',
+        'domain' => '',
+        'secure' => $isHttps,
+        'httponly' => true,
+        'samesite' => $isHttps ? 'None' : 'Lax',
+    ]);
+}
+
 requireLogin();
 
 $currentUser = getCurrentUser();
+
+// التحقق من أن المستخدم موجود بالفعل
+if (!$currentUser) {
+    // إعادة التوجيه لصفحة تسجيل الدخول
+    $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+    if (!headers_sent()) {
+        header('Location: ' . $loginUrl);
+        exit;
+    } else {
+        echo '<script>window.location.href = "' . htmlspecialchars($loginUrl) . '";</script>';
+        exit;
+    }
+}
+
 $db = db();
 $passwordMinLength = getPasswordMinLength();
 
@@ -36,6 +67,27 @@ $user = getUserById($currentUser['id']);
 
 // معالجة تحديث البروفايل
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // تحديث وقت آخر نشاط في الجلسة قبل معالجة الطلب
+    $_SESSION['last_activity'] = time();
+    $_SESSION['last_activity_previous'] = time();
+    
+    // تحديث الـ cookie مرة أخرى للتأكد من استمرار الجلسة
+    if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
+        $isHttps = (
+            (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+            (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
+        );
+        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+        setcookie(session_name(), session_id(), [
+            'expires' => time() + $sessionLifetime,
+            'path' => '/',
+            'domain' => '',
+            'secure' => $isHttps,
+            'httponly' => true,
+            'samesite' => $isHttps ? 'None' : 'Lax',
+        ]);
+    }
+    
     $action = $_POST['action'] ?? '';
     
     if ($action === 'update_profile') {
@@ -151,9 +203,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // إعادة تحميل بيانات المستخدم المحدثة من قاعدة البيانات
                     $user = getUserById($currentUser['id']);
                     
-                    // تحديث بيانات الجلسة
+                    // تحديث بيانات الجلسة بشكل كامل
                     $_SESSION['username'] = $user['username'];
-                    $_SESSION['last_activity'] = time(); // تحديث وقت آخر نشاط
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['role'] = $user['role'];
+                    $_SESSION['logged_in'] = true;
+                    $_SESSION['last_activity'] = time();
+                    $_SESSION['last_activity_previous'] = time();
                     
                     // التأكد من تحديث session cookie قبل redirect
                     if (!headers_sent() && session_id()) {
@@ -161,8 +217,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
                             (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
                         );
+                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
                         setcookie(session_name(), session_id(), [
-                            'expires' => time() + SESSION_LIFETIME,
+                            'expires' => time() + $sessionLifetime,
                             'path' => '/',
                             'domain' => '',
                             'secure' => $isHttps,

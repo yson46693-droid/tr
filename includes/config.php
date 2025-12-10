@@ -111,115 +111,46 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     }
 }
 
-// التحقق الأمني: إذا تم مسح session cookie من المتصفح، إلغاء الجلسة
+// التحقق الأمني المبسط: فقط تحديث الجلسة والـ cookie دون إلغاء الجلسة بشكل مفرط
+// الفحوصات الأمنية الصارمة تتم في auth.php عند الحاجة
 if (session_status() === PHP_SESSION_ACTIVE) {
     $sessionName = session_name();
     
-    // إذا لم يكن هناك session cookie في المتصفح
-    if (!isset($_COOKIE[$sessionName])) {
-        // إذا كانت هناك بيانات جلسة تسجيل دخول، فهذا يعني أن الكوكي تم مسحه
-        // يجب إلغاء الجلسة لأسباب أمنية
-        if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-            // تسجيل محاولة وصول غير مصرح بها
-            $userId = $_SESSION['user_id'] ?? 'unknown';
-            error_log("Security: Session cookie missing but session data exists for user ID: {$userId} - Destroying session");
-            
-            session_unset();
-            session_destroy();
-            // إعادة بدء جلسة جديدة نظيفة
-            session_set_cookie_params($sessionCookieOptions);
-            session_start();
-        }
-    } else {
-        // التحقق من أن session ID في cookie يطابق session ID الحالي
-        $cookieSessionId = $_COOKIE[$sessionName];
-        $currentSessionId = session_id();
+    // إذا كان المستخدم مسجل دخول، نحاول تحديث/إصلاح الـ cookie دائماً
+    if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+        // تحديث وقت آخر نشاط
+        $_SESSION['last_activity'] = time();
         
-        if ($cookieSessionId !== $currentSessionId) {
-            // session ID غير متطابق - محاولة تحديث cookie أولاً قبل إلغاء الجلسة
-            // هذا يحدث أحياناً عند redirect أو تحديث الصفحة
-            if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-                // محاولة تحديث cookie أولاً
-                if (!headers_sent()) {
-                    setcookie($sessionName, $currentSessionId, [
-                        'expires' => time() + SESSION_LIFETIME,
-                        'path' => '/',
-                        'domain' => '',
-                        'secure' => $isHttps,
-                        'httponly' => true,
-                        'samesite' => $isHttps ? 'None' : 'Lax',
-                    ]);
-                    
-                    // التحقق مرة أخرى بعد تحديث cookie
-                    // إذا كان المستخدم مسجل دخول وكانت الجلسة صالحة، لا نلغيها
-                    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-                        // الجلسة صالحة - فقط حدثنا cookie
-                        // لا نلغي الجلسة
-                        error_log("Session ID mismatch fixed by updating cookie for user ID: " . ($_SESSION['user_id'] ?? 'unknown'));
-                    } else {
-                        // الجلسة غير صالحة - إلغاءها
-                        $userId = $_SESSION['user_id'] ?? 'unknown';
-                        error_log("Security: Session ID mismatch and invalid session for user ID: {$userId} - Destroying session");
-                        
-                        session_unset();
-                        session_destroy();
-                        session_set_cookie_params($sessionCookieOptions);
-                        session_start();
-                    }
-                } else {
-                    // إذا كانت headers قد أُرسلت، لا نستطيع تحديث cookie
-                    // لكن إذا كانت الجلسة صالحة، نستمر
-                    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-                        // الجلسة صالحة - نستمر
-                        error_log("Session ID mismatch but session is valid (headers sent) for user ID: " . ($_SESSION['user_id'] ?? 'unknown'));
-                    } else {
-                        // الجلسة غير صالحة - إلغاءها
-                        $userId = $_SESSION['user_id'] ?? 'unknown';
-                        error_log("Security: Session ID mismatch and invalid session (headers sent) for user ID: {$userId} - Destroying session");
-                        
-                        session_unset();
-                        session_destroy();
-                        session_set_cookie_params($sessionCookieOptions);
-                        session_start();
-                    }
-                }
-            } else {
-                // المستخدم غير مسجل دخول - إلغاء الجلسة
+        // محاولة تحديث/إنشاء cookie إذا كانت headers لم تُرسل بعد
+        if (!headers_sent()) {
+            setcookie($sessionName, session_id(), [
+                'expires' => time() + SESSION_LIFETIME,
+                'path' => '/',
+                'domain' => '',
+                'secure' => $isHttps,
+                'httponly' => true,
+                'samesite' => $isHttps ? 'None' : 'Lax',
+            ]);
+        }
+        
+        // التحقق من انتهاء الجلسة بناءً على وقت آخر نشاط (فقط إذا كان موجوداً)
+        if (isset($_SESSION['last_activity_previous'])) {
+            $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
+            
+            // إذا مر أكثر من وقت الجلسة (7 أيام) + هامش أمان (1 ساعة)
+            if ($timeSinceActivity > (SESSION_LIFETIME + 3600)) {
+                $userId = $_SESSION['user_id'] ?? 'unknown';
+                error_log("Session expired due to inactivity for user ID: {$userId} (time since activity: {$timeSinceActivity} seconds)");
+                
                 session_unset();
                 session_destroy();
                 session_set_cookie_params($sessionCookieOptions);
                 session_start();
             }
-        } else {
-            // التحقق من وقت آخر نشاط وإلغاء الجلسة إذا انتهت
-            if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-                // تحديث وقت آخر نشاط أولاً (قبل أي فحص)
-                $currentTime = time();
-                $_SESSION['last_activity'] = $currentTime;
-                
-                // التحقق من وقت آخر نشاط فقط إذا كان موجوداً مسبقاً
-                // إذا لم يكن موجوداً، نعتبر أن الجلسة جديدة ونستمر
-                if (isset($_SESSION['last_activity_previous'])) {
-                    $lastActivity = $_SESSION['last_activity_previous'];
-                    $timeSinceActivity = $currentTime - $lastActivity;
-                    
-                    // إذا مر أكثر من وقت الجلسة (7 أيام)، إلغاء الجلسة
-                    // لكن نعطي هامش 5 دقائق لتجنب إلغاء الجلسة بسبب تأخير بسيط
-                    if ($timeSinceActivity > (SESSION_LIFETIME + 300)) {
-                        $userId = $_SESSION['user_id'] ?? 'unknown';
-                        error_log("Session expired due to inactivity for user ID: {$userId} (time since activity: {$timeSinceActivity} seconds)");
-                        
-                        session_unset();
-                        session_destroy();
-                        session_set_cookie_params($sessionCookieOptions);
-                        session_start();
-                    }
-                }
-                
-                // حفظ وقت آخر نشاط الحالي للفحص في الطلب التالي
-                $_SESSION['last_activity_previous'] = $currentTime;
-            }
         }
+        
+        // حفظ وقت آخر نشاط الحالي للفحص في الطلب التالي
+        $_SESSION['last_activity_previous'] = time();
     }
 }
 
