@@ -90,28 +90,80 @@ function logAutoSalaryInitCall($db, $status, $reason = null, $createdCount = 0, 
 }
 
 /**
+ * الحصول على مسار ملف lock
+ */
+function getAutoSalaryInitLockFile() {
+    $lockDir = sys_get_temp_dir();
+    $lockFile = $lockDir . DIRECTORY_SEPARATOR . 'auto_salary_init_' . date('Y-m-d') . '.lock';
+    return $lockFile;
+}
+
+/**
+ * محاولة الحصول على lock للتنفيذ
+ * @return resource|false ملف lock أو false إذا فشل
+ */
+function acquireAutoSalaryInitLock() {
+    $lockFile = getAutoSalaryInitLockFile();
+    $fp = @fopen($lockFile, 'c+');
+    
+    if (!$fp) {
+        return false;
+    }
+    
+    // محاولة الحصول على lock غير متزامن (non-blocking)
+    if (!flock($fp, LOCK_EX | LOCK_NB)) {
+        fclose($fp);
+        return false;
+    }
+    
+    return $fp;
+}
+
+/**
+ * إطلاق lock
+ */
+function releaseAutoSalaryInitLock($fp) {
+    if ($fp && is_resource($fp)) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+    }
+}
+
+/**
  * التحقق من أن auto_salary_init تم استدعاؤه اليوم بالفعل
+ * يستخدم SELECT FOR UPDATE مع transaction لمنع race condition
  */
 function wasAutoSalaryInitCalledToday($db) {
     try {
         ensureAutoSalaryInitLogsTable($db);
         
-        // التحقق من وجود استدعاء ناجح اليوم
-        // استخدام CURDATE() للمقارنة مع DATE() للكفاءة
-        $todayCall = $db->queryOne(
-            "SELECT id, status, call_time 
-             FROM auto_salary_init_logs 
-             WHERE DATE(call_time) = CURDATE() 
-             AND status = 'executed'
-             ORDER BY call_time DESC 
-             LIMIT 1"
-        );
+        // استخدام transaction مع SELECT FOR UPDATE لمنع race condition
+        $conn = $db->getConnection();
+        $conn->begin_transaction();
         
-        if (!empty($todayCall)) {
-            return true;
+        try {
+            // التحقق من وجود استدعاء ناجح اليوم مع lock
+            $todayCall = $db->queryOne(
+                "SELECT id, status, call_time 
+                 FROM auto_salary_init_logs 
+                 WHERE DATE(call_time) = CURDATE() 
+                 AND status = 'executed'
+                 ORDER BY call_time DESC 
+                 LIMIT 1
+                 FOR UPDATE"
+            );
+            
+            $conn->commit();
+            
+            if (!empty($todayCall)) {
+                return true;
+            }
+            
+            return false;
+        } catch (Exception $e) {
+            $conn->rollback();
+            throw $e;
         }
-        
-        return false;
     } catch (Exception $e) {
         error_log("auto_salary_init: Error checking today's calls: " . $e->getMessage());
         return false;
@@ -147,48 +199,69 @@ function initializeMonthSalaries() {
     
     try {
         $db = db();
+        $conn = $db->getConnection();
         
-        // التحقق من أن auto_salary_init تم استدعاؤه اليوم بالفعل
-        if (wasAutoSalaryInitCalledToday($db)) {
-            logAutoSalaryInitCall($db, 'skipped', 'تم استدعاؤه اليوم بالفعل', 0, 0, 0, $currentMonth, $currentYear);
-            return ['success' => true, 'message' => 'Already executed today', 'created' => 0, 'skipped' => true];
-        }
+        // استخدام transaction مع SELECT FOR UPDATE لمنع race condition
+        $conn->begin_transaction();
         
-        // مفتاح الجلسة لمنع التكرار
-        $sessionKey = "auto_salaries_initialized_{$currentYear}_{$currentMonth}";
-        
-        // التحقق من أن العملية لم تتم من قبل في هذه الجلسة
-        if (isset($_SESSION[$sessionKey]) && $_SESSION[$sessionKey] === true) {
-            logAutoSalaryInitCall($db, 'skipped', 'تم استدعاؤه في هذه الجلسة', 0, 0, 0, $currentMonth, $currentYear);
-            return ['success' => true, 'message' => 'Already initialized this session', 'created' => 0, 'skipped' => true];
-        }
-        
-        // التحقق من وجود جدول salaries
-        $tableCheck = $db->queryOne("SHOW TABLES LIKE 'salaries'");
-        if (empty($tableCheck)) {
-            error_log("auto_salary_init: salaries table does not exist");
-            return ['success' => false, 'message' => 'Salaries table not found', 'created' => 0];
-        }
-        
-        // التحقق من وجود علامة في قاعدة البيانات لهذا الشهر
-        // نستخدم جدول system_settings لتخزين حالة التهيئة
-        $settingKey = "salaries_initialized_{$currentYear}_{$currentMonth}";
-        
-        // التحقق من وجود جدول system_settings
-        $settingsTableCheck = $db->queryOne("SHOW TABLES LIKE 'system_settings'");
-        if (!empty($settingsTableCheck)) {
-            $existingSetting = $db->queryOne(
-                "SELECT `value` FROM system_settings WHERE `key` = ?",
-                [$settingKey]
+        try {
+            // التحقق من أن auto_salary_init تم استدعاؤه اليوم بالفعل مع lock
+            $todayCall = $db->queryOne(
+                "SELECT id, status, call_time 
+                 FROM auto_salary_init_logs 
+                 WHERE DATE(call_time) = CURDATE() 
+                 AND status = 'executed'
+                 ORDER BY call_time DESC 
+                 LIMIT 1
+                 FOR UPDATE"
             );
             
-            if (!empty($existingSetting) && $existingSetting['value'] === '1') {
-                // تم التهيئة من قبل لهذا الشهر
-                $_SESSION[$sessionKey] = true;
-                logAutoSalaryInitCall($db, 'skipped', 'تم تهيئة هذا الشهر من قبل', 0, 0, 0, $currentMonth, $currentYear);
-                return ['success' => true, 'message' => 'Already initialized this month', 'created' => 0, 'skipped' => true];
+            if (!empty($todayCall)) {
+                $conn->commit();
+                logAutoSalaryInitCall($db, 'skipped', 'تم استدعاؤه اليوم بالفعل', 0, 0, 0, $currentMonth, $currentYear);
+                return ['success' => true, 'message' => 'Already executed today', 'created' => 0, 'skipped' => true];
             }
-        }
+            
+            // مفتاح الجلسة لمنع التكرار
+            $sessionKey = "auto_salaries_initialized_{$currentYear}_{$currentMonth}";
+            
+            // التحقق من أن العملية لم تتم من قبل في هذه الجلسة
+            if (isset($_SESSION[$sessionKey]) && $_SESSION[$sessionKey] === true) {
+                $conn->commit();
+                logAutoSalaryInitCall($db, 'skipped', 'تم استدعاؤه في هذه الجلسة', 0, 0, 0, $currentMonth, $currentYear);
+                return ['success' => true, 'message' => 'Already initialized this session', 'created' => 0, 'skipped' => true];
+            }
+            
+            // نستمر في transaction للتنفيذ
+            
+            // التحقق من وجود جدول salaries
+            $tableCheck = $db->queryOne("SHOW TABLES LIKE 'salaries'");
+            if (empty($tableCheck)) {
+                $conn->rollback();
+                error_log("auto_salary_init: salaries table does not exist");
+                return ['success' => false, 'message' => 'Salaries table not found', 'created' => 0];
+            }
+            
+            // التحقق من وجود علامة في قاعدة البيانات لهذا الشهر
+            // نستخدم جدول system_settings لتخزين حالة التهيئة
+            $settingKey = "salaries_initialized_{$currentYear}_{$currentMonth}";
+            
+            // التحقق من وجود جدول system_settings
+            $settingsTableCheck = $db->queryOne("SHOW TABLES LIKE 'system_settings'");
+            if (!empty($settingsTableCheck)) {
+                $existingSetting = $db->queryOne(
+                    "SELECT `value` FROM system_settings WHERE `key` = ?",
+                    [$settingKey]
+                );
+                
+                if (!empty($existingSetting) && $existingSetting['value'] === '1') {
+                    // تم التهيئة من قبل لهذا الشهر
+                    $conn->commit();
+                    $_SESSION[$sessionKey] = true;
+                    logAutoSalaryInitCall($db, 'skipped', 'تم تهيئة هذا الشهر من قبل', 0, 0, 0, $currentMonth, $currentYear);
+                    return ['success' => true, 'message' => 'Already initialized this month', 'created' => 0, 'skipped' => true];
+                }
+            }
         
         // التحقق من نوع عمود month
         $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
@@ -199,46 +272,48 @@ function initializeMonthSalaries() {
         $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
         $hasYearColumn = !empty($yearColumnCheck);
         
-        // إعداد التاريخ الصحيح
-        $targetDate = sprintf('%04d-%02d-01', $currentYear, $currentMonth);
-        $targetYearMonth = sprintf('%04d-%02d', $currentYear, $currentMonth);
-        
-        error_log("auto_salary_init: Starting initialization for {$currentMonth}/{$currentYear} (targetDate: {$targetDate}, isMonthDate: " . ($isMonthDate ? 'true' : 'false') . ")");
-        
-        // الحصول على قائمة الموظفين النشطين (باستثناء المديرين)
-        $users = $db->query(
-            "SELECT id, full_name, username, hourly_rate, role 
-             FROM users 
-             WHERE status = 'active' 
-             AND role != 'manager' 
-             AND hourly_rate > 0
-             ORDER BY role, full_name"
-        );
-        
-        if (empty($users)) {
-            error_log("auto_salary_init: No active users found with hourly_rate > 0");
-            $_SESSION[$sessionKey] = true;
-            logAutoSalaryInitCall($db, 'skipped', 'لا يوجد مستخدمين نشطين للعملية', 0, 0, 0, $currentMonth, $currentYear);
-            return ['success' => true, 'message' => 'No users to process', 'created' => 0];
-        }
-        
-        // تحميل salary_calculator إذا لم يكن محملاً
-        if (!function_exists('createOrUpdateSalary')) {
-            $salaryCalcPath = __DIR__ . '/salary_calculator.php';
-            if (file_exists($salaryCalcPath)) {
-                require_once $salaryCalcPath;
-            } else {
-                error_log("auto_salary_init: salary_calculator.php not found");
-                return ['success' => false, 'message' => 'Salary calculator not found', 'created' => 0];
+            // إعداد التاريخ الصحيح
+            $targetDate = sprintf('%04d-%02d-01', $currentYear, $currentMonth);
+            $targetYearMonth = sprintf('%04d-%02d', $currentYear, $currentMonth);
+            
+            error_log("auto_salary_init: Starting initialization for {$currentMonth}/{$currentYear} (targetDate: {$targetDate}, isMonthDate: " . ($isMonthDate ? 'true' : 'false') . ")");
+            
+            // الحصول على قائمة الموظفين النشطين (باستثناء المديرين)
+            $users = $db->query(
+                "SELECT id, full_name, username, hourly_rate, role 
+                 FROM users 
+                 WHERE status = 'active' 
+                 AND role != 'manager' 
+                 AND hourly_rate > 0
+                 ORDER BY role, full_name"
+            );
+            
+            if (empty($users)) {
+                $conn->commit();
+                error_log("auto_salary_init: No active users found with hourly_rate > 0");
+                $_SESSION[$sessionKey] = true;
+                logAutoSalaryInitCall($db, 'skipped', 'لا يوجد مستخدمين نشطين للعملية', 0, 0, 0, $currentMonth, $currentYear);
+                return ['success' => true, 'message' => 'No users to process', 'created' => 0];
             }
-        }
         
-        $createdCount = 0;
-        $skippedCount = 0;
-        $errorCount = 0;
-        $totalUsers = count($users);
-        
-        foreach ($users as $user) {
+            // تحميل salary_calculator إذا لم يكن محملاً
+            if (!function_exists('createOrUpdateSalary')) {
+                $salaryCalcPath = __DIR__ . '/salary_calculator.php';
+                if (file_exists($salaryCalcPath)) {
+                    require_once $salaryCalcPath;
+                } else {
+                    $conn->rollback();
+                    error_log("auto_salary_init: salary_calculator.php not found");
+                    return ['success' => false, 'message' => 'Salary calculator not found', 'created' => 0];
+                }
+            }
+            
+            $createdCount = 0;
+            $skippedCount = 0;
+            $errorCount = 0;
+            $totalUsers = count($users);
+            
+            foreach ($users as $user) {
             $userId = intval($user['id']);
             $hourlyRate = floatval($user['hourly_rate'] ?? 0);
             $userName = $user['full_name'] ?? $user['username'] ?? "User {$userId}";
@@ -305,40 +380,48 @@ function initializeMonthSalaries() {
             }
         }
         
-        // تسجيل ملخص العملية
-        error_log("auto_salary_init: Summary - Created: {$createdCount}, Skipped: {$skippedCount}, Errors: {$errorCount}, Total: {$totalUsers}");
-        
-        // تسجيل علامة التهيئة في قاعدة البيانات
-        if (!empty($settingsTableCheck)) {
-            try {
-                $db->execute(
-                    "INSERT INTO system_settings (`key`, `value`, updated_at) VALUES (?, '1', NOW())
-                     ON DUPLICATE KEY UPDATE `value` = '1', updated_at = NOW()",
-                    [$settingKey]
-                );
-            } catch (Exception $e) {
-                error_log("auto_salary_init: Failed to save setting: " . $e->getMessage());
+            // تسجيل ملخص العملية
+            error_log("auto_salary_init: Summary - Created: {$createdCount}, Skipped: {$skippedCount}, Errors: {$errorCount}, Total: {$totalUsers}");
+            
+            // تسجيل علامة التهيئة في قاعدة البيانات
+            if (!empty($settingsTableCheck)) {
+                try {
+                    $db->execute(
+                        "INSERT INTO system_settings (`key`, `value`, updated_at) VALUES (?, '1', NOW())
+                         ON DUPLICATE KEY UPDATE `value` = '1', updated_at = NOW()",
+                        [$settingKey]
+                    );
+                } catch (Exception $e) {
+                    error_log("auto_salary_init: Failed to save setting: " . $e->getMessage());
+                }
             }
+            
+            // تسجيل علامة الجلسة
+            $_SESSION[$sessionKey] = true;
+            
+            // تسجيل الاستدعاء الناجح في قاعدة البيانات
+            $status = ($errorCount > 0) ? 'error' : 'executed';
+            $reason = ($errorCount > 0) ? "تم التنفيذ مع {$errorCount} أخطاء" : 'تم التنفيذ بنجاح';
+            logAutoSalaryInitCall($db, $status, $reason, $createdCount, $skippedCount, $errorCount, $currentMonth, $currentYear);
+            
+            // إتمام transaction
+            $conn->commit();
+            
+            return [
+                'success' => true,
+                'message' => "تم إنشاء {$createdCount} راتب للشهر الحالي",
+                'created' => $createdCount,
+                'skipped' => $skippedCount,
+                'errors' => $errorCount,
+                'total' => $totalUsers,
+                'month' => $currentMonth,
+                'year' => $currentYear
+            ];
+            
+        } catch (Exception $e) {
+            $conn->rollback();
+            throw $e;
         }
-        
-        // تسجيل علامة الجلسة
-        $_SESSION[$sessionKey] = true;
-        
-        // تسجيل الاستدعاء الناجح في قاعدة البيانات
-        $status = ($errorCount > 0) ? 'error' : 'executed';
-        $reason = ($errorCount > 0) ? "تم التنفيذ مع {$errorCount} أخطاء" : 'تم التنفيذ بنجاح';
-        logAutoSalaryInitCall($db, $status, $reason, $createdCount, $skippedCount, $errorCount, $currentMonth, $currentYear);
-        
-        return [
-            'success' => true,
-            'message' => "تم إنشاء {$createdCount} راتب للشهر الحالي",
-            'created' => $createdCount,
-            'skipped' => $skippedCount,
-            'errors' => $errorCount,
-            'total' => $totalUsers,
-            'month' => $currentMonth,
-            'year' => $currentYear
-        ];
         
     } catch (Exception $e) {
         error_log("auto_salary_init: Critical error: " . $e->getMessage());
@@ -377,12 +460,35 @@ function runAutoSalaryInit() {
         return;
     }
     
+    $lockFile = null;
+    
     try {
+        // محاولة الحصول على lock لمنع التنفيذ المتزامن
+        $lockFile = acquireAutoSalaryInitLock();
+        
+        if (!$lockFile) {
+            // لا يمكن الحصول على lock - يعني أن هناك عملية أخرى قيد التنفيذ
+            // نتحقق من قاعدة البيانات للتأكد
+            $db = db();
+            if (wasAutoSalaryInitCalledToday($db)) {
+                // تم التنفيذ اليوم بالفعل
+                return;
+            }
+            // إذا لم يتم التنفيذ، ننتظر قليلاً ثم نحاول مرة أخرى
+            usleep(100000); // 100ms
+            $lockFile = acquireAutoSalaryInitLock();
+            if (!$lockFile) {
+                // لا يزال لا يمكن الحصول على lock - نتخطى
+                return;
+            }
+        }
+        
         $db = db();
         
-        // التحقق من أن auto_salary_init تم استدعاؤه اليوم بالفعل (فحص أولي سريع)
+        // التحقق مرة أخرى من قاعدة البيانات بعد الحصول على lock
         if (wasAutoSalaryInitCalledToday($db)) {
-            // لا نكتب log هنا لأن initializeMonthSalaries سيكتبه
+            // تم التنفيذ اليوم بالفعل
+            releaseAutoSalaryInitLock($lockFile);
             return;
         }
         
@@ -399,8 +505,14 @@ function runAutoSalaryInit() {
         } else {
             error_log("auto_salary_init: Result - " . json_encode($result));
         }
+        
     } catch (Exception $e) {
         error_log("auto_salary_init: Error in runAutoSalaryInit: " . $e->getMessage());
+    } finally {
+        // إطلاق lock في جميع الحالات
+        if ($lockFile) {
+            releaseAutoSalaryInitLock($lockFile);
+        }
     }
 }
 
