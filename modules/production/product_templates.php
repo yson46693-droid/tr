@@ -1903,7 +1903,7 @@ if (file_exists($specificationsModulePath)) {
 
 <!-- Modal إنشاء قالب جديد -->
 <div class="modal fade" id="createTemplateModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إنشاء قالب منتج جديد</h5>
@@ -2006,7 +2006,7 @@ if (file_exists($specificationsModulePath)) {
 
 <!-- Modal تعديل قالب -->
 <div class="modal fade" id="editTemplateModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>تعديل قالب منتج</h5>

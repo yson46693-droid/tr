@@ -3991,7 +3991,7 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
 
 <!-- Modal تفاصيل الراتب -->
 <div class="modal fade" id="salaryDetailsModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
                 <h5 class="modal-title">تفاصيل الراتب</h5>
@@ -5256,7 +5256,7 @@ function printSalaryStatement() {
 
 <!-- Modal تسوية مستحقات الموظف -->
 <div class="modal fade" id="settleSalaryModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title"><i class="bi bi-cash-coin me-2"></i>تسوية مستحقات موظف</h5>
