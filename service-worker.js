@@ -329,18 +329,24 @@ self.addEventListener('fetch', event => {
           return response;
         } catch (error) {
           // في حالة الخطأ، إرجاع response خطأ JSON بدلاً من offline.html
-          return new Response(JSON.stringify({
-            success: false,
-            error: 'لا يوجد اتصال بالشبكة',
-            message: 'لا يوجد اتصال بالإنترنت. يرجى التحقق من الاتصال والمحاولة مرة أخرى.'
-          }), {
-            status: 503,
-            statusText: 'Service Unavailable',
-            headers: { 
-              'Content-Type': 'application/json; charset=utf-8',
-              'Cache-Control': 'no-store'
-            }
-          });
+          // لكن فقط إذا كان الطلب فعلاً فشل (network error)
+          // إذا كان هناك خطأ آخر، نتركه يمر للكود الأصلي
+          if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+            return new Response(JSON.stringify({
+              success: false,
+              error: 'لا يوجد اتصال بالشبكة',
+              message: 'لا يوجد اتصال بالإنترنت. يرجى التحقق من الاتصال والمحاولة مرة أخرى.'
+            }), {
+              status: 503,
+              statusText: 'Service Unavailable',
+              headers: { 
+                'Content-Type': 'application/json; charset=utf-8',
+                'Cache-Control': 'no-store'
+              }
+            });
+          }
+          // إذا كان خطأ آخر، نعيده للكود الأصلي
+          throw error;
         }
       }
       

@@ -6579,12 +6579,41 @@ document.addEventListener('DOMContentLoaded', function () {
                     cache: 'no-store'
                 });
                 
+                // Check if response is OK first
+                if (!response.ok) {
+                    // If response is not OK, check if it's a service unavailable (503) from service worker
+                    if (response.status === 503) {
+                        try {
+                            const errorData = await response.json();
+                            if (errorData && errorData.message) {
+                                throw new Error(errorData.message);
+                            }
+                        } catch (e) {
+                            // If not JSON, might be offline.html
+                            const text = await response.text();
+                            if (text.includes('لا يوجد اتصال بالإنترنت') || text.includes('offline')) {
+                                throw new Error('لا يوجد اتصال بالإنترنت. يرجى التحقق من الاتصال والمحاولة مرة أخرى.');
+                            }
+                        }
+                    }
+                    throw new Error(`فشل الطلب: ${response.status} ${response.statusText}`);
+                }
+                
                 // Check if response is JSON before parsing
                 const contentType = response.headers.get('content-type') || '';
                 let data;
                 
                 if (contentType.includes('application/json')) {
-                    data = await response.json();
+                    try {
+                        data = await response.json();
+                    } catch (parseError) {
+                        // If JSON parsing fails, might be HTML response
+                        const text = await response.text();
+                        if (text.includes('لا يوجد اتصال بالإنترنت') || text.includes('offline')) {
+                            throw new Error('لا يوجد اتصال بالإنترنت. يرجى التحقق من الاتصال والمحاولة مرة أخرى.');
+                        }
+                        throw new Error('استجابة غير صحيحة من الخادم. يرجى المحاولة مرة أخرى.');
+                    }
                 } else {
                     // If not JSON, might be offline.html or other HTML
                     const text = await response.text();
