@@ -1490,33 +1490,51 @@ function applyReturnSalaryDeduction(int $returnId, ?int $salesRepId = null, ?int
             $hourlyRate = (float)($hourlyRateStr ?: 0);
         }
         
-        // التحقق من وجود سجل راتب موجود
-        if ($hasYearColumn) {
+        // التحقق من وجود سجل راتب موجود - استخدام نفس طريقة البحث المستخدمة في approval_system.php
+        $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+        $monthType = $monthColumnCheck['Type'] ?? '';
+        $isMonthDate = stripos($monthType, 'date') !== false;
+        
+        $existingSalary = null;
+        if ($isMonthDate) {
+            $targetYearMonth = sprintf('%04d-%02d', $year, $month);
+            $whereClause = "user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ? AND month != '0000-00-00' AND month IS NOT NULL";
+            $params = [$salesRepId, $targetYearMonth];
+            if ($hasYearColumn) {
+                $whereClause .= " AND year = ? AND year > 0";
+                $params[] = $year;
+            }
             $existingSalary = $db->queryOne(
-                "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ?",
+                "SELECT id FROM salaries WHERE {$whereClause} LIMIT 1",
+                $params
+            );
+        } elseif ($hasYearColumn) {
+            $existingSalary = $db->queryOne(
+                "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? AND month > 0 AND year > 0 LIMIT 1",
                 [$salesRepId, $month, $year]
             );
         } else {
-            $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'month'");
-            $monthType = $monthColumnCheck['Type'] ?? '';
-            if (stripos($monthType, 'date') !== false) {
-                $targetDate = sprintf('%04d-%02d-01', $year, $month);
-                $existingSalary = $db->queryOne(
-                    "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ?",
-                    [$salesRepId, sprintf('%04d-%02d', $year, $month)]
-                );
-            } else {
-                $existingSalary = $db->queryOne(
-                    "SELECT id FROM salaries WHERE user_id = ? AND month = ?",
-                    [$salesRepId, $month]
-                );
-            }
+            $existingSalary = $db->queryOne(
+                "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND month > 0 LIMIT 1",
+                [$salesRepId, $month]
+            );
         }
+        
+        error_log("applyReturnSalaryDeduction: Searching for existing salary - Sales Rep ID: {$salesRepId}, Month: {$month}, Year: {$year}, Found: " . ($existingSalary ? "ID: {$existingSalary['id']}" : "NOT FOUND"));
         
         if ($existingSalary) {
             $salaryId = (int)$existingSalary['id'];
-            error_log("Found existing salary record with ID: {$salaryId}");
+            error_log("applyReturnSalaryDeduction: Found existing salary record with ID: {$salaryId}");
         } else {
+            // محاولة استخدام getSalarySummary للبحث عن الراتب الموجود
+            error_log("applyReturnSalaryDeduction: Salary not found in direct query, trying getSalarySummary - Sales Rep ID: {$salesRepId}, Month: {$month}, Year: {$year}");
+            require_once __DIR__ . '/salary_calculator.php';
+            $summary = getSalarySummary($salesRepId, $month, $year);
+            
+            if ($summary['exists'] && !empty($summary['salary']['id'])) {
+                $salaryId = (int)$summary['salary']['id'];
+                error_log("applyReturnSalaryDeduction: Found existing salary using getSalarySummary - ID: {$salaryId}");
+            } else {
                 // التحقق من صحة الشهر والسنة قبل الإنشاء - حماية من التواريخ الصفرية
                 if ($month < 1 || $month > 12 || $year < 2000 || $year > 2100) {
                     error_log("Skipping salary creation for sales rep {$salesRepId}: Invalid month ({$month}) or year ({$year})");
@@ -1525,6 +1543,8 @@ function applyReturnSalaryDeduction(int $returnId, ?int $salesRepId = null, ?int
                         'message' => 'تاريخ الراتب غير صالح. الشهر: ' . $month . ', السنة: ' . $year
                     ];
                 }
+                
+                error_log("applyReturnSalaryDeduction: No existing salary found, creating new one - Sales Rep ID: {$salesRepId}, Month: {$month}, Year: {$year}");
                 
                 // إنشاء سجل راتب جديد مع قيم افتراضية
                 $totalHours = 0;
