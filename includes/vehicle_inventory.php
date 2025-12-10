@@ -2115,16 +2115,20 @@ function executeWarehouseTransferDirectly($transferId, $executedBy = null) {
                     throw new Exception($message);
                 }
             } else {
-                $currentProduct = $db->queryOne(
-                    "SELECT quantity, warehouse_id FROM products WHERE id = ?",
-                    [$item['product_id']]
-                );
-                
-                if ($currentProduct) {
-                    $db->execute(
-                        "UPDATE products SET quantity = quantity + ?, warehouse_id = ? WHERE id = ?",
-                        [$requestedQuantity, $transfer['to_warehouse_id'], $item['product_id']]
+                // تحديث products.quantity فقط للمنتجات الخارجية (بدون batch_id)
+                // المنتجات المصنعة (مع batch_id) يتم تحديثها في finished_products فقط
+                if (!$batchId) {
+                    $currentProduct = $db->queryOne(
+                        "SELECT quantity, warehouse_id FROM products WHERE id = ?",
+                        [$item['product_id']]
                     );
+                    
+                    if ($currentProduct) {
+                        $db->execute(
+                            "UPDATE products SET quantity = quantity + ?, warehouse_id = ? WHERE id = ?",
+                            [$requestedQuantity, $transfer['to_warehouse_id'], $item['product_id']]
+                        );
+                    }
                 }
 
                 if ($batchId && ($toWarehouse['warehouse_type'] ?? '') === 'main') {
