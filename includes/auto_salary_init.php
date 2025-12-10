@@ -30,30 +30,65 @@ if (!isset($GLOBALS[$cacheKey])) {
         
         $db = db();
         
-        // التحقق من وجود جدول السجلات
+        // التحقق من وجود جدول السجلات وإنشاؤه إذا لم يكن موجوداً
         $tableExists = $db->queryOne("SHOW TABLES LIKE 'auto_salary_init_logs'");
         
-        if (!empty($tableExists)) {
-            // فحص سريع: هل تم التنفيذ اليوم؟
-            $todayExecution = $db->queryOne(
-                "SELECT id FROM auto_salary_init_logs 
-                 WHERE DATE(call_time) = CURDATE() 
-                 AND status = 'executed'
-                 LIMIT 1"
-            );
-            
-            $GLOBALS[$cacheKey] = !empty($todayExecution);
+        if (empty($tableExists)) {
+            // إنشاء الجدول إذا لم يكن موجوداً
+            try {
+                $db->execute("
+                    CREATE TABLE IF NOT EXISTS `auto_salary_init_logs` (
+                      `id` int(11) NOT NULL AUTO_INCREMENT,
+                      `call_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                      `user_id` int(11) DEFAULT NULL,
+                      `status` enum('executed','skipped','error') NOT NULL DEFAULT 'skipped',
+                      `reason` varchar(255) DEFAULT NULL,
+                      `created_count` int(11) DEFAULT 0,
+                      `skipped_count` int(11) DEFAULT 0,
+                      `error_count` int(11) DEFAULT 0,
+                      `month` int(2) DEFAULT NULL,
+                      `year` int(4) DEFAULT NULL,
+                      `ip_address` varchar(45) DEFAULT NULL,
+                      `request_uri` varchar(500) DEFAULT NULL,
+                      PRIMARY KEY (`id`),
+                      KEY `call_time` (`call_time`),
+                      KEY `user_id` (`user_id`),
+                      KEY `status` (`status`),
+                      KEY `month_year` (`month`, `year`),
+                      KEY `status_date` (`status`, `call_time`)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ");
+                error_log("auto_salary_init: Created auto_salary_init_logs table");
+            } catch (Exception $e) {
+                error_log("auto_salary_init: Failed to create table: " . $e->getMessage());
+            }
+        }
+        
+        // فحص سريع: هل تم التنفيذ اليوم؟
+        $todayExecution = $db->queryOne(
+            "SELECT id FROM auto_salary_init_logs 
+             WHERE DATE(call_time) = CURDATE() 
+             AND status = 'executed'
+             LIMIT 1"
+        );
+        
+        $GLOBALS[$cacheKey] = !empty($todayExecution);
+        
+        // Log للتحقق
+        if ($GLOBALS[$cacheKey]) {
+            error_log("auto_salary_init: Found execution for today - skipping all further execution");
         } else {
-            $GLOBALS[$cacheKey] = false;
+            error_log("auto_salary_init: No execution found for today - will proceed");
         }
     } catch (Exception $e) {
         // في حالة الخطأ، نعتبر أنه لم يتم التنفيذ
         $GLOBALS[$cacheKey] = false;
+        error_log("auto_salary_init: Error checking today's execution: " . $e->getMessage());
     }
 }
 
 // إذا تم التنفيذ اليوم، إيقاف التنفيذ فوراً بدون أي عمليات أخرى
-if ($GLOBALS[$cacheKey] === true) {
+if (isset($GLOBALS[$cacheKey]) && $GLOBALS[$cacheKey] === true) {
     // تم التنفيذ اليوم بالفعل - إيقاف فوري
     return;
 }
@@ -572,7 +607,20 @@ function runAutoSalaryInit() {
 
 // تنفيذ التهيئة التلقائية عند تحميل الملف
 // فقط إذا لم يتم التنفيذ من قبل في هذا الطلب
+// والفحص الأولي لم يمنع التنفيذ (لم يتم التنفيذ اليوم)
 if (empty($GLOBALS['auto_salary_init_executed'])) {
-    runAutoSalaryInit();
+    // التأكد من أن الفحص الأولي لم يمنع التنفيذ
+    $today = date('Y-m-d');
+    $cacheKey = 'auto_salary_init_today_check_' . $today;
+    
+    // إذا لم يتم التنفيذ اليوم، نستمر في التنفيذ
+    if (!isset($GLOBALS[$cacheKey]) || $GLOBALS[$cacheKey] !== true) {
+        error_log("auto_salary_init: Calling runAutoSalaryInit() - not executed today yet");
+        runAutoSalaryInit();
+    } else {
+        error_log("auto_salary_init: Skipping runAutoSalaryInit() - already executed today");
+    }
+} else {
+    error_log("auto_salary_init: Skipping runAutoSalaryInit() - already executed in this request");
 }
 
