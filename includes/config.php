@@ -172,7 +172,7 @@ if (session_status() === PHP_SESSION_ACTIVE) {
 }
 
 // إعدادات الأمان
-define('PASSWORD_MIN_LENGTH', 4);
+define('PASSWORD_MIN_LENGTH', 6);
 define('CSRF_TOKEN_NAME', 'csrf_token');
 define('REQUEST_USAGE_MONITOR_ENABLED', true);
 define('REQUEST_USAGE_THRESHOLD_PER_USER', 4000); // الحد اليومي لكل مستخدم قبل إنشاء تنبيه

@@ -2083,71 +2083,37 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1' && $salaryId > 0) {
         $completedHours = calculateCompletedMonthlyHours($userId, $salaryMonth, $salaryYear);
         $baseAmount = round($completedHours * $hourlyRate, 2);
         
-        // حساب نسبة التحصيلات للمندوبين (مطابق لبطاقة الموظف)
-        // يجب أن تُحسب نسبة التحصيلات على رصيد الخزنة الإجمالي (مطابق لصفحة خزنة المندوب)
-        // وليس على calculateSalesCollections التي تحسب فقط المبالغ التي تُحسب فيها نسبة 2%
+        // حساب نسبة التحصيلات للمندوبين الخاصة بالشهر المحدد فقط
+        // يجب أن تُحسب نسبة التحصيلات من التحصيلات الخاصة بالشهر المحدد فقط (وليس من رصيد الخزنة الإجمالي)
         $collectionsBonus = cleanFinancialValue($salary['collections_bonus'] ?? 0);
         $collectionsAmount = cleanFinancialValue($salary['collections_amount'] ?? 0);
         
-        // متغير لعرض رصيد الخزنة الإجمالي الحالي في بطاقة الموظف (مطابق لصفحة خزنة المندوب)
+        // متغير لعرض مبلغ التحصيلات الخاص بالشهر المحدد
         $displayCashBalance = 0.0;
         
         if ($userRole === 'sales') {
-            // استخدام رصيد الخزنة الإجمالي الفعلي للمندوب (مطابق لصفحة خزنة المندوب)
-            // رصيد الخزنة الإجمالي = التحصيلات + المبيعات المدفوعة بالكامل + الإضافات المباشرة - المبالغ المحصلة من المندوب
-            require_once __DIR__ . '/../../includes/approval_system.php';
+            // حساب نسبة التحصيلات من التحصيلات الخاصة بالشهر المحدد فقط
+            // استخدام calculateSalesCollections التي تحسب التحصيلات الخاصة بالشهر والسنة المحددين
+            $recalculatedCollectionsAmount = calculateSalesCollections($userId, $salaryMonth, $salaryYear);
+            $recalculatedCollectionsBonus = round($recalculatedCollectionsAmount * 0.02, 2);
+            $displayCashBalance = cleanFinancialValue($recalculatedCollectionsAmount);
             
-            // حساب رصيد الخزنة الإجمالي الحالي للعرض دائماً (مطابق لصفحة خزنة المندوب)
-            if (function_exists('calculateSalesRepCashBalance')) {
-                try {
-                    // التأكد من أن userId محدد بشكل صحيح
-                    if (empty($userId) || $userId <= 0) {
-                        error_log('Warning: Invalid userId in salary card: ' . $userId);
-                        $displayCashBalance = 0.0;
-                    } else {
-                        $cashRegisterBalance = calculateSalesRepCashBalance($userId);
-                        // تحويل القيمة إلى float بشكل مباشر
-                        if ($cashRegisterBalance === null || $cashRegisterBalance === false) {
-                            $displayCashBalance = 0.0;
-                        } else {
-                            $displayCashBalance = (float)$cashRegisterBalance;
-                        }
-                    }
-                    
-                    // حساب نسبة 2% من رصيد الخزنة الإجمالي
-                    $recalculatedCollectionsBonus = round($displayCashBalance * 0.02, 2);
-                    $recalculatedCollectionsAmount = $displayCashBalance;
-                    
-                    // استخدم القيمة المحسوبة حديثاً إذا كانت أكبر من القيمة المحفوظة
-                    if ($recalculatedCollectionsBonus > $collectionsBonus || $collectionsBonus == 0) {
-                        $collectionsBonus = $recalculatedCollectionsBonus;
-                        $collectionsAmount = $recalculatedCollectionsAmount;
-                    }
-                } catch (Throwable $e) {
-                    // في حالة الخطأ، سجل الخطأ واستخدم الطريقة البديلة
-                    error_log('Error calculating cash balance for user ' . $userId . ': ' . $e->getMessage());
-                    $recalculatedCollectionsAmount = calculateSalesCollections($userId, $salaryMonth, $salaryYear);
-                    $recalculatedCollectionsBonus = round($recalculatedCollectionsAmount * 0.02, 2);
-                    $displayCashBalance = cleanFinancialValue($recalculatedCollectionsAmount);
-                    
-                    if ($recalculatedCollectionsBonus > $collectionsBonus || $collectionsBonus == 0) {
-                        $collectionsBonus = $recalculatedCollectionsBonus;
-                        $collectionsAmount = $recalculatedCollectionsAmount;
-                    }
-                }
-            } else {
-                // إذا لم تكن الدالة موجودة، نستخدم الطريقة القديمة
-                $recalculatedCollectionsAmount = calculateSalesCollections($userId, $salaryMonth, $salaryYear);
-                $recalculatedCollectionsBonus = round($recalculatedCollectionsAmount * 0.02, 2);
-                
-                // استخدام قيمة التحصيلات كبديل لرصيد الخزنة الإجمالي
-                $displayCashBalance = cleanFinancialValue($recalculatedCollectionsAmount);
-                
-                // استخدم القيمة المحسوبة حديثاً إذا كانت أكبر من القيمة المحفوظة
-                if ($recalculatedCollectionsBonus > $collectionsBonus || $collectionsBonus == 0) {
+            // استخدام القيمة المحفوظة في قاعدة البيانات إذا كانت موجودة ومرتبطة بالشهر المحدد
+            // وإلا استخدام القيمة المحسوبة من التحصيلات الخاصة بالشهر
+            if ($collectionsBonus > 0 && $collectionsAmount > 0) {
+                // إذا كانت هناك قيمة محفوظة، نستخدمها (يفترض أنها مرتبطة بالشهر المحدد)
+                // لكن نتحقق من أن القيمة المحسوبة لا تتجاوز القيمة المحفوظة بشكل كبير
+                // (قد تكون القيمة المحفوظة صحيحة إذا تم حسابها سابقاً)
+                if ($recalculatedCollectionsBonus > $collectionsBonus * 1.1) {
+                    // إذا كانت القيمة المحسوبة أكبر بكثير من المحفوظة، نستخدم المحسوبة
                     $collectionsBonus = $recalculatedCollectionsBonus;
                     $collectionsAmount = $recalculatedCollectionsAmount;
                 }
+                // وإلا نستخدم القيمة المحفوظة
+            } else {
+                // إذا لم تكن هناك قيمة محفوظة، نستخدم القيمة المحسوبة
+                $collectionsBonus = $recalculatedCollectionsBonus;
+                $collectionsAmount = $recalculatedCollectionsAmount;
             }
         }
         
