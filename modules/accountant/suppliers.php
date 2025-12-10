@@ -386,15 +386,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } elseif ($action === 'add_balance' || $action === 'record_payment') {
-        $supplierId = intval($_POST['supplier_id'] ?? 0);
-        $amount = cleanFinancialValue($_POST['amount'] ?? 0);
-        $notes = trim($_POST['notes'] ?? '');
-        
-        if ($supplierId <= 0) {
-            $error = 'المورد غير محدد.';
-        } elseif ($amount <= 0) {
-            $error = 'يجب إدخال مبلغ صالح.';
+        // منع المحاسب من تسجيل معاملات مالية للموردين
+        if (strtolower($currentUser['role'] ?? '') === 'accountant') {
+            $error = 'غير مصرح لك بتسجيل معاملات مالية للموردين. يرجى التواصل مع المدير.';
         } else {
+            $supplierId = intval($_POST['supplier_id'] ?? 0);
+            $amount = cleanFinancialValue($_POST['amount'] ?? 0);
+            $notes = trim($_POST['notes'] ?? '');
+            
+            if ($supplierId <= 0) {
+                $error = 'المورد غير محدد.';
+            } elseif ($amount <= 0) {
+                $error = 'يجب إدخال مبلغ صالح.';
+            } else {
             $supplier = $db->queryOne("SELECT id, name, balance FROM suppliers WHERE id = ?", [$supplierId]);
             if (!$supplier) {
                 $error = 'لم يتم العثور على المورد.';
@@ -498,6 +502,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $error = 'حدث خطأ أثناء تحديث رصيد المورد. يرجى المحاولة مرة أخرى.';
                     }
                 }
+            }
             }
         }
     } elseif ($action === 'delete') {
@@ -651,6 +656,7 @@ if (isset($_GET['edit'])) {
                                 </td>
                                 <td data-label="الإجراءات">
                                     <div class="btn-group btn-group-sm flex-wrap">
+                                        <?php if (strtolower($currentUser['role'] ?? '') !== 'accountant'): ?>
                                         <button type="button"
                                                 class="btn btn-success mb-1"
                                                 data-bs-toggle="modal"
@@ -671,6 +677,7 @@ if (isset($_GET['edit'])) {
                                             <i class="bi bi-cash-coin"></i>
                                             <span class="d-none d-lg-inline">تسجيل سداد</span>
                                         </button>
+                                        <?php endif; ?>
                                         <button type="button"
                                                 class="btn btn-info text-white mb-1"
                                                 data-bs-toggle="collapse"
