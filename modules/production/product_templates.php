@@ -1313,6 +1313,11 @@ $rawMaterialsForTemplate = $allowedMaterials;
 
 sort($rawMaterialsForTemplate);
 
+// تسجيل debug للتحقق من المواد المتاحة
+error_log("=== Raw Materials Available ===");
+error_log("rawMaterialsForTemplate: " . json_encode($rawMaterialsForTemplate, JSON_UNESCAPED_UNICODE));
+error_log("rawMaterialsData keys: " . json_encode(array_keys($rawMaterialsData), JSON_UNESCAPED_UNICODE));
+
 require_once __DIR__ . '/../../includes/lang/' . getCurrentLanguage() . '.php';
 $lang = isset($translations) ? $translations : [];
 
