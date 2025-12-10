@@ -2115,8 +2115,8 @@ function executeWarehouseTransferDirectly($transferId, $executedBy = null) {
                     throw new Exception($message);
                 }
             } else {
-                // تحديث products.quantity فقط للمنتجات الخارجية (بدون batch_id)
-                // المنتجات المصنعة (مع batch_id) يتم تحديثها في finished_products فقط
+                // للمنتجات الخارجية: نحفظ الكمية الحالية قبل التحديث لتسجيلها في inventory_movements
+                $productQuantityBefore = 0.0;
                 if (!$batchId) {
                     $currentProduct = $db->queryOne(
                         "SELECT quantity, warehouse_id FROM products WHERE id = ?",
@@ -2124,6 +2124,7 @@ function executeWarehouseTransferDirectly($transferId, $executedBy = null) {
                     );
                     
                     if ($currentProduct) {
+                        $productQuantityBefore = (float)($currentProduct['quantity'] ?? 0);
                         $db->execute(
                             "UPDATE products SET quantity = quantity + ?, warehouse_id = ? WHERE id = ?",
                             [$requestedQuantity, $transfer['to_warehouse_id'], $item['product_id']]
@@ -2177,8 +2178,16 @@ function executeWarehouseTransferDirectly($transferId, $executedBy = null) {
                     }
                     
                     if ($product) {
-                        $quantityBefore = $batchId ? ($currentQuantity - $requestedQuantity) : (float)($product['quantity'] ?? 0);
-                        $quantityAfter = $batchId ? $currentQuantity : ($quantityBefore + $requestedQuantity);
+                        // للمنتجات الخارجية: استخدام الكمية المحفوظة قبل التحديث
+                        // للمنتجات المصنعة: حساب الكمية من finished_products
+                        if ($batchId) {
+                            $quantityBefore = $currentQuantity - $requestedQuantity;
+                            $quantityAfter = $currentQuantity;
+                        } else {
+                            // استخدام الكمية المحفوظة قبل التحديث (من السطر 2121-2124)
+                            $quantityBefore = $productQuantityBefore;
+                            $quantityAfter = $productQuantityBefore + $requestedQuantity;
+                        }
                         
                         $db->execute(
                             "INSERT INTO inventory_movements 
@@ -2197,13 +2206,9 @@ function executeWarehouseTransferDirectly($transferId, $executedBy = null) {
                             ]
                         );
                         
-                        // تحديث products.quantity فقط إذا لم يكن هناك batchId (منتج خارجي)
-                        if (!$batchId) {
-                            $db->execute(
-                                "UPDATE products SET quantity = quantity + ? WHERE id = ?",
-                                [$requestedQuantity, $item['product_id']]
-                            );
-                        }
+                        // ملاحظة: لا نحدث products.quantity هنا للمنتجات الخارجية
+                        // لأن التحديث تم بالفعل في السطر 2127-2130 قبل تسجيل الحركة
+                        // هذا يمنع التحديث المزدوج للمنتجات الخارجية
                     }
                 } catch (Exception $e) {
                     error_log("Failed to record inventory movement for transfer to main warehouse: " . $e->getMessage());
@@ -2777,6 +2782,24 @@ function approveWarehouseTransfer($transferId, $approvedBy = null) {
                     throw new Exception($message);
                 }
             } else {
+                // للمنتجات الخارجية: نحفظ الكمية الحالية قبل التحديث لتسجيلها في inventory_movements
+                $productQuantityBefore = 0.0;
+                if (!$batchId) {
+                    $currentProduct = $db->queryOne(
+                        "SELECT quantity, warehouse_id FROM products WHERE id = ?",
+                        [$item['product_id']]
+                    );
+                    
+                    if ($currentProduct) {
+                        $productQuantityBefore = (float)($currentProduct['quantity'] ?? 0);
+                        // تحديث products.quantity للمنتجات الخارجية
+                        $db->execute(
+                            "UPDATE products SET quantity = quantity + ?, warehouse_id = ? WHERE id = ?",
+                            [$requestedQuantity, $transfer['to_warehouse_id'], $item['product_id']]
+                        );
+                    }
+                }
+                
                 // إذا كان هناك batch_id وكان المخزن الوجهة رئيسياً، نعيد الكمية إلى finished_products
                 if ($batchId && ($toWarehouse['warehouse_type'] ?? '') === 'main') {
                     // التحقق من وجود السجل في finished_products
@@ -2828,8 +2851,16 @@ function approveWarehouseTransfer($transferId, $approvedBy = null) {
                     }
                     
                     if ($product) {
-                        $quantityBefore = $batchId ? ($currentQuantity - $requestedQuantity) : (float)($product['quantity'] ?? 0);
-                        $quantityAfter = $batchId ? $currentQuantity : ($quantityBefore + $requestedQuantity);
+                        // للمنتجات الخارجية: استخدام الكمية المحفوظة قبل التحديث
+                        // للمنتجات المصنعة: حساب الكمية من finished_products
+                        if ($batchId) {
+                            $quantityBefore = $currentQuantity - $requestedQuantity;
+                            $quantityAfter = $currentQuantity;
+                        } else {
+                            // استخدام الكمية المحفوظة قبل التحديث
+                            $quantityBefore = $productQuantityBefore;
+                            $quantityAfter = $productQuantityBefore + $requestedQuantity;
+                        }
                         
                         $db->execute(
                             "INSERT INTO inventory_movements 
@@ -2848,13 +2879,9 @@ function approveWarehouseTransfer($transferId, $approvedBy = null) {
                             ]
                         );
                         
-                        // تحديث products.quantity فقط إذا لم يكن هناك batchId (منتج خارجي)
-                        if (!$batchId) {
-                            $db->execute(
-                                "UPDATE products SET quantity = quantity + ? WHERE id = ?",
-                                [$requestedQuantity, $item['product_id']]
-                            );
-                        }
+                        // ملاحظة: لا نحدث products.quantity هنا للمنتجات الخارجية
+                        // لأن التحديث تم بالفعل أعلاه قبل تسجيل الحركة
+                        // هذا يمنع التحديث المزدوج للمنتجات الخارجية
                     }
                 } catch (Exception $e) {
                     error_log("Failed to record inventory movement for transfer to main warehouse: " . $e->getMessage());
