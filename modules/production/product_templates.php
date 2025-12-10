@@ -315,6 +315,14 @@ try {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
+    // تسجيل debug للتحقق من البيانات المرسلة
+    error_log("=== POST Request to product_templates ===");
+    error_log("Action: $action");
+    error_log("POST raw_materials isset: " . (isset($_POST['raw_materials']) ? 'YES' : 'NO'));
+    if (isset($_POST['raw_materials'])) {
+        error_log("POST raw_materials: " . json_encode($_POST['raw_materials'], JSON_UNESCAPED_UNICODE));
+    }
+    
     if ($action === 'create_template') {
         $productName = trim($_POST['product_name'] ?? '');
         
@@ -559,12 +567,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 // إضافة المواد الخام الأخرى
+                error_log("Creating template #$templateId - Raw materials count: " . count($rawMaterials));
+                error_log("Raw materials data: " . json_encode($rawMaterials, JSON_UNESCAPED_UNICODE));
+                
                 foreach ($rawMaterials as $material) {
                     $materialType = $material['material_type'] ?? null;
+                    $materialName = $material['name'] ?? '';
+                    $materialQuantity = $material['quantity'] ?? 0;
+                    $materialUnit = $material['unit'] ?? 'كيلوجرام';
+                    
+                    error_log("Inserting raw material: name=$materialName, type=$materialType, qty=$materialQuantity, unit=$materialUnit");
+                    
                     $db->execute(
                         "INSERT INTO product_template_raw_materials (template_id, material_name, material_type, quantity_per_unit, unit) 
                          VALUES (?, ?, ?, ?, ?)",
-                        [$templateId, $material['name'], $materialType, $material['quantity'], $material['unit']]
+                        [$templateId, $materialName, $materialType, $materialQuantity, $materialUnit]
                     );
                 }
                 
@@ -1263,7 +1280,36 @@ try {
 // إنشاء قائمة بأسماء المواد فقط للعرض في القائمة المنسدلة
 // المواد الخام الأساسية: عسل، زيت زيتون، شمع عسل، مشتقات، مكسرات، طحينة
 $allowedMaterials = ['عسل', 'زيت زيتون', 'شمع عسل', 'مشتقات', 'مكسرات', 'طحينة'];
-$rawMaterialsForTemplate = array_intersect($allowedMaterials, array_keys($rawMaterialsData));
+
+// إضافة المواد الأساسية إلى $rawMaterialsData إذا لم تكن موجودة
+// هذا يضمن ظهور المواد في القائمة المنسدلة حتى لو كان المخزن فارغًا
+foreach ($allowedMaterials as $material) {
+    if (!isset($rawMaterialsData[$material])) {
+        $materialType = 'general';
+        if ($material === 'عسل') {
+            $materialType = 'honey';
+        } elseif ($material === 'مكسرات') {
+            $materialType = 'nuts';
+        } elseif ($material === 'زيت زيتون') {
+            $materialType = 'olive_oil';
+        } elseif ($material === 'شمع عسل') {
+            $materialType = 'beeswax';
+        } elseif ($material === 'مشتقات') {
+            $materialType = 'derivatives';
+        } elseif ($material === 'طحينة') {
+            $materialType = 'tahini';
+        }
+        
+        $rawMaterialsData[$material] = [
+            'material_type' => $materialType,
+            'has_types' => false,
+            'types' => []
+        ];
+    }
+}
+
+// استخدام جميع المواد المسموح بها (بدلاً من الاعتماد على المخزون فقط)
+$rawMaterialsForTemplate = $allowedMaterials;
 
 sort($rawMaterialsForTemplate);
 
