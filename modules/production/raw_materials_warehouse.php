@@ -496,6 +496,9 @@ if (!$isApiMode) {
     if ($rawMaterialsContext === 'manager') {
         $allowedRoles[] = 'manager';
     }
+    if ($rawMaterialsContext === 'accountant') {
+        $allowedRoles[] = 'accountant';
+    }
     requireRole($allowedRoles);
 }
 

@@ -559,19 +559,21 @@ async function loadCredentials() {
             return;
         }
         
-        // الحصول على المسار الصحيح لـ API - استخدام مسار مطلق
-        const pathParts = window.location.pathname.split('/').filter(p => p && !p.endsWith('.php'));
-        let apiPath;
+        // الحصول على المسار الصحيح لـ API - استخدام getRelativeUrl من PHP
+        let apiPath = '<?php echo getRelativeUrl("api/webauthn_credentials.php"); ?>';
         
-        if (pathParts.length === 0) {
-            // في الجذر
-            apiPath = 'api/webauthn_credentials.php';
-        } else {
-            // في مجلد فرعي - استخدام مسار مطلق
-            apiPath = '/' + pathParts[0] + '/api/webauthn_credentials.php';
+        // التحقق من أن المسار صحيح
+        if (!apiPath || apiPath === '') {
+            // Fallback: حساب المسار يدوياً
+            const pathParts = window.location.pathname.split('/').filter(p => p && !p.endsWith('.php'));
+            if (pathParts.length === 0) {
+                apiPath = 'api/webauthn_credentials.php';
+            } else {
+                apiPath = '/' + pathParts[0] + '/api/webauthn_credentials.php';
+            }
         }
         
-        console.log('Loading credentials from:', apiPath, 'Path parts:', pathParts);
+        console.log('Loading credentials from:', apiPath);
         
         // إنشاء AbortController للتحكم في timeout
         const controller = new AbortController();
@@ -842,16 +844,18 @@ async function deleteCredential(credentialId, deviceName) {
     }
     
     try {
-        // الحصول على المسار الصحيح لـ API - استخدام مسار مطلق
-        const pathParts = window.location.pathname.split('/').filter(p => p && !p.endsWith('.php'));
-        let apiPath;
+        // الحصول على المسار الصحيح لـ API - استخدام getRelativeUrl من PHP
+        let apiPath = '<?php echo getRelativeUrl("api/webauthn_credentials.php"); ?>';
         
-        if (pathParts.length === 0) {
-            // في الجذر
-            apiPath = 'api/webauthn_credentials.php';
-        } else {
-            // في مجلد فرعي - استخدام مسار مطلق
-            apiPath = '/' + pathParts[0] + '/api/webauthn_credentials.php';
+        // التحقق من أن المسار صحيح
+        if (!apiPath || apiPath === '') {
+            // Fallback: حساب المسار يدوياً
+            const pathParts = window.location.pathname.split('/').filter(p => p && !p.endsWith('.php'));
+            if (pathParts.length === 0) {
+                apiPath = 'api/webauthn_credentials.php';
+            } else {
+                apiPath = '/' + pathParts[0] + '/api/webauthn_credentials.php';
+            }
         }
         
         console.log('Deleting credential, API path:', apiPath);

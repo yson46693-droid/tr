@@ -1416,9 +1416,24 @@ if (ob_get_level() > 0) {
             }
         }, 1000);
         
-        // منع فتح أدوات المطور عبر window.open
+        // منع فتح أدوات المطور عبر window.open - لكن السماح بالاستخدامات المشروعة
         var originalOpen = window.open;
-        window.open = function() {
+        window.open = function(url, target, features) {
+            // السماح بفتح النوافذ المشروعة (تقارير، روابط خارجية، إلخ)
+            if (url && typeof url === 'string') {
+                // التحقق من أن الرابط صحيح وليس محاولة لفتح أدوات المطور
+                const lowerUrl = url.toLowerCase();
+                // منع محاولات فتح أدوات المطور
+                if (lowerUrl.includes('devtools') || 
+                    lowerUrl.includes('chrome-devtools') || 
+                    lowerUrl.includes('javascript:void') ||
+                    lowerUrl === 'about:blank' && !features) {
+                    return null;
+                }
+                // السماح بجميع الروابط الأخرى (تقارير، روابط خارجية، إلخ)
+                return originalOpen.call(window, url, target || '_blank', features);
+            }
+            // إذا لم يكن هناك رابط، منع الفتح (محاولة مشبوهة)
             return null;
         };
         

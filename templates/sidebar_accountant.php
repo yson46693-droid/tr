@@ -127,6 +127,26 @@ $baseUrl = getDashboardUrl();
                     <span>قارئ أرقام التشغيلات</span>
                 </a>
             </li>
+            
+            <li class="nav-item sidebar-section-divider">
+                <div class="sidebar-section-title">Warehouses</div>
+            </li>
+            
+            <li class="nav-item">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'packaging_warehouse') ? 'active' : ''; ?>" 
+                   href="<?php echo $baseUrl; ?>accountant.php?page=packaging_warehouse">
+                    <i class="bi bi-box-seam"></i>
+                    <span>مخزن أدوات التعبئة</span>
+                </a>
+            </li>
+            
+            <li class="nav-item">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'raw_materials_warehouse') ? 'active' : ''; ?>" 
+                   href="<?php echo $baseUrl; ?>accountant.php?page=raw_materials_warehouse">
+                    <i class="bi bi-droplet"></i>
+                    <span>مخزن الخامات</span>
+                </a>
+            </li>
         </ul>
     </nav>
     
