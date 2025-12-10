@@ -445,7 +445,7 @@ $treasurySummary = $db->queryOne("
         (SELECT COALESCE(SUM(CASE WHEN type = 'income' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
         (SELECT COALESCE(SUM(CASE WHEN transaction_type IN ('collection_from_sales_rep', 'income') AND status = 'approved' THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_income,
         (SELECT COALESCE(SUM(CASE WHEN type = 'expense' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
-        (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'expense' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_expense,
+        (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'expense' AND status = 'approved' AND (description NOT LIKE '%سلفة%' AND description NOT LIKE '%سلف%') THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_expense,
         (SELECT COALESCE(SUM(CASE WHEN type = 'transfer' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
         (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'transfer' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_transfer,
         (SELECT COALESCE(SUM(CASE WHEN type = 'payment' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
@@ -484,16 +484,18 @@ if (!empty($salariesTableExists)) {
     $totalSalaries = (float) ($salariesResult['total_salaries'] ?? 0);
 }
 
-// حساب إجمالي تسويات المرتبات
+// حساب إجمالي تسويات المرتبات (يشمل التسويات والسلف)
 $totalSalaryAdjustments = 0.0;
 $accountantTableExists = $db->queryOne("SHOW TABLES LIKE 'accountant_transactions'");
 if (!empty($accountantTableExists)) {
     $adjustmentsResult = $db->queryOne(
         "SELECT COALESCE(SUM(amount), 0) as total_adjustments
          FROM accountant_transactions
-         WHERE transaction_type = 'payment' 
-         AND status = 'approved'
-         AND description LIKE '%تسوية راتب%'"
+         WHERE status = 'approved'
+         AND (
+             (transaction_type = 'payment' AND description LIKE '%تسوية راتب%')
+             OR (transaction_type = 'expense' AND (description LIKE '%سلفة%' OR description LIKE '%سلف%'))
+         )"
     );
     $totalSalaryAdjustments = (float) ($adjustmentsResult['total_adjustments'] ?? 0);
 }
