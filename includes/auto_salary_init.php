@@ -13,8 +13,10 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
-// متغير static لمنع التنفيذ المتكرر في نفس الطلب
-static $autoSalaryInitExecuted = false;
+// متغير global لمنع التنفيذ المتكرر في نفس الطلب
+if (!isset($GLOBALS['auto_salary_init_executed'])) {
+    $GLOBALS['auto_salary_init_executed'] = false;
+}
 
 /**
  * التأكد من وجود جدول سجلات استدعاءات auto_salary_init
@@ -141,39 +143,34 @@ function releaseAutoSalaryInitLock($fp) {
 
 /**
  * التحقق من أن auto_salary_init تم استدعاؤه اليوم بالفعل
- * يستخدم SELECT FOR UPDATE مع transaction لمنع race condition
+ * فحص سريع بدون transaction للسرعة
  */
 function wasAutoSalaryInitCalledToday($db) {
+    static $cache = null;
+    static $cacheDate = null;
+    
+    // استخدام cache لتقليل استعلامات قاعدة البيانات
+    $today = date('Y-m-d');
+    if ($cache !== null && $cacheDate === $today) {
+        return $cache;
+    }
+    
     try {
         ensureAutoSalaryInitLogsTable($db);
         
-        // استخدام transaction مع SELECT FOR UPDATE لمنع race condition
-        $conn = $db->getConnection();
-        $conn->begin_transaction();
+        // فحص سريع بدون transaction للسرعة
+        $todayCall = $db->queryOne(
+            "SELECT id FROM auto_salary_init_logs 
+             WHERE DATE(call_time) = CURDATE() 
+             AND status = 'executed'
+             LIMIT 1"
+        );
         
-        try {
-            // التحقق من وجود استدعاء ناجح اليوم مع lock
-            $todayCall = $db->queryOne(
-                "SELECT id, status, call_time 
-                 FROM auto_salary_init_logs 
-                 WHERE DATE(call_time) = CURDATE() 
-                 AND status = 'executed'
-                 ORDER BY call_time DESC 
-                 LIMIT 1
-                 FOR UPDATE"
-            );
-            
-            $conn->commit();
-            
-            if (!empty($todayCall)) {
-                return true;
-            }
-            
-            return false;
-        } catch (Exception $e) {
-            $conn->rollback();
-            throw $e;
-        }
+        $result = !empty($todayCall);
+        $cache = $result;
+        $cacheDate = $today;
+        
+        return $result;
     } catch (Exception $e) {
         error_log("auto_salary_init: Error checking today's calls: " . $e->getMessage());
         return false;
@@ -228,7 +225,7 @@ function initializeMonthSalaries() {
             
             if (!empty($todayCall)) {
                 $conn->commit();
-                logAutoSalaryInitCall($db, 'skipped', 'تم استدعاؤه اليوم بالفعل', 0, 0, 0, $currentMonth, $currentYear);
+                // لا نسجل skipped لتقليل عدد السجلات
                 return ['success' => true, 'message' => 'Already executed today', 'created' => 0, 'skipped' => true];
             }
             
@@ -238,7 +235,7 @@ function initializeMonthSalaries() {
             // التحقق من أن العملية لم تتم من قبل في هذه الجلسة
             if (isset($_SESSION[$sessionKey]) && $_SESSION[$sessionKey] === true) {
                 $conn->commit();
-                logAutoSalaryInitCall($db, 'skipped', 'تم استدعاؤه في هذه الجلسة', 0, 0, 0, $currentMonth, $currentYear);
+                // لا نسجل skipped لتقليل عدد السجلات
                 return ['success' => true, 'message' => 'Already initialized this session', 'created' => 0, 'skipped' => true];
             }
             
@@ -264,13 +261,13 @@ function initializeMonthSalaries() {
                     [$settingKey]
                 );
                 
-                if (!empty($existingSetting) && $existingSetting['value'] === '1') {
-                    // تم التهيئة من قبل لهذا الشهر
-                    $conn->commit();
-                    $_SESSION[$sessionKey] = true;
-                    logAutoSalaryInitCall($db, 'skipped', 'تم تهيئة هذا الشهر من قبل', 0, 0, 0, $currentMonth, $currentYear);
-                    return ['success' => true, 'message' => 'Already initialized this month', 'created' => 0, 'skipped' => true];
-                }
+            if (!empty($existingSetting) && $existingSetting['value'] === '1') {
+                // تم التهيئة من قبل لهذا الشهر
+                $conn->commit();
+                $_SESSION[$sessionKey] = true;
+                // لا نسجل skipped لتقليل عدد السجلات
+                return ['success' => true, 'message' => 'Already initialized this month', 'created' => 0, 'skipped' => true];
+            }
             }
         
         // التحقق من نوع عمود month
@@ -302,7 +299,7 @@ function initializeMonthSalaries() {
                 $conn->commit();
                 error_log("auto_salary_init: No active users found with hourly_rate > 0");
                 $_SESSION[$sessionKey] = true;
-                logAutoSalaryInitCall($db, 'skipped', 'لا يوجد مستخدمين نشطين للعملية', 0, 0, 0, $currentMonth, $currentYear);
+                // لا نسجل skipped لتقليل عدد السجلات
                 return ['success' => true, 'message' => 'No users to process', 'created' => 0];
             }
         
@@ -450,14 +447,18 @@ function initializeMonthSalaries() {
  * يتم استدعاؤها تلقائياً عند تحميل الملف
  */
 function runAutoSalaryInit() {
+    // منع التنفيذ المتكرر في نفس الطلب
+    if (!empty($GLOBALS['auto_salary_init_executed'])) {
+        return;
+    }
+    
+    // فحص سريع جداً قبل أي عمليات
     // التحقق من أن المستخدم مسجل الدخول
     if (!function_exists('isLoggedIn')) {
-        error_log("auto_salary_init: isLoggedIn function not found");
         return;
     }
     
     if (!isLoggedIn()) {
-        error_log("auto_salary_init: User not logged in, skipping");
         return;
     }
     
@@ -466,9 +467,23 @@ function runAutoSalaryInit() {
     $isApi = strpos($_SERVER['REQUEST_URI'] ?? '', '/api/') !== false;
     
     if ($isAjax || $isApi) {
-        error_log("auto_salary_init: AJAX/API request, skipping");
         return;
     }
+    
+    // فحص سريع من قاعدة البيانات قبل أي عمليات أخرى
+    try {
+        $db = db();
+        if (wasAutoSalaryInitCalledToday($db)) {
+            $GLOBALS['auto_salary_init_executed'] = true;
+            return;
+        }
+    } catch (Exception $e) {
+        // في حالة الخطأ، نتخطى
+        return;
+    }
+    
+    // علامة التنفيذ لمنع التكرار
+    $GLOBALS['auto_salary_init_executed'] = true;
     
     $lockFile = null;
     
@@ -478,26 +493,19 @@ function runAutoSalaryInit() {
         
         if (!$lockFile) {
             // لا يمكن الحصول على lock - يعني أن هناك عملية أخرى قيد التنفيذ
-            // نتحقق من قاعدة البيانات للتأكد
+            // نتحقق من قاعدة البيانات مرة أخرى
             $db = db();
             if (wasAutoSalaryInitCalledToday($db)) {
-                // تم التنفيذ اليوم بالفعل
                 return;
             }
-            // إذا لم يتم التنفيذ، ننتظر قليلاً ثم نحاول مرة أخرى
-            usleep(100000); // 100ms
-            $lockFile = acquireAutoSalaryInitLock();
-            if (!$lockFile) {
-                // لا يزال لا يمكن الحصول على lock - نتخطى
-                return;
-            }
+            // إذا لم يتم التنفيذ، نتخطى (لا ننتظر)
+            return;
         }
         
         $db = db();
         
         // التحقق مرة أخرى من قاعدة البيانات بعد الحصول على lock
         if (wasAutoSalaryInitCalledToday($db)) {
-            // تم التنفيذ اليوم بالفعل
             releaseAutoSalaryInitLock($lockFile);
             return;
         }
@@ -527,5 +535,8 @@ function runAutoSalaryInit() {
 }
 
 // تنفيذ التهيئة التلقائية عند تحميل الملف
-runAutoSalaryInit();
+// فقط إذا لم يتم التنفيذ من قبل في هذا الطلب
+if (empty($GLOBALS['auto_salary_init_executed'])) {
+    runAutoSalaryInit();
+}
 
