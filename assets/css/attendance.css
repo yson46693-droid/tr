@@ -4,16 +4,37 @@
  * ضمان التمرير العمودي على الهواتف
  */
 
+/* ===== Global Scroll Fix for Attendance Page ===== */
+body.attendance-page,
+body.attendance-page.modal-open {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    position: relative !important;
+    height: auto !important;
+    padding-right: 0 !important;
+}
+
+/* إزالة أي تأثيرات Bootstrap modal على التمرير */
+body.attendance-page.modal-open .dashboard-wrapper,
+body.attendance-page.modal-open .dashboard-main {
+    overflow-y: visible !important;
+    padding-right: 0 !important;
+}
+
 /* ===== Mobile Scroll Fix ===== */
 @media (max-width: 768px) {
-    /* ضمان أن body و html قابلان للتمرير */
+    /* ضمان أن body و html قابلان للتمرير - حتى عند فتح modal */
     html,
-    body {
+    body,
+    body.modal-open,
+    body.attendance-page,
+    body.attendance-page.modal-open {
         overflow-x: hidden !important;
         overflow-y: auto !important;
         height: auto !important;
         min-height: 100vh;
-        position: relative;
+        position: relative !important;
+        padding-right: 0 !important;
     }
     
     /* ضمان أن dashboard-wrapper قابل للتمرير */
@@ -109,6 +130,36 @@
         position: relative;
         z-index: 1;
         margin-bottom: 1rem;
+    }
+    
+    /* إزالة أي قيود على التمرير من Bootstrap modal */
+    body.attendance-page.modal-open {
+        padding-right: 0 !important;
+    }
+    
+    /* ضمان أن جميع العناصر قابلة للتمرير */
+    .attendance-page .container-fluid > * {
+        position: relative;
+    }
+    
+    /* إزالة أي max-height يمنع التمرير */
+    .attendance-page .dashboard-main,
+    .attendance-page .container-fluid {
+        max-height: none !important;
+    }
+    
+    /* ضمان أن html قابل للتمرير أيضاً */
+    html {
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        height: auto !important;
+    }
+    
+    /* إزالة أي fixed positioning يمنع التمرير */
+    .attendance-page .container-fluid,
+    .attendance-page .dashboard-main,
+    .attendance-page .dashboard-wrapper {
+        position: relative !important;
     }
 }
 

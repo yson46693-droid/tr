@@ -437,9 +437,8 @@ if ($page === 'reports') {
     }
 }
 
-if ($page === 'pos') {
-    $page = 'dashboard';
-}
+// معالجة صفحة نقطة البيع (POS) - متاحة للمحاسب
+// لا حاجة لتغيير $page هنا، سيتم معالجتها لاحقاً
 
 // معالجة AJAX قبل أي إخراج HTML - خاصة لصفحة مخزن أدوات التعبئة
 if ($page === 'packaging_warehouse' && isset($_GET['ajax']) && $_GET['ajax'] == '1' && isset($_GET['material_id'])) {
@@ -1853,6 +1852,22 @@ $pageDescription = 'لوحة تحكم المحاسب - إدارة المعامل
                     }
                 } else {
                     echo '<div class="alert alert-warning">صفحة منتجات الشركة غير متاحة حالياً</div>';
+                }
+                ?>
+                
+            <?php elseif ($page === 'pos'): ?>
+                <!-- صفحة نقطة البيع -->
+                <?php 
+                $modulePath = __DIR__ . '/../modules/manager/pos.php';
+                if (file_exists($modulePath)) {
+                    try {
+                        include $modulePath;
+                    } catch (Throwable $e) {
+                        error_log('Accountant POS module error: ' . $e->getMessage());
+                        echo '<div class="alert alert-danger">حدث خطأ أثناء تحميل صفحة نقطة البيع: ' . htmlspecialchars($e->getMessage()) . '</div>';
+                    }
+                } else {
+                    echo '<div class="alert alert-warning">صفحة نقطة البيع غير متاحة حالياً</div>';
                 }
                 ?>
                 

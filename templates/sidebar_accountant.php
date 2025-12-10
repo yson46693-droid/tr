@@ -107,6 +107,14 @@ $baseUrl = getDashboardUrl();
             </li>
             
             <li class="nav-item">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'pos') ? 'active' : ''; ?>" 
+                   href="<?php echo $baseUrl; ?>accountant.php?page=pos">
+                    <i class="bi bi-cash-register"></i>
+                    <span>نقطة البيع</span>
+                </a>
+            </li>
+            
+            <li class="nav-item">
                 <a class="nav-link" href="<?php echo $baseUrl; ?>accountant.php?page=attendance">
                     <i class="bi bi-calendar-check"></i>
                     <span><?php echo $lang['menu_attendance']; ?></span>

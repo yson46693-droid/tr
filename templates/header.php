@@ -2627,7 +2627,7 @@ if (ob_get_level() > 0) {
     })();
     </script>
 </head>
-<body class="dashboard-body"
+<body class="dashboard-body<?php echo isset($pageBodyClass) ? ' ' . htmlspecialchars($pageBodyClass) : ''; ?>"
       data-user-role="<?php echo htmlspecialchars(isset($currentUser['role']) ? $currentUser['role'] : ''); ?>"
       data-user-id="<?php echo isset($currentUser['id']) ? (int) $currentUser['id'] : 0; ?>">
     <!-- Accessibility: Skip to main content -->

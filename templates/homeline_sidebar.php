@@ -345,6 +345,13 @@ switch ($role) {
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'company_products'),
                 'badge' => null
             ],
+            [
+                'title' => 'نقطة البيع',
+                'icon' => 'bi-cash-register',
+                'url' => $baseUrl . 'accountant.php?page=pos',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'pos'),
+                'badge' => null
+            ],
            
             [
                 'title' => isset($lang['menu_attendance']) ? $lang['menu_attendance'] : 'الحضور',

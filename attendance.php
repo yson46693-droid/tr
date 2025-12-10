@@ -132,6 +132,9 @@ $pageTitle = isset($lang['attendance']) ? $lang['attendance'] : 'الحضور و
 // إضافة ملف CSS الخاص بصفحة الحضور
 $pageStylesheets = isset($pageStylesheets) ? $pageStylesheets : [];
 $pageStylesheets[] = 'assets/css/attendance.css';
+
+// إضافة class للصفحة لضمان التمرير على الموبايل
+$pageBodyClass = isset($pageBodyClass) ? $pageBodyClass . ' attendance-page' : 'attendance-page';
 ?>
 <?php include __DIR__ . '/templates/header.php'; ?>
 
