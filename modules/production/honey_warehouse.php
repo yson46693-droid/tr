@@ -797,7 +797,7 @@ $stats['total_honey'] = $stats['total_raw_honey'] + $stats['total_filtered_honey
 
 <!-- Modal لعرض سجل التصفية -->
 <div class="modal fade" id="filtrationHistoryModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">سجل عمليات التصفية</h5>

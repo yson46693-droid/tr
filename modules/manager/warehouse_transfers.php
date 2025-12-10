@@ -1782,7 +1782,7 @@ if (isset($_GET['id'])) {
 
 <!-- Modal نقل من بضاعة المندوب -->
 <div class="modal fade" id="transferFromSalesRepModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title"><i class="bi bi-truck me-2"></i>نقل منتجات من بضاعة المندوب إلى المخزن الرئيسي</h5>

@@ -2736,7 +2736,7 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
 
 <?php if (($currentUser['role'] ?? '') === 'manager'): ?>
 <div class="modal fade" id="createMaterialModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" id="createMaterialForm">
                 <div class="modal-header bg-primary text-white">
@@ -3021,7 +3021,7 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
 
 <!-- Modal تعديل أداة التعبئة -->
 <div class="modal fade" id="editMaterialModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" id="editMaterialForm">
                 <div class="modal-header bg-warning">
@@ -3086,7 +3086,7 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
 
 <!-- Modal لعرض التفاصيل -->
 <div class="modal fade" id="materialDetailsModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">تفاصيل استخدام الأداة</h5>

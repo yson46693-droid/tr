@@ -456,7 +456,7 @@ if (isset($_GET['id'])) {
 
 <!-- Modal إضافة سيارة -->
 <div class="modal fade" id="addVehicleModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">إضافة سيارة جديدة</h5>
@@ -518,7 +518,7 @@ if (isset($_GET['id'])) {
 
 <!-- Modal التعديل السريع -->
 <div class="modal fade" id="editVehicleModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
                 <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>تعديل السيارة</h5>

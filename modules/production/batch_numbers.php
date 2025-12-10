@@ -464,7 +464,7 @@ if (isset($_GET['id'])) {
 
 <!-- Modal إنشاء رقم تشغيلة -->
 <div class="modal fade" id="addBatchModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">إنشاء رقم تشغيلة جديد</h5>

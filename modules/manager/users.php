@@ -613,7 +613,7 @@ $users = $db->query($sql, $params);
 
 <!-- Modal إضافة مستخدم -->
 <div class="modal fade" id="addUserModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">إضافة مستخدم جديد</h5>
@@ -673,7 +673,7 @@ $users = $db->query($sql, $params);
 
 <!-- Modal تعديل مستخدم -->
 <div class="modal fade" id="editUserModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">تعديل مستخدم</h5>

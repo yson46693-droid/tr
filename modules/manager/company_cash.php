@@ -1148,7 +1148,7 @@ $typeColorMap = [
 
 <!-- Modal تحصيل من مندوب -->
 <div class="modal fade" id="collectFromRepModal" tabindex="-1" aria-labelledby="collectFromRepModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="collectFromRepModalLabel">
@@ -1447,7 +1447,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Modal إنشاء تقرير تفصيلي -->
 <div class="modal fade" id="generateReportModal" tabindex="-1" aria-labelledby="generateReportModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title" id="generateReportModalLabel">

@@ -664,7 +664,7 @@ $hasStatusColumn = !empty($statusColumnCheck);
 
 <!-- Modal إضافة تحصيل -->
 <div class="modal fade" id="addCollectionModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">إضافة تحصيل جديد</h5>
@@ -724,7 +724,7 @@ $hasStatusColumn = !empty($statusColumnCheck);
 
 <!-- Modal تعديل تحصيل -->
 <div class="modal fade" id="editCollectionModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">تعديل التحصيل</h5>

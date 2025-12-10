@@ -2848,7 +2848,7 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
 
 <!-- Modal طباعة الباركود -->
 <div class="modal fade" id="printBarcodesModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title"><i class="bi bi-printer me-2"></i>طباعة الباركود</h5>
@@ -4671,7 +4671,7 @@ window.printBarcodes = printBarcodes;
 
 <!-- Modal طلب استلام منتجات من بضاعة المندوب -->
 <div class="modal fade" id="receiveFromSalesRepModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title"><i class="bi bi-truck me-2"></i>طلب استلام منتجات من بضاعة المندوب</h5>

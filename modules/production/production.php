@@ -7323,7 +7323,7 @@ $lang = isset($translations) ? $translations : [];
 
 <!-- Modal طباعة الباركودات -->
 <div class="modal fade" id="printBarcodesModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title"><i class="bi bi-printer me-2"></i>طباعة الباركودات</h5>
@@ -7366,7 +7366,7 @@ $lang = isset($translations) ? $translations : [];
 
 <!-- Modal إضافة إنتاج -->
 <div class="modal fade" id="addProductionModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i><?php echo isset($lang['add_production']) ? $lang['add_production'] : 'إضافة إنتاج'; ?></h5>
@@ -7438,7 +7438,7 @@ $lang = isset($translations) ? $translations : [];
 
 <!-- Modal تعديل إنتاج -->
 <div class="modal fade" id="editProductionModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-pencil me-2"></i><?php echo isset($lang['edit_production']) ? $lang['edit_production'] : 'تعديل إنتاج'; ?></h5>
