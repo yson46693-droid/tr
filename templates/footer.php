@@ -548,7 +548,6 @@ if (!defined('ACCESS_ALLOWED')) {
     </script>
     
     <!-- Professional Loading Overlay Script - تم حذفه بالكامل -->
-            let isNavigating = false;
             let pageLoadStarted = false;
             const SHOW_DELAY = 0; // بدون تأخير - إظهار فوري
             const MIN_DISPLAY_TIME = 100; // الحد الأدنى للعرض (100ms) - محسّن للسرعة
