@@ -144,7 +144,7 @@ if ($isTemplateAjax) {
             }
 
             $rawMaterials = $db->query(
-                "SELECT id, material_name, quantity_per_unit, unit 
+                "SELECT id, material_name, material_type, quantity_per_unit, unit 
                  FROM product_template_raw_materials 
                  WHERE template_id = ?",
                 [$templateId]
@@ -156,19 +156,26 @@ if ($isTemplateAjax) {
                 $defaultSupplier = null;
                 $defaultHoneyVariety = null;
                 $detailType = null;
+                
+                // استخدام material_type من قاعدة البيانات أولاً
+                if (!empty($rawMaterial['material_type'])) {
+                    $detailType = trim((string)$rawMaterial['material_type']);
+                }
+                
                 if ($name !== '') {
                     $normalizedName = $normalizeMaterialName($name);
                     if ($normalizedName !== '' && isset($rawDefaults[$normalizedName])) {
                         $defaultSupplier = $rawDefaults[$normalizedName]['supplier_id'] ?? null;
                         $defaultHoneyVariety = $rawDefaults[$normalizedName]['honey_variety'] ?? null;
-                        if (!empty($rawDefaults[$normalizedName]['type'])) {
+                        // استخدام type من detailsPayload فقط إذا لم يكن material_type موجوداً في قاعدة البيانات
+                        if ($detailType === null && !empty($rawDefaults[$normalizedName]['type'])) {
                             $detailType = (string)$rawDefaults[$normalizedName]['type'];
                         }
                     }
                 }
 
                 $isHoneyMaterial = false;
-                $componentType = $detailType !== null ? trim((string)$detailType) : 'raw_general';
+                $componentType = $detailType !== null && $detailType !== '' ? trim((string)$detailType) : 'raw_general';
                 $hasHoneyKeyword = (mb_stripos($name, 'عسل') !== false) || (stripos($name, 'honey') !== false);
                 if ($detailType === null && $hasHoneyKeyword) {
                     $isHoneyMaterial = true;
