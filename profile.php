@@ -10,31 +10,14 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/audit_log.php';
 
-// التأكد من أن الجلسة نشطة وتحديث الـ cookie قبل أي عملية
-if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
-    $isHttps = (
-        (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-        (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
-    );
-    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-    
-    // تحديث أوقات النشاط لضمان عدم انتهاء الجلسة
-    if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-        // حفظ الوقت الحالي كـ previous إذا لم يكن موجوداً
-        if (!isset($_SESSION['last_activity_previous'])) {
-            $_SESSION['last_activity_previous'] = time();
-        }
-        $_SESSION['last_activity'] = time();
+// تحديث أوقات النشاط لضمان عدم انتهاء الجلسة
+// ملاحظة: تحديث الـ cookie يتم تلقائياً في config.php، لا حاجة لتحديثه هنا
+if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+    // حفظ الوقت الحالي كـ previous إذا لم يكن موجوداً
+    if (!isset($_SESSION['last_activity_previous'])) {
+        $_SESSION['last_activity_previous'] = time();
     }
-    
-    setcookie(session_name(), session_id(), [
-        'expires' => time() + $sessionLifetime,
-        'path' => '/',
-        'domain' => '',
-        'secure' => $isHttps,
-        'httponly' => true,
-        'samesite' => $isHttps ? 'None' : 'Lax',
-    ]);
+    $_SESSION['last_activity'] = time();
 }
 
 requireLogin();
@@ -107,22 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $_SESSION['last_activity'] = time();
     $_SESSION['last_activity_previous'] = time();
     
-    // تحديث الـ cookie مرة أخرى للتأكد من استمرار الجلسة
-    if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
-        $isHttps = (
-            (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-            (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
-        );
-        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-        setcookie(session_name(), session_id(), [
-            'expires' => time() + $sessionLifetime,
-            'path' => '/',
-            'domain' => '',
-            'secure' => $isHttps,
-            'httponly' => true,
-            'samesite' => $isHttps ? 'None' : 'Lax',
-        ]);
-    }
+    // ملاحظة: تحديث الـ cookie يتم تلقائياً في config.php، لا حاجة لتحديثه هنا
     
     $action = $_POST['action'] ?? '';
     
@@ -247,22 +215,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['last_activity'] = time();
                     $_SESSION['last_activity_previous'] = time();
                     
-                    // التأكد من تحديث session cookie قبل redirect
-                    if (!headers_sent() && session_id()) {
-                        $isHttps = (
-                            (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-                            (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
-                        );
-                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                        setcookie(session_name(), session_id(), [
-                            'expires' => time() + $sessionLifetime,
-                            'path' => '/',
-                            'domain' => '',
-                            'secure' => $isHttps,
-                            'httponly' => true,
-                            'samesite' => $isHttps ? 'None' : 'Lax',
-                        ]);
-                    }
+                    // ملاحظة: تحديث الـ cookie يتم تلقائياً في config.php، لا حاجة لتحديثه هنا
                     
                     $_SESSION['success_message'] = 'تم تحديث البروفايل بنجاح';
                     

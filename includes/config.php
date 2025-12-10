@@ -111,27 +111,14 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     }
 }
 
-// التحقق الأمني المبسط: فقط تحديث الجلسة والـ cookie دون إلغاء الجلسة بشكل مفرط
+// التحقق الأمني المبسط: فقط تحديث الجلسة دون إلغاء الجلسة بشكل مفرط
 // الفحوصات الأمنية الصارمة تتم في auth.php عند الحاجة
+// ملاحظة: تحديث الـ cookie يتم في الكود أعلاه (lines 85-111)، لا حاجة لتحديثه هنا مرة أخرى
 if (session_status() === PHP_SESSION_ACTIVE) {
-    $sessionName = session_name();
-    
-    // إذا كان المستخدم مسجل دخول، نحاول تحديث/إصلاح الـ cookie دائماً
+    // إذا كان المستخدم مسجل دخول، تحديث وقت آخر نشاط
     if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
         // تحديث وقت آخر نشاط
         $_SESSION['last_activity'] = time();
-        
-        // محاولة تحديث/إنشاء cookie إذا كانت headers لم تُرسل بعد
-        if (!headers_sent()) {
-            setcookie($sessionName, session_id(), [
-                'expires' => time() + SESSION_LIFETIME,
-                'path' => '/',
-                'domain' => '',
-                'secure' => $isHttps,
-                'httponly' => true,
-                'samesite' => $isHttps ? 'None' : 'Lax',
-            ]);
-        }
         
         // التحقق من انتهاء الجلسة بناءً على وقت آخر نشاط (فقط إذا كان موجوداً)
         if (isset($_SESSION['last_activity_previous'])) {
