@@ -412,6 +412,21 @@ switch ($role) {
                 'active' => ($currentPage === 'manager.php' && $currentPageParam === 'reports'),
                 'badge' => null
             ],
+            ['divider' => true, 'title' => 'المخازن'],
+            [
+                'title' => 'مخزن أدوات التعبئة',
+                'icon' => 'bi-box-seam',
+                'url' => $baseUrl . 'accountant.php?page=packaging_warehouse',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'packaging_warehouse'),
+                'badge' => null
+            ],
+            [
+                'title' => 'مخزن الخامات',
+                'icon' => 'bi-droplet',
+                'url' => $baseUrl . 'accountant.php?page=raw_materials_warehouse',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'raw_materials_warehouse'),
+                'badge' => null
+            ],
             ['divider' => true, 'title' => 'أدوات'],
             [
                 'title' => 'مخزن توالف المصنع',
