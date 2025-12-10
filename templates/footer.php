@@ -577,8 +577,9 @@ if (!defined('ACCESS_ALLOWED')) {
             let activeRequests = 0;
             let showTimeout = null;
             let hideTimeout = null;
-            const SHOW_DELAY = 150; // تأخير 150ms قبل الإظهار لتجنب الوميض
-            const MIN_DISPLAY_TIME = 300; // الحد الأدنى للعرض (300ms) لضمان رؤية اللوحة
+            let isNavigating = false;
+            const SHOW_DELAY = 50; // تأخير قصير جداً (50ms) فقط للطلبات السريعة
+            const MIN_DISPLAY_TIME = 200; // الحد الأدنى للعرض (200ms) لضمان الرؤية
             
             // دالة لإظهار loading overlay
             function showLoading(immediate = false) {
@@ -602,15 +603,19 @@ if (!defined('ACCESS_ALLOWED')) {
                     clearTimeout(showTimeout);
                 }
                 
-                // إظهار فوري أو بعد تأخير قصير
-                if (immediate) {
+                // إظهار فوري أو بعد تأخير قصير جداً
+                if (immediate || isNavigating) {
+                    // إظهار فوري للتنقل أو الطلبات المهمة
                     loadingOverlay.style.display = 'flex';
+                    loadingOverlay.style.opacity = '1';
                     loadingOverlay.classList.add('show');
                     loadingOverlay.setAttribute('aria-hidden', 'false');
                 } else {
+                    // تأخير قصير جداً للطلبات العادية
                     showTimeout = setTimeout(function() {
                         if (activeRequests > 0 && loadingOverlay) {
                             loadingOverlay.style.display = 'flex';
+                            loadingOverlay.style.opacity = '1';
                             loadingOverlay.classList.add('show');
                             loadingOverlay.setAttribute('aria-hidden', 'false');
                         }
@@ -635,19 +640,23 @@ if (!defined('ACCESS_ALLOWED')) {
                     showTimeout = null;
                 }
                 
-                // إخفاء overlay بعد تأخير قصير لضمان رؤية اللوحة
-                hideTimeout = setTimeout(function() {
-                    if (activeRequests <= 0 && loadingOverlay) {
-                        loadingOverlay.classList.remove('show');
-                        setTimeout(function() {
-                            if (loadingOverlay && activeRequests <= 0) {
-                                loadingOverlay.style.display = 'none';
-                                loadingOverlay.setAttribute('aria-hidden', 'true');
-                            }
-                        }, 400); // انتظار انتهاء transition
-                        hideTimeout = null;
-                    }
-                }, MIN_DISPLAY_TIME);
+                // إخفاء overlay فوراً إذا لم يكن هناك طلبات نشطة
+                if (activeRequests <= 0) {
+                    hideTimeout = setTimeout(function() {
+                        if (activeRequests <= 0 && loadingOverlay) {
+                            loadingOverlay.classList.remove('show');
+                            // إخفاء فوري بعد transition قصير
+                            setTimeout(function() {
+                                if (loadingOverlay && activeRequests <= 0 && !isNavigating) {
+                                    loadingOverlay.style.display = 'none';
+                                    loadingOverlay.style.opacity = '0';
+                                    loadingOverlay.setAttribute('aria-hidden', 'true');
+                                }
+                            }, 300); // وقت transition
+                            hideTimeout = null;
+                        }
+                    }, MIN_DISPLAY_TIME);
+                }
             }
             
             // Intercept fetch requests
@@ -863,7 +872,6 @@ if (!defined('ACCESS_ALLOWED')) {
                 if (form && form.tagName === 'FORM') {
                     // تجاهل النماذج التي لديها data-no-loading
                     if (!form.hasAttribute('data-no-loading') && !form.hasAttribute('data-bs-toggle')) {
-                        console.log('Form submit detected, showing loading');
                         showLoading(true); // إظهار فوري للنماذج
                     }
                 }
@@ -928,49 +936,108 @@ if (!defined('ACCESS_ALLOWED')) {
                 }
                 
                 if (isInternalLink && !isSamePage) {
-                    console.log('Navigation detected:', href);
+                    isNavigating = true;
                     showLoading(true); // إظهار فوري للتنقل
                 } else if (!isInternalLink) {
-                    console.log('External link detected:', href);
+                    isNavigating = true;
                     showLoading(true); // إظهار فوري للروابط الخارجية
                 }
             }, true); // استخدام capture phase للقبض على الحدث قبل أي handlers أخرى
             
-            // إخفاء loading عند تحميل الصفحة (fallback)
+            // إظهار loading فوراً عند بدء تحميل صفحة جديدة (beforeunload)
+            window.addEventListener('beforeunload', function() {
+                if (isNavigating) {
+                    // إظهار loading فوراً قبل تحميل الصفحة
+                    if (loadingOverlay) {
+                        loadingOverlay.style.display = 'flex';
+                        loadingOverlay.style.opacity = '1';
+                        loadingOverlay.classList.add('show');
+                        loadingOverlay.setAttribute('aria-hidden', 'false');
+                    }
+                }
+            });
+            
+            // إخفاء loading فوراً عند تحميل الصفحة
             function ensureLoadingHidden() {
+                isNavigating = false;
+                
                 if (document.readyState === 'complete') {
-                    setTimeout(function() {
-                        activeRequests = 0;
-                        hideLoading();
-                    }, 200);
+                    // الصفحة محملة بالفعل - إخفاء فوري
+                    activeRequests = 0;
+                    if (loadingOverlay) {
+                        loadingOverlay.classList.remove('show');
+                        setTimeout(function() {
+                            if (loadingOverlay) {
+                                loadingOverlay.style.display = 'none';
+                                loadingOverlay.style.opacity = '0';
+                                loadingOverlay.setAttribute('aria-hidden', 'true');
+                            }
+                        }, 200);
+                    }
                 } else {
+                    // انتظار تحميل الصفحة
                     window.addEventListener('load', function() {
                         setTimeout(function() {
+                            isNavigating = false;
                             activeRequests = 0;
-                            hideLoading();
-                        }, 300);
+                            if (loadingOverlay) {
+                                loadingOverlay.classList.remove('show');
+                                setTimeout(function() {
+                                    if (loadingOverlay) {
+                                        loadingOverlay.style.display = 'none';
+                                        loadingOverlay.style.opacity = '0';
+                                        loadingOverlay.setAttribute('aria-hidden', 'true');
+                                    }
+                                }, 200);
+                            }
+                        }, 100); // إخفاء سريع بعد التحميل
+                    }, { once: true });
+                    
+                    // إخفاء عند DOMContentLoaded أيضاً (أسرع)
+                    document.addEventListener('DOMContentLoaded', function() {
+                        setTimeout(function() {
+                            isNavigating = false;
+                        }, 50);
                     }, { once: true });
                 }
             }
             
             ensureLoadingHidden();
             
-            // Fallback إضافي بعد 5 ثواني
+            // Fallback إضافي بعد 3 ثواني
             setTimeout(function() {
                 if (loadingOverlay && loadingOverlay.classList.contains('show')) {
-                    console.warn('Loading overlay still visible after 5s, forcing hide');
+                    isNavigating = false;
                     activeRequests = 0;
-                    hideLoading();
+                    if (loadingOverlay) {
+                        loadingOverlay.classList.remove('show');
+                        setTimeout(function() {
+                            if (loadingOverlay) {
+                                loadingOverlay.style.display = 'none';
+                                loadingOverlay.style.opacity = '0';
+                                loadingOverlay.setAttribute('aria-hidden', 'true');
+                            }
+                        }, 200);
+                    }
                 }
-            }, 5000);
+            }, 3000);
             
-            // إخفاء loading عند الرجوع للخلف
+            // إخفاء loading عند الرجوع للخلف أو عند تحميل الصفحة من cache
             window.addEventListener('pageshow', function(event) {
-                if (event.persisted) {
-                    activeRequests = 0;
-                    if (showTimeout) clearTimeout(showTimeout);
-                    if (hideTimeout) clearTimeout(hideTimeout);
-                    hideLoading();
+                isNavigating = false;
+                activeRequests = 0;
+                if (showTimeout) clearTimeout(showTimeout);
+                if (hideTimeout) clearTimeout(hideTimeout);
+                
+                if (loadingOverlay) {
+                    loadingOverlay.classList.remove('show');
+                    setTimeout(function() {
+                        if (loadingOverlay) {
+                            loadingOverlay.style.display = 'none';
+                            loadingOverlay.style.opacity = '0';
+                            loadingOverlay.setAttribute('aria-hidden', 'true');
+                        }
+                    }, 100);
                 }
             });
             

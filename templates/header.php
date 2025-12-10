@@ -995,13 +995,29 @@ if (ob_get_level() > 0) {
         
         #professionalLoadingOverlay.show {
             display: flex !important;
-            opacity: 1;
-            visibility: visible;
+            opacity: 1 !important;
+            visibility: visible !important;
         }
         
         /* تأكد من أن overlay مرئي عند class show */
         #professionalLoadingOverlay.show[style*="display: none"] {
             display: flex !important;
+        }
+        
+        /* تحسين الاستجابة على الموبايل */
+        @media (max-width: 768px) {
+            #professionalLoadingOverlay .loading-text {
+                font-size: 16px;
+            }
+            
+            #professionalLoadingOverlay .loading-subtext {
+                font-size: 12px;
+            }
+            
+            #professionalLoadingOverlay .spinner-wrapper {
+                width: 60px;
+                height: 60px;
+            }
         }
         
         #professionalLoadingOverlay .loading-container {
