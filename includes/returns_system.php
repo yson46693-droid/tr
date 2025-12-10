@@ -1617,6 +1617,7 @@ function applyReturnSalaryDeduction(int $returnId, ?int $salesRepId = null, ?int
                 $salaryId = (int)$db->getLastInsertId();
                 error_log("Created new salary record with ID: {$salaryId} for user {$salesRepId}, month {$month}, year {$year}");
             }
+            }
         
         if ($salaryId <= 0) {
             return [
