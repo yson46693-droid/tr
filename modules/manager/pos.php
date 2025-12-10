@@ -1402,17 +1402,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $invoiceData = getInvoice($invoiceId);
                 
-                // إضافة credit_used إلى invoiceData لضمان ظهوره في الفاتورة المطبوعة
-                if ($invoiceData && $creditUsed > 0) {
-                    $invoiceData['credit_used'] = $creditUsed;
-                    // تحديث paid_amount ليشمل المبلغ المدفوع من رصيد العميل
-                    // paid_amount في الفاتورة يجب أن يعكس المبلغ الإجمالي المدفوع (نقدي + رصيد دائن)
+                // تحديث invoiceData بالمبالغ الصحيحة لضمان ظهورها بشكل صحيح في الفاتورة المطبوعة
+                if ($invoiceData) {
+                    // تحديث paid_amount: المبلغ الإجمالي المدفوع (نقدي + رصيد دائن)
                     $invoiceData['paid_amount'] = $totalPaidAmount;
-                    // تحديث paid_from_credit للإشارة إلى أن جزء من المبلغ دُفع من رصيد العميل
-                    $invoiceData['paid_from_credit'] = ($creditUsed > 0) ? 1 : 0;
+                    
+                    // تحديث remaining_amount: المبلغ المتبقي بعد الدفع
+                    $invoiceData['remaining_amount'] = $dueAmount;
+                    
+                    // إضافة credit_used إذا كان هناك استخدام من الرصيد الدائن
+                    if ($creditUsed > 0) {
+                        $invoiceData['credit_used'] = $creditUsed;
+                        $invoiceData['paid_from_credit'] = 1;
+                    } else {
+                        $invoiceData['credit_used'] = 0;
+                        $invoiceData['paid_from_credit'] = 0;
+                    }
                 }
                 
                 $invoiceMeta = [
+                    'payment_type' => $paymentType, // إضافة payment_type لاستخدامه في طباعة الفاتورة
                     'summary' => [
                         'subtotal' => $subtotal,
                         'prepaid' => $prepaidAmount,

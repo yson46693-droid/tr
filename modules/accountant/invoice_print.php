@@ -125,9 +125,14 @@ $discount        = $invoiceData['discount_amount'] ?? 0;
 $total           = $invoiceData['total_amount'] ?? 0;
 $paidAmount      = $invoiceData['paid_amount'] ?? 0;
 // استخدام remaining_amount من قاعدة البيانات إذا كان موجوداً، وإلا حسابها من total - paid
+// ملاحظة: عند البيع بالآجل، paidAmount = 0، لذا remaining_amount يجب أن يكون = total
 $dueAmount       = isset($invoiceData['remaining_amount']) && $invoiceData['remaining_amount'] !== null 
     ? (float)$invoiceData['remaining_amount'] 
     : max(0, $total - $paidAmount);
+// التأكد من أن dueAmount لا يكون 0 إذا كان total > 0 و paidAmount = 0 (بيع بالآجل)
+if ($total > 0 && $paidAmount <= 0.01 && $dueAmount <= 0.01) {
+    $dueAmount = $total;
+}
 $creditUsed      = (float)($invoiceData['credit_used'] ?? 0);
 $paidFromCredit  = isset($invoiceData['paid_from_credit']) ? (int)$invoiceData['paid_from_credit'] : 0;
 // التحقق من كون الفاتورة مدفوعة من رصيد العميل
@@ -392,15 +397,20 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
                         <strong><?php echo formatCurrency($total); ?></strong>
                     </div>
                     <?php 
-                    // إخفاء حقل "المدفوع" إذا كان البيع بالآجل (credit) في نقطة بيع المندوب
+                    // إخفاء حقل "المدفوع" فقط إذا كان البيع بالآجل الكامل (credit) بدون أي دفع نقدي
                     // أو إذا كانت الفاتورة مدفوعة بالكامل من رصيد العميل فقط (بدون دفع نقدي)
                     $paymentType = isset($invoiceMeta) && is_array($invoiceMeta) ? ($invoiceMeta['payment_type'] ?? null) : null;
                     $isCreditSale = ($paymentType === 'credit');
                     // حساب المبلغ النقدي الفعلي (paidAmount - creditUsed)
                     $cashPaidAmount = max(0, $paidAmount - $creditUsed);
-                    // إخفاء "المدفوع" فقط إذا كان البيع بالآجل الكامل (بدون دفع نقدي)
+                    // إخفاء "المدفوع" فقط إذا كان البيع بالآجل الكامل (بدون دفع نقدي على الإطلاق)
                     // أو إذا كانت الفاتورة مدفوعة بالكامل من رصيد العميل فقط (بدون دفع نقدي)
-                    $shouldHideCashPaid = $isCreditSale || ($isPaidFromCredit && $cashPaidAmount <= 0.01);
+                    // ملاحظة: في حالة التحصيل الجزئي (partial)، يجب عرض المبلغ المدفوع
+                    $shouldHideCashPaid = ($isCreditSale && $cashPaidAmount <= 0.01) || ($isPaidFromCredit && $cashPaidAmount <= 0.01);
+                    // عرض "المدفوع" في حالة:
+                    // 1. التحصيل الجزئي (partial) - يجب عرض المبلغ المدفوع
+                    // 2. الدفع الكامل (full) - يجب عرض المبلغ المدفوع
+                    // 3. أي حالة فيها cashPaidAmount > 0
                     if (!$shouldHideCashPaid && $cashPaidAmount > 0.01): ?>
                         <div class="summary-row">
                             <span>المدفوع</span>
