@@ -393,14 +393,18 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
                     </div>
                     <?php 
                     // إخفاء حقل "المدفوع" إذا كان البيع بالآجل (credit) في نقطة بيع المندوب
-                    // أو إذا كانت الفاتورة مدفوعة من رصيد العميل
+                    // أو إذا كانت الفاتورة مدفوعة بالكامل من رصيد العميل فقط (بدون دفع نقدي)
                     $paymentType = isset($invoiceMeta) && is_array($invoiceMeta) ? ($invoiceMeta['payment_type'] ?? null) : null;
                     $isCreditSale = ($paymentType === 'credit');
-                    // إخفاء "المدفوع" إذا كان البيع بالآجل أو إذا كانت الفاتورة مدفوعة من رصيد العميل
-                    if (!$isCreditSale && !$isPaidFromCredit): ?>
+                    // حساب المبلغ النقدي الفعلي (paidAmount - creditUsed)
+                    $cashPaidAmount = max(0, $paidAmount - $creditUsed);
+                    // إخفاء "المدفوع" فقط إذا كان البيع بالآجل الكامل (بدون دفع نقدي)
+                    // أو إذا كانت الفاتورة مدفوعة بالكامل من رصيد العميل فقط (بدون دفع نقدي)
+                    $shouldHideCashPaid = $isCreditSale || ($isPaidFromCredit && $cashPaidAmount <= 0.01);
+                    if (!$shouldHideCashPaid && $cashPaidAmount > 0.01): ?>
                         <div class="summary-row">
                             <span>المدفوع</span>
-                            <strong class="text-success"><?php echo formatCurrency($paidAmount); ?></strong>
+                            <strong class="text-success"><?php echo formatCurrency($cashPaidAmount); ?></strong>
                         </div>
                     <?php endif; ?>
                     <?php if ($creditUsed > 0): ?>

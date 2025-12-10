@@ -1401,6 +1401,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $conn->commit();
 
                 $invoiceData = getInvoice($invoiceId);
+                
+                // إضافة credit_used إلى invoiceData لضمان ظهوره في الفاتورة المطبوعة
+                if ($invoiceData && $creditUsed > 0) {
+                    $invoiceData['credit_used'] = $creditUsed;
+                    // تحديث paid_amount ليشمل المبلغ المدفوع من رصيد العميل
+                    // paid_amount في الفاتورة يجب أن يعكس المبلغ الإجمالي المدفوع (نقدي + رصيد دائن)
+                    $invoiceData['paid_amount'] = $totalPaidAmount;
+                    // تحديث paid_from_credit للإشارة إلى أن جزء من المبلغ دُفع من رصيد العميل
+                    $invoiceData['paid_from_credit'] = ($creditUsed > 0) ? 1 : 0;
+                }
+                
                 $invoiceMeta = [
                     'summary' => [
                         'subtotal' => $subtotal,
