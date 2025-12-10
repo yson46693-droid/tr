@@ -74,11 +74,10 @@ if (!isset($GLOBALS[$cacheKey])) {
         
         $GLOBALS[$cacheKey] = !empty($todayExecution);
         
-        // Log للتحقق
-        if ($GLOBALS[$cacheKey]) {
+        // Log للتحقق - فقط مرة واحدة لكل يوم
+        if ($GLOBALS[$cacheKey] && !isset($GLOBALS[$cacheKey . '_logged'])) {
             error_log("auto_salary_init: Found execution for today - skipping all further execution");
-        } else {
-            error_log("auto_salary_init: No execution found for today - will proceed");
+            $GLOBALS[$cacheKey . '_logged'] = true;
         }
     } catch (Exception $e) {
         // في حالة الخطأ، نعتبر أنه لم يتم التنفيذ
@@ -660,12 +659,8 @@ if (empty($GLOBALS['auto_salary_init_executed'])) {
     
     // إذا لم يتم التنفيذ اليوم، نستمر في التنفيذ
     if (!isset($GLOBALS[$cacheKey]) || $GLOBALS[$cacheKey] !== true) {
-        error_log("auto_salary_init: Calling runAutoSalaryInit() - not executed today yet");
         runAutoSalaryInit();
-    } else {
-        error_log("auto_salary_init: Skipping runAutoSalaryInit() - already executed today");
     }
-} else {
-    error_log("auto_salary_init: Skipping runAutoSalaryInit() - already executed in this request");
+    // لا نطبع رسائل عند التخطي - هذا طبيعي
 }
 

@@ -278,9 +278,8 @@ function ensureReturnSchemaCompatibility(): void
                                 error_log("Error in simple enum update: " . $e2->getMessage());
                             }
                         }
-                    } else {
-                        error_log("'return_request' already exists in approvals.type enum");
                     }
+                    // لا نطبع رسالة إذا كان return_request موجوداً بالفعل - هذا طبيعي
                 }
             }
         } catch (Throwable $e) {

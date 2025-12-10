@@ -683,6 +683,12 @@ if (ob_get_level() > 0) {
             overflow: visible !important;
         }
         
+        /* التأكد من أن modal-content لا يمنع التمرير */
+        .modal-dialog-scrollable .modal-content {
+            max-height: 100%;
+            overflow: hidden;
+        }
+        
         /* إصلاح خاص للـ modal-body - السماح للـ dropdown بالظهور */
         .modal-body {
             overflow-x: hidden !important;
@@ -712,6 +718,33 @@ if (ob_get_level() > 0) {
             overflow-x: hidden !important;
             position: relative;
             contain: none !important;
+            max-height: calc(100vh - 200px) !important;
+        }
+        
+        /* للتأكد من أن النماذج الكبيرة قابلة للتمرير */
+        .modal-dialog.modal-lg.modal-dialog-scrollable .modal-body {
+            max-height: calc(100vh - 180px) !important;
+        }
+        
+        .modal-dialog.modal-xl.modal-dialog-scrollable .modal-body {
+            max-height: calc(100vh - 160px) !important;
+        }
+        
+        /* التأكد من أن modal-content لا يمنع التمرير */
+        .modal-dialog-scrollable .modal-content {
+            max-height: 100%;
+            overflow: hidden;
+        }
+        
+        /* إصلاح إضافي: التأكد من أن modal-dialog-scrollable يعمل بشكل صحيح */
+        .modal-dialog-scrollable {
+            height: auto !important;
+            max-height: calc(100vh - 1rem) !important;
+        }
+        
+        .modal-dialog-scrollable .modal-content {
+            height: auto !important;
+            max-height: 100% !important;
         }
         
         /* التأكد من أن select dropdown يظهر بشكل صحيح */
