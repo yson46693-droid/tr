@@ -960,12 +960,31 @@ if (!defined('ACCESS_ALLOWED')) {
                 const hrefPath = href.split('?')[0].split('#')[0];
                 const isSamePage = hrefPath === currentPath || hrefPath === '';
                 
-                // إذا كان الرابط يحتوي على data-no-splash، لا تظهر loading فقط للروابط الداخلية السريعة
-                if (link.hasAttribute('data-no-splash') && isInternalLink && isSamePage) {
+                // التحقق من الصفحات الخاصة (chat, batch_reader) التي تحتاج معاملة خاصة
+                const isSpecialPage = href.includes('page=chat') || href.includes('page=batch_reader');
+                
+                // إذا كان الرابط يحتوي على data-no-splash، لا تظهر loading للروابط الداخلية
+                if (link.hasAttribute('data-no-splash') && isInternalLink) {
+                    // للصفحات الخاصة، نضيف flag في sessionStorage لتجاهل شاشة التحميل
+                    if (isSpecialPage) {
+                        sessionStorage.setItem('internalNavigation', 'true');
+                    }
                     return;
                 }
                 
                 if (isInternalLink && !isSamePage) {
+                    // للصفحات الخاصة (chat, batch_reader)، لا نعرض loading overlay
+                    if (isSpecialPage) {
+                        sessionStorage.setItem('internalNavigation', 'true');
+                        // إخفاء pageLoader فوراً عند التنقل
+                        const pageLoader = document.getElementById('pageLoader');
+                        if (pageLoader) {
+                            pageLoader.classList.add('hidden');
+                            pageLoader.style.display = 'none';
+                        }
+                        return; // لا نعرض professionalLoadingOverlay للصفحات الخاصة
+                    }
+                    
                     isNavigating = true;
                     // إخفاء pageLoader فوراً عند التنقل
                     const pageLoader = document.getElementById('pageLoader');
@@ -987,6 +1006,13 @@ if (!defined('ACCESS_ALLOWED')) {
             // إظهار loading فوراً عند بدء تحميل صفحة جديدة (beforeunload) - مرة واحدة فقط
             let beforeUnloadTriggered = false;
             window.addEventListener('beforeunload', function() {
+                // التحقق من أن هذه ليست صفحة خاصة (chat, batch_reader)
+                const isSpecialPage = window.location.href.includes('page=chat') || window.location.href.includes('page=batch_reader');
+                if (isSpecialPage) {
+                    // للصفحات الخاصة، لا نعرض loading overlay
+                    return;
+                }
+                
                 if (isNavigating && !beforeUnloadTriggered) {
                     beforeUnloadTriggered = true;
                     // إظهار loading فوراً قبل تحميل الصفحة
@@ -1240,6 +1266,14 @@ if (!defined('ACCESS_ALLOWED')) {
             window.addEventListener('pageshow', function(event) {
                 // إعادة تعيين flag عند تحميل صفحة جديدة
                 pageLoaderHidden = false;
+                
+                // التحقق من الصفحات الخاصة (chat, batch_reader)
+                const isSpecialPage = window.location.href.includes('page=chat') || window.location.href.includes('page=batch_reader');
+                if (isSpecialPage) {
+                    pageLoaderHidden = true;
+                    hideSplashScreen(true); // إخفاء فوري للصفحات الخاصة
+                    return;
+                }
                 
                 // إذا كانت الصفحة من cache (back/forward)، لا تظهر splash screen
                 if (event.persisted && pageLoader) {

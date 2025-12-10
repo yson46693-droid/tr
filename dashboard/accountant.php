@@ -1531,8 +1531,30 @@ $pageDescription = 'لوحة تحكم المحاسب - إدارة المعامل
                 <!-- صفحة قارئ أرقام التشغيلات -->
                 <div class="container-fluid p-0" style="height: 100vh; overflow: hidden;">
                     <iframe src="<?php echo getRelativeUrl('reader/index.php'); ?>" 
-                            style="width: 100%; height: 100%; border: none; display: block;"></iframe>
+                            style="width: 100%; height: 100%; border: none; display: block;"
+                            data-no-loading="true"></iframe>
                 </div>
+                <script>
+                    // منع ظهور شاشة التحميل عند تحميل iframe
+                    (function() {
+                        const iframe = document.querySelector('iframe[data-no-loading="true"]');
+                        if (iframe) {
+                            // إخفاء شاشة التحميل فوراً عند تحميل iframe
+                            const loadingOverlay = document.getElementById('professionalLoadingOverlay');
+                            if (loadingOverlay) {
+                                loadingOverlay.style.display = 'none';
+                                loadingOverlay.style.opacity = '0';
+                                loadingOverlay.classList.remove('show');
+                                loadingOverlay.setAttribute('aria-hidden', 'true');
+                            }
+                            const pageLoader = document.getElementById('pageLoader');
+                            if (pageLoader) {
+                                pageLoader.classList.add('hidden');
+                                pageLoader.style.display = 'none';
+                            }
+                        }
+                    })();
+                </script>
                 
             <?php elseif ($page === 'local_customers'): ?>
                 <?php 
