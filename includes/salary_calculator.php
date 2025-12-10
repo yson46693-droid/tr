@@ -1089,18 +1089,17 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             $currentAdvancesDeduction = floatval($currentSalary['advances_deduction'] ?? 0);
             $currentDeductions = floatval($currentSalary['deductions'] ?? 0);
             
-            // قراءة collections_bonus الحالي للمحافظة على المكافآت الفورية
-            $existingCollectionsBonus = 0;
-            if ($hasCollectionsBonusColumn) {
-                $existingCollectionsBonus = floatval($currentSalary['collections_bonus'] ?? 0);
-                // ===== إصلاح: استخدام القيمة الأكبر بين الموجودة والمحسوبة =====
-                // collections_bonus يتم تحديثه مباشرة عبر applyCollectionInstantReward (للتحصيلات الجزئية)
-                // لكن للبيع الكاش، يتم حسابه عبر calculateSalesCollections
-                // لذلك نستخدم القيمة الأكبر لضمان عدم فقدان أي مكافآت
-                $calculatedCollectionsBonus = round($collectionsBonusCalc, 2);
-                $collectionsBonusCalc = max($existingCollectionsBonus, $calculatedCollectionsBonus);
-                $calculation['collections_bonus'] = $collectionsBonusCalc;
-                $calculation['total_bonus'] = $calculation['bonus'] + $collectionsBonusCalc;
+                // قراءة collections_bonus الحالي (للرجوع إليه فقط)
+                $existingCollectionsBonus = 0;
+                if ($hasCollectionsBonusColumn) {
+                    $existingCollectionsBonus = floatval($currentSalary['collections_bonus'] ?? 0);
+                    // collections_bonus يجب أن يكون دائماً = القيمة المحسوبة من جميع التحصيلات في الشهر
+                    // لأن calculateSalesCollections تحسب من جميع collections في الشهر، لذا يجب أن تكون القيمة المحسوبة هي القيمة الصحيحة دائماً
+                    // يجب استخدام القيمة المحسوبة مباشرة (وليس max) لضمان أن نسبة التحصيلات تُحسب بشكل صحيح وتراكمي
+                    $calculatedCollectionsBonus = round($collectionsBonusCalc, 2);
+                    $collectionsBonusCalc = $calculatedCollectionsBonus;
+                    $calculation['collections_bonus'] = $collectionsBonusCalc;
+                    $calculation['total_bonus'] = $calculation['bonus'] + $collectionsBonusCalc;
                 
                 // تسجيل لأغراض التتبع
                 error_log(sprintf(
@@ -1143,15 +1142,14 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             $currentAdvancesDeduction = floatval($currentSalary['advances_deduction'] ?? 0);
             $currentDeductions = floatval($currentSalary['deductions'] ?? 0);
             
-            // قراءة collections_bonus الحالي للمحافظة على المكافآت الفورية
+            // قراءة collections_bonus الحالي (للرجوع إليه فقط)
             if ($hasCollectionsBonusColumn) {
                 $existingCollectionsBonus = floatval($currentSalary['collections_bonus'] ?? 0);
-                // ===== إصلاح: استخدام القيمة الأكبر بين الموجودة والمحسوبة =====
-                // collections_bonus يتم تحديثه مباشرة عبر applyCollectionInstantReward (للتحصيلات الجزئية)
-                // لكن للبيع الكاش، يتم حسابه عبر calculateSalesCollections
-                // لذلك نستخدم القيمة الأكبر لضمان عدم فقدان أي مكافآت
+                // collections_bonus يجب أن يكون دائماً = القيمة المحسوبة من جميع التحصيلات في الشهر
+                // لأن calculateSalesCollections تحسب من جميع collections في الشهر، لذا يجب أن تكون القيمة المحسوبة هي القيمة الصحيحة دائماً
+                // يجب استخدام القيمة المحسوبة مباشرة (وليس max) لضمان أن نسبة التحصيلات تُحسب بشكل صحيح وتراكمي
                 $calculatedCollectionsBonus = round($collectionsBonusCalc, 2);
-                $collectionsBonusCalc = max($existingCollectionsBonus, $calculatedCollectionsBonus);
+                $collectionsBonusCalc = $calculatedCollectionsBonus;
                 $calculation['collections_bonus'] = $collectionsBonusCalc;
                 $calculation['total_bonus'] = $calculation['bonus'] + $collectionsBonusCalc;
                 
@@ -1373,12 +1371,13 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                     $existingCollectionsAmount = floatval($currentSalaryBonus['collections_amount'] ?? 0);
                 }
                 
-                // استخدام القيمة الأكبر بين:
-                // 1. القيمة الحالية المحفوظة (تتضمن المكافآت الفورية من applyCollectionInstantReward)
-                // 2. القيمة المحسوبة من collections (2%)
-                // هذا يضمن عدم محو المكافآت الفورية المضافة
-                $finalCollectionsBonus = max($existingCollectionsBonus, round($collectionsBonusCalc, 2));
-                $finalCollectionsAmount = max($existingCollectionsAmount, round($collectionsAmountCalc, 2));
+                // collections_bonus يجب أن يكون دائماً = القيمة المحسوبة من جميع التحصيلات في الشهر
+                // لأن calculateSalesCollections تحسب من جميع collections في الشهر، لذا يجب أن تكون القيمة المحسوبة هي القيمة الصحيحة دائماً
+                // يجب استخدام القيمة المحسوبة مباشرة (وليس max) لضمان أن نسبة التحصيلات تُحسب بشكل صحيح وتراكمي
+                $calculatedCollectionsBonus = round($collectionsBonusCalc, 2);
+                $calculatedCollectionsAmount = round($collectionsAmountCalc, 2);
+                $finalCollectionsBonus = $calculatedCollectionsBonus;
+                $finalCollectionsAmount = $calculatedCollectionsAmount;
                 
                 // تحديث فقط إذا كانت القيمة مختلفة
                 if (abs($finalCollectionsBonus - $existingCollectionsBonus) > 0.01 || 

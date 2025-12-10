@@ -1150,14 +1150,10 @@ function recordAttendanceCheckOut($userId, $photoBase64 = null) {
                         $collectionsAmount = calculateSalesCollections($userId, $attendanceMonthNumber, $attendanceYearNumber);
                         $calculatedBonusFromCollections = round($collectionsAmount * 0.02, 2);
                         
-                        // قراءة القيمة الحالية من collections_bonus (قد تتضمن مكافآت من pos.php)
-                        $existingCollectionsBonus = floatval($existingSalary['collections_bonus'] ?? 0);
-                        
-                        // استخدام القيمة الأكبر بين:
-                        // 1. القيمة الحالية المحفوظة (تتضمن المكافآت من pos.php)
-                        // 2. القيمة المحسوبة من collections (2%)
-                        // هذا يضمن عدم محو المكافآت المضافة من pos.php
-                        $collectionsBonus = max($existingCollectionsBonus, $calculatedBonusFromCollections);
+                        // collections_bonus يجب أن يكون دائماً = القيمة المحسوبة من جميع التحصيلات في الشهر
+                        // لأن calculateSalesCollections تحسب من جميع collections في الشهر، لذا يجب أن تكون القيمة المحسوبة هي القيمة الصحيحة دائماً
+                        // يجب استخدام القيمة المحسوبة مباشرة (وليس max) لضمان أن نسبة التحصيلات تُحسب بشكل صحيح وتراكمي
+                        $collectionsBonus = $calculatedBonusFromCollections;
                         
                         error_log("Sales collections: amount={$collectionsAmount}, calculatedBonus={$calculatedBonusFromCollections}, existingBonus={$existingCollectionsBonus}, finalBonus={$collectionsBonus}");
                         
@@ -2311,14 +2307,10 @@ function processAutoCheckoutForMissingEmployees(): void
                                 $collectionsAmount = calculateSalesCollections($userId, $attendanceMonthNumber, $attendanceYearNumber);
                                 $calculatedBonusFromCollections = round($collectionsAmount * 0.02, 2);
                                 
-                                // قراءة القيمة الحالية من collections_bonus (قد تتضمن مكافآت من pos.php)
-                                $existingCollectionsBonus = floatval($existingSalary['collections_bonus'] ?? 0);
-                                
-                                // استخدام القيمة الأكبر بين:
-                                // 1. القيمة الحالية المحفوظة (تتضمن المكافآت من pos.php)
-                                // 2. القيمة المحسوبة من collections (2%)
-                                // هذا يضمن عدم محو المكافآت المضافة من pos.php
-                                $collectionsBonus = max($existingCollectionsBonus, $calculatedBonusFromCollections);
+                                // collections_bonus يجب أن يكون دائماً = القيمة المحسوبة من جميع التحصيلات في الشهر
+                                // لأن calculateSalesCollections تحسب من جميع collections في الشهر، لذا يجب أن تكون القيمة المحسوبة هي القيمة الصحيحة دائماً
+                                // يجب استخدام القيمة المحسوبة مباشرة (وليس max) لضمان أن نسبة التحصيلات تُحسب بشكل صحيح وتراكمي
+                                $collectionsBonus = $calculatedBonusFromCollections;
                                 
                                 $collectionsBonusColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'collections_bonus'");
                                 if (!empty($collectionsBonusColumnCheck)) {
