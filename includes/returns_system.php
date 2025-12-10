@@ -1798,14 +1798,10 @@ function approveReturn(int $returnId, ?int $approvedBy = null, ?string $notes = 
             );
         }
         
-        // تحديد نوع المخزن بناءً على دور المستخدم
-        $userRole = strtolower($currentUser['role'] ?? '');
-        $isManager = ($userRole === 'manager');
-        
-        // جلب بيانات المرتجع
+        // جلب بيانات المرتجع مع دور المندوب الذي أنشأ المرتجع
         $return = $db->queryOne(
             "SELECT r.*, c.name as customer_name, c.balance as customer_balance,
-                    u.full_name as sales_rep_name
+                    u.full_name as sales_rep_name, u.role as sales_rep_role
              FROM returns r
              LEFT JOIN customers c ON r.customer_id = c.id
              LEFT JOIN users u ON r.sales_rep_id = u.id
@@ -1910,12 +1906,18 @@ function approveReturn(int $returnId, ?int $approvedBy = null, ?string $notes = 
             }
             
             // 3. إرجاع المنتجات للمخزون
-            // إذا كان المستخدم مديراً، إرجاع المنتجات إلى المخزن الرئيسي
-            // وإلا، إرجاعها إلى مخزن سيارة المندوب
-            if ($isManager) {
-                $inventoryResult = returnProductsToMainWarehouse($returnId, $approvedBy);
-            } else {
+            // تحديد نوع المخزن بناءً على من أنشأ المرتجع (sales_rep_id)، وليس من وافق عليه
+            // إذا كان sales_rep_id موجود وله دور 'sales'، إرجاع المنتجات لمخزن سيارة المندوب
+            // وإلا، إرجاعها للمخزن الرئيسي (في حالة إنشاء المرتجع من قبل المدير أو عدم وجود مندوب)
+            $salesRepRole = strtolower($return['sales_rep_role'] ?? '');
+            $shouldReturnToVehicle = ($salesRepId > 0 && $salesRepRole === 'sales');
+            
+            if ($shouldReturnToVehicle) {
+                error_log("Return {$returnId}: Returning products to vehicle inventory (sales rep ID: {$salesRepId})");
                 $inventoryResult = returnProductsToVehicleInventory($returnId, $approvedBy);
+            } else {
+                error_log("Return {$returnId}: Returning products to main warehouse (sales_rep_id: {$salesRepId}, sales_rep_role: {$salesRepRole})");
+                $inventoryResult = returnProductsToMainWarehouse($returnId, $approvedBy);
             }
             
             if (!$inventoryResult['success']) {
