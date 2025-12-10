@@ -30,21 +30,29 @@
         }
     }
 
-    // عند بدء فتح الـ modal - إعداد الـ animation بشكل سلس
+    // عند بدء فتح الـ modal - إعداد الـ animation بشكل سلس بدون lag
     document.addEventListener('show.bs.modal', function (event) {
         const modal = event.target;
         ensureFadeClass(modal);
         enableModal(modal);
         
-        // إزالة أي styles inline قد تتعارض مع CSS
         const modalDialog = modal.querySelector('.modal-dialog');
         if (modalDialog) {
-            // استخدام requestAnimationFrame لضمان سلاسة الـ animation
+            // إعداد الحالة الأولية قبل بدء الـ animation
+            // استخدام requestAnimationFrame لضمان عدم وجود lag
             requestAnimationFrame(function() {
-                // إزالة أي styles inline للسماح لـ CSS بالتحكم
+                // إزالة أي styles inline قد تتعارض
                 modalDialog.style.transform = '';
                 modalDialog.style.opacity = '';
                 modalDialog.style.transition = '';
+                
+                // إضافة class مؤقت لضمان بدء الـ animation بشكل صحيح
+                modal.classList.add('showing');
+                
+                // إزالة class بعد بدء الـ animation مباشرة
+                requestAnimationFrame(function() {
+                    modal.classList.remove('showing');
+                });
             });
         }
     });

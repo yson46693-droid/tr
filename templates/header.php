@@ -791,7 +791,9 @@ if (ob_get_level() > 0) {
         
         /* تأثير انسدال سلس (slide down) للـ modals عند فتحها - يطبق على جميع الـ modals */
         /* استخدام GPU acceleration لتحسين الأداء وإزالة الـ lag */
-        .modal .modal-dialog {
+        .modal .modal-dialog,
+        .modal.fade .modal-dialog,
+        .modal:not(.fade) .modal-dialog {
             will-change: transform, opacity;
             backface-visibility: hidden;
             perspective: 1000px;
@@ -803,13 +805,16 @@ if (ob_get_level() > 0) {
         /* حالة الـ modal عند الفتح - animation سلس */
         .modal.show .modal-dialog,
         .modal.fade.show .modal-dialog,
-        .modal.showing .modal-dialog {
+        .modal.showing .modal-dialog,
+        .modal:not(.fade).show .modal-dialog {
             transform: translate3d(0, 0, 0) !important;
             opacity: 1 !important;
         }
         
         /* حالة البداية - قبل إظهار الـ modal (لا transition هنا لتجنب lag) */
-        .modal:not(.show):not(.showing) .modal-dialog {
+        .modal:not(.show):not(.showing) .modal-dialog,
+        .modal.fade:not(.show):not(.showing) .modal-dialog,
+        .modal:not(.fade):not(.show):not(.showing) .modal-dialog {
             transform: translate3d(0, -30px, 0) !important;
             opacity: 0 !important;
             transition: none !important;
