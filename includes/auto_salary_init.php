@@ -16,6 +16,7 @@ if (!defined('ACCESS_ALLOWED')) {
 /**
  * فحص فوري من قاعدة البيانات
  * لمنع أي استدعاءات إضافية إذا تم التنفيذ اليوم
+ * يفحص وجود سجل بتاريخ اليوم في جدول auto_salary_init_logs
  */
 function checkAutoSalaryInitToday() {
     $today = date('Y-m-d');
@@ -56,7 +57,8 @@ function checkAutoSalaryInitToday() {
                           KEY `user_id` (`user_id`),
                           KEY `status` (`status`),
                           KEY `month_year` (`month`, `year`),
-                          KEY `status_date` (`status`, `call_time`)
+                          KEY `status_date` (`status`, `call_time`),
+                          KEY `date_status` (DATE(`call_time`), `status`)
                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                     ");
                     error_log("auto_salary_init: Created auto_salary_init_logs table");
@@ -65,15 +67,19 @@ function checkAutoSalaryInitToday() {
                 }
             }
             
-            // فحص سريع: هل تم التنفيذ اليوم؟
+            // فحص دقيق: هل تم التنفيذ اليوم؟ (نفحص أي سجل بتاريخ اليوم بغض النظر عن الحالة)
+            // هذا يضمن أننا لا نستدعي الملف مرة أخرى في نفس اليوم حتى لو فشل التنفيذ السابق
             $todayExecution = $db->queryOne(
-                "SELECT id FROM auto_salary_init_logs 
-                 WHERE DATE(call_time) = CURDATE() 
-                 AND status = 'executed'
+                "SELECT id, status FROM auto_salary_init_logs 
+                 WHERE DATE(call_time) = CURDATE()
                  LIMIT 1"
             );
             
             $GLOBALS[$cacheKey] = !empty($todayExecution);
+            
+            if ($GLOBALS[$cacheKey]) {
+                error_log("auto_salary_init: Found existing log for today (status: " . ($todayExecution['status'] ?? 'unknown') . ") - skipping execution");
+            }
         } catch (Exception $e) {
             // في حالة الخطأ، نعتبر أنه لم يتم التنفيذ
             $GLOBALS[$cacheKey] = false;
@@ -131,14 +137,9 @@ function ensureAutoSalaryInitLogsTable($db) {
 /**
  * تسجيل محاولة استدعاء auto_salary_init
  * يتم تسجيل جميع الاستدعاءات المهمة (executed و error و skipped المهمة)
+ * هذه الدالة تستخدم فقط للتسجيل اليدوي، بينما runAutoSalaryInit تسجل تلقائياً
  */
 function logAutoSalaryInitCall($db, $status, $reason = null, $createdCount = 0, $skippedCount = 0, $errorCount = 0, $month = null, $year = null) {
-    // تسجيل جميع الاستدعاءات المهمة
-    // تخطي فقط skipped البسيطة (مثل "تم استدعاؤه في هذه الجلسة")
-    if ($status === 'skipped' && ($reason === 'تم استدعاؤه في هذه الجلسة' || $reason === 'تم استدعاؤه اليوم بالفعل')) {
-        return true;
-    }
-    
     try {
         ensureAutoSalaryInitLogsTable($db);
         
@@ -251,11 +252,11 @@ function initializeMonthSalaries() {
         
         try {
             // التحقق من أن auto_salary_init تم استدعاؤه اليوم بالفعل مع lock
+            // نفحص أي سجل بتاريخ اليوم (بغض النظر عن الحالة) لأن runAutoSalaryInit تسجل السجل قبل الاستدعاء
             $todayCall = $db->queryOne(
                 "SELECT id, status, call_time 
                  FROM auto_salary_init_logs 
-                 WHERE DATE(call_time) = CURDATE() 
-                 AND status = 'executed'
+                 WHERE DATE(call_time) = CURDATE()
                  ORDER BY call_time DESC 
                  LIMIT 1
                  FOR UPDATE"
@@ -263,7 +264,7 @@ function initializeMonthSalaries() {
             
             if (!empty($todayCall)) {
                 $conn->commit();
-                // لا نسجل skipped لتقليل عدد السجلات
+                // تم التنفيذ اليوم بالفعل - نرجع بدون إنشاء رواتب جديدة
                 return ['success' => true, 'message' => 'Already executed today', 'created' => 0, 'skipped' => true];
             }
             
@@ -337,9 +338,8 @@ function initializeMonthSalaries() {
                 $conn->commit();
                 error_log("auto_salary_init: No active users found with hourly_rate > 0");
                 $_SESSION[$sessionKey] = true;
-                // تسجيل الحالة في قاعدة البيانات
-                logAutoSalaryInitCall($db, 'executed', 'لا يوجد مستخدمين نشطين للعملية', 0, 0, 0, $currentMonth, $currentYear);
-                return ['success' => true, 'message' => 'No users to process', 'created' => 0];
+                // ملاحظة: لا نسجل سجل هنا لأن runAutoSalaryInit تسجل السجل قبل الاستدعاء وتقوم بتحديثه بعد الانتهاء
+                return ['success' => true, 'message' => 'No users to process', 'created' => 0, 'skipped' => true];
             }
         
             // تحميل salary_calculator إذا لم يكن محملاً
@@ -445,10 +445,8 @@ function initializeMonthSalaries() {
             // تسجيل علامة الجلسة
             $_SESSION[$sessionKey] = true;
             
-            // تسجيل الاستدعاء الناجح في قاعدة البيانات
-            $status = ($errorCount > 0) ? 'error' : 'executed';
-            $reason = ($errorCount > 0) ? "تم التنفيذ مع {$errorCount} أخطاء" : 'تم التنفيذ بنجاح';
-            logAutoSalaryInitCall($db, $status, $reason, $createdCount, $skippedCount, $errorCount, $currentMonth, $currentYear);
+            // ملاحظة: لا نسجل سجل جديد هنا لأن runAutoSalaryInit تسجل السجل قبل الاستدعاء
+            // وتقوم بتحديثه بعد الانتهاء من التنفيذ
             
             // إتمام transaction
             $conn->commit();
@@ -483,7 +481,9 @@ function initializeMonthSalaries() {
 
 /**
  * تنفيذ التهيئة التلقائية
- * يتم استدعاؤها تلقائياً عند تحميل الملف
+ * يتم استدعاؤها تلقائياً مرة واحدة كل يوم
+ * يفحص قاعدة البيانات أولاً للتأكد من عدم التنفيذ اليوم
+ * إذا لم يتم التنفيذ، ينفذ العملية ثم يسجل التاريخ
  */
 function runAutoSalaryInit() {
     // منع التنفيذ المتكرر في نفس الطلب
@@ -491,7 +491,7 @@ function runAutoSalaryInit() {
         return;
     }
     
-    // فحص: هل تم التنفيذ اليوم؟
+    // فحص أولي: هل تم التنفيذ اليوم؟ (من cache)
     if (checkAutoSalaryInitToday()) {
         return;
     }
@@ -529,58 +529,106 @@ function runAutoSalaryInit() {
         $db = db();
         
         // التحقق مرة أخرى من قاعدة البيانات بعد الحصول على lock
-        if (wasAutoSalaryInitCalledToday($db)) {
+        // هذا الفحص الحاسم: إذا وُجد سجل بتاريخ اليوم، لا ننفذ
+        $todayExecution = $db->queryOne(
+            "SELECT id, status FROM auto_salary_init_logs 
+             WHERE DATE(call_time) = CURDATE()
+             LIMIT 1"
+        );
+        
+        if (!empty($todayExecution)) {
+            // تم التنفيذ اليوم بالفعل - تحديث cache والخروج
+            $today = date('Y-m-d');
+            $cacheKey = 'auto_salary_init_today_check_' . $today;
+            $GLOBALS[$cacheKey] = true;
             releaseAutoSalaryInitLock($lockFile);
+            error_log("auto_salary_init: Already executed today (found log ID: {$todayExecution['id']}, status: {$todayExecution['status']}) - skipping");
             return;
         }
         
-        error_log("auto_salary_init: Starting auto salary initialization");
+        // لم يتم التنفيذ اليوم - نبدأ التنفيذ
+        error_log("auto_salary_init: Starting auto salary initialization for " . date('Y-m-d'));
+        
+        // تسجيل بداية التنفيذ في قاعدة البيانات فوراً (قبل التنفيذ الفعلي)
+        // هذا يمنع أي محاولات أخرى من التنفيذ في نفس الوقت
+        try {
+            ensureAutoSalaryInitLogsTable($db);
+            
+            $userId = null;
+            if (function_exists('getCurrentUser')) {
+                $currentUser = getCurrentUser();
+                $userId = $currentUser['id'] ?? null;
+            } elseif (isset($_SESSION['user_id'])) {
+                $userId = $_SESSION['user_id'];
+            }
+            
+            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
+            $requestUri = $_SERVER['REQUEST_URI'] ?? null;
+            
+            // تسجيل سجل أولي بحالة 'executed' (سيتم تحديثه لاحقاً)
+            $db->execute(
+                "INSERT INTO auto_salary_init_logs 
+                 (call_time, user_id, status, reason, created_count, skipped_count, error_count, month, year, ip_address, request_uri)
+                 VALUES (NOW(), ?, 'executed', 'بدء التنفيذ', 0, 0, 0, ?, ?, ?, ?)",
+                [$userId, (int)date('n'), (int)date('Y'), $ipAddress, $requestUri]
+            );
+            
+            // تحديث cache فوراً
+            $today = date('Y-m-d');
+            $cacheKey = 'auto_salary_init_today_check_' . $today;
+            $GLOBALS[$cacheKey] = true;
+            
+            error_log("auto_salary_init: Logged initial execution record for today");
+        } catch (Exception $e) {
+            error_log("auto_salary_init: Failed to log initial execution: " . $e->getMessage());
+            // نستمر في التنفيذ حتى لو فشل التسجيل الأولي
+        }
         
         // تنفيذ التهيئة
         $result = initializeMonthSalaries();
         
-        // التأكد من تسجيل السجل في قاعدة البيانات
-        // إذا لم يتم تسجيله في initializeMonthSalaries، نسجله هنا
+        // تحديث السجل بالنتائج النهائية
         $currentMonth = $result['month'] ?? (int)date('n');
         $currentYear = $result['year'] ?? (int)date('Y');
         
-        // التحقق من وجود سجل اليوم بعد التنفيذ
-        $todayExecution = $db->queryOne(
-            "SELECT id FROM auto_salary_init_logs 
-             WHERE DATE(call_time) = CURDATE() 
-             AND status = 'executed'
-             LIMIT 1"
-        );
-        
-        // إذا لم يتم إنشاء سجل، ننشئه الآن
-        if (empty($todayExecution)) {
+        try {
             $status = 'executed';
-            $reason = 'تم التنفيذ';
+            $reason = 'تم التنفيذ بنجاح';
             
             if (isset($result['skipped']) && $result['skipped']) {
+                $status = 'skipped';
                 $reason = $result['message'] ?? 'تم التخطي - تم التهيئة من قبل';
             } elseif (isset($result['created']) && $result['created'] > 0) {
                 $reason = "تم إنشاء {$result['created']} راتب";
             } elseif (isset($result['errors']) && $result['errors'] > 0) {
                 $status = 'error';
                 $reason = "تم التنفيذ مع {$result['errors']} أخطاء";
+            } elseif (isset($result['success']) && !$result['success']) {
+                $status = 'error';
+                $reason = $result['message'] ?? 'فشل التنفيذ';
             }
             
-            logAutoSalaryInitCall(
-                $db, 
-                $status, 
-                $reason, 
-                $result['created'] ?? 0, 
-                $result['skipped'] ?? 0, 
-                $result['errors'] ?? 0, 
-                $currentMonth, 
-                $currentYear
+            // تحديث السجل الذي أنشأناه سابقاً
+            $db->execute(
+                "UPDATE auto_salary_init_logs 
+                 SET status = ?, reason = ?, created_count = ?, skipped_count = ?, error_count = ?, month = ?, year = ?
+                 WHERE DATE(call_time) = CURDATE()
+                 ORDER BY id DESC
+                 LIMIT 1",
+                [
+                    $status,
+                    $reason,
+                    $result['created'] ?? 0,
+                    $result['skipped'] ?? 0,
+                    $result['errors'] ?? 0,
+                    $currentMonth,
+                    $currentYear
+                ]
             );
             
-            // تحديث cache
-            $today = date('Y-m-d');
-            $cacheKey = 'auto_salary_init_today_check_' . $today;
-            $GLOBALS[$cacheKey] = true;
+            error_log("auto_salary_init: Updated execution log with final results (status: $status, created: " . ($result['created'] ?? 0) . ")");
+        } catch (Exception $e) {
+            error_log("auto_salary_init: Failed to update execution log: " . $e->getMessage());
         }
         
         // تسجيل النتيجة في error_log (للتتبع)
@@ -594,6 +642,57 @@ function runAutoSalaryInit() {
         
     } catch (Exception $e) {
         error_log("auto_salary_init: Error in runAutoSalaryInit: " . $e->getMessage());
+        
+        // في حالة الخطأ، نسجل السجل بحالة 'error'
+        try {
+            $db = db();
+            ensureAutoSalaryInitLogsTable($db);
+            
+            $userId = null;
+            if (function_exists('getCurrentUser')) {
+                $currentUser = getCurrentUser();
+                $userId = $currentUser['id'] ?? null;
+            } elseif (isset($_SESSION['user_id'])) {
+                $userId = $_SESSION['user_id'];
+            }
+            
+            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
+            $requestUri = $_SERVER['REQUEST_URI'] ?? null;
+            
+            // التحقق من وجود سجل اليوم
+            $todayLog = $db->queryOne(
+                "SELECT id FROM auto_salary_init_logs 
+                 WHERE DATE(call_time) = CURDATE()
+                 LIMIT 1"
+            );
+            
+            if (empty($todayLog)) {
+                // إنشاء سجل خطأ جديد
+                $db->execute(
+                    "INSERT INTO auto_salary_init_logs 
+                     (call_time, user_id, status, reason, created_count, skipped_count, error_count, month, year, ip_address, request_uri)
+                     VALUES (NOW(), ?, 'error', ?, 0, 0, 0, ?, ?, ?, ?)",
+                    [$userId, 'خطأ في التنفيذ: ' . $e->getMessage(), (int)date('n'), (int)date('Y'), $ipAddress, $requestUri]
+                );
+            } else {
+                // تحديث السجل الموجود
+                $db->execute(
+                    "UPDATE auto_salary_init_logs 
+                     SET status = 'error', reason = ?
+                     WHERE DATE(call_time) = CURDATE()
+                     ORDER BY id DESC
+                     LIMIT 1",
+                    ['خطأ في التنفيذ: ' . $e->getMessage()]
+                );
+            }
+            
+            // تحديث cache
+            $today = date('Y-m-d');
+            $cacheKey = 'auto_salary_init_today_check_' . $today;
+            $GLOBALS[$cacheKey] = true;
+        } catch (Exception $logError) {
+            error_log("auto_salary_init: Failed to log error: " . $logError->getMessage());
+        }
     } finally {
         // إطلاق lock في جميع الحالات
         if ($lockFile) {
@@ -602,6 +701,6 @@ function runAutoSalaryInit() {
     }
 }
 
-// تم إزالة التنفيذ التلقائي
-// يتم استدعاء runAutoSalaryInit() يدوياً فقط من modules/manager/users.php عند إضافة مستخدم جديد
+// يتم استدعاء runAutoSalaryInit() تلقائياً من includes/config.php مرة واحدة كل يوم
+// كما يمكن استدعاؤه يدوياً من modules/manager/users.php عند إضافة مستخدم جديد
 

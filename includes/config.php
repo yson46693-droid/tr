@@ -756,4 +756,24 @@ if (ENABLE_DAILY_ATTENDANCE_PHOTOS_CLEANUP) {
     }
 }
 
+/**
+ * تشغيل إنشاء الرواتب التلقائي مرة واحدة كل يوم
+ * يتم فحص قاعدة البيانات أولاً للتأكد من عدم التنفيذ اليوم
+ * إذا لم يتم التنفيذ، ينفذ العملية ثم يسجل التاريخ
+ */
+if (function_exists('isLoggedIn') && isLoggedIn()) {
+    try {
+        if (!function_exists('runAutoSalaryInit')) {
+            require_once __DIR__ . '/auto_salary_init.php';
+        }
+        if (function_exists('runAutoSalaryInit')) {
+            runAutoSalaryInit();
+        }
+    } catch (Exception $e) {
+        error_log('Auto salary init error in config.php: ' . $e->getMessage());
+    } catch (Throwable $e) {
+        error_log('Auto salary init error in config.php: ' . $e->getMessage());
+    }
+}
+
 
