@@ -449,7 +449,7 @@ $treasurySummary = $db->queryOne("
         (SELECT COALESCE(SUM(CASE WHEN type = 'transfer' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
         (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'transfer' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_transfer,
         (SELECT COALESCE(SUM(CASE WHEN type = 'payment' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
-        (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'payment' AND status = 'approved' THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_payment,
+        (SELECT COALESCE(SUM(CASE WHEN transaction_type = 'payment' AND status = 'approved' AND (description NOT LIKE '%تسوية راتب%' OR description IS NULL) THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS approved_payment,
         (SELECT COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) FROM financial_transactions) +
         (SELECT COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) FROM accountant_transactions) AS pending_total
 ");
@@ -515,7 +515,8 @@ $netApprovedBalance =
     ($treasurySummary['approved_income'] ?? 0) 
     - ($treasurySummary['approved_expense'] ?? 0)
     - ($treasurySummary['approved_payment'] ?? 0)
-    - $totalSalaries;
+    - $totalSalaries
+    - $totalSalaryAdjustments;
 
 $approvedIncome = (float) ($treasurySummary['approved_income'] ?? 0);
 $approvedExpense = (float) ($treasurySummary['approved_expense'] ?? 0);
