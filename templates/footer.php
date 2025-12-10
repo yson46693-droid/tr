@@ -547,36 +547,7 @@ if (!defined('ACCESS_ALLOWED')) {
         }
     </script>
     
-    <!-- Professional Loading Overlay Script - ذكي وسريع -->
-    <?php if (isLoggedIn()): ?>
-    <script>
-        (function() {
-            'use strict';
-            
-            // الانتظار حتى يتم تحميل DOM
-            function initLoadingOverlay() {
-                let loadingOverlay = document.getElementById('professionalLoadingOverlay');
-                
-                // إذا لم يكن موجوداً، انتظر قليلاً ثم أعد المحاولة
-                if (!loadingOverlay) {
-                    setTimeout(initLoadingOverlay, 100);
-                    return;
-                }
-                
-                // التأكد من أن overlay موجود في DOM
-                if (!document.body.contains(loadingOverlay)) {
-                    document.body.appendChild(loadingOverlay);
-                }
-                
-                // استدعاء باقي الكود
-                setupLoadingOverlay(loadingOverlay);
-            }
-            
-            function setupLoadingOverlay(loadingOverlay) {
-            
-            let activeRequests = 0;
-            let showTimeout = null;
-            let hideTimeout = null;
+    <!-- Professional Loading Overlay Script - تم حذفه بالكامل -->
             let isNavigating = false;
             let pageLoadStarted = false;
             const SHOW_DELAY = 0; // بدون تأخير - إظهار فوري
