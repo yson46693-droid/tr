@@ -22,18 +22,39 @@ function initSecureSession() {
             $_SESSION['last_activity'] = time();
         }
         
-        // التحقق من انتهاء صلاحية الجلسة
-        $timeout = defined('SESSION_TIMEOUT') ? SESSION_TIMEOUT : 1800; // 30 دقيقة افتراضياً
-        if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $timeout)) {
-            session_unset();
-            session_destroy();
-            // إعادة بدء جلسة جديدة
-            if (session_status() !== PHP_SESSION_ACTIVE) {
-                session_start();
+        // استخدام SESSION_LIFETIME بدلاً من SESSION_TIMEOUT (7 أيام بدلاً من 30 دقيقة)
+        // مع هامش أمان إضافي (1 ساعة) لتجنب إلغاء الجلسة بسبب تأخير بسيط
+        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // 7 أيام افتراضياً
+        $timeout = $sessionLifetime + 3600; // هامش أمان: ساعة إضافية
+        
+        // التحقق من انتهاء صلاحية الجلسة فقط إذا كان المستخدم مسجل دخول
+        // وإذا كان هناك وقت آخر نشاط سابق محفوظ
+        if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+            // إذا كان هناك وقت آخر نشاط سابق، نفحصه
+            if (isset($_SESSION['last_activity_previous'])) {
+                $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
+                if ($timeSinceActivity > $timeout) {
+                    // الجلسة انتهت - إلغاؤها
+                    error_log("Session expired in initSecureSession: time since activity = {$timeSinceActivity} seconds");
+                    session_unset();
+                    session_destroy();
+                    // إعادة بدء جلسة جديدة
+                    if (session_status() !== PHP_SESSION_ACTIVE) {
+                        session_start();
+                    }
+                    $_SESSION['last_activity'] = time();
+                    $_SESSION['last_activity_previous'] = time();
+                } else {
+                    // تحديث آخر نشاط
+                    $_SESSION['last_activity'] = time();
+                }
+            } else {
+                // لا يوجد وقت سابق - نعتبر الجلسة جديدة ونحفظ الوقت الحالي
+                $_SESSION['last_activity'] = time();
+                $_SESSION['last_activity_previous'] = time();
             }
-            $_SESSION['last_activity'] = time();
         } else {
-            // تحديث آخر نشاط
+            // المستخدم غير مسجل دخول - فقط تحديث آخر نشاط
             $_SESSION['last_activity'] = time();
         }
         
@@ -98,12 +119,34 @@ function initSecureSession() {
         $_SESSION['last_activity'] = time();
     }
     
-    // التحقق من انتهاء صلاحية الجلسة
-    $timeout = defined('SESSION_TIMEOUT') ? SESSION_TIMEOUT : 1800;
-    if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $timeout)) {
-        session_unset();
-        session_destroy();
-        session_start();
+    // التحقق من انتهاء صلاحية الجلسة (فقط للمستخدمين المسجلين)
+    // استخدام SESSION_LIFETIME بدلاً من SESSION_TIMEOUT
+    if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // 7 أيام
+        $timeout = $sessionLifetime + 3600; // هامش أمان: ساعة إضافية
+        
+        // التحقق فقط إذا كان هناك وقت آخر نشاط سابق
+        if (isset($_SESSION['last_activity_previous'])) {
+            $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
+            if ($timeSinceActivity > $timeout) {
+                // الجلسة انتهت - إلغاؤها
+                error_log("Session expired in initSecureSession (new session): time since activity = {$timeSinceActivity} seconds");
+                session_unset();
+                session_destroy();
+                session_start();
+                $_SESSION['last_activity'] = time();
+                $_SESSION['last_activity_previous'] = time();
+            } else {
+                // تحديث آخر نشاط
+                $_SESSION['last_activity'] = time();
+            }
+        } else {
+            // لا يوجد وقت سابق - نعتبر الجلسة جديدة ونحفظ الوقت الحالي
+            $_SESSION['last_activity'] = time();
+            $_SESSION['last_activity_previous'] = time();
+        }
+    } else {
+        // المستخدم غير مسجل دخول - فقط تحديث آخر نشاط
         $_SESSION['last_activity'] = time();
     }
 }

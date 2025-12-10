@@ -17,6 +17,16 @@ if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
         (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
     );
     $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+    
+    // تحديث أوقات النشاط لضمان عدم انتهاء الجلسة
+    if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+        // حفظ الوقت الحالي كـ previous إذا لم يكن موجوداً
+        if (!isset($_SESSION['last_activity_previous'])) {
+            $_SESSION['last_activity_previous'] = time();
+        }
+        $_SESSION['last_activity'] = time();
+    }
+    
     setcookie(session_name(), session_id(), [
         'expires' => time() + $sessionLifetime,
         'path' => '/',
@@ -29,18 +39,44 @@ if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
 
 requireLogin();
 
+// تحديث أوقات النشاط مرة أخرى بعد requireLogin() لضمان عدم انتهاء الجلسة
+if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+    $_SESSION['last_activity'] = time();
+    if (!isset($_SESSION['last_activity_previous'])) {
+        $_SESSION['last_activity_previous'] = time();
+    }
+}
+
 $currentUser = getCurrentUser();
 
 // التحقق من أن المستخدم موجود بالفعل
 if (!$currentUser) {
-    // إعادة التوجيه لصفحة تسجيل الدخول
-    $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
-    if (!headers_sent()) {
-        header('Location: ' . $loginUrl);
-        exit;
+    // محاولة إعادة تحميل المستخدم مرة أخرى (في حالة خطأ مؤقت)
+    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+        $currentUser = getUserById($_SESSION['user_id']);
+        if ($currentUser && isset($currentUser['status']) && $currentUser['status'] === 'active') {
+            // المستخدم موجود - المتابعة
+        } else {
+            // إعادة التوجيه لصفحة تسجيل الدخول
+            $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+            if (!headers_sent()) {
+                header('Location: ' . $loginUrl);
+                exit;
+            } else {
+                echo '<script>window.location.href = "' . htmlspecialchars($loginUrl) . '";</script>';
+                exit;
+            }
+        }
     } else {
-        echo '<script>window.location.href = "' . htmlspecialchars($loginUrl) . '";</script>';
-        exit;
+        // إعادة التوجيه لصفحة تسجيل الدخول
+        $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+        if (!headers_sent()) {
+            header('Location: ' . $loginUrl);
+            exit;
+        } else {
+            echo '<script>window.location.href = "' . htmlspecialchars($loginUrl) . '";</script>';
+            exit;
+        }
     }
 }
 
