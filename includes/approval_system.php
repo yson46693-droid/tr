@@ -977,11 +977,16 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
             if ($status === 'approved' && !empty($return['sales_rep_id'])) {
                 require_once __DIR__ . '/returns_system.php';
                 
+                error_log("Approval system: Attempting to return products to vehicle inventory for return ID: {$entityId}, sales_rep_id: {$return['sales_rep_id']}");
+                
                 // إرجاع المنتجات إلى مخزن سيارة المندوب
                 $inventoryResult = returnProductsToVehicleInventory($entityId, $approvedBy);
                 if (!$inventoryResult['success']) {
+                    error_log("Approval system: Failed to return products to vehicle inventory: " . ($inventoryResult['message'] ?? 'خطأ غير معروف'));
                     throw new Exception('فشل إرجاع المنتجات لمخزن السيارة: ' . ($inventoryResult['message'] ?? 'خطأ غير معروف'));
                 }
+                
+                error_log("Approval system: Successfully returned products to vehicle inventory for return ID: {$entityId}");
             }
             
             // إذا تمت الموافقة وكانت طريقة الإرجاع نقداً، خصم المبلغ من خزنة المندوب
@@ -1067,6 +1072,8 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                     // حساب 2% من إجمالي مبلغ المرتجع
                     $deductionAmount = round($refundAmount * 0.02, 2);
                     
+                    error_log("Approval system: Processing return deduction - Return ID: {$entityId}, Sales Rep ID: {$salesRepId}, Refund Amount: {$refundAmount}, Deduction Amount: {$deductionAmount}");
+                    
                     if ($deductionAmount > 0) {
                         // تحديد الشهر والسنة من تاريخ المرتجع
                         $returnDate = $return['return_date'] ?? date('Y-m-d');
@@ -1074,27 +1081,74 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                         $month = (int)date('n', $timestamp);
                         $year = (int)date('Y', $timestamp);
                         
-                        // الحصول على أو إنشاء سجل الراتب
-                        $summary = getSalarySummary($salesRepId, $month, $year);
-                        
-                        if (!$summary['exists']) {
-                            $creation = createOrUpdateSalary($salesRepId, $month, $year);
-                            if (!($creation['success'] ?? false)) {
-                                error_log('Failed to create salary for return deduction: ' . ($creation['message'] ?? 'unknown error'));
-                                throw new Exception('تعذر إنشاء سجل الراتب لخصم المرتجع');
-                            }
-                            $summary = getSalarySummary($salesRepId, $month, $year);
-                            if (!($summary['exists'] ?? false)) {
-                                throw new Exception('لم يتم العثور على سجل الراتب بعد إنشائه');
-                            }
+                        // التحقق النهائي من صحة القيم - حماية إضافية
+                        if ($month < 1 || $month > 12 || $year < 2000 || $year > 2100) {
+                            $month = (int)date('n');
+                            $year = (int)date('Y');
+                            error_log("Invalid date extracted from return_date ({$returnDate}), using current date: month={$month}, year={$year}");
                         }
                         
-                        $salary = $summary['salary'];
+                        // البحث عن الراتب الموجود مباشرة بدون إنشاء جديد
+                        $yearColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries LIKE 'year'");
+                        $hasYearColumn = !empty($yearColumnCheck);
+                        
+                        $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
+                        $monthType = $monthColumnCheck['Type'] ?? '';
+                        $isMonthDate = stripos($monthType, 'date') !== false;
+                        
+                        $salary = null;
+                        if ($isMonthDate) {
+                            $targetYearMonth = sprintf('%04d-%02d', $year, $month);
+                            $whereClause = "user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ? AND month != '0000-00-00' AND month IS NOT NULL";
+                            $params = [$salesRepId, $targetYearMonth];
+                            if ($hasYearColumn) {
+                                $whereClause .= " AND year = ? AND year > 0";
+                                $params[] = $year;
+                            }
+                            $salary = $db->queryOne(
+                                "SELECT * FROM salaries WHERE {$whereClause} LIMIT 1",
+                                $params
+                            );
+                        } elseif ($hasYearColumn) {
+                            $salary = $db->queryOne(
+                                "SELECT * FROM salaries WHERE user_id = ? AND month = ? AND year = ? AND month > 0 AND year > 0 LIMIT 1",
+                                [$salesRepId, $month, $year]
+                            );
+                        } else {
+                            $salary = $db->queryOne(
+                                "SELECT * FROM salaries WHERE user_id = ? AND month = ? AND month > 0 LIMIT 1",
+                                [$salesRepId, $month]
+                            );
+                        }
+                        
+                        // إذا لم يكن الراتب موجوداً، نستخدم getSalarySummary ثم createOrUpdateSalary
+                        if (!$salary) {
+                            error_log("Approval system: Salary not found, attempting to create/get using getSalarySummary - Sales Rep ID: {$salesRepId}, Month: {$month}, Year: {$year}");
+                            $summary = getSalarySummary($salesRepId, $month, $year);
+                            if (!$summary['exists']) {
+                                error_log("Approval system: Salary doesn't exist, creating new salary record");
+                                $creation = createOrUpdateSalary($salesRepId, $month, $year);
+                                if (!($creation['success'] ?? false)) {
+                                    error_log('Failed to create salary for return deduction: ' . ($creation['message'] ?? 'unknown error'));
+                                    throw new Exception('تعذر إنشاء سجل الراتب لخصم المرتجع');
+                                }
+                                $summary = getSalarySummary($salesRepId, $month, $year);
+                                if (!($summary['exists'] ?? false)) {
+                                    throw new Exception('لم يتم العثور على سجل الراتب بعد إنشائه');
+                                }
+                            }
+                            $salary = $summary['salary'];
+                        } else {
+                            error_log("Approval system: Found existing salary record ID: {$salary['id']} for Sales Rep ID: {$salesRepId}, Month: {$month}, Year: {$year}");
+                        }
+                        
                         $salaryId = (int)($salary['id'] ?? 0);
                         
                         if ($salaryId <= 0) {
                             throw new Exception('تعذر تحديد سجل الراتب لخصم المرتجع');
                         }
+                        
+                        error_log("Approval system: Applying deduction to salary ID: {$salaryId}, Deduction Amount: {$deductionAmount}");
                         
                         // الحصول على أسماء الأعمدة في جدول الرواتب
                         $columns = $db->query("SHOW COLUMNS FROM salaries");
