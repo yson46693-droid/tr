@@ -1486,43 +1486,60 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
         
         // تحقق نهائي قبل الإدراج مع LOCK لمنع race conditions
         // استخدام SELECT FOR UPDATE للحصول على lock على السجلات المطابقة
+        // هذا مهم جداً لمنع إنشاء رواتب مكررة في حالة الاستدعاءات المتزامنة
         if (empty($existingSalary)) {
             try {
+                $conn = $db->getConnection();
+                
                 // بدء transaction
-                $db->execute("START TRANSACTION");
+                if (!$conn->in_transaction) {
+                    $conn->begin_transaction();
+                }
                 
                 // SELECT FOR UPDATE بناءً على نوع عمود month
+                // هذا يحصل على lock على السجلات المطابقة ويمنع أي عملية أخرى من إنشاء راتب مكرر
                 if ($isMonthDate) {
                     $finalCheck = $db->queryOne(
-                        "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ? AND month != '0000-00-00' LIMIT 1 FOR UPDATE",
+                        "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ? AND month != '0000-00-00' AND month IS NOT NULL LIMIT 1 FOR UPDATE",
                         [$userId, $targetYearMonth]
                     );
                 } elseif ($hasYearColumn) {
                     $finalCheck = $db->queryOne(
-                        "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? LIMIT 1 FOR UPDATE",
+                        "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? AND month > 0 AND year > 0 LIMIT 1 FOR UPDATE",
                         [$userId, $month, $year]
                     );
                 } else {
                     $finalCheck = $db->queryOne(
-                        "SELECT id FROM salaries WHERE user_id = ? AND month = ? LIMIT 1 FOR UPDATE",
+                        "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND month > 0 AND month <= 12 LIMIT 1 FOR UPDATE",
                         [$userId, $month]
                     );
                 }
                 
                 if (!empty($finalCheck)) {
                     $existingSalary = $finalCheck;
-                    error_log("Final duplicate check with LOCK: Found existing salary ID: {$existingSalary['id']} for user: {$userId}");
+                    error_log("Final duplicate check with LOCK: Found existing salary ID: {$existingSalary['id']} for user: {$userId}, month: {$month}, year: {$year}");
+                    
+                    // إذا وُجد راتب موجود، نرجع بدون إنشاء راتب جديد
+                    // سنقوم بتحديث الراتب الموجود بدلاً من إنشاء راتب جديد
+                    if ($conn->in_transaction) {
+                        $conn->commit();
+                    }
+                } else {
+                    // لا يوجد راتب موجود - نستمر في إنشاء راتب جديد
+                    // سنقوم بالـ commit بعد إدراج الراتب
+                    // لا نغلق transaction هنا - سنغلقها بعد إدراج الراتب
                 }
-                
-                // Commit transaction
-                $db->execute("COMMIT");
             } catch (Exception $e) {
                 try {
-                    $db->execute("ROLLBACK");
+                    $conn = $db->getConnection();
+                    if ($conn->in_transaction) {
+                        $conn->rollback();
+                    }
                 } catch (Exception $rollbackEx) {
                     error_log("Rollback failed: " . $rollbackEx->getMessage());
                 }
                 error_log("Error in final duplicate check with lock: " . $e->getMessage());
+                // في حالة الخطأ، نستمر في محاولة إنشاء الراتب (ON DUPLICATE KEY سيمنع التكرار)
             }
         }
         
@@ -1987,7 +2004,49 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
         
         // تسجيل نتيجة الإدراج
         if (isset($result) && $result) {
+            // Commit transaction إذا كنا في transaction
+            try {
+                $conn = $db->getConnection();
+                if ($conn->in_transaction) {
+                    $conn->commit();
+                    error_log("createOrUpdateSalary: Committed transaction after inserting salary for user: {$userId}");
+                }
+            } catch (Exception $commitEx) {
+                error_log("createOrUpdateSalary: Failed to commit transaction: " . $commitEx->getMessage());
+                // نستمر حتى لو فشل commit لأن الراتب تم إدراجه بالفعل
+            }
+            
             $insertId = $db->getLastInsertId();
+            
+            // فحص نهائي: التأكد من عدم وجود رواتب مكررة
+            // هذا فحص إضافي للتأكد من أن UNIQUE KEY عمل بشكل صحيح
+            if ($insertId) {
+                try {
+                    if ($isMonthDate) {
+                        $duplicateCheck = $db->query(
+                            "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ? AND month != '0000-00-00' AND month IS NOT NULL AND id != ?",
+                            [$userId, $targetYearMonth, $insertId]
+                        );
+                    } elseif ($hasYearColumn) {
+                        $duplicateCheck = $db->query(
+                            "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? AND month > 0 AND year > 0 AND id != ?",
+                            [$userId, $month, $year, $insertId]
+                        );
+                    } else {
+                        $duplicateCheck = $db->query(
+                            "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND month > 0 AND month <= 12 AND id != ?",
+                            [$userId, $month, $insertId]
+                        );
+                    }
+                    
+                    if (!empty($duplicateCheck) && count($duplicateCheck) > 0) {
+                        error_log("WARNING: createOrUpdateSalary: Found duplicate salaries for user {$userId}, month {$month}, year {$year}. Created ID: {$insertId}, Duplicates: " . json_encode($duplicateCheck));
+                    }
+                } catch (Exception $checkEx) {
+                    error_log("createOrUpdateSalary: Error checking for duplicates: " . $checkEx->getMessage());
+                }
+            }
+            
             error_log("createOrUpdateSalary: Successfully inserted salary ID: {$insertId} for user: {$userId}, month: {$monthValue}, year: {$year}");
             return [
                 'success' => true,
@@ -1996,6 +2055,16 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                 'calculation' => $calculation
             ];
         } else {
+            // Rollback في حالة فشل الإدراج
+            try {
+                $conn = $db->getConnection();
+                if ($conn->in_transaction) {
+                    $conn->rollback();
+                }
+            } catch (Exception $rollbackEx) {
+                error_log("createOrUpdateSalary: Failed to rollback transaction: " . $rollbackEx->getMessage());
+            }
+            
             error_log("createOrUpdateSalary: Insert failed for user: {$userId}");
             // محاولة قراءة الخطأ إذا كان متاحاً
             return [

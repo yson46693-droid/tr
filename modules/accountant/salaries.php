@@ -1387,66 +1387,95 @@ if ($shouldAutoCreate) {
         }
         
         // التحقق من وجود راتب للمستخدم في الشهر المحدد
+        // استخدام نفس منطق التحقق الموجود في createOrUpdateSalary لضمان الاتساق
         $hasSalary = false;
+        $existingSalary = null;
         try {
-                // البحث بناءً على نوع عمود month
+                // استخدام transaction مع SELECT FOR UPDATE لمنع race conditions
+                $conn = $db->getConnection();
+                $wasInTransaction = $conn->in_transaction;
+                
+                if (!$wasInTransaction) {
+                    $conn->begin_transaction();
+                }
+                
+                // البحث بناءً على نوع عمود month - نفس المنطق في createOrUpdateSalary
                 if ($isMonthDate) {
-                    // عمود month من نوع DATE - البحث باستخدام DATE_FORMAT
+                    // عمود month من نوع DATE - البحث باستخدام DATE_FORMAT مع FOR UPDATE
                     $existingSalary = $db->queryOne(
-                        "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ? AND month != '0000-00-00' AND month IS NOT NULL LIMIT 1",
+                        "SELECT id FROM salaries WHERE user_id = ? AND DATE_FORMAT(month, '%Y-%m') = ? AND month != '0000-00-00' AND month IS NOT NULL LIMIT 1 FOR UPDATE",
                         [$userId, $targetYearMonth]
                     );
                     $hasSalary = !empty($existingSalary);
                 } elseif ($hasYearColumn) {
                     // عمود month من نوع INT مع وجود عمود year منفصل
-                $existingSalary = $db->queryOne(
-                    "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? AND month > 0 AND year > 0 LIMIT 1",
-                    [$userId, $selectedMonth, $selectedYear]
-                );
-                $hasSalary = !empty($existingSalary);
-            } else {
+                    $existingSalary = $db->queryOne(
+                        "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND year = ? AND month > 0 AND year > 0 LIMIT 1 FOR UPDATE",
+                        [$userId, $selectedMonth, $selectedYear]
+                    );
+                    $hasSalary = !empty($existingSalary);
+                } else {
                     // عمود month من نوع INT بدون عمود year
                     $existingSalary = $db->queryOne(
-                        "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND month > 0 AND month <= 12 LIMIT 1",
+                        "SELECT id FROM salaries WHERE user_id = ? AND month = ? AND month > 0 AND month <= 12 LIMIT 1 FOR UPDATE",
                         [$userId, $selectedMonth]
                     );
-                $hasSalary = !empty($existingSalary);
+                    $hasSalary = !empty($existingSalary);
+                }
+                
+                // إذا لم يكن في transaction من قبل، نغلق transaction الآن
+                if (!$wasInTransaction && $conn->in_transaction) {
+                    $conn->commit();
+                }
+            } catch (Exception $checkEx) {
+                // في حالة الخطأ في التحقق، نغلق transaction إذا كنا قد بدأناه
+                try {
+                    $conn = $db->getConnection();
+                    if ($conn->in_transaction && !$wasInTransaction) {
+                        $conn->rollback();
+                    }
+                } catch (Exception $rollbackEx) {
+                    error_log("Failed to rollback transaction in salary check: " . $rollbackEx->getMessage());
+                }
+                error_log("Error checking for existing salary for user {$userId}: " . $checkEx->getMessage());
+                $hasSalary = false; // نعتبر أنه لا يوجد راتب في حالة الخطأ
             }
             
             // إذا لم يكن للمستخدم راتب في هذا الشهر، قم بإنشائه
-            if (!$hasSalary) {
-                error_log("User {$userId} ({$userName}) has no salary for {$selectedMonth}/{$selectedYear}, creating...");
-                
+            try {
+                if (!$hasSalary) {
+                    error_log("User {$userId} ({$userName}) has no salary for {$selectedMonth}/{$selectedYear}, creating...");
+                    
                     // استخدام createOrUpdateSalary التي تحتوي على حماية من التكرار
-                $result = createOrUpdateSalary(
-                    $userId,
-                    $selectedMonth,
-                    $selectedYear,
-                    0, // bonus
-                    0, // deductions
-                    'إنشاء تلقائي عند فتح صفحة الرواتب - أول مرة في الشهر'
-                );
-                
-                if ($result['success']) {
-                    $createdCount++;
-                    $salaryId = $result['salary_id'] ?? 'N/A';
-                    error_log("✓ Successfully created salary for user {$userId} ({$userName}), salary_id: {$salaryId}");
+                    $result = createOrUpdateSalary(
+                        $userId,
+                        $selectedMonth,
+                        $selectedYear,
+                        0, // bonus
+                        0, // deductions
+                        'إنشاء تلقائي عند فتح صفحة الرواتب - أول مرة في الشهر'
+                    );
+                    
+                    if ($result['success']) {
+                        $createdCount++;
+                        $salaryId = $result['salary_id'] ?? 'N/A';
+                        error_log("✓ Successfully created salary for user {$userId} ({$userName}), salary_id: {$salaryId}");
+                    } else {
+                        $errorCount++;
+                        $errorMsg = $result['message'] ?? 'Unknown error';
+                        error_log("✗ Failed to create salary for user {$userId} ({$userName}): {$errorMsg}");
+                    }
                 } else {
-                    $errorCount++;
-                    $errorMsg = $result['message'] ?? 'Unknown error';
-                    error_log("✗ Failed to create salary for user {$userId} ({$userName}): {$errorMsg}");
+                    $salaryId = $existingSalary['id'] ?? 'N/A';
+                    error_log("User {$userId} ({$userName}) already has salary (ID: {$salaryId}) for {$selectedMonth}/{$selectedYear}, skipping");
                 }
-            } else {
-                $salaryId = $existingSalary['id'] ?? 'N/A';
-                error_log("User {$userId} ({$userName}) already has salary (ID: {$salaryId}) for {$selectedMonth}/{$selectedYear}, skipping");
+            } catch (Exception $e) {
+                $errorCount++;
+                error_log("✗ Exception while processing user {$userId} ({$userName}): " . $e->getMessage());
+            } catch (Throwable $e) {
+                $errorCount++;
+                error_log("✗ Fatal error while processing user {$userId} ({$userName}): " . $e->getMessage());
             }
-        } catch (Exception $e) {
-            $errorCount++;
-            error_log("✗ Exception while processing user {$userId} ({$userName}): " . $e->getMessage());
-        } catch (Throwable $e) {
-            $errorCount++;
-            error_log("✗ Fatal error while processing user {$userId} ({$userName}): " . $e->getMessage());
-        }
     }
     
         // تسجيل ملخص العملية
