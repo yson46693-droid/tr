@@ -193,22 +193,31 @@ if (session_status() === PHP_SESSION_ACTIVE) {
         } else {
             // التحقق من وقت آخر نشاط وإلغاء الجلسة إذا انتهت
             if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-                $lastActivity = $_SESSION['last_activity'] ?? time();
-                $timeSinceActivity = time() - $lastActivity;
+                // تحديث وقت آخر نشاط أولاً (قبل أي فحص)
+                $currentTime = time();
+                $_SESSION['last_activity'] = $currentTime;
                 
-                // إذا مر أكثر من وقت الجلسة، إلغاء الجلسة
-                if ($timeSinceActivity > SESSION_LIFETIME) {
-                    $userId = $_SESSION['user_id'] ?? 'unknown';
-                    error_log("Session expired due to inactivity for user ID: {$userId}");
+                // التحقق من وقت آخر نشاط فقط إذا كان موجوداً مسبقاً
+                // إذا لم يكن موجوداً، نعتبر أن الجلسة جديدة ونستمر
+                if (isset($_SESSION['last_activity_previous'])) {
+                    $lastActivity = $_SESSION['last_activity_previous'];
+                    $timeSinceActivity = $currentTime - $lastActivity;
                     
-                    session_unset();
-                    session_destroy();
-                    session_set_cookie_params($sessionCookieOptions);
-                    session_start();
-                } else {
-                    // تحديث وقت آخر نشاط
-                    $_SESSION['last_activity'] = time();
+                    // إذا مر أكثر من وقت الجلسة (7 أيام)، إلغاء الجلسة
+                    // لكن نعطي هامش 5 دقائق لتجنب إلغاء الجلسة بسبب تأخير بسيط
+                    if ($timeSinceActivity > (SESSION_LIFETIME + 300)) {
+                        $userId = $_SESSION['user_id'] ?? 'unknown';
+                        error_log("Session expired due to inactivity for user ID: {$userId} (time since activity: {$timeSinceActivity} seconds)");
+                        
+                        session_unset();
+                        session_destroy();
+                        session_set_cookie_params($sessionCookieOptions);
+                        session_start();
+                    }
                 }
+                
+                // حفظ وقت آخر نشاط الحالي للفحص في الطلب التالي
+                $_SESSION['last_activity_previous'] = $currentTime;
             }
         }
     }

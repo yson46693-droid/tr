@@ -973,22 +973,14 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                 [$status, $approvedBy, $entityId]
             );
             
-            // إذا تمت الموافقة، إرجاع المنتجات إلى المخزن المناسب
+            // إذا تمت الموافقة، إرجاع المنتجات إلى مخزن سيارة المندوب
             if ($status === 'approved' && !empty($return['sales_rep_id'])) {
                 require_once __DIR__ . '/returns_system.php';
                 
-                // إذا كان المستخدم مديراً، إرجاع المنتجات إلى المخزن الرئيسي
-                if ($isManager) {
-                    $inventoryResult = returnProductsToMainWarehouse($entityId, $approvedBy);
-                    if (!$inventoryResult['success']) {
-                        throw new Exception('فشل إرجاع المنتجات للمخزن الرئيسي: ' . ($inventoryResult['message'] ?? 'خطأ غير معروف'));
-                    }
-                } else {
-                    // إذا لم يكن مديراً، إرجاع المنتجات إلى مخزن سيارة المندوب
-                    $inventoryResult = returnProductsToVehicleInventory($entityId, $approvedBy);
-                    if (!$inventoryResult['success']) {
-                        throw new Exception('فشل إرجاع المنتجات لمخزن السيارة: ' . ($inventoryResult['message'] ?? 'خطأ غير معروف'));
-                    }
+                // إرجاع المنتجات إلى مخزن سيارة المندوب
+                $inventoryResult = returnProductsToVehicleInventory($entityId, $approvedBy);
+                if (!$inventoryResult['success']) {
+                    throw new Exception('فشل إرجاع المنتجات لمخزن السيارة: ' . ($inventoryResult['message'] ?? 'خطأ غير معروف'));
                 }
             }
             
@@ -1051,10 +1043,8 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                 }
             }
             
-            // تعطيل خصم المرتب - لا يتم خصم أي مبلغ من تحصيلات المندوب
-            // إذا تمت الموافقة، خصم 2% من إجمالي مبلغ المرتجع من راتب المندوب - DISABLED
-            // if ($status === 'approved' && !empty($return['sales_rep_id']) && !empty($return['refund_amount'])) {
-            if (false && $status === 'approved' && !empty($return['sales_rep_id']) && !empty($return['refund_amount'])) {
+            // إذا تمت الموافقة، خصم 2% من إجمالي مبلغ المرتجع من راتب المندوب
+            if ($status === 'approved' && !empty($return['sales_rep_id']) && !empty($return['refund_amount'])) {
                 require_once __DIR__ . '/salary_calculator.php';
                 
                 $salesRepId = (int)$return['sales_rep_id'];
