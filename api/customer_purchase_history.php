@@ -77,7 +77,7 @@ function shutdownHandler() {
         
         if (!headers_sent()) {
             http_response_code(500);
-header('Content-Type: application/json; charset=utf-8');
+            header('Content-Type: application/json; charset=utf-8');
         }
         
         echo '{"success":false,"message":"حدث خطأ في الخادم"}';
@@ -91,14 +91,14 @@ register_shutdown_function('shutdownHandler');
 
 // ===== تحميل الملفات المطلوبة =====
 try {
-require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/path_helper.php';
+    require_once __DIR__ . '/../includes/config.php';
+    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/auth.php';
+    require_once __DIR__ . '/../includes/path_helper.php';
     
     // تحميل product_name_helper إذا كان موجوداً
     if (file_exists(__DIR__ . '/../includes/product_name_helper.php')) {
-require_once __DIR__ . '/../includes/product_name_helper.php';
+        require_once __DIR__ . '/../includes/product_name_helper.php';
     }
 } catch (Throwable $e) {
     error_log('Error loading includes: ' . $e->getMessage());
@@ -183,36 +183,36 @@ function handleGetHistory($currentUser): void
         }
         
         $db = db();
-    
-    // Verify customer exists
-    if ($isLocalCustomer) {
-        $customer = $db->queryOne(
-            "SELECT id, name, phone, address, balance FROM local_customers WHERE id = ?",
-            [$customerId]
-        );
-    } else {
-        $customer = $db->queryOne(
-            "SELECT id, name, phone, address, created_by, balance FROM customers WHERE id = ?",
-            [$customerId]
-        );
         
+        // Verify customer exists
+        if ($isLocalCustomer) {
+            $customer = $db->queryOne(
+                "SELECT id, name, phone, address, balance FROM local_customers WHERE id = ?",
+                [$customerId]
+            );
+        } else {
+            $customer = $db->queryOne(
+                "SELECT id, name, phone, address, created_by, balance FROM customers WHERE id = ?",
+                [$customerId]
+            );
+            
             // التحقق من ملكية العميل للمندوب
-        if ($currentUser['role'] === 'sales') {
-            $salesRepId = (int)$currentUser['id'];
-            if ((int)($customer['created_by'] ?? 0) !== $salesRepId) {
+            if ($currentUser['role'] === 'sales') {
+                $salesRepId = (int)$currentUser['id'];
+                if ((int)($customer['created_by'] ?? 0) !== $salesRepId) {
                     returnJsonResponse(['success' => false, 'message' => 'هذا العميل غير مرتبط بك'], 403);
                 }
+            }
         }
-    }
-    
-    if (!$customer) {
+        
+        if (!$customer) {
             returnJsonResponse(['success' => false, 'message' => 'العميل غير موجود'], 404);
-    }
+        }
         
         $purchaseHistory = [];
-    
-    // Get purchase history based on customer type
-    if ($isLocalCustomer) {
+        
+        // Get purchase history based on customer type
+        if ($isLocalCustomer) {
             $purchaseHistory = getLocalCustomerPurchaseHistory($db, $customerId);
         } else {
             $purchaseHistory = getNormalCustomerPurchaseHistory($db, $customerId);
@@ -225,18 +225,18 @@ function handleGetHistory($currentUser): void
         $result = formatPurchaseHistory($purchaseHistory, $returnedQuantities, $isLocalCustomer, $db);
         
         returnJsonResponse([
-                'success' => true,
-                'customer' => [
-                    'id' => (int)$customer['id'],
-                    'name' => $customer['name'],
-                    'phone' => $customer['phone'] ?? '',
-                    'address' => $customer['address'] ?? '',
-                    'balance' => (float)($customer['balance'] ?? 0)
-                ],
+            'success' => true,
+            'customer' => [
+                'id' => (int)$customer['id'],
+                'name' => $customer['name'],
+                'phone' => $customer['phone'] ?? '',
+                'address' => $customer['address'] ?? '',
+                'balance' => (float)($customer['balance'] ?? 0)
+            ],
             'purchase_history' => $result
         ]);
         
-                    } catch (Throwable $e) {
+    } catch (Throwable $e) {
         error_log('handleGetHistory error: ' . $e->getMessage());
         error_log('Stack trace: ' . $e->getTraceAsString());
         returnJsonResponse([
@@ -531,92 +531,92 @@ function formatPurchaseHistory(array $purchaseHistory, array $returnedQuantities
 function handleSearch($currentUser): void
 {
     try {
-    $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
-    $batchNumber = isset($_GET['batch_number']) ? trim($_GET['batch_number']) : '';
-    $productName = isset($_GET['product_name']) ? trim($_GET['product_name']) : '';
-    
-    if ($customerId <= 0) {
+        $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
+        $batchNumber = isset($_GET['batch_number']) ? trim($_GET['batch_number']) : '';
+        $productName = isset($_GET['product_name']) ? trim($_GET['product_name']) : '';
+        
+        if ($customerId <= 0) {
             returnJsonResponse(['success' => false, 'message' => 'معرف العميل غير صالح'], 422);
-    }
-    
-    $db = db();
-    
-    // Verify customer
-    $customer = $db->queryOne(
-        "SELECT id, name, created_by FROM customers WHERE id = ?",
-        [$customerId]
-    );
-    
-    if (!$customer) {
+        }
+        
+        $db = db();
+        
+        // Verify customer
+        $customer = $db->queryOne(
+            "SELECT id, name, created_by FROM customers WHERE id = ?",
+            [$customerId]
+        );
+        
+        if (!$customer) {
             returnJsonResponse(['success' => false, 'message' => 'العميل غير موجود'], 404);
-    }
-    
-    if ($currentUser['role'] === 'sales') {
-        $salesRepId = (int)$currentUser['id'];
-        if ((int)($customer['created_by'] ?? 0) !== $salesRepId) {
+        }
+        
+        if ($currentUser['role'] === 'sales') {
+            $salesRepId = (int)$currentUser['id'];
+            if ((int)($customer['created_by'] ?? 0) !== $salesRepId) {
                 returnJsonResponse(['success' => false, 'message' => 'هذا العميل غير مرتبط بك'], 403);
             }
-    }
-    
-    // Build search query
-    $sql = "SELECT 
-            i.id as invoice_id,
-            i.invoice_number,
-            i.date as invoice_date,
-            ii.id as invoice_item_id,
-            ii.product_id,
+        }
+        
+        // Build search query
+        $sql = "SELECT 
+                i.id as invoice_id,
+                i.invoice_number,
+                i.date as invoice_date,
+                ii.id as invoice_item_id,
+                ii.product_id,
                 COALESCE(NULLIF(TRIM(p.name), ''), CONCAT('منتج رقم ', p.id)) as product_name,
-            p.unit,
-            ii.quantity,
-            ii.unit_price,
-            ii.total_price,
-            GROUP_CONCAT(DISTINCT bn.batch_number ORDER BY bn.batch_number SEPARATOR ', ') as batch_numbers,
-            GROUP_CONCAT(DISTINCT bn.id ORDER BY bn.id SEPARATOR ',') as batch_number_ids
-        FROM invoices i
-        INNER JOIN invoice_items ii ON i.id = ii.invoice_id
-        LEFT JOIN products p ON ii.product_id = p.id
-        LEFT JOIN sales_batch_numbers sbn ON ii.id = sbn.invoice_item_id
-        LEFT JOIN batch_numbers bn ON sbn.batch_number_id = bn.id
-        WHERE i.customer_id = ?";
-    
-    $params = [$customerId];
-    
-    if ($batchNumber) {
-        $sql .= " AND bn.batch_number LIKE ?";
-        $params[] = "%{$batchNumber}%";
-    }
-    
-    if ($productName) {
+                p.unit,
+                ii.quantity,
+                ii.unit_price,
+                ii.total_price,
+                GROUP_CONCAT(DISTINCT bn.batch_number ORDER BY bn.batch_number SEPARATOR ', ') as batch_numbers,
+                GROUP_CONCAT(DISTINCT bn.id ORDER BY bn.id SEPARATOR ',') as batch_number_ids
+            FROM invoices i
+            INNER JOIN invoice_items ii ON i.id = ii.invoice_id
+            LEFT JOIN products p ON ii.product_id = p.id
+            LEFT JOIN sales_batch_numbers sbn ON ii.id = sbn.invoice_item_id
+            LEFT JOIN batch_numbers bn ON sbn.batch_number_id = bn.id
+            WHERE i.customer_id = ?";
+        
+        $params = [$customerId];
+        
+        if ($batchNumber) {
+            $sql .= " AND bn.batch_number LIKE ?";
+            $params[] = "%{$batchNumber}%";
+        }
+        
+        if ($productName) {
             $sql .= " AND p.name LIKE ?";
-        $params[] = "%{$productName}%";
-    }
-    
+            $params[] = "%{$productName}%";
+        }
+        
         $sql .= " GROUP BY i.id, ii.id ORDER BY i.date DESC, i.id DESC";
-    
+        
         $results = $db->query($sql, $params) ?: [];
-    
-    $formatted = [];
-    foreach ($results as $item) {
-        $formatted[] = [
-            'invoice_id' => (int)$item['invoice_id'],
-            'invoice_number' => $item['invoice_number'],
-            'invoice_date' => $item['invoice_date'],
-            'invoice_item_id' => (int)$item['invoice_item_id'],
-            'product_id' => (int)$item['product_id'],
-            'product_name' => $item['product_name'] ?? 'غير معروف',
-            'unit' => $item['unit'] ?? 'قطعة',
-            'quantity' => (float)$item['quantity'],
-            'unit_price' => (float)$item['unit_price'],
-            'total_price' => (float)$item['total_price'],
-            'batch_numbers' => !empty($item['batch_numbers']) ? explode(', ', $item['batch_numbers']) : [],
-            'batch_number_ids' => !empty($item['batch_number_ids']) ? array_map('intval', explode(',', $item['batch_number_ids'])) : []
-        ];
-    }
-    
+        
+        $formatted = [];
+        foreach ($results as $item) {
+            $formatted[] = [
+                'invoice_id' => (int)$item['invoice_id'],
+                'invoice_number' => $item['invoice_number'],
+                'invoice_date' => $item['invoice_date'],
+                'invoice_item_id' => (int)$item['invoice_item_id'],
+                'product_id' => (int)$item['product_id'],
+                'product_name' => $item['product_name'] ?? 'غير معروف',
+                'unit' => $item['unit'] ?? 'قطعة',
+                'quantity' => (float)$item['quantity'],
+                'unit_price' => (float)$item['unit_price'],
+                'total_price' => (float)$item['total_price'],
+                'batch_numbers' => !empty($item['batch_numbers']) ? explode(', ', $item['batch_numbers']) : [],
+                'batch_number_ids' => !empty($item['batch_number_ids']) ? array_map('intval', explode(',', $item['batch_number_ids'])) : []
+            ];
+        }
+        
         returnJsonResponse([
-        'success' => true,
-        'results' => $formatted
-    ]);
+            'success' => true,
+            'results' => $formatted
+        ]);
         
     } catch (Throwable $e) {
         error_log('handleSearch error: ' . $e->getMessage());
