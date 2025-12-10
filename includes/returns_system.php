@@ -1751,7 +1751,6 @@ function applyReturnSalaryDeduction(int $returnId, ?int $salesRepId = null, ?int
                 'message' => 'حدث خطأ أثناء تطبيق خصم المرتب: ' . $e->getMessage()
             ];
         }
-        
     } catch (Throwable $e) {
         error_log("applyReturnSalaryDeduction fatal error: " . $e->getMessage());
         return [
