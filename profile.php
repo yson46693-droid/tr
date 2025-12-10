@@ -627,7 +627,7 @@ async function loadCredentials() {
             
             html += `
                 <div class="list-group-item d-flex justify-content-between align-items-center" data-credential-id="${cred.id}">
-                    <div>
+                    <div class="flex-grow-1">
                         <div class="fw-bold">
                             <i class="bi bi-fingerprint me-2"></i>
                             ${cred.device_name || 'جهاز غير معروف'}
@@ -637,9 +637,6 @@ async function loadCredentials() {
                             <div>آخر استخدام: ${lastUsed}</div>
                         </small>
                     </div>
-                    <button class="btn btn-sm btn-danger delete-credential-btn" data-credential-id="${cred.id}" data-device-name="${(cred.device_name || 'البصمة').replace(/"/g, '&quot;')}">
-                        <i class="bi bi-trash"></i> حذف
-                    </button>
                 </div>
             `;
         });
@@ -647,16 +644,7 @@ async function loadCredentials() {
         
         listContainer.innerHTML = html;
         
-        // إضافة event listeners لأزرار الحذف
-        listContainer.querySelectorAll('.delete-credential-btn').forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                const credentialId = this.getAttribute('data-credential-id');
-                const deviceName = this.getAttribute('data-device-name');
-                deleteCredential(credentialId, deviceName);
-            });
-        });
+        // تم إزالة أزرار الحذف - لا يمكن حذف التوكنات نهائياً
         
         // إخفاء علامة التحميل بعد نجاح التحميل
         if (statusLoader) {
@@ -836,57 +824,12 @@ if (typeof window.registerNewCredential === 'undefined') {
     window.registerNewCredential = registerNewCredential;
 }
 
-// حذف بصمة
+// حذف بصمة - تم تعطيل هذه الوظيفة نهائياً
+// لا يمكن حذف التوكنات/البصمات لأسباب أمنية
 async function deleteCredential(credentialId, deviceName) {
-    const deviceNameSafe = typeof deviceName === 'string' ? deviceName : 'البصمة';
-    if (!confirm(`هل أنت متأكد من حذف البصمة "${deviceNameSafe}"؟\n\nسيتم حذف هذه البصمة ولن تتمكن من استخدامها في تسجيل الدخول.`)) {
-        return;
-    }
-    
-    try {
-        // الحصول على المسار الصحيح لـ API - استخدام getRelativeUrl من PHP
-        let apiPath = '<?php echo getRelativeUrl("api/webauthn_credentials.php"); ?>';
-        
-        // التحقق من أن المسار صحيح
-        if (!apiPath || apiPath === '') {
-            // Fallback: حساب المسار يدوياً
-            const pathParts = window.location.pathname.split('/').filter(p => p && !p.endsWith('.php'));
-            if (pathParts.length === 0) {
-                apiPath = 'api/webauthn_credentials.php';
-            } else {
-                apiPath = '/' + pathParts[0] + '/api/webauthn_credentials.php';
-            }
-        }
-        
-        console.log('Deleting credential, API path:', apiPath);
-        
-        const response = await fetch(apiPath, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams({
-                action: 'delete',
-                credential_id: credentialId
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            // إظهار رسالة نجاح قبل refresh
-            alert('تم حذف البصمة بنجاح');
-            
-            // عمل refresh للصفحة
-            window.location.reload();
-        } else {
-            alert('خطأ: ' + (data.error || 'حدث خطأ أثناء حذف البصمة'));
-        }
-        
-    } catch (error) {
-        console.error('Error deleting credential:', error);
-        alert('خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
-    }
+    alert('لا يمكن حذف التوكنات/البصمات لأسباب أمنية. يرجى الاتصال بالمسؤول إذا كنت بحاجة إلى حذف بصمة.');
+    console.warn('Attempt to delete credential blocked:', credentialId);
+    return false;
 }
 
 // تحميل القائمة عند تحميل الصفحة
