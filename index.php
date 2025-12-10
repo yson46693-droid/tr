@@ -1,5 +1,8 @@
 <?php
-session_start();
+// بدء الجلسة مع معالجة الأخطاء
+if (session_status() === PHP_SESSION_NONE) {
+    @session_start();
+}
 define('ACCESS_ALLOWED', true);
 
 // معالجة طلب manifest.json من المسار /v1/manifest.json
@@ -230,9 +233,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $uri = $_SERVER['REQUEST_URI'] ?? '';
         if (strpos($uri, '/api/') === false && function_exists('protectFormFromCSRF')) {
             try {
-                protectFormFromCSRF();
-            } catch (Exception $e) {
+                $csrfResult = protectFormFromCSRF();
+                if ($csrfResult === false) {
+                    // فشل التحقق - في حالة تسجيل الدخول، قد يكون بسبب إعادة توليد الجلسة
+                    // نسمح بمحاولة واحدة إضافية بتوليد token جديد
+                    error_log("CSRF protection returned false for login attempt - retrying with new token");
+                    
+                    // محاولة توليد token جديد والتحقق مرة أخرى
+                    if (function_exists('generateCSRFToken') && session_status() === PHP_SESSION_ACTIVE) {
+                        generateCSRFToken(true);
+                        $retryResult = protectFormFromCSRF();
+                        if ($retryResult === false) {
+                            $error = 'خطأ في التحقق الأمني. يرجى تحديث الصفحة والمحاولة مرة أخرى.';
+                        }
+                    } else {
+                        $error = 'خطأ في التحقق الأمني. يرجى تحديث الصفحة والمحاولة مرة أخرى.';
+                    }
+                }
+            } catch (Throwable $e) {
+                $error = 'حدث خطأ أثناء التحقق الأمني. يرجى المحاولة مرة أخرى.';
                 error_log("CSRF protection error: " . $e->getMessage());
+                error_log("CSRF protection stack trace: " . $e->getTraceAsString());
             }
         }
         

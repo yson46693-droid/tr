@@ -2766,7 +2766,7 @@ if (ob_get_level() > 0) {
     }
     ?>
     <?php if ($enablePageLoaderSplash): ?>
-    <div id="pageLoader" role="status" aria-live="polite" aria-label="<?php echo isset($lang['loading']) ? $lang['loading'] : 'جاري التحميل'; ?>">
+    <div id="pageLoader" role="status" aria-live="polite" aria-label="<?php echo isset($lang['loading']) ? $lang['loading'] : 'جاري التحميل'; ?>" style="display: flex; opacity: 1;">
         <img src="<?php echo ASSETS_URL; ?>icons/icon-192x192.png" 
              alt="<?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?>" 
              class="loader-logo"

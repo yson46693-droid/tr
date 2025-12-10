@@ -18,10 +18,16 @@ if (!defined('ACCESS_ALLOWED')) {
 function verifyCSRFTokenEnhanced($token = null, $allowPreviousToken = true) {
     // التأكد من أن الجلسة نشطة
     if (session_status() !== PHP_SESSION_ACTIVE) {
-        return false;
+        // محاولة بدء الجلسة إذا لم تكن قد بدأت
+        if (!headers_sent()) {
+            @session_start();
+        } else {
+            return false;
+        }
     }
     
-    if (!isset($_SESSION)) {
+    // التأكد من وجود $_SESSION
+    if (!isset($_SESSION) || !is_array($_SESSION)) {
         return false;
     }
     
@@ -107,13 +113,14 @@ function getCSRFToken() {
     // التأكد من أن الجلسة نشطة
     if (session_status() !== PHP_SESSION_ACTIVE) {
         if (!headers_sent()) {
-            session_start();
+            @session_start();
         } else {
             return '';
         }
     }
     
-    if (!isset($_SESSION)) {
+    // التأكد من وجود $_SESSION
+    if (!isset($_SESSION) || !is_array($_SESSION)) {
         return '';
     }
     
@@ -160,11 +167,20 @@ function protectFormFromCSRF() {
         
         // التحقق من أن الجلسة نشطة
         if (session_status() !== PHP_SESSION_ACTIVE) {
-            error_log("CSRF: Session not active");
             // محاولة بدء الجلسة
             if (!headers_sent()) {
-                session_start();
+                @session_start();
+            } else {
+                // إذا تم إرسال headers، لا يمكن التحقق من CSRF
+                error_log("CSRF: Cannot start session - headers already sent");
+                return false;
             }
+        }
+        
+        // التأكد من وجود $_SESSION
+        if (!isset($_SESSION) || !is_array($_SESSION)) {
+            error_log("CSRF: Session array not available");
+            return false;
         }
         
         // التأكد من وجود CSRF token في الجلسة قبل التحقق
@@ -189,22 +205,30 @@ function protectFormFromCSRF() {
             $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
             $hasTokenInPost = isset($_POST['csrf_token']) && !empty($_POST['csrf_token']);
             $hasTokenInSession = isset($_SESSION['csrf_token']) && !empty($_SESSION['csrf_token']);
+            $hasPreviousToken = isset($_SESSION['csrf_token_previous']) && !empty($_SESSION['csrf_token_previous']);
             $sessionId = session_id();
             
             $logMessage = sprintf(
-                "CSRF Validation Failed - IP: %s, UserAgent: %s, HasTokenInPost: %s, HasTokenInSession: %s, SessionID: %s, IsLoginRequest: %s",
+                "CSRF Validation Failed - IP: %s, UserAgent: %s, HasTokenInPost: %s, HasTokenInSession: %s, HasPreviousToken: %s, SessionID: %s, IsLoginRequest: %s",
                 $ipAddress,
                 $userAgent,
                 ($hasTokenInPost ? 'yes' : 'no'),
                 ($hasTokenInSession ? 'yes' : 'no'),
+                ($hasPreviousToken ? 'yes' : 'no'),
                 $sessionId,
                 ($isLoginRequest ? 'yes' : 'no')
             );
             
             error_log($logMessage);
             
-            http_response_code(403);
-            die('خطأ في التحقق الأمني. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
+            // فقط في حالة عدم كونها طلب تسجيل دخول أو في حالة عدم وجود token نهائياً
+            if (!$isLoginRequest || (!$hasTokenInPost && !$hasTokenInSession)) {
+                http_response_code(403);
+                die('خطأ في التحقق الأمني. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
+            }
+            
+            // لطلبات تسجيل الدخول، نعيد false للسماح للمعالج الأعلى بالتعامل معها
+            return false;
         }
         
         // بعد التحقق الناجح، تنظيف token السابق إذا كان موجوداً (استخدام مرة واحدة)

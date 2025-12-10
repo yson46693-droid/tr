@@ -144,12 +144,12 @@ function ensureAutoSalaryInitLogsTable($db) {
 
 /**
  * تسجيل محاولة استدعاء auto_salary_init
- * يتم تسجيل الاستدعاءات المهمة فقط (executed و error) لتقليل عدد السجلات
+ * يتم تسجيل جميع الاستدعاءات المهمة (executed و error و skipped المهمة)
  */
 function logAutoSalaryInitCall($db, $status, $reason = null, $createdCount = 0, $skippedCount = 0, $errorCount = 0, $month = null, $year = null) {
-    // تسجيل الاستدعاءات المهمة فقط (executed و error)
-    // تخطي تسجيل skipped لتقليل عدد السجلات
-    if ($status === 'skipped') {
+    // تسجيل جميع الاستدعاءات المهمة
+    // تخطي فقط skipped البسيطة (مثل "تم استدعاؤه في هذه الجلسة")
+    if ($status === 'skipped' && ($reason === 'تم استدعاؤه في هذه الجلسة' || $reason === 'تم استدعاؤه اليوم بالفعل')) {
         return true;
     }
     
@@ -379,7 +379,8 @@ function initializeMonthSalaries() {
                 $conn->commit();
                 error_log("auto_salary_init: No active users found with hourly_rate > 0");
                 $_SESSION[$sessionKey] = true;
-                // لا نسجل skipped لتقليل عدد السجلات
+                // تسجيل الحالة في قاعدة البيانات
+                logAutoSalaryInitCall($db, 'executed', 'لا يوجد مستخدمين نشطين للعملية', 0, 0, 0, $currentMonth, $currentYear);
                 return ['success' => true, 'message' => 'No users to process', 'created' => 0];
             }
         
@@ -585,6 +586,15 @@ function runAutoSalaryInit() {
         
         // تنفيذ التهيئة
         $result = initializeMonthSalaries();
+        
+        // إذا لم يتم تسجيل السجل في initializeMonthSalaries، نسجله هنا
+        if (isset($result['skipped']) && $result['skipped'] && !isset($result['logged'])) {
+            // تسجيل حالة skipped المهمة
+            $db = db();
+            $currentMonth = $result['month'] ?? (int)date('n');
+            $currentYear = $result['year'] ?? (int)date('Y');
+            logAutoSalaryInitCall($db, 'executed', $result['message'] ?? 'تم التخطي - تم التهيئة من قبل', 0, 0, 0, $currentMonth, $currentYear);
+        }
         
         // تسجيل النتيجة في error_log (للتتبع)
         if (isset($result['created']) && $result['created'] > 0) {

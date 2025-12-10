@@ -899,6 +899,18 @@ function hashPassword($password) {
  * محسّن لدعم إعادة توليد الجلسة - يحفظ token السابق مؤقتاً
  */
 function generateCSRFToken($forceRefresh = false) {
+    // التأكد من أن الجلسة نشطة
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        if (!headers_sent()) {
+            @session_start();
+        }
+    }
+    
+    // التأكد من وجود $_SESSION
+    if (!isset($_SESSION) || !is_array($_SESSION)) {
+        return '';
+    }
+    
     // حفظ token الحالي كـ previous قبل إنشاء واحد جديد
     if ($forceRefresh && isset($_SESSION['csrf_token']) && !empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token_previous'] = $_SESSION['csrf_token'];
@@ -908,7 +920,7 @@ function generateCSRFToken($forceRefresh = false) {
         }
     }
     
-    if ($forceRefresh || !isset($_SESSION['csrf_token'])) {
+    if ($forceRefresh || !isset($_SESSION['csrf_token']) || empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
     
@@ -919,7 +931,7 @@ function generateCSRFToken($forceRefresh = false) {
         unset($_SESSION['csrf_token_previous_time']);
     }
     
-    return $_SESSION['csrf_token'];
+    return $_SESSION['csrf_token'] ?? '';
 }
 
 /**
