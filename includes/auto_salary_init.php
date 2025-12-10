@@ -13,6 +13,51 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
+// ============================================
+// فحص فوري من قاعدة البيانات في بداية الملف
+// لمنع أي استدعاءات إضافية إذا تم التنفيذ اليوم
+// ============================================
+$today = date('Y-m-d');
+$cacheKey = 'auto_salary_init_today_check_' . $today;
+
+// استخدام GLOBALS cache لتقليل استعلامات قاعدة البيانات
+if (!isset($GLOBALS[$cacheKey])) {
+    try {
+        // تحميل db.php إذا لم يكن محملاً
+        if (!function_exists('db')) {
+            require_once __DIR__ . '/db.php';
+        }
+        
+        $db = db();
+        
+        // التحقق من وجود جدول السجلات
+        $tableExists = $db->queryOne("SHOW TABLES LIKE 'auto_salary_init_logs'");
+        
+        if (!empty($tableExists)) {
+            // فحص سريع: هل تم التنفيذ اليوم؟
+            $todayExecution = $db->queryOne(
+                "SELECT id FROM auto_salary_init_logs 
+                 WHERE DATE(call_time) = CURDATE() 
+                 AND status = 'executed'
+                 LIMIT 1"
+            );
+            
+            $GLOBALS[$cacheKey] = !empty($todayExecution);
+        } else {
+            $GLOBALS[$cacheKey] = false;
+        }
+    } catch (Exception $e) {
+        // في حالة الخطأ، نعتبر أنه لم يتم التنفيذ
+        $GLOBALS[$cacheKey] = false;
+    }
+}
+
+// إذا تم التنفيذ اليوم، إيقاف التنفيذ فوراً بدون أي عمليات أخرى
+if ($GLOBALS[$cacheKey] === true) {
+    // تم التنفيذ اليوم بالفعل - إيقاف فوري
+    return;
+}
+
 // متغير global لمنع التنفيذ المتكرر في نفس الطلب
 if (!isset($GLOBALS['auto_salary_init_executed'])) {
     $GLOBALS['auto_salary_init_executed'] = false;
@@ -144,17 +189,18 @@ function releaseAutoSalaryInitLock($fp) {
 /**
  * التحقق من أن auto_salary_init تم استدعاؤه اليوم بالفعل
  * فحص سريع بدون transaction للسرعة
+ * يستخدم cache من الفحص الأولي في بداية الملف
  */
 function wasAutoSalaryInitCalledToday($db) {
-    static $cache = null;
-    static $cacheDate = null;
-    
-    // استخدام cache لتقليل استعلامات قاعدة البيانات
     $today = date('Y-m-d');
-    if ($cache !== null && $cacheDate === $today) {
-        return $cache;
+    $cacheKey = 'auto_salary_init_today_check_' . $today;
+    
+    // استخدام cache من الفحص الأولي
+    if (isset($GLOBALS[$cacheKey])) {
+        return $GLOBALS[$cacheKey];
     }
     
+    // إذا لم يكن هناك cache، نفحص قاعدة البيانات
     try {
         ensureAutoSalaryInitLogsTable($db);
         
@@ -167,8 +213,7 @@ function wasAutoSalaryInitCalledToday($db) {
         );
         
         $result = !empty($todayCall);
-        $cache = $result;
-        $cacheDate = $today;
+        $GLOBALS[$cacheKey] = $result;
         
         return $result;
     } catch (Exception $e) {
@@ -470,17 +515,8 @@ function runAutoSalaryInit() {
         return;
     }
     
-    // فحص سريع من قاعدة البيانات قبل أي عمليات أخرى
-    try {
-        $db = db();
-        if (wasAutoSalaryInitCalledToday($db)) {
-            $GLOBALS['auto_salary_init_executed'] = true;
-            return;
-        }
-    } catch (Exception $e) {
-        // في حالة الخطأ، نتخطى
-        return;
-    }
+    // الفحص الأولي في بداية الملف يمنع الوصول إلى هنا إذا تم التنفيذ اليوم
+    // لكن نضيف فحص إضافي للسلامة
     
     // علامة التنفيذ لمنع التكرار
     $GLOBALS['auto_salary_init_executed'] = true;
