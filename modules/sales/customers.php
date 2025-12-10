@@ -760,25 +760,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             ]
                         );
                         
-                        // تحديث راتب المندوب المسؤول عن العميل (المستحق للعمولة)
-                        // وليس بالضرورة الشخص الذي قام بالتحصيل
-                        try {
-                            $salesRepId = getSalesRepForCustomer($customerId);
-                            if ($salesRepId && $salesRepId > 0) {
-                                refreshSalesCommissionForUser(
-                                    $salesRepId,
-                                    $collectionDate,
-                                    'تحديث تلقائي بعد تحصيل من صفحة العملاء'
-                                );
-                            }
-                        } catch (Throwable $e) {
-                            // لا نوقف العملية إذا فشل تحديث الراتب
-                            error_log('Error updating sales commission after collection from customers page: ' . $e->getMessage());
-                        }
-                        
                         // القاعدة 3: أي مبلغ يقوم المندوب بتحصيله من العملاء من خلال صفحة العملاء
                         // يتم احتساب نسبة 2% للمندوب الذي قام بالتحصيل
                         // إضافة المكافأة الفورية بنسبة 2% للمندوب الذي قام بالتحصيل مباشرة
+                        // ملاحظة: لا نستخدم refreshSalesCommissionForUser هنا لتجنب الحساب المزدوج
+                        // لأن applyCollectionInstantReward يضيف النسبة مباشرة
                         if (($currentUser['role'] ?? '') === 'sales' && $collectionId) {
                             try {
                                 require_once __DIR__ . '/../../includes/salary_calculator.php';
@@ -793,6 +779,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 }
                             } catch (Throwable $instantRewardError) {
                                 error_log('Instant collection reward error (customers page): ' . $instantRewardError->getMessage());
+                            }
+                        } else {
+                            // إذا كان التحصيل من قبل مدير أو محاسب، نحدث راتب المندوب المسؤول عن العميل
+                            // وليس بالضرورة الشخص الذي قام بالتحصيل
+                            try {
+                                $salesRepId = getSalesRepForCustomer($customerId);
+                                if ($salesRepId && $salesRepId > 0) {
+                                    refreshSalesCommissionForUser(
+                                        $salesRepId,
+                                        $collectionDate,
+                                        'تحديث تلقائي بعد تحصيل من صفحة العملاء'
+                                    );
+                                }
+                            } catch (Throwable $e) {
+                                // لا نوقف العملية إذا فشل تحديث الراتب
+                                error_log('Error updating sales commission after collection from customers page: ' . $e->getMessage());
                             }
                         }
                     } else {
