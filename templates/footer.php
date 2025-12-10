@@ -582,6 +582,10 @@ if (!defined('ACCESS_ALLOWED')) {
             const SHOW_DELAY = 0; // بدون تأخير - إظهار فوري
             const MIN_DISPLAY_TIME = 100; // الحد الأدنى للعرض (100ms) - محسّن للسرعة
             
+            // التحقق من أننا في صفحة الدردشة - منع ظهور loading overlay تماماً
+            const isChatPage = window.location.href.includes('page=chat') || 
+                              document.querySelector('[data-chat-app]') !== null;
+            
             // لا تظهر overlay عند تحميل الصفحة الأولى - ستظهر فقط عند التنقل بين الصفحات
             // التأكد من أن overlay مخفي عند تحميل الصفحة
             if (loadingOverlay) {
@@ -594,6 +598,13 @@ if (!defined('ACCESS_ALLOWED')) {
             // دالة لإظهار loading overlay
             function showLoading(immediate = false) {
                 if (!loadingOverlay) return;
+                
+                // التحقق من أننا في صفحة الدردشة - لا نعرض loading overlay
+                const isChatPage = window.location.href.includes('page=chat') || 
+                                  document.querySelector('[data-chat-app]') !== null;
+                if (isChatPage) {
+                    return; // لا تفعل شيئاً في صفحة الدردشة
+                }
                 
                 activeRequests++;
                 
@@ -623,6 +634,13 @@ if (!defined('ACCESS_ALLOWED')) {
             // دالة لإخفاء loading overlay
             function hideLoading() {
                 if (!loadingOverlay) return;
+                
+                // التحقق من أننا في صفحة الدردشة - لا نحتاج لإخفاء loading overlay
+                const isChatPage = window.location.href.includes('page=chat') || 
+                                  document.querySelector('[data-chat-app]') !== null;
+                if (isChatPage) {
+                    return; // لا تفعل شيئاً في صفحة الدردشة
+                }
                 
                 activeRequests = Math.max(0, activeRequests - 1);
                 
@@ -700,9 +718,11 @@ if (!defined('ACCESS_ALLOWED')) {
                     '/api/notifications.php',
                     '/api/check_update.php',
                     '/api/background-tasks.php',
+                    '/api/chat',
                     'notification',
                     'update',
-                    'background'
+                    'background',
+                    'chat'
                 ];
                 const shouldSkip = skipUrls.some(skip => url.includes(skip));
                 
@@ -744,9 +764,11 @@ if (!defined('ACCESS_ALLOWED')) {
                     '/api/notifications.php',
                     '/api/check_update.php',
                     '/api/background-tasks.php',
+                    '/api/chat',
                     'notification',
                     'update',
-                    'background'
+                    'background',
+                    'chat'
                 ];
                 const shouldSkip = skipUrls.some(skip => url.includes(skip));
                 
