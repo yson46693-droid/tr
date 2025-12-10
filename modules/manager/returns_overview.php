@@ -8,15 +8,23 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
+// تحميل الملفات المطلوبة
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/path_helper.php';
 require_once __DIR__ . '/../../includes/table_styles.php';
 
-requireRole(['manager', 'accountant']);
-
+// التحقق من الصلاحيات بدون requireRole لتجنب redirect
 $currentUser = getCurrentUser();
+if (!$currentUser) {
+    die('يجب تسجيل الدخول');
+}
+$allowedRoles = ['manager', 'accountant'];
+if (!in_array(strtolower($currentUser['role'] ?? ''), $allowedRoles, true)) {
+    die('ليس لديك صلاحية للوصول إلى هذه الصفحة');
+}
+
 $db = db();
 $basePath = getBasePath();
 
@@ -80,7 +88,12 @@ if ($customerFilter > 0) {
 $sql .= " GROUP BY r.id";
 
 // تنفيذ استعلام مرتجعات المندوبين
-$returns = $db->query($sql, $params) ?: [];
+try {
+    $returns = $db->query($sql, $params) ?: [];
+} catch (Throwable $e) {
+    error_log('Error fetching delegate returns: ' . $e->getMessage());
+    $returns = [];
+}
 
 // جلب مرتجعات العملاء المحليين
 $localReturns = [];
@@ -123,7 +136,12 @@ if (!empty($localReturnsTableExists)) {
     
     $localSql .= " GROUP BY lr.id";
     
-    $localReturns = $db->query($localSql, $localParams) ?: [];
+    try {
+        $localReturns = $db->query($localSql, $localParams) ?: [];
+    } catch (Throwable $e) {
+        error_log('Error fetching local returns: ' . $e->getMessage());
+        $localReturns = [];
+    }
 }
 
 // دمج المرتجعات
