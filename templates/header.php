@@ -1134,18 +1134,8 @@ if (ob_get_level() > 0) {
         </div>
     </div>
     <script>
-        // إظهار شاشة التحميل فوراً عند بداية تحميل الصفحة
-        (function() {
-            'use strict';
-            const loadingOverlay = document.getElementById('professionalLoadingOverlay');
-            if (loadingOverlay && document.readyState === 'loading') {
-                // إظهار فوري بدون أي تأخير
-                loadingOverlay.style.display = 'flex';
-                loadingOverlay.style.opacity = '1';
-                loadingOverlay.classList.add('show');
-                loadingOverlay.setAttribute('aria-hidden', 'false');
-            }
-        })();
+        // لا تظهر professionalLoadingOverlay عند تحميل الصفحة الأولى
+        // ستظهر فقط عند التنقل بين الصفحات (beforeunload)
     </script>
     <?php endif; ?>
     

@@ -587,13 +587,48 @@ function runAutoSalaryInit() {
         // تنفيذ التهيئة
         $result = initializeMonthSalaries();
         
-        // إذا لم يتم تسجيل السجل في initializeMonthSalaries، نسجله هنا
-        if (isset($result['skipped']) && $result['skipped'] && !isset($result['logged'])) {
-            // تسجيل حالة skipped المهمة
-            $db = db();
-            $currentMonth = $result['month'] ?? (int)date('n');
-            $currentYear = $result['year'] ?? (int)date('Y');
-            logAutoSalaryInitCall($db, 'executed', $result['message'] ?? 'تم التخطي - تم التهيئة من قبل', 0, 0, 0, $currentMonth, $currentYear);
+        // التأكد من تسجيل السجل في قاعدة البيانات
+        // إذا لم يتم تسجيله في initializeMonthSalaries، نسجله هنا
+        $currentMonth = $result['month'] ?? (int)date('n');
+        $currentYear = $result['year'] ?? (int)date('Y');
+        
+        // التحقق من وجود سجل اليوم بعد التنفيذ
+        $todayExecution = $db->queryOne(
+            "SELECT id FROM auto_salary_init_logs 
+             WHERE DATE(call_time) = CURDATE() 
+             AND status = 'executed'
+             LIMIT 1"
+        );
+        
+        // إذا لم يتم إنشاء سجل، ننشئه الآن
+        if (empty($todayExecution)) {
+            $status = 'executed';
+            $reason = 'تم التنفيذ';
+            
+            if (isset($result['skipped']) && $result['skipped']) {
+                $reason = $result['message'] ?? 'تم التخطي - تم التهيئة من قبل';
+            } elseif (isset($result['created']) && $result['created'] > 0) {
+                $reason = "تم إنشاء {$result['created']} راتب";
+            } elseif (isset($result['errors']) && $result['errors'] > 0) {
+                $status = 'error';
+                $reason = "تم التنفيذ مع {$result['errors']} أخطاء";
+            }
+            
+            logAutoSalaryInitCall(
+                $db, 
+                $status, 
+                $reason, 
+                $result['created'] ?? 0, 
+                $result['skipped'] ?? 0, 
+                $result['errors'] ?? 0, 
+                $currentMonth, 
+                $currentYear
+            );
+            
+            // تحديث cache
+            $today = date('Y-m-d');
+            $cacheKey = 'auto_salary_init_today_check_' . $today;
+            $GLOBALS[$cacheKey] = true;
         }
         
         // تسجيل النتيجة في error_log (للتتبع)
