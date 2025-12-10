@@ -849,7 +849,7 @@ $totalPages = ceil($totalCount / $perPage);
 <?php if ($isManager): ?>
 <!-- Modal تعديل منتج تالف -->
 <div class="modal fade" id="editProductModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">تعديل منتج تالف</h5>
@@ -885,7 +885,7 @@ $totalPages = ceil($totalCount / $perPage);
 
 <!-- Modal حذف منتج تالف -->
 <div class="modal fade" id="deleteProductModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">حذف منتج تالف</h5>
@@ -906,7 +906,7 @@ $totalPages = ceil($totalCount / $perPage);
 
 <!-- Modal تعديل أداة تعبئة تالفة -->
 <div class="modal fade" id="editPackagingModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">تعديل أداة تعبئة تالفة</h5>
@@ -935,7 +935,7 @@ $totalPages = ceil($totalCount / $perPage);
 
 <!-- Modal حذف أداة تعبئة تالفة -->
 <div class="modal fade" id="deletePackagingModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">حذف أداة تعبئة تالفة</h5>
@@ -956,7 +956,7 @@ $totalPages = ceil($totalCount / $perPage);
 
 <!-- Modal تعديل خامة مهدرة -->
 <div class="modal fade" id="editRawMaterialModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">تعديل خامة مهدرة</h5>
@@ -991,7 +991,7 @@ $totalPages = ceil($totalCount / $perPage);
 
 <!-- Modal حذف خامة مهدرة -->
 <div class="modal fade" id="deleteRawMaterialModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">حذف خامة مهدرة</h5>

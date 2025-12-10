@@ -47,56 +47,164 @@ if (!empty($invoicesTableExists)) {
     $hasPaidFromCreditColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'paid_from_credit'"));
 }
 
-// جلب جميع الفواتير
+// جلب جميع الفواتير - استخدام نفس منطق my_records (تجميع الفواتير)
 $invoices = [];
 if (!empty($invoicesTableExists)) {
     // التحقق من وجود عمود credit_used
     $hasCreditUsedColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'credit_used'"));
-    $creditUsedSelect = $hasCreditUsedColumn ? ", COALESCE(credit_used, 0) as credit_used" : ", 0 as credit_used";
     
-    $invoices = $db->query(
-        "SELECT id, invoice_number, date, total_amount, paid_amount, status, paid_from_credit{$creditUsedSelect},
-                customer_id, (SELECT name FROM customers WHERE id = invoices.customer_id) as customer_name,
-                amount_added_to_sales
-         FROM invoices
-         WHERE sales_rep_id = ? AND status != 'cancelled'
-         ORDER BY date DESC, id DESC",
-        [$salesRepId]
-    ) ?: [];
+    // التحقق من وجود عمود paid_from_credit
+    $hasPaidFromCreditColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'paid_from_credit'"));
+    
+    // الحصول على معاملات الفلترة (اختيارية)
+    $dateFrom = isset($_GET['date_from']) ? trim($_GET['date_from']) : '';
+    $dateTo = isset($_GET['date_to']) ? trim($_GET['date_to']) : '';
+    $customerId = isset($_GET['customer_id']) ? intval($_GET['customer_id']) : 0;
+    $invoiceNumber = isset($_GET['invoice_number']) ? trim($_GET['invoice_number']) : '';
+    
+    // بناء استعلام مطابق لـ my_records (تجميع الفواتير)
+    $sql = "SELECT 
+                   i.id as invoice_id,
+                   i.invoice_number,
+                   i.date,
+                   i.customer_id,
+                   i.sales_rep_id,
+                   i.status,
+                   c.name as customer_name,
+                   COALESCE(i.credit_used, 0) as credit_used,
+                   " . ($hasPaidFromCreditColumn ? "COALESCE(i.paid_from_credit, 0) as paid_from_credit," : "0 as paid_from_credit,") . "
+                   i.total_amount,
+                   i.paid_amount,
+                   i.amount_added_to_sales,
+                   COUNT(ii.id) as items_count,
+                   GROUP_CONCAT(
+                       CONCAT(
+                           COALESCE(
+                               (SELECT fp2.product_name 
+                                FROM finished_products fp2 
+                                WHERE fp2.product_id = ii.product_id 
+                                  AND fp2.product_name IS NOT NULL 
+                                  AND TRIM(fp2.product_name) != ''
+                                  AND fp2.product_name NOT LIKE 'منتج رقم%'
+                                ORDER BY fp2.id DESC 
+                                LIMIT 1),
+                               NULLIF(TRIM(p.name), ''),
+                               CONCAT('منتج رقم ', ii.product_id)
+                           ),
+                           ' (', FORMAT(ii.quantity, 2), ')'
+                       ) SEPARATOR '، '
+                   ) as products_list,
+                   SUM(ii.total_price) as total
+            FROM invoices i
+            INNER JOIN invoice_items ii ON i.id = ii.invoice_id
+            LEFT JOIN customers c ON i.customer_id = c.id
+            LEFT JOIN products p ON ii.product_id = p.id
+            WHERE i.status != 'cancelled' AND i.sales_rep_id = ?";
+    
+    $params = [$salesRepId];
+    
+    // تطبيق الفلاتر
+    if (!empty($dateFrom)) {
+        $sql .= " AND DATE(i.date) >= ?";
+        $params[] = $dateFrom;
+    }
+    
+    if (!empty($dateTo)) {
+        $sql .= " AND DATE(i.date) <= ?";
+        $params[] = $dateTo;
+    }
+    
+    if ($customerId > 0) {
+        $sql .= " AND i.customer_id = ?";
+        $params[] = $customerId;
+    }
+    
+    if (!empty($invoiceNumber)) {
+        $sql .= " AND i.invoice_number LIKE ?";
+        $params[] = '%' . $invoiceNumber . '%';
+    }
+    
+    // تجميع الفواتير (مثل my_records)
+    $sql .= " GROUP BY i.id, i.invoice_number, i.date, i.customer_id, i.sales_rep_id, i.status, c.name, i.credit_used";
+    if ($hasPaidFromCreditColumn) {
+        $sql .= ", i.paid_from_credit";
+    }
+    $sql .= ", i.total_amount, i.paid_amount, i.amount_added_to_sales";
+    
+    // الترتيب
+    $sql .= " ORDER BY i.date DESC, i.id DESC";
+    
+    $invoices = $db->query($sql, $params) ?: [];
 }
 
-// جلب جميع التحصيلات
+// جلب جميع التحصيلات - تطبيق نفس الفلاتر
 $collections = [];
 if (!empty($collectionsTableExists)) {
     $statusColumnCheck = $db->queryOne("SHOW COLUMNS FROM collections LIKE 'status'");
     $hasStatusColumn = !empty($statusColumnCheck);
     
-    $statusFilter = $hasStatusColumn ? "AND status IN ('pending', 'approved')" : "";
+    $statusFilter = $hasStatusColumn ? "AND c.status IN ('pending', 'approved')" : "";
     
-    $collections = $db->query(
-        "SELECT c.*, 
+    $collectionsSql = "SELECT c.*, 
                 u.full_name as collected_by_name,
                 (SELECT name FROM customers WHERE id = c.customer_id) as customer_name
          FROM collections c
          LEFT JOIN users u ON c.collected_by = u.id
-         WHERE c.collected_by = ? $statusFilter
-         ORDER BY c.date DESC, c.id DESC",
-        [$salesRepId]
-    ) ?: [];
+         WHERE c.collected_by = ? $statusFilter";
+    
+    $collectionsParams = [$salesRepId];
+    
+    // تطبيق فلاتر التاريخ والعميل
+    if (!empty($dateFrom)) {
+        $collectionsSql .= " AND DATE(c.date) >= ?";
+        $collectionsParams[] = $dateFrom;
+    }
+    
+    if (!empty($dateTo)) {
+        $collectionsSql .= " AND DATE(c.date) <= ?";
+        $collectionsParams[] = $dateTo;
+    }
+    
+    if ($customerId > 0) {
+        $collectionsSql .= " AND c.customer_id = ?";
+        $collectionsParams[] = $customerId;
+    }
+    
+    $collectionsSql .= " ORDER BY c.date DESC, c.id DESC";
+    
+    $collections = $db->query($collectionsSql, $collectionsParams) ?: [];
 }
 
-// جلب جميع المرتجعات
+// جلب جميع المرتجعات - تطبيق نفس الفلاتر
 $returns = [];
 if (!empty($returnsTableExists)) {
-    $returns = $db->query(
-        "SELECT r.*,
+    $returnsSql = "SELECT r.*,
                 (SELECT invoice_number FROM invoices WHERE id = r.invoice_id) as invoice_number,
                 (SELECT name FROM customers WHERE id = r.customer_id) as customer_name
          FROM returns r
-         WHERE r.sales_rep_id = ? AND r.status IN ('approved', 'processed')
-         ORDER BY r.return_date DESC, r.id DESC",
-        [$salesRepId]
-    ) ?: [];
+         WHERE r.sales_rep_id = ? AND r.status IN ('approved', 'processed')";
+    
+    $returnsParams = [$salesRepId];
+    
+    // تطبيق فلاتر التاريخ والعميل
+    if (!empty($dateFrom)) {
+        $returnsSql .= " AND DATE(r.return_date) >= ?";
+        $returnsParams[] = $dateFrom;
+    }
+    
+    if (!empty($dateTo)) {
+        $returnsSql .= " AND DATE(r.return_date) <= ?";
+        $returnsParams[] = $dateTo;
+    }
+    
+    if ($customerId > 0) {
+        $returnsSql .= " AND r.customer_id = ?";
+        $returnsParams[] = $customerId;
+    }
+    
+    $returnsSql .= " ORDER BY r.return_date DESC, r.id DESC";
+    
+    $returns = $db->query($returnsSql, $returnsParams) ?: [];
 }
 
 // جلب الإضافات المباشرة للخزنة
@@ -141,7 +249,8 @@ $totalCashAdditions = 0.0;
 $totalCollectedFromRep = 0.0;
 
 foreach ($invoices as $inv) {
-    $totalSales += (float)($inv['total_amount'] ?? 0);
+    // استخدام total من SUM (مثل my_records) بدلاً من total_amount
+    $totalSales += (float)($inv['total'] ?? $inv['total_amount'] ?? 0);
     $totalPaid += (float)($inv['paid_amount'] ?? 0);
 }
 
@@ -897,7 +1006,8 @@ $statementTime = date('H:i:s');
                 <?php else: ?>
                     <?php foreach ($invoices as $invoice): ?>
                         <?php
-                        $totalAmount = (float)($invoice['total_amount'] ?? 0);
+                        // استخدام total من SUM (مثل my_records) بدلاً من total_amount
+                        $totalAmount = (float)($invoice['total'] ?? $invoice['total_amount'] ?? 0);
                         $paidAmount = (float)($invoice['paid_amount'] ?? 0);
                         $creditUsed = (float)($invoice['credit_used'] ?? 0);
                         $remaining = $totalAmount - $paidAmount - $creditUsed;

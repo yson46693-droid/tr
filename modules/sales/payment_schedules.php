@@ -790,7 +790,7 @@ if (isset($_GET['id'])) {
 
 <!-- Modal إضافة موعد تحصيل -->
 <div class="modal fade" id="addScheduleModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة موعد تحصيل</h5>
@@ -841,7 +841,7 @@ if (isset($_GET['id'])) {
 
 <!-- Modal تعديل موعد تحصيل -->
 <div class="modal fade" id="editScheduleModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title"><i class="bi bi-pencil-fill me-2"></i>تعديل موعد التحصيل</h5>
@@ -880,7 +880,7 @@ if (isset($_GET['id'])) {
 
 <!-- Modal تحديد عدد أيام التنبيه -->
 <div class="modal fade" id="reminderModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
                 <h5 class="modal-title"><i class="bi bi-bell-fill me-2"></i>تحديد عدد أيام التنبيه</h5>

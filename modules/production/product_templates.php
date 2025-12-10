@@ -2162,7 +2162,7 @@ if (file_exists($specificationsModulePath)) {
 
 <!-- Modal تفاصيل القالب -->
 <div class="modal fade" id="templateDetailsModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-light">
                 <h5 class="modal-title">
@@ -2216,7 +2216,7 @@ if (file_exists($specificationsModulePath)) {
 
 <!-- Modal تفاصيل الباركود للتشغيلة -->
 <div class="modal fade" id="batchBarcodeModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title"><i class="bi bi-upc-scan me-2"></i>باركود التشغيلة</h5>

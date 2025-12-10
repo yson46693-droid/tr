@@ -593,7 +593,7 @@ $backUrl = '?page=attendance_management&month=' . urlencode($selectedMonth);
 <?php if ($selectedUserId > 0 && in_array($currentUser['role'], ['manager', 'accountant'])): ?>
 <!-- Modal تعديل العدادات -->
 <div class="modal fade" id="editCountsModal" tabindex="-1" aria-labelledby="editCountsModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="editCountsModalLabel">
@@ -631,7 +631,7 @@ $backUrl = '?page=attendance_management&month=' . urlencode($selectedMonth);
 
 <!-- Modal تعديل الصلاحيات -->
 <div class="modal fade" id="editPermissionsModal" tabindex="-1" aria-labelledby="editPermissionsModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="editPermissionsModalLabel">

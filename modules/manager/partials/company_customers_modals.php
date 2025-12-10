@@ -11,7 +11,7 @@ $formAction = getRelativeUrl($dashboardScript);
 
 <!-- Add Customer Modal -->
 <div class="modal fade" id="addCustomerModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <form id="addCustomerForm" method="POST" action="<?php echo htmlspecialchars($formAction); ?>">
                 <input type="hidden" name="page" value="customers">
@@ -51,7 +51,7 @@ $formAction = getRelativeUrl($dashboardScript);
 
 <!-- Edit Customer Modal -->
 <div class="modal fade" id="editCustomerModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" action="<?php echo htmlspecialchars($formAction); ?>">
                 <input type="hidden" name="page" value="customers">
@@ -91,7 +91,7 @@ $formAction = getRelativeUrl($dashboardScript);
 
 <!-- Delete Customer Modal -->
 <div class="modal fade" id="deleteCustomerModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" action="<?php echo htmlspecialchars($formAction); ?>">
                 <input type="hidden" name="page" value="customers">

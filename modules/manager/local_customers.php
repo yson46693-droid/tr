@@ -1136,7 +1136,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 
 <!-- Modal تحصيل ديون العميل -->
 <div class="modal fade" id="collectPaymentModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-cash-coin me-2"></i>تحصيل ديون العميل المحلي</h5>
@@ -1179,7 +1179,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 
 <!-- Modal إضافة عميل محلي جديد -->
 <div class="modal fade" id="addLocalCustomerModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">إضافة عميل محلي جديد</h5>
@@ -1482,7 +1482,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 
 <!-- Modal عرض موقع العميل -->
 <div class="modal fade" id="viewLocationModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-geo-alt me-2"></i>موقع العميل المحلي</h5>

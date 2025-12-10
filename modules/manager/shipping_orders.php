@@ -3040,7 +3040,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
 </div>
 
 <div class="modal fade" id="addShippingCompanyModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-truck me-2"></i>إضافة شركة شحن</h5>

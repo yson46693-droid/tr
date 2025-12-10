@@ -337,7 +337,7 @@ $specificationsCount = is_countable($productSpecifications) ? count($productSpec
 </div>
 
 <div class="modal fade" id="addSpecificationModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <form class="modal-content" method="POST">
             <input type="hidden" name="form_token" value="<?php echo htmlspecialchars($formToken); ?>">
             <input type="hidden" name="action" value="add_specification">
@@ -381,7 +381,7 @@ $specificationsCount = is_countable($productSpecifications) ? count($productSpec
 </div>
 
 <div class="modal fade" id="editSpecificationModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <form class="modal-content" method="POST">
             <input type="hidden" name="form_token" value="<?php echo htmlspecialchars($formToken); ?>">
             <input type="hidden" name="action" value="edit_specification">
