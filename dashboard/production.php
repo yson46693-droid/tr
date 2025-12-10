@@ -55,10 +55,22 @@ if ($isTemplateAjax) {
         ];
 
         try {
+            // البحث عن القالب في جدول product_templates أولاً
             $template = $db->queryOne(
                 "SELECT * FROM product_templates WHERE id = ?",
                 [$templateId]
             );
+
+            // إذا لم يتم العثور عليه، جرب جدول unified_product_templates
+            if (!$template) {
+                $unifiedTableCheck = $db->queryOne("SHOW TABLES LIKE 'unified_product_templates'");
+                if (!empty($unifiedTableCheck)) {
+                    $template = $db->queryOne(
+                        "SELECT *, 'unified' AS template_type FROM unified_product_templates WHERE id = ?",
+                        [$templateId]
+                    );
+                }
+            }
 
             if (!$template) {
                 throw new Exception('القالب غير موجود أو تم حذفه.');
@@ -138,12 +150,55 @@ if ($isTemplateAjax) {
                 ];
             }
 
-            $rawMaterials = $db->query(
-                "SELECT id, material_name, material_type, quantity_per_unit, unit 
-                 FROM product_template_raw_materials 
-                 WHERE template_id = ?",
-                [$templateId]
-            );
+            // تحديد جدول المواد الخام بناءً على نوع القالب
+            $rawMaterials = [];
+            $templateTypeFromParam = trim($templateType);
+            $isUnifiedTemplate = ($templateTypeFromParam === 'unified' || $templateTypeKey === 'unified');
+            
+            if ($isUnifiedTemplate) {
+                // القوالب الموحدة تستخدم جدول template_raw_materials
+                $templateRawMaterialsExists = $db->queryOne("SHOW TABLES LIKE 'template_raw_materials'");
+                if (!empty($templateRawMaterialsExists)) {
+                    $rawMaterials = $db->query(
+                        "SELECT id, material_name, material_type, quantity as quantity_per_unit, unit 
+                         FROM template_raw_materials 
+                         WHERE template_id = ?",
+                        [$templateId]
+                    );
+                }
+            } else {
+                // القوالب التقليدية تستخدم جدول product_template_raw_materials
+                $rawMaterials = $db->query(
+                    "SELECT id, material_name, material_type, quantity_per_unit, unit 
+                     FROM product_template_raw_materials 
+                     WHERE template_id = ?",
+                    [$templateId]
+                );
+            }
+            
+            // إذا لم يتم العثور على مواد، جرب الجدول الآخر
+            if (empty($rawMaterials)) {
+                if ($isUnifiedTemplate) {
+                    // جرب product_template_raw_materials كبديل
+                    $rawMaterials = $db->query(
+                        "SELECT id, material_name, material_type, quantity_per_unit, unit 
+                         FROM product_template_raw_materials 
+                         WHERE template_id = ?",
+                        [$templateId]
+                    );
+                } else {
+                    // جرب template_raw_materials كبديل
+                    $templateRawMaterialsExists = $db->queryOne("SHOW TABLES LIKE 'template_raw_materials'");
+                    if (!empty($templateRawMaterialsExists)) {
+                        $rawMaterials = $db->query(
+                            "SELECT id, material_name, material_type, quantity as quantity_per_unit, unit 
+                             FROM template_raw_materials 
+                             WHERE template_id = ?",
+                            [$templateId]
+                        );
+                    }
+                }
+            }
             foreach ($rawMaterials as $rawMaterial) {
                 $name = trim((string)($rawMaterial['material_name'] ?? 'مادة خام'));
                 $quantity = number_format((float)($rawMaterial['quantity_per_unit'] ?? 0), 3);
@@ -257,12 +312,56 @@ if ($isTemplateAjax) {
                 }
             }
 
-            $packagingItems = $db->query(
-                "SELECT id, packaging_material_id, packaging_name, quantity_per_unit 
-                 FROM product_template_packaging 
-                 WHERE template_id = ?",
-                [$templateId]
-            );
+            // جلب أدوات التعبئة بناءً على نوع القالب
+            $packagingItems = [];
+            if ($isUnifiedTemplate) {
+                // القوالب الموحدة تستخدم جدول template_packaging
+                $templatePackagingExists = $db->queryOne("SHOW TABLES LIKE 'template_packaging'");
+                if (!empty($templatePackagingExists)) {
+                    $packagingItems = $db->query(
+                        "SELECT tp.id, tp.packaging_material_id, 
+                                COALESCE(tp.packaging_name, pm.name, CONCAT('أداة تعبئة #', tp.packaging_material_id)) as packaging_name, 
+                                tp.quantity_per_unit 
+                         FROM template_packaging tp
+                         LEFT JOIN packaging_materials pm ON tp.packaging_material_id = pm.id
+                         WHERE tp.template_id = ?",
+                        [$templateId]
+                    );
+                }
+            } else {
+                // القوالب التقليدية تستخدم جدول product_template_packaging
+                $packagingItems = $db->query(
+                    "SELECT id, packaging_material_id, packaging_name, quantity_per_unit 
+                     FROM product_template_packaging 
+                     WHERE template_id = ?",
+                    [$templateId]
+                );
+            }
+            
+            // إذا لم يتم العثور على أدوات تعبئة، جرب الجدول الآخر
+            if (empty($packagingItems)) {
+                if ($isUnifiedTemplate) {
+                    $packagingItems = $db->query(
+                        "SELECT id, packaging_material_id, packaging_name, quantity_per_unit 
+                         FROM product_template_packaging 
+                         WHERE template_id = ?",
+                        [$templateId]
+                    );
+                } else {
+                    $templatePackagingExists = $db->queryOne("SHOW TABLES LIKE 'template_packaging'");
+                    if (!empty($templatePackagingExists)) {
+                        $packagingItems = $db->query(
+                            "SELECT tp.id, tp.packaging_material_id, 
+                                    COALESCE(tp.packaging_name, pm.name, CONCAT('أداة تعبئة #', tp.packaging_material_id)) as packaging_name, 
+                                    tp.quantity_per_unit 
+                             FROM template_packaging tp
+                             LEFT JOIN packaging_materials pm ON tp.packaging_material_id = pm.id
+                             WHERE tp.template_id = ?",
+                            [$templateId]
+                        );
+                    }
+                }
+            }
             foreach ($packagingItems as $packItem) {
                 $packagingId = $packItem['packaging_material_id'] ?? null;
                 $name = $packItem['packaging_name'] ?? ('أداة تعبئة #' . ($packagingId ?: $packItem['id']));
