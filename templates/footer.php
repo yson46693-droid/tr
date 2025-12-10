@@ -963,13 +963,15 @@ if (!defined('ACCESS_ALLOWED')) {
                 // التحقق من الصفحات الخاصة (chat, batch_reader) التي تحتاج معاملة خاصة
                 const isSpecialPage = href.includes('page=chat') || href.includes('page=batch_reader');
                 
-                // إذا كان الرابط يحتوي على data-no-splash، لا تظهر loading للروابط الداخلية
+                // إذا كان الرابط يحتوي على data-no-splash، نتحقق من نوع الصفحة
                 if (link.hasAttribute('data-no-splash') && isInternalLink) {
-                    // للصفحات الخاصة، نضيف flag في sessionStorage لتجاهل شاشة التحميل
+                    // للصفحات الخاصة فقط، نضيف flag في sessionStorage لتجاهل شاشة التحميل
                     if (isSpecialPage) {
                         sessionStorage.setItem('internalNavigation', 'true');
+                        return;
                     }
-                    return;
+                    // للصفحات العادية في dashboard، نعرض loading overlay
+                    // لا نعيد return هنا، نتابع الكود أدناه
                 }
                 
                 if (isInternalLink && !isSamePage) {
@@ -985,6 +987,8 @@ if (!defined('ACCESS_ALLOWED')) {
                         return; // لا نعرض professionalLoadingOverlay للصفحات الخاصة
                     }
                     
+                    // للروابط الداخلية في نفس dashboard (production.php, manager.php, etc.)
+                    // نعرض loading overlay بشكل طبيعي
                     isNavigating = true;
                     // إخفاء pageLoader فوراً عند التنقل
                     const pageLoader = document.getElementById('pageLoader');
@@ -992,6 +996,8 @@ if (!defined('ACCESS_ALLOWED')) {
                         pageLoader.classList.add('hidden');
                         pageLoader.style.display = 'none';
                     }
+                    // إظهار professionalLoadingOverlay للتنقل بين الصفحات
+                    // سيتم إظهاره في beforeunload
                 } else if (!isInternalLink) {
                     isNavigating = true;
                     // إخفاء pageLoader فوراً عند التنقل
@@ -1000,20 +1006,25 @@ if (!defined('ACCESS_ALLOWED')) {
                         pageLoader.classList.add('hidden');
                         pageLoader.style.display = 'none';
                     }
+                    // إظهار professionalLoadingOverlay للروابط الخارجية
+                    // سيتم إظهاره في beforeunload
                 }
             }, true); // استخدام capture phase للقبض على الحدث قبل أي handlers أخرى
             
             // إظهار loading فوراً عند بدء تحميل صفحة جديدة (beforeunload) - مرة واحدة فقط
             let beforeUnloadTriggered = false;
             window.addEventListener('beforeunload', function() {
-                // التحقق من أن هذه ليست صفحة خاصة (chat, batch_reader)
-                const isSpecialPage = window.location.href.includes('page=chat') || window.location.href.includes('page=batch_reader');
-                if (isSpecialPage) {
-                    // للصفحات الخاصة، لا نعرض loading overlay
-                    return;
-                }
+                // التحقق من أن هذه ليست صفحة خاصة (chat, batch_reader) - نتحقق من الصفحة الحالية
+                const currentUrl = window.location.href;
+                const isSpecialPage = currentUrl.includes('page=chat') || currentUrl.includes('page=batch_reader');
                 
+                // إذا كان هناك تنقل نشط (isNavigating) ولم يتم تشغيل beforeunload من قبل
                 if (isNavigating && !beforeUnloadTriggered) {
+                    // للصفحات الخاصة، لا نعرض loading overlay
+                    if (isSpecialPage) {
+                        return;
+                    }
+                    
                     beforeUnloadTriggered = true;
                     // إظهار loading فوراً قبل تحميل الصفحة
                     if (loadingOverlay) {
