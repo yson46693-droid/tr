@@ -29,6 +29,17 @@ $db = db();
 $error = '';
 $success = '';
 
+// الحصول على رسائل النجاح والخطأ من session (بعد redirect)
+$sessionSuccess = getSuccessMessage();
+if ($sessionSuccess) {
+    $success = $sessionSuccess;
+}
+
+$sessionError = getErrorMessage();
+if ($sessionError) {
+    $error = $sessionError;
+}
+
 // معالجة العمليات
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -66,11 +77,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'unit_price' => $unitPrice
                 ]);
                 
-                $success = 'تم إضافة المنتج الخارجي بنجاح.';
+                // منع التكرار باستخدام redirect
+                preventDuplicateSubmission(
+                    'تم إضافة المنتج الخارجي بنجاح.',
+                    ['page' => 'company_products'],
+                    null,
+                    'manager'
+                );
             } catch (Exception $e) {
                 error_log('create_external_product error: ' . $e->getMessage());
-                $error = 'تعذر إضافة المنتج الخارجي. يرجى المحاولة لاحقاً.';
+                preventDuplicateSubmission(
+                    null,
+                    ['page' => 'company_products'],
+                    null,
+                    'manager',
+                    'تعذر إضافة المنتج الخارجي. يرجى المحاولة لاحقاً.'
+                );
             }
+        } else {
+            // في حالة وجود خطأ في التحقق، إعادة التوجيه مع رسالة الخطأ
+            preventDuplicateSubmission(
+                null,
+                ['page' => 'company_products'],
+                null,
+                'manager',
+                $error
+            );
         }
     } elseif ($action === 'update_external_product') {
         // منع المحاسب من التعديل على المنتجات الخارجية
@@ -99,12 +131,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'unit_price' => $unitPrice
                     ]);
                     
-                    $success = 'تم تحديث المنتج الخارجي بنجاح.';
+                    // منع التكرار باستخدام redirect
+                    preventDuplicateSubmission(
+                        'تم تحديث المنتج الخارجي بنجاح.',
+                        ['page' => 'company_products'],
+                        null,
+                        'manager'
+                    );
                 } catch (Exception $e) {
                     error_log('update_external_product error: ' . $e->getMessage());
-                    $error = 'تعذر تحديث المنتج الخارجي. يرجى المحاولة لاحقاً.';
+                    preventDuplicateSubmission(
+                        null,
+                        ['page' => 'company_products'],
+                        null,
+                        'manager',
+                        'تعذر تحديث المنتج الخارجي. يرجى المحاولة لاحقاً.'
+                    );
                 }
+            } else {
+                // في حالة وجود خطأ في التحقق، إعادة التوجيه مع رسالة الخطأ
+                preventDuplicateSubmission(
+                    null,
+                    ['page' => 'company_products'],
+                    null,
+                    'manager',
+                    $error
+                );
             }
+        } else {
+            // في حالة عدم وجود صلاحية، إعادة التوجيه مع رسالة الخطأ
+            preventDuplicateSubmission(
+                null,
+                ['page' => 'company_products'],
+                null,
+                'manager',
+                $error
+            );
         }
     } elseif ($action === 'delete_external_product') {
         // منع المحاسب من الحذف على المنتجات الخارجية
@@ -123,12 +185,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                     
                     logAudit($currentUser['id'], 'delete_external_product', 'product', $productId, null, []);
-                    $success = 'تم حذف المنتج الخارجي بنجاح.';
+                    
+                    // منع التكرار باستخدام redirect
+                    preventDuplicateSubmission(
+                        'تم حذف المنتج الخارجي بنجاح.',
+                        ['page' => 'company_products'],
+                        null,
+                        'manager'
+                    );
                 } catch (Exception $e) {
                     error_log('delete_external_product error: ' . $e->getMessage());
-                    $error = 'تعذر حذف المنتج الخارجي. يرجى المحاولة لاحقاً.';
+                    preventDuplicateSubmission(
+                        null,
+                        ['page' => 'company_products'],
+                        null,
+                        'manager',
+                        'تعذر حذف المنتج الخارجي. يرجى المحاولة لاحقاً.'
+                    );
                 }
+            } else {
+                // في حالة وجود خطأ في التحقق، إعادة التوجيه مع رسالة الخطأ
+                preventDuplicateSubmission(
+                    null,
+                    ['page' => 'company_products'],
+                    null,
+                    'manager',
+                    $error
+                );
             }
+        } else {
+            // في حالة عدم وجود صلاحية، إعادة التوجيه مع رسالة الخطأ
+            preventDuplicateSubmission(
+                null,
+                ['page' => 'company_products'],
+                null,
+                'manager',
+                $error
+            );
         }
     }
 }
