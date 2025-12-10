@@ -2077,7 +2077,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1' && $salaryId > 0) {
         $bonus = cleanFinancialValue($salary['bonus_standardized'] ?? ($salary['bonus'] ?? $salary['bonuses'] ?? 0));
         $deductions = cleanFinancialValue($salary['deductions'] ?? 0);
         
-        // حساب الراتب الأساسي بناءً على الساعات المكتملة فقط (مطابق لبطاقة الموظف)
+        // حساب الراتب الأساسي دائماً من الساعات × سعر الساعة (حقل ثابت لا يتأثر بالتسويات)
+        // لا نستخدم base_amount المحفوظ في قاعدة البيانات لأنه قد يكون متأثراً بالتسويات
         require_once __DIR__ . '/../../includes/salary_calculator.php';
         $completedHours = calculateCompletedMonthlyHours($userId, $salaryMonth, $salaryYear);
         $baseAmount = round($completedHours * $hourlyRate, 2);

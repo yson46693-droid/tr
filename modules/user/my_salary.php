@@ -46,7 +46,11 @@ if (!function_exists('calculateTotalSalaryWithCollections')) {
      */
     function calculateTotalSalaryWithCollections($salaryRecord, $userId, $month, $year, $role) {
         global $bonusColumnName;
-        $baseAmount = cleanFinancialValue($salaryRecord['base_amount'] ?? 0);
+        // حساب الراتب الأساسي دائماً من الساعات × سعر الساعة (حقل ثابت لا يتأثر بالتسويات)
+        require_once __DIR__ . '/../../includes/salary_calculator.php';
+        $hourlyRate = cleanFinancialValue($salaryRecord['hourly_rate'] ?? 0);
+        $completedHours = calculateCompletedMonthlyHours($userId, $month, $year);
+        $baseAmount = round($completedHours * $hourlyRate, 2);
         // استخدام اسم العمود الصحيح (bonus أو bonuses)
         $bonus = cleanFinancialValue($salaryRecord[$bonusColumnName] ?? $salaryRecord['bonus'] ?? $salaryRecord['bonuses'] ?? 0);
         $deductions = cleanFinancialValue($salaryRecord['deductions'] ?? 0);
@@ -366,13 +370,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $bonus = cleanFinancialValue($salaryRecord[$bonusColumnName] ?? $salaryRecord['bonus'] ?? $salaryRecord['bonuses'] ?? 0);
     $deductions = cleanFinancialValue($salaryRecord['deductions'] ?? 0);
     
-    // استخدام base_amount من قاعدة البيانات إذا كان موجوداً
-    $baseAmount = cleanFinancialValue($salaryRecord['base_amount'] ?? 0);
-    if ($baseAmount <= 0) {
-        // إذا لم يكن base_amount موجوداً، احسبه من الساعات
-        $completedHours = calculateCompletedMonthlyHours($currentUser['id'], $month, $year);
-        $baseAmount = round($completedHours * $hourlyRate, 2);
-    }
+    // حساب الراتب الأساسي دائماً من الساعات × سعر الساعة (حقل ثابت لا يتأثر بالتسويات)
+    // لا نستخدم base_amount المحفوظ في قاعدة البيانات لأنه قد يكون متأثراً بالتسويات
+    $completedHours = calculateCompletedMonthlyHours($currentUser['id'], $month, $year);
+    $baseAmount = round($completedHours * $hourlyRate, 2);
     
     // حساب نسبة التحصيلات للمندوبين (نفس المنطق المستخدم في العرض)
     $collectionsBonus = 0;
@@ -962,7 +963,11 @@ if ($salaryData['exists']) {
     }
     
     // حساب الراتب الإجمالي (قبل الخصومات)
-    $baseAmountForAdvance = cleanFinancialValue($currentSalary['base_amount'] ?? 0);
+    // حساب الراتب الأساسي دائماً من الساعات × سعر الساعة (حقل ثابت لا يتأثر بالتسويات)
+    require_once __DIR__ . '/../../includes/salary_calculator.php';
+    $hourlyRateForAdvance = cleanFinancialValue($currentSalary['hourly_rate'] ?? $currentUser['hourly_rate'] ?? 0);
+    $completedHoursForAdvance = calculateCompletedMonthlyHours($currentUser['id'], $selectedMonth, $selectedYear);
+    $baseAmountForAdvance = round($completedHoursForAdvance * $hourlyRateForAdvance, 2);
     $bonusForAdvance = cleanFinancialValue($currentSalary[$bonusColumnName] ?? $currentSalary['bonus'] ?? $currentSalary['bonuses'] ?? 0);
     $deductionsForAdvance = cleanFinancialValue($currentSalary['deductions'] ?? 0);
     
@@ -1015,7 +1020,11 @@ if ($salaryData['exists']) {
         }
         
         // حساب الراتب الإجمالي (قبل الخصومات)
-        $baseAmountForAdvance = cleanFinancialValue($currentSalary['base_amount'] ?? 0);
+        // حساب الراتب الأساسي دائماً من الساعات × سعر الساعة (حقل ثابت لا يتأثر بالتسويات)
+        require_once __DIR__ . '/../../includes/salary_calculator.php';
+        $hourlyRateForAdvance = cleanFinancialValue($currentSalary['hourly_rate'] ?? $currentUser['hourly_rate'] ?? 0);
+        $completedHoursForAdvance = calculateCompletedMonthlyHours($currentUser['id'], $selectedMonth, $selectedYear);
+        $baseAmountForAdvance = round($completedHoursForAdvance * $hourlyRateForAdvance, 2);
         $bonusForAdvance = cleanFinancialValue($currentSalary['bonus'] ?? 0);
         $deductionsForAdvance = cleanFinancialValue($currentSalary['deductions'] ?? 0);
         
@@ -1068,7 +1077,12 @@ if ($currentSalary) {
     
     // حساب الحد الأقصى للسلفة بناءً على نصف الراتب الصافي (بعد الخصومات)
     // الراتب الصافي = الراتب الإجمالي - الخصومات
-    $grossSalaryForStats = cleanFinancialValue($currentSalary['base_amount'] ?? 0) + 
+    // حساب الراتب الأساسي دائماً من الساعات × سعر الساعة (حقل ثابت لا يتأثر بالتسويات)
+    require_once __DIR__ . '/../../includes/salary_calculator.php';
+    $hourlyRateForStats = cleanFinancialValue($currentSalary['hourly_rate'] ?? $currentUser['hourly_rate'] ?? 0);
+    $completedHoursForStats = calculateCompletedMonthlyHours($currentUser['id'], $selectedMonth, $selectedYear);
+    $baseAmountForStats = round($completedHoursForStats * $hourlyRateForStats, 2);
+    $grossSalaryForStats = $baseAmountForStats + 
                           cleanFinancialValue($currentSalary[$bonusColumnName] ?? $currentSalary['bonus'] ?? $currentSalary['bonuses'] ?? 0) + 
                           cleanFinancialValue($monthStats['collections_bonus'] ?? 0);
     $deductionsForStats = cleanFinancialValue($currentSalary['deductions'] ?? 0);
@@ -1185,8 +1199,12 @@ if ($currentUser['role'] === 'sales') {
 
 // استخدام القيم من جدول salaries وإعادة حساب الراتب الإجمالي من المكونات لضمان الدقة
 if ($currentSalary && isset($currentSalary['base_amount'])) {
-    // استخدام القيم من قاعدة البيانات
-    $baseAmount = cleanFinancialValue($currentSalary['base_amount'] ?? 0);
+    // حساب الراتب الأساسي دائماً من الساعات × سعر الساعة (حقل ثابت لا يتأثر بالتسويات)
+    // لا نستخدم base_amount المحفوظ في قاعدة البيانات لأنه قد يكون متأثراً بالتسويات
+    require_once __DIR__ . '/../../includes/salary_calculator.php';
+    $hourlyRate = cleanFinancialValue($currentSalary['hourly_rate'] ?? $currentUser['hourly_rate'] ?? 0);
+    $completedHours = calculateCompletedMonthlyHours($currentUser['id'], $selectedMonth, $selectedYear);
+    $baseAmount = round($completedHours * $hourlyRate, 2);
     
     // حساب نسبة التحصيلات: يجب أن تشمل:
     // 1. 2% من المبالغ المحصلة فعلياً من جدول collections
