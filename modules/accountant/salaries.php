@@ -2085,8 +2085,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1' && $salaryId > 0) {
         
         // حساب نسبة التحصيلات للمندوبين الخاصة بالشهر المحدد فقط
         // يجب أن تُحسب نسبة التحصيلات من التحصيلات الخاصة بالشهر المحدد فقط (وليس من رصيد الخزنة الإجمالي)
-        $collectionsBonus = cleanFinancialValue($salary['collections_bonus'] ?? 0);
-        $collectionsAmount = cleanFinancialValue($salary['collections_amount'] ?? 0);
+        // لا نستخدم القيمة المحفوظة في collections_bonus لأنها قد تكون من شهر آخر
+        $collectionsBonus = 0;
+        $collectionsAmount = 0;
         
         // متغير لعرض مبلغ التحصيلات الخاص بالشهر المحدد
         $displayCashBalance = 0.0;
@@ -2094,27 +2095,14 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1' && $salaryId > 0) {
         if ($userRole === 'sales') {
             // حساب نسبة التحصيلات من التحصيلات الخاصة بالشهر المحدد فقط
             // استخدام calculateSalesCollections التي تحسب التحصيلات الخاصة بالشهر والسنة المحددين
+            // نستخدم دائماً القيمة المحسوبة للشهر المحدد فقط (نتجاهل القيمة المحفوظة)
             $recalculatedCollectionsAmount = calculateSalesCollections($userId, $salaryMonth, $salaryYear);
             $recalculatedCollectionsBonus = round($recalculatedCollectionsAmount * 0.02, 2);
             $displayCashBalance = cleanFinancialValue($recalculatedCollectionsAmount);
             
-            // استخدام القيمة المحفوظة في قاعدة البيانات إذا كانت موجودة ومرتبطة بالشهر المحدد
-            // وإلا استخدام القيمة المحسوبة من التحصيلات الخاصة بالشهر
-            if ($collectionsBonus > 0 && $collectionsAmount > 0) {
-                // إذا كانت هناك قيمة محفوظة، نستخدمها (يفترض أنها مرتبطة بالشهر المحدد)
-                // لكن نتحقق من أن القيمة المحسوبة لا تتجاوز القيمة المحفوظة بشكل كبير
-                // (قد تكون القيمة المحفوظة صحيحة إذا تم حسابها سابقاً)
-                if ($recalculatedCollectionsBonus > $collectionsBonus * 1.1) {
-                    // إذا كانت القيمة المحسوبة أكبر بكثير من المحفوظة، نستخدم المحسوبة
-                    $collectionsBonus = $recalculatedCollectionsBonus;
-                    $collectionsAmount = $recalculatedCollectionsAmount;
-                }
-                // وإلا نستخدم القيمة المحفوظة
-            } else {
-                // إذا لم تكن هناك قيمة محفوظة، نستخدم القيمة المحسوبة
-                $collectionsBonus = $recalculatedCollectionsBonus;
-                $collectionsAmount = $recalculatedCollectionsAmount;
-            }
+            // استخدام القيمة المحسوبة دائماً (خاصة بالشهر المحدد)
+            $collectionsBonus = $recalculatedCollectionsBonus;
+            $collectionsAmount = $recalculatedCollectionsAmount;
         }
         
         // حساب الراتب الإجمالي الصحيح دائماً من المكونات (مطابق لبطاقة الموظف)

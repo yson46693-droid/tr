@@ -136,17 +136,60 @@ if (session_status() === PHP_SESSION_ACTIVE) {
         $currentSessionId = session_id();
         
         if ($cookieSessionId !== $currentSessionId) {
-            // session ID غير متطابق - إلغاء الجلسة الحالية
+            // session ID غير متطابق - محاولة تحديث cookie أولاً قبل إلغاء الجلسة
+            // هذا يحدث أحياناً عند redirect أو تحديث الصفحة
             if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-                $userId = $_SESSION['user_id'] ?? 'unknown';
-                error_log("Security: Session ID mismatch for user ID: {$userId} - Destroying session");
+                // محاولة تحديث cookie أولاً
+                if (!headers_sent()) {
+                    setcookie($sessionName, $currentSessionId, [
+                        'expires' => time() + SESSION_LIFETIME,
+                        'path' => '/',
+                        'domain' => '',
+                        'secure' => $isHttps,
+                        'httponly' => true,
+                        'samesite' => $isHttps ? 'None' : 'Lax',
+                    ]);
+                    
+                    // التحقق مرة أخرى بعد تحديث cookie
+                    // إذا كان المستخدم مسجل دخول وكانت الجلسة صالحة، لا نلغيها
+                    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+                        // الجلسة صالحة - فقط حدثنا cookie
+                        // لا نلغي الجلسة
+                        error_log("Session ID mismatch fixed by updating cookie for user ID: " . ($_SESSION['user_id'] ?? 'unknown'));
+                    } else {
+                        // الجلسة غير صالحة - إلغاءها
+                        $userId = $_SESSION['user_id'] ?? 'unknown';
+                        error_log("Security: Session ID mismatch and invalid session for user ID: {$userId} - Destroying session");
+                        
+                        session_unset();
+                        session_destroy();
+                        session_set_cookie_params($sessionCookieOptions);
+                        session_start();
+                    }
+                } else {
+                    // إذا كانت headers قد أُرسلت، لا نستطيع تحديث cookie
+                    // لكن إذا كانت الجلسة صالحة، نستمر
+                    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+                        // الجلسة صالحة - نستمر
+                        error_log("Session ID mismatch but session is valid (headers sent) for user ID: " . ($_SESSION['user_id'] ?? 'unknown'));
+                    } else {
+                        // الجلسة غير صالحة - إلغاءها
+                        $userId = $_SESSION['user_id'] ?? 'unknown';
+                        error_log("Security: Session ID mismatch and invalid session (headers sent) for user ID: {$userId} - Destroying session");
+                        
+                        session_unset();
+                        session_destroy();
+                        session_set_cookie_params($sessionCookieOptions);
+                        session_start();
+                    }
+                }
+            } else {
+                // المستخدم غير مسجل دخول - إلغاء الجلسة
+                session_unset();
+                session_destroy();
+                session_set_cookie_params($sessionCookieOptions);
+                session_start();
             }
-            
-            session_unset();
-            session_destroy();
-            // إعادة بدء جلسة جديدة نظيفة
-            session_set_cookie_params($sessionCookieOptions);
-            session_start();
         } else {
             // التحقق من وقت آخر نشاط وإلغاء الجلسة إذا انتهت
             if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {

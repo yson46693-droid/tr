@@ -153,6 +153,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     // تحديث بيانات الجلسة
                     $_SESSION['username'] = $user['username'];
+                    $_SESSION['last_activity'] = time(); // تحديث وقت آخر نشاط
+                    
+                    // التأكد من تحديث session cookie قبل redirect
+                    if (!headers_sent() && session_id()) {
+                        $isHttps = (
+                            (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+                            (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
+                        );
+                        setcookie(session_name(), session_id(), [
+                            'expires' => time() + SESSION_LIFETIME,
+                            'path' => '/',
+                            'domain' => '',
+                            'secure' => $isHttps,
+                            'httponly' => true,
+                            'samesite' => $isHttps ? 'None' : 'Lax',
+                        ]);
+                    }
                     
                     $_SESSION['success_message'] = 'تم تحديث البروفايل بنجاح';
                     
