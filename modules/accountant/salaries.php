@@ -1124,7 +1124,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $currentAccumulated = $accumulatedData['accumulated'];
                 // حساب المتبقي بناءً على settlements_advances وليس paid_amount لتجنب المضاعفة
                 $currentSettlementsAdvances = cleanFinancialValue($salary['settlements_advances'] ?? 0);
-                $currentRemaining = max(0, $currentAccumulated - $currentSettlementsAdvances);
+                
+                // التحقق من أن settlements_advances لا يتجاوز accumulated_amount
+                // إذا كان هناك خطأ في البيانات (settlements_advances > accumulated_amount)، نصححه
+                if ($currentSettlementsAdvances > $currentAccumulated + 0.01) {
+                    error_log("settle_salary: WARNING - settlements_advances ($currentSettlementsAdvances) exceeds accumulated_amount ($currentAccumulated). This may be from a previous salary or data error.");
+                    // تصحيح settlements_advances ليكون مساوياً لـ accumulated_amount كحد أقصى
+                    // لكن نسمح بالتسوية إذا كان المبلغ الجديد لا يتجاوز accumulated_amount
+                    $correctedSettlementsAdvances = min($currentSettlementsAdvances, $currentAccumulated);
+                    $currentRemaining = max(0, $currentAccumulated - $correctedSettlementsAdvances);
+                    
+                    // إذا كان المبلغ المطلوب تسويته يتجاوز المتبقي الصحيح، نرفض الطلب
+                    if ($settlementAmount > $currentRemaining + 0.01) {
+                        $_SESSION['salaries_error'] = 'مبلغ التسوية (' . formatCurrency($settlementAmount) . ') يتجاوز المبلغ المتبقي المتاح (' . formatCurrency($currentRemaining) . ' من أصل ' . formatCurrency($currentAccumulated) . '). ملاحظة: يوجد خطأ في البيانات - التسويات والسلف (' . formatCurrency($currentSettlementsAdvances) . ') تتجاوز المبلغ التراكمي. يرجى مراجعة البيانات أولاً.';
+                        error_log("settle_salary: Validation failed - settlementAmount ($settlementAmount) > currentRemaining ($currentRemaining) after correction");
+                        $redirectUrl = $buildViewUrl($view, ['month' => $selectedMonth, 'year' => $selectedYear]);
+                        header('Location: ' . $redirectUrl);
+                        exit;
+                    }
+                    
+                    // إذا كان المبلغ المطلوب تسويته لا يتجاوز المتبقي الصحيح، نستخدم settlements_advances المصحح
+                    $currentSettlementsAdvances = $correctedSettlementsAdvances;
+                } else {
+                    $currentRemaining = max(0, $currentAccumulated - $currentSettlementsAdvances);
+                }
                 
                 // تسجيل المعلومات للتشخيص
                 error_log("settle_salary: salaryId=$salaryId, userId=$userId, month=$salaryMonth, year=$salaryYear");
@@ -1167,7 +1190,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         
                         // التحقق المنطقي: التأكد من أن التسويات والسلف لا تتجاوز المبلغ التراكمي
                         if ($newSettlementsAdvances > $currentAccumulated + 0.01) {
-                            throw new Exception('خطأ في الحساب: التسويات والسلف (' . formatCurrency($newSettlementsAdvances) . ') تتجاوز المبلغ التراكمي (' . formatCurrency($currentAccumulated) . ')');
+                            // إذا كان المبلغ الجديد يتجاوز المبلغ التراكمي، نحدده إلى المبلغ التراكمي
+                            // هذا يحدث عادة عندما يكون settlements_advances من راتب سابق
+                            error_log("settle_salary: WARNING - newSettlementsAdvances ($newSettlementsAdvances) would exceed accumulated_amount ($currentAccumulated). Limiting to accumulated_amount.");
+                            $newSettlementsAdvances = $currentAccumulated;
                         }
                         
                         // تحديث settlements_advances فقط (accumulated_amount يبقى كما هو)

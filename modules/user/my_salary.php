@@ -437,28 +437,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
     }
     
-    // حساب الحد الأقصى للسلفة بناءً على نصف الباقي الفعلي من الراتب
+    // حساب الحد الأقصى للسلفة بناءً على نصف الباقي الفعلي من الراتب فقط
+    // الحد الأقصى للسلفة يعتمد فقط على المتبقي من الراتب وليس على أي مبالغ أخرى
     // إذا كان الباقي متاحاً، استخدمه، وإلا استخدم الراتب الصافي
     $baseForMaxAdvance = ($remainingAmount > 0 || $salaryData['exists']) ? $remainingAmount : $netSalary;
-    
-    // للمندوبين: إضافة نسبة التحصيلات الحالية إلى المتبقي المتاح للسلفة
-    if ($currentUser['role'] === 'sales' && $collectionsBonus > 0) {
-        // الراتب الإجمالي المحسوب حالياً (يتضمن نسبة التحصيلات الحالية)
-        $currentCalculatedTotal = $netSalary;
-        
-        // الراتب المحفوظ في قاعدة البيانات
-        $savedTotal = cleanFinancialValue($salaryRecord['total_amount'] ?? 0);
-        
-        // إذا كان الراتب المحسوب أكبر من المحفوظ، هذا يعني أن هناك نسبة تحصيلات جديدة
-        if ($currentCalculatedTotal > $savedTotal) {
-            $additionalCollectionsBonus = $currentCalculatedTotal - $savedTotal;
-            // إضافة نسبة التحصيلات الجديدة إلى المتبقي المتاح للسلفة
-            $baseForMaxAdvance = $remainingAmount + $additionalCollectionsBonus;
-        }
-        
-        // التأكد من أن المتبقي لا يتجاوز الراتب الإجمالي المحسوب
-        $baseForMaxAdvance = min($baseForMaxAdvance, $currentCalculatedTotal);
-    }
     
     $maxAdvance = cleanFinancialValue(max(0, $baseForMaxAdvance * 0.5));
     
@@ -1315,32 +1297,10 @@ if ($salaryData['exists'] && isset($currentSalary) && isset($currentSalary['id']
     }
 }
 
-// حساب الحد الأقصى للسلفة بناءً على نصف الباقي الفعلي من الراتب
+// حساب الحد الأقصى للسلفة بناءً على نصف الباقي الفعلي من الراتب فقط
 // الباقي الفعلي = المبلغ التراكمي - المبلغ المدفوع (يشمل التسويات والسلفات المدفوعة)
-// للمندوبين: يجب أن يتضمن الحد الأقصى نسبة التحصيلات الحالية (غير المسددة)
-$effectiveRemainingForAdvance = $remainingAmount;
-
-// للمندوبين: إذا كانت نسبة التحصيلات الحالية أكبر من الصفر ولم يتم تسويتها بالكامل
-// نضيف الفرق بين الراتب الإجمالي المحسوب حالياً والراتب المحفوظ في قاعدة البيانات
-if ($currentUser['role'] === 'sales' && $collectionsBonus > 0) {
-    // الراتب الإجمالي المحسوب حالياً (يتضمن نسبة التحصيلات الحالية)
-    $currentCalculatedTotal = $totalSalary;
-    
-    // الراتب المحفوظ في قاعدة البيانات
-    $savedTotal = cleanFinancialValue($currentSalary['total_amount'] ?? 0);
-    
-    // إذا كان الراتب المحسوب أكبر من المحفوظ، هذا يعني أن هناك نسبة تحصيلات جديدة
-    if ($currentCalculatedTotal > $savedTotal) {
-        $additionalCollectionsBonus = $currentCalculatedTotal - $savedTotal;
-        // إضافة نسبة التحصيلات الجديدة إلى المتبقي المتاح للسلفة
-        $effectiveRemainingForAdvance = $remainingAmount + $additionalCollectionsBonus;
-    }
-    
-    // التأكد من أن المتبقي لا يتجاوز الراتب الإجمالي المحسوب
-    $effectiveRemainingForAdvance = min($effectiveRemainingForAdvance, $currentCalculatedTotal);
-}
-
-$maxAdvance = cleanFinancialValue(max(0, $effectiveRemainingForAdvance * 0.5));
+// الحد الأقصى للسلفة يعتمد فقط على المتبقي من الراتب وليس على أي مبالغ أخرى
+$maxAdvance = cleanFinancialValue(max(0, $remainingAmount * 0.5));
 
 $dashboardUrl = getDashboardUrl($currentUser['role']);
 $monthName = date('F', mktime(0, 0, 0, $selectedMonth, 1));
