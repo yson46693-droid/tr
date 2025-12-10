@@ -1381,6 +1381,9 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('DOMContentLoaded', function() {
     const printBtn = document.getElementById('printSupplierReportBtn');
     if (printBtn) {
+        // Get the base URL from PHP
+        const reportBaseUrl = '<?php echo getRelativeUrl("print_supplier_report.php"); ?>';
+        
         printBtn.addEventListener('click', function() {
             const supplierId = document.getElementById('reportSupplierId').value;
             const dateFrom = document.getElementById('reportDateFrom').value;
@@ -1391,19 +1394,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // حساب المسار الصحيح
-            const currentPath = window.location.pathname;
-            const pathParts = currentPath.split('/').filter(p => p);
-            const stopIndex = pathParts.findIndex(part => part === 'dashboard' || part === 'modules');
-            const baseParts = stopIndex === -1 ? pathParts : pathParts.slice(0, stopIndex);
-            
-            let basePath = '/';
-            if (baseParts.length > 0) {
-                basePath = '/' + baseParts.join('/') + '/';
-            }
-            
-            // بناء URL للتقرير
-            const reportUrl = basePath + 'print_supplier_report.php' + 
+            // بناء URL للتقرير باستخدام المسار الصحيح من PHP
+            const reportUrl = reportBaseUrl + 
                 '?supplier_id=' + encodeURIComponent(supplierId) +
                 '&date_from=' + encodeURIComponent(dateFrom) +
                 '&date_to=' + encodeURIComponent(dateTo);

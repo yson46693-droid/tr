@@ -487,12 +487,17 @@ $rawReportQuery = static function ($dbConnection, $sql, $params = []) {
     }
 };
 
-$rawMaterialsContext = defined('RAW_MATERIALS_CONTEXT') ? RAW_MATERIALS_CONTEXT : 'production';
-$allowedRoles = ['production'];
-if ($rawMaterialsContext === 'manager') {
-    $allowedRoles[] = 'manager';
+// Check if we're in API mode (for report generation API)
+$isApiMode = isset($GLOBALS['RAW_MATERIALS_API_MODE']) && $GLOBALS['RAW_MATERIALS_API_MODE'] === true;
+
+if (!$isApiMode) {
+    $rawMaterialsContext = defined('RAW_MATERIALS_CONTEXT') ? RAW_MATERIALS_CONTEXT : 'production';
+    $allowedRoles = ['production'];
+    if ($rawMaterialsContext === 'manager') {
+        $allowedRoles[] = 'manager';
+    }
+    requireRole($allowedRoles);
 }
-requireRole($allowedRoles);
 
 $currentUser = getCurrentUser();
 $db = db();
@@ -952,6 +957,8 @@ $tahiniMaterialOptions = array_map(static function ($type, $data) {
     ];
 }, array_keys($tahiniMaterialAggregates), $tahiniMaterialAggregates);
 
+// Build report only if not in API mode (API will build it itself)
+if (!$isApiMode) {
 $rawWarehouseReport = [
     'generated_at' => date('Y-m-d H:i'),
     'generated_by' => $currentUser['full_name'] ?? ($currentUser['username'] ?? 'مستخدم'),
@@ -2059,7 +2066,7 @@ $allSuppliers = $db->query(
 END OLD CODE */ }
 
 // ======= معالجة العمليات =======
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
     // منع تكرار الإرسال باستخدام CSRF Token
@@ -3701,12 +3708,22 @@ if ($section === 'nuts') {
     }
 }
 
+// End of API mode check for report building
+}
+
+if (!$isApiMode) {
 $rawMaterialsReportMeta = storeRawMaterialsReportDocument($rawWarehouseReport);
 $rawMaterialsReportViewUrl = $rawMaterialsReportMeta['viewer_path'] ?? '';
 $rawMaterialsReportPrintUrl = $rawMaterialsReportMeta['print_path'] ?? '';
 $rawMaterialsReportAbsoluteView = $rawMaterialsReportMeta['absolute_viewer_url'] ?? '';
 $rawMaterialsReportAbsolutePrint = $rawMaterialsReportMeta['absolute_print_url'] ?? '';
 $rawMaterialsReportGeneratedAt = $rawWarehouseReport['generated_at'] ?? date('Y-m-d H:i');
+} // End of !$isApiMode check for report meta
+
+// If in API mode, exit here (don't output HTML)
+if ($isApiMode) {
+    return; // Exit early, API will handle response
+}
 ?>
 
 <style>
@@ -6532,38 +6549,87 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     if (reportButton) {
+        reportButton.addEventListener('click', async () => {
+            // Disable button and show loading state
+            const originalText = reportButton.innerHTML;
+            reportButton.disabled = true;
+            reportButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري التوليد...';
+            
+            try {
+                // Calculate API URL
+                const currentPath = window.location.pathname;
+                const pathParts = currentPath.split('/').filter(p => p);
+                const stopIndex = pathParts.findIndex(part => part === 'dashboard' || part === 'modules');
+                const baseParts = stopIndex === -1 ? pathParts : pathParts.slice(0, stopIndex);
+                let basePath = '/';
+                if (baseParts.length > 0) {
+                    basePath = '/' + baseParts.join('/') + '/';
+                }
+                const apiUrl = basePath + 'api/generate_raw_materials_report.php';
+                
+                // Call API to generate report
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update button attributes with new report URLs
+                    reportButton.setAttribute('data-viewer-url', data.viewer_url || '');
+                    reportButton.setAttribute('data-print-url', data.print_url || '');
+                    reportButton.setAttribute('data-report-ready', '1');
+                    reportButton.setAttribute('data-generated-at', data.generated_at || '');
+                    
+                    // Update modal content if it exists
+                    const generatedAtSpan = document.querySelector('#rawMaterialsReportModal .fw-semibold');
+                    if (generatedAtSpan) {
+                        generatedAtSpan.textContent = data.generated_at || '';
+                    }
+                    
+                    // Show modal or open report
+                    if (reportModalElement && typeof bootstrap !== 'undefined') {
+                        const instance = bootstrap.Modal.getOrCreateInstance(reportModalElement);
+                        instance.show();
+                    } else if (data.viewer_url) {
+                        openInNewTab(data.viewer_url);
+                    }
+                } else {
+                    alert('فشل في توليد التقرير: ' + (data.error || 'حدث خطأ غير معروف'));
+                }
+            } catch (error) {
+                console.error('Error generating report:', error);
+                alert('حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+            } finally {
+                // Restore button state
+                reportButton.disabled = false;
+                reportButton.innerHTML = originalText;
+            }
+        });
+        
+        // Handle view and print buttons
         const viewUrl = reportButton.getAttribute('data-viewer-url') || '';
         const printUrlAttr = reportButton.getAttribute('data-print-url') || '';
         const isReady = reportButton.getAttribute('data-report-ready') === '1';
         const resolvedPrintUrl = printUrlAttr || (viewUrl ? (viewUrl.includes('?') ? `${viewUrl}&print=1` : `${viewUrl}?print=1`) : '');
 
-        if (!isReady) {
-            reportButton.addEventListener('click', () => {
-                alert('لا يمكن توليد التقرير حالياً. يرجى تحديث الصفحة أو التأكد من صلاحيات مجلد التخزين.');
+        if (viewButton && isReady) {
+            viewButton.addEventListener('click', () => {
+                const currentViewUrl = reportButton.getAttribute('data-viewer-url') || viewUrl;
+                openInNewTab(currentViewUrl);
+                hideModal();
             });
-        } else {
-            reportButton.addEventListener('click', () => {
-                if (!reportModalElement || typeof bootstrap === 'undefined') {
-                    openInNewTab(viewUrl);
-                    return;
-                }
-                const instance = bootstrap.Modal.getOrCreateInstance(reportModalElement);
-                instance.show();
+        }
+
+        if (printButton && isReady) {
+            printButton.addEventListener('click', () => {
+                const currentPrintUrl = reportButton.getAttribute('data-print-url') || resolvedPrintUrl;
+                openInNewTab(currentPrintUrl);
+                hideModal();
             });
-
-            if (viewButton) {
-                viewButton.addEventListener('click', () => {
-                    openInNewTab(viewUrl);
-                    hideModal();
-                });
-            }
-
-            if (printButton) {
-                printButton.addEventListener('click', () => {
-                    openInNewTab(resolvedPrintUrl);
-                    hideModal();
-                });
-            }
         }
     }
 });
