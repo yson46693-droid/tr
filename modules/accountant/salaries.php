@@ -5195,8 +5195,15 @@ function printSalaryStatement() {
         return false;
     }
     
-    // بناء الرابط بشكل صحيح - استخدام window.location.pathname كقاعدة
-    const baseUrl = '<?php echo isset($currentUrl) && !empty($currentUrl) ? $currentUrl : getRelativeUrl("dashboard/accountant.php"); ?>';
+    // بناء الرابط بشكل صحيح
+    // استخدام window.location.pathname كقاعدة
+    let baseUrl = '<?php echo isset($currentUrl) && !empty($currentUrl) ? htmlspecialchars($currentUrl) : htmlspecialchars($_SERVER["PHP_SELF"] ?? "/dashboard/accountant.php"); ?>';
+    
+    // إذا كان baseUrl فارغاً أو غير صحيح، استخدم window.location.pathname
+    if (!baseUrl || baseUrl.trim() === '') {
+        baseUrl = window.location.pathname;
+    }
+    
     let url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'page=salaries&action=print_statement&salary_id=' + salaryId + '&user_id=' + userId + '&period_type=' + periodType;
     
     if (periodType === 'current_month' || periodType === 'specific_month') {
