@@ -13,84 +13,75 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
-// ============================================
-// فحص فوري من قاعدة البيانات في بداية الملف
-// لمنع أي استدعاءات إضافية إذا تم التنفيذ اليوم
-// ============================================
-$today = date('Y-m-d');
-$cacheKey = 'auto_salary_init_today_check_' . $today;
+/**
+ * فحص فوري من قاعدة البيانات
+ * لمنع أي استدعاءات إضافية إذا تم التنفيذ اليوم
+ */
+function checkAutoSalaryInitToday() {
+    $today = date('Y-m-d');
+    $cacheKey = 'auto_salary_init_today_check_' . $today;
 
-// استخدام GLOBALS cache لتقليل استعلامات قاعدة البيانات
-if (!isset($GLOBALS[$cacheKey])) {
-    try {
-        // تحميل db.php إذا لم يكن محملاً
-        if (!function_exists('db')) {
-            require_once __DIR__ . '/db.php';
-        }
-        
-        $db = db();
-        
-        // التحقق من وجود جدول السجلات وإنشاؤه إذا لم يكن موجوداً
-        $tableExists = $db->queryOne("SHOW TABLES LIKE 'auto_salary_init_logs'");
-        
-        if (empty($tableExists)) {
-            // إنشاء الجدول إذا لم يكن موجوداً
-            try {
-                $db->execute("
-                    CREATE TABLE IF NOT EXISTS `auto_salary_init_logs` (
-                      `id` int(11) NOT NULL AUTO_INCREMENT,
-                      `call_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                      `user_id` int(11) DEFAULT NULL,
-                      `status` enum('executed','skipped','error') NOT NULL DEFAULT 'skipped',
-                      `reason` varchar(255) DEFAULT NULL,
-                      `created_count` int(11) DEFAULT 0,
-                      `skipped_count` int(11) DEFAULT 0,
-                      `error_count` int(11) DEFAULT 0,
-                      `month` int(2) DEFAULT NULL,
-                      `year` int(4) DEFAULT NULL,
-                      `ip_address` varchar(45) DEFAULT NULL,
-                      `request_uri` varchar(500) DEFAULT NULL,
-                      PRIMARY KEY (`id`),
-                      KEY `call_time` (`call_time`),
-                      KEY `user_id` (`user_id`),
-                      KEY `status` (`status`),
-                      KEY `month_year` (`month`, `year`),
-                      KEY `status_date` (`status`, `call_time`)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-                ");
-                error_log("auto_salary_init: Created auto_salary_init_logs table");
-            } catch (Exception $e) {
-                error_log("auto_salary_init: Failed to create table: " . $e->getMessage());
+    // استخدام GLOBALS cache لتقليل استعلامات قاعدة البيانات
+    if (!isset($GLOBALS[$cacheKey])) {
+        try {
+            // تحميل db.php إذا لم يكن محملاً
+            if (!function_exists('db')) {
+                require_once __DIR__ . '/db.php';
             }
+            
+            $db = db();
+            
+            // التحقق من وجود جدول السجلات وإنشاؤه إذا لم يكن موجوداً
+            $tableExists = $db->queryOne("SHOW TABLES LIKE 'auto_salary_init_logs'");
+            
+            if (empty($tableExists)) {
+                // إنشاء الجدول إذا لم يكن موجوداً
+                try {
+                    $db->execute("
+                        CREATE TABLE IF NOT EXISTS `auto_salary_init_logs` (
+                          `id` int(11) NOT NULL AUTO_INCREMENT,
+                          `call_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                          `user_id` int(11) DEFAULT NULL,
+                          `status` enum('executed','skipped','error') NOT NULL DEFAULT 'skipped',
+                          `reason` varchar(255) DEFAULT NULL,
+                          `created_count` int(11) DEFAULT 0,
+                          `skipped_count` int(11) DEFAULT 0,
+                          `error_count` int(11) DEFAULT 0,
+                          `month` int(2) DEFAULT NULL,
+                          `year` int(4) DEFAULT NULL,
+                          `ip_address` varchar(45) DEFAULT NULL,
+                          `request_uri` varchar(500) DEFAULT NULL,
+                          PRIMARY KEY (`id`),
+                          KEY `call_time` (`call_time`),
+                          KEY `user_id` (`user_id`),
+                          KEY `status` (`status`),
+                          KEY `month_year` (`month`, `year`),
+                          KEY `status_date` (`status`, `call_time`)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    ");
+                    error_log("auto_salary_init: Created auto_salary_init_logs table");
+                } catch (Exception $e) {
+                    error_log("auto_salary_init: Failed to create table: " . $e->getMessage());
+                }
+            }
+            
+            // فحص سريع: هل تم التنفيذ اليوم؟
+            $todayExecution = $db->queryOne(
+                "SELECT id FROM auto_salary_init_logs 
+                 WHERE DATE(call_time) = CURDATE() 
+                 AND status = 'executed'
+                 LIMIT 1"
+            );
+            
+            $GLOBALS[$cacheKey] = !empty($todayExecution);
+        } catch (Exception $e) {
+            // في حالة الخطأ، نعتبر أنه لم يتم التنفيذ
+            $GLOBALS[$cacheKey] = false;
+            error_log("auto_salary_init: Error checking today's execution: " . $e->getMessage());
         }
-        
-        // فحص سريع: هل تم التنفيذ اليوم؟
-        $todayExecution = $db->queryOne(
-            "SELECT id FROM auto_salary_init_logs 
-             WHERE DATE(call_time) = CURDATE() 
-             AND status = 'executed'
-             LIMIT 1"
-        );
-        
-        $GLOBALS[$cacheKey] = !empty($todayExecution);
-        
-        // لا نطبع رسائل عند التخطي - هذا سلوك طبيعي وليس خطأ
-    } catch (Exception $e) {
-        // في حالة الخطأ، نعتبر أنه لم يتم التنفيذ
-        $GLOBALS[$cacheKey] = false;
-        error_log("auto_salary_init: Error checking today's execution: " . $e->getMessage());
     }
-}
-
-// إذا تم التنفيذ اليوم، إيقاف التنفيذ فوراً بدون أي عمليات أخرى
-if (isset($GLOBALS[$cacheKey]) && $GLOBALS[$cacheKey] === true) {
-    // تم التنفيذ اليوم بالفعل - إيقاف فوري
-    return;
-}
-
-// متغير global لمنع التنفيذ المتكرر في نفس الطلب
-if (!isset($GLOBALS['auto_salary_init_executed'])) {
-    $GLOBALS['auto_salary_init_executed'] = false;
+    
+    return $GLOBALS[$cacheKey] ?? false;
 }
 
 /**
@@ -219,37 +210,9 @@ function releaseAutoSalaryInitLock($fp) {
 /**
  * التحقق من أن auto_salary_init تم استدعاؤه اليوم بالفعل
  * فحص سريع بدون transaction للسرعة
- * يستخدم cache من الفحص الأولي في بداية الملف
  */
 function wasAutoSalaryInitCalledToday($db) {
-    $today = date('Y-m-d');
-    $cacheKey = 'auto_salary_init_today_check_' . $today;
-    
-    // استخدام cache من الفحص الأولي
-    if (isset($GLOBALS[$cacheKey])) {
-        return $GLOBALS[$cacheKey];
-    }
-    
-    // إذا لم يكن هناك cache، نفحص قاعدة البيانات
-    try {
-        ensureAutoSalaryInitLogsTable($db);
-        
-        // فحص سريع بدون transaction للسرعة
-        $todayCall = $db->queryOne(
-            "SELECT id FROM auto_salary_init_logs 
-             WHERE DATE(call_time) = CURDATE() 
-             AND status = 'executed'
-             LIMIT 1"
-        );
-        
-        $result = !empty($todayCall);
-        $GLOBALS[$cacheKey] = $result;
-        
-        return $result;
-    } catch (Exception $e) {
-        error_log("auto_salary_init: Error checking today's calls: " . $e->getMessage());
-        return false;
-    }
+    return checkAutoSalaryInitToday();
 }
 
 /**
@@ -528,6 +491,11 @@ function runAutoSalaryInit() {
         return;
     }
     
+    // فحص: هل تم التنفيذ اليوم؟
+    if (checkAutoSalaryInitToday()) {
+        return;
+    }
+    
     // فحص سريع جداً قبل أي عمليات
     // التحقق من أن المستخدم مسجل الدخول
     if (!function_exists('isLoggedIn')) {
@@ -537,17 +505,6 @@ function runAutoSalaryInit() {
     if (!isLoggedIn()) {
         return;
     }
-    
-    // التحقق من أن هذا ليس طلب AJAX أو API
-    $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
-    $isApi = strpos($_SERVER['REQUEST_URI'] ?? '', '/api/') !== false;
-    
-    if ($isAjax || $isApi) {
-        return;
-    }
-    
-    // الفحص الأولي في بداية الملف يمنع الوصول إلى هنا إذا تم التنفيذ اليوم
-    // لكن نضيف فحص إضافي للسلامة
     
     // علامة التنفيذ لمنع التكرار
     $GLOBALS['auto_salary_init_executed'] = true;
@@ -645,18 +602,6 @@ function runAutoSalaryInit() {
     }
 }
 
-// تنفيذ التهيئة التلقائية عند تحميل الملف
-// فقط إذا لم يتم التنفيذ من قبل في هذا الطلب
-// والفحص الأولي لم يمنع التنفيذ (لم يتم التنفيذ اليوم)
-if (empty($GLOBALS['auto_salary_init_executed'])) {
-    // التأكد من أن الفحص الأولي لم يمنع التنفيذ
-    $today = date('Y-m-d');
-    $cacheKey = 'auto_salary_init_today_check_' . $today;
-    
-    // إذا لم يتم التنفيذ اليوم، نستمر في التنفيذ
-    if (!isset($GLOBALS[$cacheKey]) || $GLOBALS[$cacheKey] !== true) {
-        runAutoSalaryInit();
-    }
-    // لا نطبع رسائل عند التخطي - هذا طبيعي
-}
+// تم إزالة التنفيذ التلقائي
+// يتم استدعاء runAutoSalaryInit() يدوياً فقط من modules/manager/users.php عند إضافة مستخدم جديد
 

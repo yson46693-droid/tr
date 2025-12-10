@@ -113,11 +113,6 @@ require_once __DIR__ . '/../includes/path_helper.php';
 
 requireRole('sales');
 
-// تحميل ملف إنشاء الرواتب التلقائي
-if (file_exists(__DIR__ . '/../includes/auto_salary_init.php')) {
-    require_once __DIR__ . '/../includes/auto_salary_init.php';
-}
-
 // تحميل $currentUser قبل header.php لضمان أنه متاح في جميع الملفات
 if (!isset($currentUser) || $currentUser === null) {
     $currentUser = getCurrentUser();

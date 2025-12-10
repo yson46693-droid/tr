@@ -118,6 +118,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (file_exists(__DIR__ . '/../../includes/auto_salary_init.php')) {
                     try {
                         require_once __DIR__ . '/../../includes/auto_salary_init.php';
+                        // استدعاء الدالة مباشرة بعد تحميل الملف
+                        if (function_exists('runAutoSalaryInit')) {
+                            runAutoSalaryInit();
+                        }
                     } catch (Exception $e) {
                         error_log("auto_salary_init: Error after user creation: " . $e->getMessage());
                     }

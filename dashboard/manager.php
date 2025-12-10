@@ -316,11 +316,6 @@ require_once __DIR__ . '/../includes/table_styles.php';
 
 requireRole(['manager', 'accountant']);
 
-// تحميل ملف إنشاء الرواتب التلقائي
-if (file_exists(__DIR__ . '/../includes/auto_salary_init.php')) {
-    require_once __DIR__ . '/../includes/auto_salary_init.php';
-}
-
 $currentUser = getCurrentUser();
 $db = db();
 
