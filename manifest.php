@@ -69,8 +69,15 @@ if ($scriptPath !== '/' && $scriptPath !== '' && $scriptPath !== '.') {
 // تحديث المسارات في JSON
 if ($json && isset($json['icons'])) {
     foreach ($json['icons'] as &$icon) {
-        if (isset($icon['src']) && strpos($icon['src'], '/assets/') === 0) {
-            $icon['src'] = $basePath . $icon['src'];
+        if (isset($icon['src'])) {
+            // إذا كان المسار نسبي (يبدأ بـ assets/)، أضف basePath
+            if (strpos($icon['src'], 'assets/') === 0) {
+                $icon['src'] = $basePath . '/' . $icon['src'];
+            }
+            // إذا كان المسار مطلق (يبدأ بـ /assets/)، أضف basePath
+            elseif (strpos($icon['src'], '/assets/') === 0) {
+                $icon['src'] = $basePath . $icon['src'];
+            }
         }
     }
     unset($icon);
@@ -81,25 +88,61 @@ if (isset($json['shortcuts'])) {
     foreach ($json['shortcuts'] as &$shortcut) {
         if (isset($shortcut['icons'])) {
             foreach ($shortcut['icons'] as &$icon) {
-                if (isset($icon['src']) && strpos($icon['src'], '/assets/') === 0) {
-                    $icon['src'] = $basePath . $icon['src'];
+                if (isset($icon['src'])) {
+                    // إذا كان المسار نسبي (يبدأ بـ assets/)، أضف basePath
+                    if (strpos($icon['src'], 'assets/') === 0) {
+                        $icon['src'] = $basePath . '/' . $icon['src'];
+                    }
+                    // إذا كان المسار مطلق (يبدأ بـ /assets/)، أضف basePath
+                    elseif (strpos($icon['src'], '/assets/') === 0) {
+                        $icon['src'] = $basePath . $icon['src'];
+                    }
                 }
             }
             unset($icon);
         }
-        if (isset($shortcut['url']) && strpos($shortcut['url'], '/') === 0 && strpos($shortcut['url'], $basePath) !== 0) {
-            $shortcut['url'] = $basePath . $shortcut['url'];
+        if (isset($shortcut['url'])) {
+            // إذا كان المسار نسبي (لا يبدأ بـ /)، أضف basePath
+            if (strpos($shortcut['url'], '/') !== 0) {
+                $shortcut['url'] = $basePath . '/' . $shortcut['url'];
+            }
+            // إذا كان المسار مطلق (يبدأ بـ /) ولم يكن يحتوي على basePath، أضفه
+            elseif (strpos($shortcut['url'], $basePath) !== 0) {
+                $shortcut['url'] = $basePath . $shortcut['url'];
+            }
         }
     }
     unset($shortcut);
 }
 
 // تحديث start_url و scope
-if (isset($json['start_url']) && strpos($json['start_url'], $basePath) !== 0) {
-    $json['start_url'] = $basePath . $json['start_url'];
+if (isset($json['start_url'])) {
+    // إذا كان المسار نسبي (لا يبدأ بـ /)، أضف basePath
+    if (strpos($json['start_url'], '/') !== 0) {
+        $json['start_url'] = $basePath . '/' . $json['start_url'];
+    }
+    // إذا كان المسار مطلق (يبدأ بـ /) ولم يكن يحتوي على basePath، أضفه
+    elseif (strpos($json['start_url'], $basePath) !== 0) {
+        $json['start_url'] = $basePath . $json['start_url'];
+    }
+    // التأكد من أن start_url ينتهي بـ / (مطلوب لـ Android)
+    if (substr($json['start_url'], -1) !== '/') {
+        $json['start_url'] .= '/';
+    }
 }
-if (isset($json['scope']) && strpos($json['scope'], $basePath) !== 0) {
-    $json['scope'] = $basePath . $json['scope'];
+if (isset($json['scope'])) {
+    // إذا كان المسار نسبي (لا يبدأ بـ /)، أضف basePath
+    if (strpos($json['scope'], '/') !== 0) {
+        $json['scope'] = $basePath . '/' . $json['scope'];
+    }
+    // إذا كان المسار مطلق (يبدأ بـ /) ولم يكن يحتوي على basePath، أضفه
+    elseif (strpos($json['scope'], $basePath) !== 0) {
+        $json['scope'] = $basePath . $json['scope'];
+    }
+    // التأكد من أن scope ينتهي بـ / (مطلوب لـ Android)
+    if (substr($json['scope'], -1) !== '/') {
+        $json['scope'] .= '/';
+    }
 }
 
 // تحويل JSON مرة أخرى

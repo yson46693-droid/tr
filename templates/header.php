@@ -569,6 +569,11 @@ if (ob_get_level() > 0) {
     <meta name="apple-mobile-web-app-title" content="<?php echo APP_NAME; ?>">
     <meta name="mobile-web-app-capable" content="yes">
     
+    <!-- Android PWA Meta Tags -->
+    <meta name="application-name" content="<?php echo APP_NAME; ?>">
+    <meta name="msapplication-TileColor" content="#f1c40f">
+    <meta name="msapplication-tap-highlight" content="no">
+    
     <!-- Manifest -->
     <link rel="manifest" href="<?php echo getRelativeUrl('manifest.php'); ?>">
     

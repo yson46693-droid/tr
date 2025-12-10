@@ -184,12 +184,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // انتظر قليلاً قبل إظهار البانر
         setTimeout(() => {
             if (isMobileDevice() && !isInstalled()) {
-                // على Android، إظهار البانر إذا لم يكن هناك deferredPrompt
-                if (isAndroid() && !deferredPrompt) {
-                    // إظهار البانر بعد 5 ثوان من تحميل الصفحة
+                // على Android، إظهار البانر دائماً (حتى لو لم يكن هناك deferredPrompt)
+                if (isAndroid()) {
+                    // إظهار البانر بعد 3 ثوان من تحميل الصفحة
                     setTimeout(() => {
                         showInstallBanner();
-                    }, 5000);
+                    }, 3000);
                 }
                 
                 // على iOS، إظهار البانر دائماً مع تعليمات خاصة
