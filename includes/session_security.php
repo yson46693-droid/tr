@@ -77,10 +77,22 @@ function initSecureSession() {
     
     // تجديد معرف الجلسة للجلسات الجديدة فقط
     if (!isset($_SESSION['initiated'])) {
+        // حفظ CSRF token الحالي قبل إعادة توليد الجلسة (إن وجد)
+        $currentCsrfToken = $_SESSION['csrf_token'] ?? null;
+        if ($currentCsrfToken) {
+            $_SESSION['csrf_token_previous'] = $currentCsrfToken;
+            $_SESSION['csrf_token_previous_time'] = time();
+        }
+        
         session_regenerate_id(true);
         $_SESSION['initiated'] = true;
         $_SESSION['created_at'] = time();
         $_SESSION['last_activity'] = time();
+        
+        // تجديد CSRF token بعد إعادة توليد الجلسة
+        if (function_exists('generateCSRFToken')) {
+            generateCSRFToken(true);
+        }
     } else {
         // تحديث آخر نشاط
         $_SESSION['last_activity'] = time();
@@ -99,12 +111,25 @@ function initSecureSession() {
 /**
  * تجديد معرف الجلسة بعد تسجيل الدخول
  * متوافق مع النظام الحالي
+ * محسّن لحفظ CSRF token أثناء إعادة توليد الجلسة
  */
 function regenerateSessionAfterLogin() {
     if (session_status() === PHP_SESSION_ACTIVE) {
+        // حفظ CSRF token الحالي قبل إعادة توليد الجلسة
+        $currentCsrfToken = $_SESSION['csrf_token'] ?? null;
+        if ($currentCsrfToken) {
+            $_SESSION['csrf_token_previous'] = $currentCsrfToken;
+            $_SESSION['csrf_token_previous_time'] = time();
+        }
+        
         session_regenerate_id(true);
         $_SESSION['regenerated_at'] = time();
         $_SESSION['last_activity'] = time();
+        
+        // تجديد CSRF token بعد إعادة توليد الجلسة
+        if (function_exists('generateCSRFToken')) {
+            generateCSRFToken(true);
+        }
     }
 }
 

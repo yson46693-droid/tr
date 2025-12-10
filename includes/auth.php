@@ -186,10 +186,23 @@ function checkRememberToken($cookieValue) {
             [$tokenRecord['id']]
         );
         
+        // حفظ CSRF token الحالي قبل إعادة توليد الجلسة
+        $currentCsrfToken = $_SESSION['csrf_token'] ?? null;
+        
         // إنشاء جلسة جديدة
         if (session_status() === PHP_SESSION_ACTIVE) {
+            if ($currentCsrfToken) {
+                $_SESSION['csrf_token_previous'] = $currentCsrfToken;
+                $_SESSION['csrf_token_previous_time'] = time();
+            }
             session_regenerate_id(true);
         }
+        
+        // تجديد CSRF token بعد إعادة توليد الجلسة
+        if (function_exists('generateCSRFToken')) {
+            generateCSRFToken(true);
+        }
+        
         $_SESSION['user_id'] = $tokenRecord['user_id'];
         $_SESSION['username'] = $tokenRecord['username'];
         $_SESSION['role'] = $tokenRecord['role'];
@@ -392,10 +405,20 @@ function login($username, $password, $rememberMe = false) {
         return ['success' => false, 'message' => 'اسم المستخدم أو كلمة المرور غير صحيحة'];
     }
     
+    // حفظ CSRF token الحالي قبل إعادة توليد الجلسة (للمساعدة في التحقق)
+    $currentCsrfToken = $_SESSION['csrf_token'] ?? null;
+    
     // تسجيل الدخول
     if (session_status() === PHP_SESSION_ACTIVE) {
+        // حفظ token السابق قبل إعادة توليد الجلسة
+        if ($currentCsrfToken) {
+            $_SESSION['csrf_token_previous'] = $currentCsrfToken;
+            $_SESSION['csrf_token_previous_time'] = time();
+        }
         session_regenerate_id(true);
     }
+    
+    // إنشاء token جديد بعد إعادة توليد الجلسة
     generateCSRFToken(true);
     $_SESSION['user_id'] = $user['id'];
     $_SESSION['username'] = $user['username'];
@@ -873,11 +896,29 @@ function hashPassword($password) {
 
 /**
  * إنشاء رمز CSRF
+ * محسّن لدعم إعادة توليد الجلسة - يحفظ token السابق مؤقتاً
  */
 function generateCSRFToken($forceRefresh = false) {
+    // حفظ token الحالي كـ previous قبل إنشاء واحد جديد
+    if ($forceRefresh && isset($_SESSION['csrf_token']) && !empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token_previous'] = $_SESSION['csrf_token'];
+        // تنظيف token السابق بعد 5 دقائق (وقت كافٍ لإكمال تسجيل الدخول)
+        if (!isset($_SESSION['csrf_token_previous_time'])) {
+            $_SESSION['csrf_token_previous_time'] = time();
+        }
+    }
+    
     if ($forceRefresh || !isset($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
+    
+    // تنظيف token السابق القديم (أكثر من 5 دقائق)
+    if (isset($_SESSION['csrf_token_previous_time']) && 
+        (time() - $_SESSION['csrf_token_previous_time']) > 300) {
+        unset($_SESSION['csrf_token_previous']);
+        unset($_SESSION['csrf_token_previous_time']);
+    }
+    
     return $_SESSION['csrf_token'];
 }
 

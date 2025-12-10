@@ -300,12 +300,13 @@ async function updateNotificationBadge(count = null) {
     const badge = document.getElementById('notificationBadge');
     if (badge) {
         const safeCount = Number.isFinite(Number(count)) ? Math.max(0, parseInt(count, 10)) : 0;
-        badge.textContent = safeCount.toString();
-        badge.style.display = 'inline-block';
+        badge.textContent = safeCount > 99 ? '99+' : safeCount.toString();
         if (safeCount > 0) {
             badge.classList.add('has-notifications');
+            badge.style.display = 'inline-flex';
         } else {
             badge.classList.remove('has-notifications');
+            badge.style.display = 'none';
         }
     }
 }

@@ -163,9 +163,11 @@
         if (badge) {
             if (count > 0) {
                 badge.textContent = count > 99 ? '99+' : count;
-                badge.style.display = 'inline-block';
+                badge.style.display = 'inline-flex';
+                badge.classList.add('has-notifications');
             } else {
                 badge.style.display = 'none';
+                badge.classList.remove('has-notifications');
             }
         }
     }
