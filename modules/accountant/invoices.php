@@ -343,7 +343,7 @@ if (isset($_GET['id'])) {
 
 <!-- Modal إنشاء فاتورة -->
 <div class="modal fade" id="addInvoiceModal" tabindex="-1">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">إنشاء فاتورة جديدة</h5>

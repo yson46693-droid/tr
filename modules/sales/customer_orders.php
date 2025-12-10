@@ -1913,7 +1913,7 @@ if (isset($_GET['id'])) {
 
 <!-- Modal إنشاء طلب -->
 <div class="modal fade" id="addOrderModal" tabindex="-1">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">إنشاء طلب جديد</h5>
@@ -2047,7 +2047,7 @@ if (isset($_GET['id'])) {
 <!-- Modal إنشاء طلب شركة -->
 <?php if ($isManagerOrAccountant): ?>
 <div class="modal fade" id="addCompanyOrderModal" tabindex="-1">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-building me-2"></i>إنشاء طلب عميل شركة</h5>
