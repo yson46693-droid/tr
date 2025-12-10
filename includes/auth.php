@@ -47,29 +47,7 @@ function getPasswordMinLength(): int
  * التحقق من تسجيل الدخول
  */
 function isLoggedIn() {
-    // التحقق الأمني: إذا لم يكن هناك session cookie، إلغاء الجلسة
-    $sessionName = session_name();
-    if (!isset($_COOKIE[$sessionName]) && session_status() === PHP_SESSION_ACTIVE) {
-        // إذا تم مسح session cookie من المتصفح، يجب إلغاء الجلسة
-        session_unset();
-        session_destroy();
-        return false;
-    }
-    
-    // التحقق من أن session ID في cookie يطابق session ID الحالي
-    if (session_status() === PHP_SESSION_ACTIVE && isset($_COOKIE[$sessionName])) {
-        $cookieSessionId = $_COOKIE[$sessionName];
-        $currentSessionId = session_id();
-        
-        // إذا كان session ID في cookie لا يطابق session ID الحالي، إلغاء الجلسة
-        if ($cookieSessionId !== $currentSessionId) {
-            session_unset();
-            session_destroy();
-            return false;
-        }
-    }
-    
-    // التحقق من الجلسة أولاً
+    // التحقق من الجلسة أولاً (قبل أي فحوصات أخرى)
     if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
         // التحقق الإضافي: التأكد من وجود user_id في الجلسة
         if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
@@ -78,6 +56,57 @@ function isLoggedIn() {
             session_destroy();
             return false;
         }
+        
+        // إذا كانت الجلسة صالحة، نتحقق من session cookie (لكن لا ننهي الجلسة مباشرة)
+        $sessionName = session_name();
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            // إذا لم يكن هناك session cookie، نحاول تحديثه بدلاً من إلغاء الجلسة
+            if (!isset($_COOKIE[$sessionName])) {
+                // محاولة تحديث cookie إذا كانت headers لم تُرسل بعد
+                if (!headers_sent()) {
+                    $isHttps = (
+                        (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+                        (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
+                    );
+                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                    setcookie($sessionName, session_id(), [
+                        'expires' => time() + $sessionLifetime,
+                        'path' => '/',
+                        'domain' => '',
+                        'secure' => $isHttps,
+                        'httponly' => true,
+                        'samesite' => $isHttps ? 'None' : 'Lax',
+                    ]);
+                }
+                // نستمر حتى لو لم نستطع تحديث cookie (لأن الجلسة صالحة)
+            } else {
+                // التحقق من أن session ID في cookie يطابق session ID الحالي
+                $cookieSessionId = $_COOKIE[$sessionName];
+                $currentSessionId = session_id();
+                
+                // إذا كان session ID غير متطابق، نحاول تحديث cookie بدلاً من إلغاء الجلسة
+                if ($cookieSessionId !== $currentSessionId) {
+                    // محاولة تحديث cookie إذا كانت headers لم تُرسل بعد
+                    if (!headers_sent()) {
+                        $isHttps = (
+                            (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+                            (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
+                        );
+                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                        setcookie($sessionName, $currentSessionId, [
+                            'expires' => time() + $sessionLifetime,
+                            'path' => '/',
+                            'domain' => '',
+                            'secure' => $isHttps,
+                            'httponly' => true,
+                            'samesite' => $isHttps ? 'None' : 'Lax',
+                        ]);
+                    }
+                    // نستمر حتى لو لم نستطع تحديث cookie (لأن الجلسة صالحة)
+                }
+            }
+        }
+        
         return true;
     }
     

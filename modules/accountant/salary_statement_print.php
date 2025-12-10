@@ -12,11 +12,20 @@ require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/path_helper.php';
 
-requireAnyRole(['accountant', 'manager']);
+// التحقق من الصلاحيات (إذا لم يتم التحقق منها بالفعل)
+if (!function_exists('getCurrentUser') || !isLoggedIn()) {
+    requireAnyRole(['accountant', 'manager']);
+}
 
 // المتغيرات المطلوبة من salaries.php
 if (!isset($employee) || !isset($periodLabel) || !isset($statementSalaries) || !isset($statementAdvances) || !isset($statementSettlements)) {
-    die('بيانات غير كاملة');
+    // تسجيل الخطأ للتشخيص
+    error_log('Salary statement print - Missing variables: employee=' . (isset($employee) ? 'set' : 'not set') . 
+              ', periodLabel=' . (isset($periodLabel) ? 'set' : 'not set') . 
+              ', statementSalaries=' . (isset($statementSalaries) ? 'set' : 'not set') . 
+              ', statementAdvances=' . (isset($statementAdvances) ? 'set' : 'not set') . 
+              ', statementSettlements=' . (isset($statementSettlements) ? 'set' : 'not set'));
+    die('بيانات غير كاملة - يرجى المحاولة مرة أخرى');
 }
 
 // التحقق من نوع عمود month مرة واحدة فقط

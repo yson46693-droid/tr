@@ -2064,6 +2064,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'print_statement') {
     $employee['accumulated_amount'] = $accumulatedAmount;
     $employee['paid_amount'] = $paidAmount;
     
+    // التأكد من تعريف ACCESS_ALLOWED قبل استدعاء صفحة الطباعة
+    if (!defined('ACCESS_ALLOWED')) {
+        define('ACCESS_ALLOWED', true);
+    }
+    
     // عرض صفحة الطباعة
     include __DIR__ . '/salary_statement_print.php';
     exit;
@@ -5184,19 +5189,55 @@ function printSalaryStatement() {
     const userId = document.getElementById('statementUserId').value;
     const periodType = document.getElementById('statementPeriodType').value;
     
-    let url = '<?php echo $currentUrl; ?>?page=salaries&action=print_statement&salary_id=' + salaryId + '&user_id=' + userId + '&period_type=' + periodType;
+    // التحقق من وجود القيم المطلوبة
+    if (!salaryId || !userId) {
+        alert('خطأ: يرجى التأكد من تحديد الموظف والراتب');
+        return false;
+    }
+    
+    // بناء الرابط بشكل صحيح - استخدام window.location.pathname كقاعدة
+    const baseUrl = '<?php echo isset($currentUrl) && !empty($currentUrl) ? $currentUrl : getRelativeUrl("dashboard/accountant.php"); ?>';
+    let url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'page=salaries&action=print_statement&salary_id=' + salaryId + '&user_id=' + userId + '&period_type=' + periodType;
     
     if (periodType === 'current_month' || periodType === 'specific_month') {
         const month = document.getElementById('statementMonth').value;
         const year = document.getElementById('statementYear').value;
-        url += '&month=' + month + '&year=' + year;
+        if (month && year) {
+            url += '&month=' + encodeURIComponent(month) + '&year=' + encodeURIComponent(year);
+        }
     } else if (periodType === 'date_range') {
         const fromDate = document.getElementById('statementFromDate').value;
         const toDate = document.getElementById('statementToDate').value;
-        url += '&from_date=' + fromDate + '&to_date=' + toDate;
+        if (fromDate && toDate) {
+            url += '&from_date=' + encodeURIComponent(fromDate) + '&to_date=' + encodeURIComponent(toDate);
+        }
     }
     
-    window.open(url, '_blank');
+    // تسجيل الرابط للتشخيص
+    console.log('Print salary statement URL:', url);
+    
+    // محاولة فتح النافذة الجديدة
+    try {
+        const printWindow = window.open(url, '_blank', 'width=1200,height=800,scrollbars=yes');
+        if (!printWindow || printWindow.closed || typeof printWindow.closed === 'undefined') {
+            // إذا فشل window.open (بسبب popup blocker)، استخدم window.location
+            console.warn('Popup blocked, using window.location instead');
+            window.location.href = url;
+        } else {
+            // انتظار قليل ثم التحقق من أن النافذة تم فتحها
+            setTimeout(function() {
+                if (printWindow.closed) {
+                    console.warn('Print window was closed immediately');
+                }
+            }, 500);
+        }
+    } catch (e) {
+        console.error('Error opening print window:', e);
+        // في حالة الخطأ، استخدم window.location
+        window.location.href = url;
+    }
+    
+    return false;
 }
 </script>
 
