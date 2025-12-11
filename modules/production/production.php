@@ -2112,13 +2112,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 } else {
                     // القوالب التقليدية من جدول product_templates
+                    // التأكد من جلب جميع الأعمدة بما فيها custom_carton_quantity و custom_carton_type_id
                     $template = $db->queryOne(
-                        "SELECT pt.*, pr.id as product_id, pr.name as product_name, pr.unit_price as product_unit_price
+                        "SELECT pt.*, 
+                                pr.id as product_id, 
+                                pr.name as product_name, 
+                                pr.unit_price as product_unit_price,
+                                pt.custom_carton_quantity,
+                                pt.custom_carton_type_id
                          FROM product_templates pt
                          LEFT JOIN products pr ON pt.product_name = pr.name
                          WHERE pt.id = ?",
                         [$templateId]
                     );
+                    
+                    // Log للتحقق من البيانات المسترجعة
+                    if ($template) {
+                        error_log('Template loaded: id=' . $templateId . ', carton_type=' . ($template['carton_type'] ?? 'NULL') . ', custom_carton_quantity=' . ($template['custom_carton_quantity'] ?? 'NULL') . ', custom_carton_type_id=' . ($template['custom_carton_type_id'] ?? 'NULL'));
+                    }
                 }
 
                 if (!$template) {
@@ -4886,6 +4897,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $customCartonQuantity = isset($template['custom_carton_quantity']) ? (int)$template['custom_carton_quantity'] : null;
                     $customCartonTypeId = isset($template['custom_carton_type_id']) ? (int)$template['custom_carton_type_id'] : null;
                     
+                    // Log للتحقق من البيانات
+                    error_log('Carton deduction check: carton_type=' . ($cartonType ?? 'NULL') . ', custom_carton_quantity=' . ($customCartonQuantity ?? 'NULL') . ', custom_carton_type_id=' . ($customCartonTypeId ?? 'NULL'));
+                    
                     if ($cartonType === 'custom' && $customCartonQuantity > 0 && $customCartonTypeId > 0) {
                         // النوع المخصص: استخدام القيم المخصصة من القالب
                         error_log('=== Starting custom carton-based auto-deduction: quantity=' . $quantity . ', divisor=' . $customCartonQuantity . ', material_id=' . $customCartonTypeId);
@@ -5015,11 +5029,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     error_log('Custom carton auto-deduction ERROR: ' . $deductionError->getMessage() . ' | ID=' . $targetMaterialId . ', Qty=' . $additionalQty);
                                 }
                             } else {
-                                error_log('Custom carton auto-deduction skipped: quantity (' . $quantity . ') < divisor (' . $divisor . ') or no boxes needed');
+                                error_log('Custom carton auto-deduction skipped: quantity (' . $quantity . ') < divisor (' . $divisor . ') or no boxes needed (additionalQty=' . $additionalQty . ')');
                             }
                         } else {
-                            error_log('Custom carton auto-deduction skipped: custom carton info not found for ID ' . $targetMaterialId);
+                            error_log('Custom carton auto-deduction skipped: custom carton info not found for ID ' . $targetMaterialId . ' (packagingTableExists=' . ($packagingTableExists ? 'true' : 'false') . ')');
                         }
+                    } elseif ($cartonType === 'custom') {
+                        // النوع مخصص لكن البيانات غير كاملة
+                        error_log('Custom carton type selected but missing data: custom_carton_quantity=' . ($customCartonQuantity ?? 'NULL') . ', custom_carton_type_id=' . ($customCartonTypeId ?? 'NULL'));
                     } elseif ($cartonType && in_array($cartonType, ['kilo', 'half', 'quarter', 'third'])) {
                         // الأنواع القياسية
                         error_log('=== Starting carton-based auto-deduction: carton_type=' . $cartonType . ', quantity=' . $quantity);
@@ -5176,11 +5193,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     error_log('WARNING: Custom carton material ID ' . $targetMaterialId . ' not found in database!');
                                 }
                             } else {
-                                error_log('Custom carton auto-deduction skipped: quantity (' . $quantity . ') < divisor (' . $divisor . ') or no boxes needed');
+                                error_log('Custom carton auto-deduction skipped: quantity (' . $quantity . ') < divisor (' . $divisor . ') or no boxes needed (additionalQty=' . $additionalQty . ')');
                             }
                         } else {
-                            error_log('Custom carton auto-deduction skipped: custom carton info not found for ID ' . $targetMaterialId);
+                            error_log('Custom carton auto-deduction skipped: custom carton info not found for ID ' . $targetMaterialId . ' (packagingTableExists=' . ($packagingTableExists ? 'true' : 'false') . ')');
                         }
+                    } elseif ($cartonType === 'custom') {
+                        // النوع مخصص لكن البيانات غير كاملة
+                        error_log('Custom carton type selected but missing data: custom_carton_quantity=' . ($customCartonQuantity ?? 'NULL') . ', custom_carton_type_id=' . ($customCartonTypeId ?? 'NULL'));
                     }
                 } catch (Exception $cartonDeductionError) {
                     error_log('Carton-based auto-deduction error: ' . $cartonDeductionError->getMessage());
