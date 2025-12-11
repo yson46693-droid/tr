@@ -1330,7 +1330,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                             data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
                                             data-customer-address="<?php echo htmlspecialchars($customer['address'] ?? ''); ?>"
                                         >
-                                            <i class="bi bi-receipt me-1"></i>سجل مشتريات
+                                            <i class="bi bi-receipt me-1"></i>سجل 
                                         </button>
                                         <button
                                             type="button"
@@ -1338,7 +1338,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                         >
-                                            <i class="bi bi-arrow-return-left me-1"></i>إرجاع منتجات
+                                            <i class="bi bi-arrow-return-left me-1"></i>مرتجع
                                         </button>
                                     </div>
                                 </td>

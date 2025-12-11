@@ -5397,6 +5397,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     // منع إنشاء قوالب المنتجات من خارج صفحة مخزن الخامات
 }
+// إغلاق if block الخاص بمعالجة POST requests (السطر 1835)
 
 // Pagination
 $pageNum = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
