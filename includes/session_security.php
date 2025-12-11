@@ -125,6 +125,7 @@ function initSecureSession() {
     session_start();
     
     // تجديد معرف الجلسة للجلسات الجديدة فقط
+    // ملاحظة: استخدام false للسماح بجلسات متعددة على أجهزة مختلفة
     if (!isset($_SESSION['initiated'])) {
         // حفظ CSRF token الحالي قبل إعادة توليد الجلسة (إن وجد)
         $currentCsrfToken = $_SESSION['csrf_token'] ?? null;
@@ -133,7 +134,8 @@ function initSecureSession() {
             $_SESSION['csrf_token_previous_time'] = time();
         }
         
-        session_regenerate_id(true);
+        // استخدام false للسماح بجلسات متعددة
+        session_regenerate_id(false);
         $_SESSION['initiated'] = true;
         $_SESSION['created_at'] = time();
         $_SESSION['last_activity'] = time();
@@ -214,7 +216,8 @@ function regenerateSessionAfterLogin() {
             $_SESSION['csrf_token_previous_time'] = time();
         }
         
-        session_regenerate_id(true);
+        // استخدام false للسماح بجلسات متعددة على أجهزة مختلفة
+        session_regenerate_id(false);
         $_SESSION['regenerated_at'] = time();
         $_SESSION['last_activity'] = time();
         

@@ -326,7 +326,7 @@ if (!defined('BROWSER_NOTIFICATIONS_ENABLED')) {
     define('BROWSER_NOTIFICATIONS_ENABLED', true);
 }
 if (!defined('NOTIFICATION_POLL_INTERVAL')) {
-    define('NOTIFICATION_POLL_INTERVAL', 120000); // 120 ثانية افتراضياً
+    define('NOTIFICATION_POLL_INTERVAL', 30000); // 30 ثانية - محسّن للأداء
 }
 if (!defined('NOTIFICATION_AUTO_REFRESH_ENABLED')) {
     define('NOTIFICATION_AUTO_REFRESH_ENABLED', true);

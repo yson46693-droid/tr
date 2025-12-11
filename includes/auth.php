@@ -269,12 +269,14 @@ function checkRememberToken($cookieValue) {
         $currentCsrfToken = $_SESSION['csrf_token'] ?? null;
         
         // إنشاء جلسة جديدة
+        // ملاحظة: استخدام false للسماح بجلسات متعددة على أجهزة مختلفة
         if (session_status() === PHP_SESSION_ACTIVE) {
             if ($currentCsrfToken) {
                 $_SESSION['csrf_token_previous'] = $currentCsrfToken;
                 $_SESSION['csrf_token_previous_time'] = time();
             }
-            session_regenerate_id(true);
+            // استخدام false للسماح بجلسات متعددة
+            session_regenerate_id(false);
         }
         
         // تجديد CSRF token بعد إعادة توليد الجلسة
@@ -578,13 +580,21 @@ function login($username, $password, $rememberMe = false) {
     $currentCsrfToken = $_SESSION['csrf_token'] ?? null;
     
     // تسجيل الدخول
+    // ملاحظة: استخدام session_regenerate_id(false) للسماح بجلسات متعددة على أجهزة مختلفة
+    // false يعني عدم حذف الجلسة القديمة، مما يسمح للمستخدم بالبقاء مسجل دخول على أجهزة أخرى
     if (session_status() === PHP_SESSION_ACTIVE) {
         // حفظ token السابق قبل إعادة توليد الجلسة
         if ($currentCsrfToken) {
             $_SESSION['csrf_token_previous'] = $currentCsrfToken;
             $_SESSION['csrf_token_previous_time'] = time();
         }
-        session_regenerate_id(true);
+        // استخدام false للسماح بجلسات متعددة على أجهزة مختلفة
+        session_regenerate_id(false);
+    } else {
+        // إذا لم تكن الجلسة نشطة، ابدأ جلسة جديدة
+        if (!headers_sent()) {
+            @session_start();
+        }
     }
     
     // إنشاء token جديد بعد إعادة توليد الجلسة
@@ -609,14 +619,16 @@ function login($username, $password, $rememberMe = false) {
             $db = db();
             $expiresAt = date('Y-m-d H:i:s', strtotime('+30 days')); // 30 يوم
             
-            // حذف أي token موجود لنفس المستخدم
+            // السماح بعدة tokens للمستخدم الواحد للسماح بتسجيل الدخول على أجهزة متعددة
+            // لا نحذف tokens القديمة - فقط نحذف المنتهية الصلاحية
             try {
-                $db->execute("DELETE FROM remember_tokens WHERE user_id = ?", [$user['id']]);
+                // حذف tokens المنتهية الصلاحية فقط
+                $db->execute("DELETE FROM remember_tokens WHERE user_id = ? AND expires_at < NOW()", [$user['id']]);
             } catch (Exception $e) {
-                error_log("Error deleting remember token: " . $e->getMessage());
+                error_log("Error cleaning expired remember tokens: " . $e->getMessage());
             }
             
-            // إضافة token جديد
+            // إضافة token جديد (يسمح بعدة tokens لنفس المستخدم)
             try {
                 $db->execute(
                     "INSERT INTO remember_tokens (user_id, token, expires_at, ip_address, user_agent) 
