@@ -4920,10 +4920,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $customCartonInfo = null;
                         if ($packagingTableExists && $targetMaterialId > 0) {
                             try {
-                                $customCartonInfo = $db->queryOne(
-                                    "SELECT id, name, code, unit FROM packaging_materials WHERE id = ?",
-                                    [$targetMaterialId]
-                                );
+                                // التحقق من وجود عمود code أولاً
+                                $codeColumnExists = false;
+                                try {
+                                    $codeColumnCheck = $db->queryOne("SHOW COLUMNS FROM packaging_materials LIKE 'code'");
+                                    $codeColumnExists = !empty($codeColumnCheck);
+                                } catch (Exception $colCheckError) {
+                                    error_log('Error checking code column: ' . $colCheckError->getMessage());
+                                }
+                                
+                                // بناء الاستعلام بناءً على وجود عمود code
+                                if ($codeColumnExists) {
+                                    $customCartonInfo = $db->queryOne(
+                                        "SELECT id, name, code, unit FROM packaging_materials WHERE id = ?",
+                                        [$targetMaterialId]
+                                    );
+                                } else {
+                                    $customCartonInfo = $db->queryOne(
+                                        "SELECT id, name, unit FROM packaging_materials WHERE id = ?",
+                                        [$targetMaterialId]
+                                    );
+                                }
                             } catch (Exception $e) {
                                 error_log('Error fetching custom carton info: ' . $e->getMessage());
                             }
@@ -4932,7 +4949,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($customCartonInfo) {
                             $targetMaterialName = $customCartonInfo['name'] ?? 'كرتونة مخصصة';
                             $targetMaterialUnit = $customCartonInfo['unit'] ?? 'قطعة';
-                            $targetCodeKey = $customCartonInfo['code'] ?? '';
+                            $targetCodeKey = $customCartonInfo['code'] ?? null;
                             $targetDisplayCode = $formatPackagingCode($targetCodeKey) ?? $targetMaterialName;
                             
                             // حساب الكمية المطلوبة للخصم
