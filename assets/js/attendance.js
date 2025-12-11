@@ -414,6 +414,18 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
+    // دالة لإزالة backdrop
+    function removeBackdrop() {
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(backdrop => {
+            backdrop.style.display = 'none';
+            backdrop.style.opacity = '0';
+            backdrop.style.pointerEvents = 'none';
+            backdrop.style.zIndex = '-1';
+            backdrop.remove();
+        });
+    }
+    
     // عند فتح الـ modal
     cameraModal.addEventListener('show.bs.modal', function(event) {
         const button = event.relatedTarget;
@@ -422,6 +434,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (button) {
             currentAction = button.getAttribute('data-action');
         }
+        
+        // إزالة backdrop فوراً
+        removeBackdrop();
         
         // تحديث العنوان
         const title = document.getElementById('cameraModalTitle');
@@ -447,10 +462,19 @@ document.addEventListener('DOMContentLoaded', function() {
         // إيقاف أي stream سابق
         stopCamera();
         
-        // تهيئة الكاميرا بعد تأخير قصير لضمان أن الـ modal مفتوح بالكامل
+        // إزالة backdrop بعد تأخير قصير (للتأكد من إزالته حتى لو تم إنشاؤه بعد فتح Modal)
         setTimeout(() => {
+            removeBackdrop();
             initCamera();
-        }, 500);
+        }, 100);
+        
+        // مراقبة مستمرة لإزالة backdrop
+        const backdropInterval = setInterval(() => {
+            removeBackdrop();
+        }, 50);
+        
+        // حفظ interval ID لإيقافه لاحقاً
+        cameraModal.dataset.backdropInterval = backdropInterval;
     });
     
     // عند إغلاق الـ modal
@@ -458,6 +482,16 @@ document.addEventListener('DOMContentLoaded', function() {
         stopCamera();
         capturedPhoto = null;
         currentAction = null;
+        
+        // إيقاف مراقبة backdrop
+        if (cameraModal.dataset.backdropInterval) {
+            clearInterval(parseInt(cameraModal.dataset.backdropInterval));
+            delete cameraModal.dataset.backdropInterval;
+        }
+        
+        // إزالة backdrop نهائياً
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(backdrop => backdrop.remove());
     });
     
     // إضافة event listeners للأزرار مع التحقق من حالة التعطيل

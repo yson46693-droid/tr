@@ -1235,6 +1235,20 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                     $rawBalance = number_format($customerBalance, 2, '.', '');
                                     ?>
                                     <div class="d-flex flex-wrap align-items-center gap-2">
+                                        <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-warning edit-local-customer-btn"
+                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
+                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
+                                            data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
+                                            data-customer-address="<?php echo htmlspecialchars($customer['address'] ?? ''); ?>"
+                                            data-customer-region-id="<?php echo (int)($customer['region_id'] ?? 0); ?>"
+                                            data-customer-balance="<?php echo $rawBalance; ?>"
+                                        >
+                                            <i class="bi bi-pencil me-1"></i>تعديل
+                                        </button>
+                                        <?php endif; ?>
                                         <button
                                             type="button"
                                             class="btn btn-sm <?php echo $customerBalance > 0 ? 'btn-success' : 'btn-outline-secondary'; ?>"
@@ -2771,6 +2785,96 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// معالج تعديل العميل المحلي
+var editLocalCustomerButtons = document.querySelectorAll('.edit-local-customer-btn');
+var editLocalCustomerModal = document.getElementById('editLocalCustomerModal');
+
+if (editLocalCustomerModal) {
+    editLocalCustomerButtons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var customerId = this.getAttribute('data-customer-id');
+            var customerName = this.getAttribute('data-customer-name');
+            var customerPhone = this.getAttribute('data-customer-phone');
+            var customerAddress = this.getAttribute('data-customer-address');
+            var customerRegionId = this.getAttribute('data-customer-region-id');
+            var customerBalance = this.getAttribute('data-customer-balance');
+            
+            document.getElementById('editLocalCustomerId').value = customerId;
+            document.getElementById('editLocalCustomerName').value = customerName;
+            document.getElementById('editLocalCustomerPhone').value = customerPhone || '';
+            document.getElementById('editLocalCustomerAddress').value = customerAddress || '';
+            document.getElementById('editLocalCustomerRegionId').value = customerRegionId || '';
+            
+            var balanceInput = document.getElementById('editLocalCustomerBalance');
+            if (balanceInput) {
+                balanceInput.value = customerBalance || '0';
+            }
+            
+            var modal = new bootstrap.Modal(editLocalCustomerModal);
+            modal.show();
+        });
+    });
+}
+</script>
+
+<!-- Modal تعديل عميل محلي -->
+<?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
+<div class="modal fade" id="editLocalCustomerModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تعديل بيانات العميل المحلي</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+                <input type="hidden" name="action" value="edit_customer">
+                <input type="hidden" name="customer_id" id="editLocalCustomerId">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم العميل</label>
+                        <input type="text" class="form-control" id="editLocalCustomerName" disabled>
+                        <small class="text-muted">لا يمكن تعديل اسم العميل</small>
+                    </div>
+                    <?php if ($currentRole === 'manager'): ?>
+                    <div class="mb-3">
+                        <label class="form-label">ديون العميل / رصيد العميل</label>
+                        <input type="number" class="form-control" name="balance" id="editLocalCustomerBalance" step="0.01" placeholder="مثال: 0 أو -500">
+                        <small class="text-muted">
+                            <strong>إدخال قيمة سالبة:</strong> يتم اعتبارها رصيد دائن للعميل (مبلغ متاح للعميل).
+                        </small>
+                    </div>
+                    <?php endif; ?>
+                    <div class="mb-3">
+                        <label class="form-label">رقم الهاتف</label>
+                        <input type="text" class="form-control" name="phone" id="editLocalCustomerPhone" placeholder="مثال: 01234567890">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">العنوان</label>
+                        <textarea class="form-control" name="address" id="editLocalCustomerAddress" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">المنطقة</label>
+                        <select class="form-select" name="region_id" id="editLocalCustomerRegionId">
+                            <option value="">اختر المنطقة</option>
+                            <?php
+                            $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                            foreach ($regions as $region):
+                            ?>
+                                <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 </script>
 
 <style>

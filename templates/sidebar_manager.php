@@ -133,6 +133,14 @@ $baseUrl = getDashboardUrl();
                 </a>
             </li>
             
+            <li class="nav-item">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'regions') ? 'active' : ''; ?>" 
+                   href="<?php echo $baseUrl; ?>manager.php?page=regions">
+                    <i class="bi bi-geo-alt"></i>
+                    <span>المناطق</span>
+                </a>
+            </li>
+            
             <li class="nav-item sidebar-section-divider">
                 <div class="sidebar-section-title">Management</div>
             </li>

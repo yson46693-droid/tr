@@ -262,6 +262,97 @@ body.attendance-page.modal-open .dashboard-main {
     box-shadow: none !important;
 }
 
+/* إزالة الحاجز (backdrop) الذي يمنع التفاعل */
+.attendance-page .modal-backdrop {
+    display: none !important;
+    opacity: 0 !important;
+    background-color: transparent !important;
+    pointer-events: none !important;
+    z-index: -1 !important;
+}
+
+.attendance-page .modal-backdrop.show,
+.attendance-page .modal-backdrop.fade {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* ضمان أن Modal نفسه قابل للتفاعل */
+.attendance-page #cameraModal {
+    pointer-events: auto !important;
+}
+
+.attendance-page #cameraModal .modal-dialog {
+    pointer-events: auto !important;
+    z-index: 1055 !important;
+}
+
+.attendance-page #cameraModal .modal-content {
+    pointer-events: auto !important;
+    z-index: 1056 !important;
+}
+
+.attendance-page #cameraModal .modal-body,
+.attendance-page #cameraModal .modal-header,
+.attendance-page #cameraModal .modal-footer {
+    pointer-events: auto !important;
+}
+
+.attendance-page #cameraModal .btn,
+.attendance-page #cameraModal button,
+.attendance-page #cameraModal video,
+.attendance-page #cameraModal img,
+.attendance-page #cameraModal canvas,
+.attendance-page #cameraModal .btn-close {
+    pointer-events: auto !important;
+    touch-action: manipulation !important;
+    z-index: 1057 !important;
+    position: relative;
+}
+
+/* إزالة أي overlay أو طبقات إضافية */
+.attendance-page .modal-backdrop ~ .modal-backdrop {
+    display: none !important;
+}
+
+/* ضمان أن body لا يمنع التفاعل عند فتح Modal */
+body.attendance-page.modal-open {
+    overflow: visible !important;
+    padding-right: 0 !important;
+}
+
+body.attendance-page.modal-open .modal-backdrop {
+    display: none !important;
+    pointer-events: none !important;
+}
+
+/* على الموبايل - إزالة backdrop تماماً */
+@media (max-width: 768px) {
+    .attendance-page .modal-backdrop,
+    .attendance-page .modal-backdrop.show,
+    .attendance-page .modal-backdrop.fade {
+        display: none !important;
+        opacity: 0 !important;
+        background: transparent !important;
+        pointer-events: none !important;
+        z-index: -999 !important;
+    }
+    
+    .attendance-page #cameraModal {
+        z-index: 9999 !important;
+    }
+    
+    .attendance-page #cameraModal .modal-dialog {
+        z-index: 10000 !important;
+        margin: 0.5rem !important;
+    }
+    
+    .attendance-page #cameraModal .modal-content {
+        z-index: 10001 !important;
+    }
+}
+
 /* إزالة أي تأثيرات من badges */
 .attendance-page .badge {
     box-shadow: none !important;

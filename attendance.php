@@ -428,7 +428,7 @@ $lang = isset($translations) ? $translations : [];
 </div>
 
 <!-- Modal الكاميرا -->
-<div class="modal fade" id="cameraModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+<div class="modal fade" id="cameraModal" tabindex="-1" data-bs-backdrop="false" data-bs-keyboard="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
