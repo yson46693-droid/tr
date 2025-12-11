@@ -647,6 +647,295 @@ renderRepresentativeCards($representatives, [
 ]);
 ?>
 
+<?php
+// جلب جميع عملاء المندوبين للجدول
+$allCustomersPageNum = isset($_GET['cp']) ? max(1, intval($_GET['cp'])) : 1;
+$allCustomersPerPage = 20;
+$allCustomersOffset = ($allCustomersPageNum - 1) * $allCustomersPerPage;
+
+$allCustomersSearch = trim($_GET['cs'] ?? '');
+$allCustomersDebtStatus = $_GET['cds'] ?? 'all';
+$allowedDebtStatuses = ['all', 'debtor', 'clear'];
+if (!in_array($allCustomersDebtStatus, $allowedDebtStatuses, true)) {
+    $allCustomersDebtStatus = 'all';
+}
+
+// بناء استعلام SQL لعملاء المندوبين
+$allCustomersSql = "SELECT c.*, 
+        COALESCE(rep1.full_name, rep2.full_name) as rep_name, 
+        r.name as region_name
+        FROM customers c
+        LEFT JOIN users rep1 ON c.rep_id = rep1.id AND rep1.role = 'sales'
+        LEFT JOIN users rep2 ON c.created_by = rep2.id AND rep2.role = 'sales'
+        LEFT JOIN regions r ON c.region_id = r.id
+        WHERE (c.rep_id IS NOT NULL AND c.rep_id IN (SELECT id FROM users WHERE role = 'sales'))
+           OR (c.created_by IS NOT NULL AND c.created_by IN (SELECT id FROM users WHERE role = 'sales'))";
+
+$allCustomersCountSql = "SELECT COUNT(*) as total 
+        FROM customers c
+        WHERE (c.rep_id IS NOT NULL AND c.rep_id IN (SELECT id FROM users WHERE role = 'sales'))
+           OR (c.created_by IS NOT NULL AND c.created_by IN (SELECT id FROM users WHERE role = 'sales'))";
+
+$allCustomersParams = [];
+$allCustomersCountParams = [];
+
+if ($allCustomersDebtStatus === 'debtor') {
+    $allCustomersSql .= " AND (c.balance IS NOT NULL AND c.balance > 0)";
+    $allCustomersCountSql .= " AND (c.balance IS NOT NULL AND c.balance > 0)";
+} elseif ($allCustomersDebtStatus === 'clear') {
+    $allCustomersSql .= " AND (c.balance IS NULL OR c.balance <= 0)";
+    $allCustomersCountSql .= " AND (c.balance IS NULL OR c.balance <= 0)";
+}
+
+if ($allCustomersSearch) {
+    $allCustomersSql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR rep1.full_name LIKE ? OR rep2.full_name LIKE ?)";
+    $allCustomersCountSql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR c.region_id IN (SELECT id FROM regions WHERE name LIKE ?) OR c.rep_id IN (SELECT id FROM users WHERE role = 'sales' AND full_name LIKE ?) OR c.created_by IN (SELECT id FROM users WHERE role = 'sales' AND full_name LIKE ?))";
+    $searchParam = '%' . $allCustomersSearch . '%';
+    $allCustomersParams[] = $searchParam;
+    $allCustomersParams[] = $searchParam;
+    $allCustomersParams[] = $searchParam;
+    $allCustomersParams[] = $searchParam;
+    $allCustomersParams[] = $searchParam;
+    $allCustomersParams[] = $searchParam;
+    $allCustomersCountParams[] = $searchParam;
+    $allCustomersCountParams[] = $searchParam;
+    $allCustomersCountParams[] = $searchParam;
+    $allCustomersCountParams[] = $searchParam;
+    $allCustomersCountParams[] = $searchParam;
+    $allCustomersCountParams[] = $searchParam;
+}
+
+$allCustomersSql .= " ORDER BY c.name ASC LIMIT ? OFFSET ?";
+$allCustomersParams[] = $allCustomersPerPage;
+$allCustomersParams[] = $allCustomersOffset;
+
+try {
+    $allCustomersTotalResult = $db->queryOne($allCustomersCountSql, $allCustomersCountParams);
+    $allCustomersTotal = $allCustomersTotalResult['total'] ?? 0;
+    $allCustomersTotalPages = ceil($allCustomersTotal / $allCustomersPerPage);
+    
+    $allCustomers = $db->query($allCustomersSql, $allCustomersParams);
+} catch (Throwable $e) {
+    error_log('Error fetching all rep customers: ' . $e->getMessage());
+    $allCustomers = [];
+    $allCustomersTotal = 0;
+    $allCustomersTotalPages = 1;
+}
+?>
+
+<!-- جدول جميع عملاء المندوبين -->
+<div class="card shadow-sm mt-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">جميع عملاء المندوبين (<?php echo $allCustomersTotal; ?>)</h5>
+    </div>
+    <div class="card-body">
+        <!-- البحث والفلترة -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <form method="GET" action="" class="row g-2 g-md-3 align-items-end">
+                    <input type="hidden" name="page" value="representatives_customers">
+                    <div class="col-12 col-md-6 col-lg-5">
+                        <label for="allCustomersSearch" class="visually-hidden">بحث عن العملاء</label>
+                        <div class="input-group input-group-sm shadow-sm">
+                            <span class="input-group-text bg-light text-muted border-end-0">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input
+                                type="text"
+                                class="form-control border-start-0"
+                                id="allCustomersSearch"
+                                name="cs"
+                                value="<?php echo htmlspecialchars($allCustomersSearch); ?>"
+                                placeholder="بحث سريع بالاسم أو الهاتف أو المندوب"
+                                autocomplete="off"
+                            >
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3 col-lg-2">
+                        <label for="allCustomersDebtStatusFilter" class="visually-hidden">تصفية حسب حالة الديون</label>
+                        <select class="form-select form-select-sm shadow-sm" id="allCustomersDebtStatusFilter" name="cds">
+                            <option value="all" <?php echo $allCustomersDebtStatus === 'all' ? 'selected' : ''; ?>>الكل</option>
+                            <option value="debtor" <?php echo $allCustomersDebtStatus === 'debtor' ? 'selected' : ''; ?>>مدين</option>
+                            <option value="clear" <?php echo $allCustomersDebtStatus === 'clear' ? 'selected' : ''; ?>>غير مدين / لديه رصيد</option>
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-3 col-lg-2 d-grid">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-search me-1"></i>
+                            <span>بحث</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="table-responsive dashboard-table-wrapper">
+            <table class="table dashboard-table align-middle">
+                <thead>
+                    <tr>
+                        <th>الاسم</th>
+                        <th>رقم الهاتف</th>
+                        <th>الرصيد</th>
+                        <th>العنوان</th>
+                        <th>المنطقة</th>
+                        <th>المندوب</th>
+                        <th>الموقع</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($allCustomers)): ?>
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">لا توجد عملاء للمندوبين</td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($allCustomers as $customer): ?>
+                            <tr>
+                                <td><strong><?php echo htmlspecialchars($customer['name']); ?></strong></td>
+                                <td><?php echo htmlspecialchars($customer['phone'] ?? '-'); ?></td>
+                                <td>
+                                    <?php
+                                        $customerBalanceValue = isset($customer['balance']) ? (float) $customer['balance'] : 0.0;
+                                        $balanceBadgeClass = $customerBalanceValue > 0
+                                            ? 'bg-warning-subtle text-warning'
+                                            : ($customerBalanceValue < 0 ? 'bg-info-subtle text-info' : 'bg-secondary-subtle text-secondary');
+                                        $displayBalanceValue = $customerBalanceValue < 0 ? abs($customerBalanceValue) : $customerBalanceValue;
+                                    ?>
+                                    <strong><?php echo formatCurrency($displayBalanceValue); ?></strong>
+                                    <?php if ($customerBalanceValue !== 0.0): ?>
+                                        <span class="badge <?php echo $balanceBadgeClass; ?> ms-1">
+                                            <?php echo $customerBalanceValue > 0 ? 'رصيد مدين' : 'رصيد دائن'; ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?php echo htmlspecialchars($customer['address'] ?? '-'); ?></td>
+                                <td><?php echo htmlspecialchars($customer['region_name'] ?? '-'); ?></td>
+                                <td><?php echo htmlspecialchars($customer['rep_name'] ?? '-'); ?></td>
+                                <td>
+                                    <?php
+                                    $hasLocation = isset($customer['latitude'], $customer['longitude']) &&
+                                        $customer['latitude'] !== null &&
+                                        $customer['longitude'] !== null;
+                                    $latValue = $hasLocation ? (float)$customer['latitude'] : null;
+                                    $lngValue = $hasLocation ? (float)$customer['longitude'] : null;
+                                    ?>
+                                    <div class="d-flex flex-wrap align-items-center gap-2">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-primary all-customers-location-capture-btn"
+                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
+                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
+                                        >
+                                            <i class="bi bi-geo-alt me-1"></i>تحديد
+                                        </button>
+                                        <?php if ($hasLocation): ?>
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm btn-outline-info all-customers-location-view-btn"
+                                                data-customer-id="<?php echo (int)$customer['id']; ?>"
+                                                data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
+                                                data-latitude="<?php echo htmlspecialchars(number_format($latValue, 8, '.', '')); ?>"
+                                                data-longitude="<?php echo htmlspecialchars(number_format($lngValue, 8, '.', '')); ?>"
+                                            >
+                                                <i class="bi bi-map me-1"></i>عرض
+                                            </button>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary-subtle text-secondary">غير محدد</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <?php
+                                    $customerBalance = isset($customer['balance']) ? (float)$customer['balance'] : 0.0;
+                                    $displayBalanceForButton = $customerBalance < 0 ? abs($customerBalance) : $customerBalance;
+                                    $formattedBalance = formatCurrency($displayBalanceForButton);
+                                    $rawBalance = number_format($customerBalance, 2, '.', '');
+                                    ?>
+                                    <div class="d-flex flex-wrap align-items-center gap-2">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm <?php echo $customerBalance > 0 ? 'btn-success' : 'btn-outline-secondary'; ?> all-customers-collect-btn"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#allCustomersCollectPaymentModal"
+                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
+                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
+                                            data-customer-balance="<?php echo $rawBalance; ?>"
+                                            data-customer-balance-formatted="<?php echo htmlspecialchars($formattedBalance); ?>"
+                                            <?php echo $customerBalance > 0 ? '' : 'disabled'; ?>
+                                        >
+                                            <i class="bi bi-cash-coin me-1"></i>تحصيل
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-info js-all-customers-purchase-history"
+                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
+                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
+                                            data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
+                                            data-customer-address="<?php echo htmlspecialchars($customer['address'] ?? ''); ?>"
+                                        >
+                                            <i class="bi bi-receipt me-1"></i>سجل 
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-warning js-all-customers-return-products"
+                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
+                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
+                                        >
+                                            <i class="bi bi-arrow-return-left me-1"></i>مرتجع
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        <?php if ($allCustomersTotalPages > 1): ?>
+        <nav aria-label="Page navigation" class="mt-3">
+            <ul class="pagination justify-content-center">
+                <li class="page-item <?php echo $allCustomersPageNum <= 1 ? 'disabled' : ''; ?>">
+                    <a class="page-link" href="?page=representatives_customers&cp=<?php echo $allCustomersPageNum - 1; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?>">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                
+                <?php
+                $startPage = max(1, $allCustomersPageNum - 2);
+                $endPage = min($allCustomersTotalPages, $allCustomersPageNum + 2);
+                
+                if ($startPage > 1): ?>
+                    <li class="page-item"><a class="page-link" href="?page=representatives_customers&cp=1<?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?>">1</a></li>
+                    <?php if ($startPage > 2): ?>
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    <?php endif; ?>
+                <?php endif; ?>
+                
+                <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                    <li class="page-item <?php echo $i == $allCustomersPageNum ? 'active' : ''; ?>">
+                        <a class="page-link" href="?page=representatives_customers&cp=<?php echo $i; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?>"><?php echo $i; ?></a>
+                    </li>
+                <?php endfor; ?>
+                
+                <?php if ($endPage < $allCustomersTotalPages): ?>
+                    <?php if ($endPage < $allCustomersTotalPages - 1): ?>
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    <?php endif; ?>
+                    <li class="page-item"><a class="page-link" href="?page=representatives_customers&cp=<?php echo $allCustomersTotalPages; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?>"><?php echo $allCustomersTotalPages; ?></a></li>
+                <?php endif; ?>
+                
+                <li class="page-item <?php echo $allCustomersPageNum >= $allCustomersTotalPages ? 'disabled' : ''; ?>">
+                    <a class="page-link" href="?page=representatives_customers&cp=<?php echo $allCustomersPageNum + 1; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?>">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        <?php endif; ?>
+    </div>
+</div>
 
 <style>
 .representative-card-link {
@@ -2072,6 +2361,515 @@ document.addEventListener('DOMContentLoaded', function() {
             if (locationExternalLink) locationExternalLink.href = '#';
         });
     }
+});
+</script>
+
+<!-- CSS للجدول الجديد -->
+<style>
+/* الأزرار في عمود الإجراءات: 2×2 على جميع الشاشات */
+.dashboard-table tbody td:last-child .d-flex {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.25rem !important;
+    width: 100% !important;
+}
+
+.dashboard-table tbody td:last-child .btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
+@media (max-width: 767.98px) {
+    .dashboard-table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0 -0.75rem;
+        padding: 0 0.75rem;
+    }
+    
+    .dashboard-table {
+        min-width: 950px;
+        font-size: 0.85rem;
+        width: 100%;
+        table-layout: fixed;
+    }
+    
+    /* تحديد عرض الأعمدة - 8 أعمدة */
+    .dashboard-table thead th:nth-child(1),
+    .dashboard-table tbody td:nth-child(1) {
+        width: 18%;
+        min-width: 110px;
+    }
+    
+    .dashboard-table thead th:nth-child(2),
+    .dashboard-table tbody td:nth-child(2) {
+        width: 12%;
+        min-width: 85px;
+    }
+    
+    .dashboard-table thead th:nth-child(3),
+    .dashboard-table tbody td:nth-child(3) {
+        width: 10%;
+        min-width: 65px;
+    }
+    
+    .dashboard-table thead th:nth-child(4),
+    .dashboard-table tbody td:nth-child(4) {
+        width: 12%;
+        min-width: 75px;
+        word-wrap: break-word;
+        white-space: normal;
+    }
+    
+    .dashboard-table thead th:nth-child(5),
+    .dashboard-table tbody td:nth-child(5) {
+        width: 10%;
+        min-width: 65px;
+    }
+    
+    .dashboard-table thead th:nth-child(6),
+    .dashboard-table tbody td:nth-child(6) {
+        width: 10%;
+        min-width: 80px;
+    }
+    
+    .dashboard-table thead th:nth-child(7),
+    .dashboard-table tbody td:nth-child(7) {
+        width: 13%;
+        min-width: 90px;
+    }
+    
+    .dashboard-table thead th:nth-child(8),
+    .dashboard-table tbody td:nth-child(8) {
+        width: 15%;
+        min-width: 140px;
+    }
+    
+    .dashboard-table thead th {
+        font-size: 0.8rem;
+        padding: 0.5rem 0.35rem;
+        white-space: nowrap;
+        font-weight: 600;
+    }
+    
+    .dashboard-table tbody td {
+        padding: 0.5rem 0.35rem;
+        font-size: 0.8rem;
+        vertical-align: middle;
+    }
+    
+    .dashboard-table .btn {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.4rem;
+        white-space: nowrap;
+    }
+    
+    .dashboard-table .btn i {
+        font-size: 0.75rem;
+    }
+    
+    .dashboard-table .badge {
+        font-size: 0.65rem;
+        padding: 0.2rem 0.4rem;
+    }
+    
+    .dashboard-table tbody td:nth-child(7) .d-flex {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.3rem;
+    }
+    
+    .dashboard-table tbody td:nth-child(7) .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .dashboard-table {
+        min-width: 900px;
+        font-size: 0.8rem;
+    }
+    
+    .dashboard-table thead th {
+        font-size: 0.75rem;
+        padding: 0.45rem 0.3rem;
+    }
+    
+    .dashboard-table tbody td {
+        font-size: 0.75rem;
+        padding: 0.45rem 0.3rem;
+    }
+    
+    .dashboard-table .btn {
+        font-size: 0.65rem;
+        padding: 0.2rem 0.35rem;
+    }
+    
+    .dashboard-table .btn i {
+        font-size: 0.7rem;
+    }
+    
+    .dashboard-table thead th:nth-child(4),
+    .dashboard-table tbody td:nth-child(4) {
+        display: table-cell !important;
+    }
+    
+    .dashboard-table .badge {
+        font-size: 0.6rem;
+        padding: 0.15rem 0.35rem;
+    }
+    
+    .dashboard-table thead th:nth-child(1),
+    .dashboard-table tbody td:nth-child(1) {
+        min-width: 100px;
+    }
+    
+    .dashboard-table thead th:nth-child(2),
+    .dashboard-table tbody td:nth-child(2) {
+        min-width: 80px;
+    }
+    
+    .dashboard-table thead th:nth-child(3),
+    .dashboard-table tbody td:nth-child(3) {
+        min-width: 60px;
+    }
+    
+    .dashboard-table thead th:nth-child(4),
+    .dashboard-table tbody td:nth-child(4) {
+        min-width: 70px;
+    }
+    
+    .dashboard-table thead th:nth-child(5),
+    .dashboard-table tbody td:nth-child(5) {
+        min-width: 60px;
+    }
+    
+    .dashboard-table thead th:nth-child(6),
+    .dashboard-table tbody td:nth-child(6) {
+        min-width: 75px;
+    }
+    
+    .dashboard-table thead th:nth-child(7),
+    .dashboard-table tbody td:nth-child(7) {
+        min-width: 85px;
+    }
+    
+    .dashboard-table thead th:nth-child(8),
+    .dashboard-table tbody td:nth-child(8) {
+        min-width: 130px;
+    }
+}
+</style>
+
+<!-- Modal تحصيل ديون العميل -->
+<div class="modal fade" id="allCustomersCollectPaymentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-cash-coin me-2"></i>تحصيل ديون العميل</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+                <input type="hidden" name="action" value="collect_debt">
+                <input type="hidden" name="customer_id" value="">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <div class="fw-semibold text-muted">العميل</div>
+                        <div class="fs-5 all-customers-collection-customer-name">-</div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="fw-semibold text-muted">الديون الحالية</div>
+                        <div class="fs-5 text-warning all-customers-collection-current-debt">-</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="allCustomersCollectionAmount">مبلغ التحصيل <span class="text-danger">*</span></label>
+                        <input
+                            type="number"
+                            class="form-control"
+                            id="allCustomersCollectionAmount"
+                            name="amount"
+                            step="0.01"
+                            min="0.01"
+                            required
+                        >
+                        <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">تحصيل المبلغ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal عرض موقع العميل -->
+<div class="modal fade" id="allCustomersViewLocationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-geo-alt me-2"></i>موقع العميل</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="text-muted small fw-semibold">العميل</div>
+                    <div class="fs-5 fw-bold all-customers-location-customer-name">-</div>
+                </div>
+                <div class="ratio ratio-16x9">
+                    <iframe
+                        class="all-customers-location-map-frame border rounded"
+                        src=""
+                        title="معاينة موقع العميل"
+                        allowfullscreen
+                        loading="lazy"
+                        allow="geolocation; camera; microphone"
+                    ></iframe>
+                </div>
+                <p class="mt-3 text-muted mb-0">
+                    يمكنك متابعة الموقع داخل المعاينة أو فتحه في خرائط Google للحصول على اتجاهات دقيقة.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                <a href="#" target="_blank" rel="noopener" class="btn btn-primary all-customers-location-open-map">
+                    <i class="bi bi-map"></i> فتح في الخرائط
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// معالج modal التحصيل
+document.addEventListener('DOMContentLoaded', function () {
+    var collectionModal = document.getElementById('allCustomersCollectPaymentModal');
+    if (collectionModal) {
+        var nameElement = collectionModal.querySelector('.all-customers-collection-customer-name');
+        var debtElement = collectionModal.querySelector('.all-customers-collection-current-debt');
+        var customerIdInput = collectionModal.querySelector('input[name="customer_id"]');
+        var amountInput = collectionModal.querySelector('input[name="amount"]');
+
+        if (nameElement && debtElement && customerIdInput && amountInput) {
+            collectionModal.addEventListener('show.bs.modal', function (event) {
+                var triggerButton = event.relatedTarget;
+                if (!triggerButton) {
+                    return;
+                }
+
+                var customerName = triggerButton.getAttribute('data-customer-name') || '-';
+                var balanceRaw = triggerButton.getAttribute('data-customer-balance') || '0';
+                var balanceFormatted = triggerButton.getAttribute('data-customer-balance-formatted') || balanceRaw;
+                var numericBalance = parseFloat(balanceRaw);
+                if (!Number.isFinite(numericBalance)) {
+                    numericBalance = 0;
+                }
+                var debtAmount = numericBalance > 0 ? numericBalance : 0;
+
+                nameElement.textContent = customerName;
+                debtElement.textContent = balanceFormatted;
+                customerIdInput.value = triggerButton.getAttribute('data-customer-id') || '';
+
+                amountInput.value = debtAmount.toFixed(2);
+                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.setAttribute('min', '0');
+                amountInput.readOnly = debtAmount <= 0;
+                if (debtAmount > 0) {
+                    amountInput.focus();
+                }
+            });
+
+            collectionModal.addEventListener('hidden.bs.modal', function () {
+                nameElement.textContent = '-';
+                debtElement.textContent = '-';
+                customerIdInput.value = '';
+                amountInput.value = '';
+                amountInput.removeAttribute('max');
+            });
+        }
+    }
+
+    // معالج أزرار عرض الموقع
+    var locationViewButtons = document.querySelectorAll('.all-customers-location-view-btn');
+    var viewLocationModal = document.getElementById('allCustomersViewLocationModal');
+    var locationMapFrame = viewLocationModal ? viewLocationModal.querySelector('.all-customers-location-map-frame') : null;
+    var locationCustomerName = viewLocationModal ? viewLocationModal.querySelector('.all-customers-location-customer-name') : null;
+    var locationExternalLink = viewLocationModal ? viewLocationModal.querySelector('.all-customers-location-open-map') : null;
+
+    if (locationViewButtons && locationViewButtons.length > 0 && viewLocationModal) {
+        locationViewButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                var customerName = button.getAttribute('data-customer-name') || '-';
+                var latitude = button.getAttribute('data-latitude');
+                var longitude = button.getAttribute('data-longitude');
+
+                if (locationCustomerName) {
+                    locationCustomerName.textContent = customerName;
+                }
+
+                if (latitude && longitude && locationMapFrame) {
+                    var mapUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16&output=embed';
+                    locationMapFrame.src = mapUrl;
+
+                    if (locationExternalLink) {
+                        locationExternalLink.href = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16';
+                    }
+
+                    var modal = new bootstrap.Modal(viewLocationModal);
+                    modal.show();
+                }
+            });
+        });
+    }
+
+    // معالج أزرار تحديد الموقع
+    var locationCaptureButtons = document.querySelectorAll('.all-customers-location-capture-btn');
+    locationCaptureButtons.forEach(function (button) {
+        button.addEventListener('click', function () {
+            var customerId = button.getAttribute('data-customer-id');
+            var customerName = button.getAttribute('data-customer-name') || '';
+
+            if (!customerId) {
+                alert('تعذر تحديد العميل.');
+                return;
+            }
+
+            if (!navigator.geolocation) {
+                alert('المتصفح الحالي لا يدعم تحديد الموقع الجغرافي.');
+                return;
+            }
+
+            setButtonLoading(button, true);
+
+            navigator.geolocation.getCurrentPosition(function (position) {
+                var latitude = position.coords.latitude.toFixed(8);
+                var longitude = position.coords.longitude.toFixed(8);
+                var requestUrl = window.location.pathname + window.location.search;
+
+                var formData = new URLSearchParams();
+                formData.append('action', 'update_location');
+                formData.append('customer_id', customerId);
+                formData.append('latitude', latitude);
+                formData.append('longitude', longitude);
+
+                fetch(requestUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData.toString()
+                })
+                    .then(function (response) {
+                        return response.json();
+                    })
+                    .then(function (data) {
+                        setButtonLoading(button, false);
+                        if (data.success) {
+                            alert('تم حفظ الموقع بنجاح!');
+                            location.reload();
+                        } else {
+                            alert(data.message || 'حدث خطأ أثناء حفظ الموقع.');
+                        }
+                    })
+                    .catch(function (error) {
+                        setButtonLoading(button, false);
+                        alert('حدث خطأ في الاتصال بالخادم.');
+                        console.error('Error:', error);
+                    });
+            }, function (error) {
+                setButtonLoading(button, false);
+                var errorMessage = 'تعذر الحصول على الموقع.';
+                if (error.code === 1) {
+                    errorMessage = 'تم رفض طلب الحصول على الموقع. يرجى السماح بالوصول إلى الموقع في إعدادات المتصفح.';
+                } else if (error.code === 2) {
+                    errorMessage = 'تعذر تحديد الموقع. يرجى المحاولة مرة أخرى.';
+                } else if (error.code === 3) {
+                    errorMessage = 'انتهت مهلة طلب الموقع. يرجى المحاولة مرة أخرى.';
+                }
+                alert(errorMessage);
+            }, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+        });
+    });
+
+    function setButtonLoading(button, isLoading) {
+        if (!button) {
+            return;
+        }
+
+        if (isLoading) {
+            button.dataset.originalHtml = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>جارٍ التحديد';
+        } else {
+            if (button.dataset.originalHtml) {
+                button.innerHTML = button.dataset.originalHtml;
+                delete button.dataset.originalHtml;
+            }
+            button.disabled = false;
+        }
+    }
+
+    // معالج أزرار سجل المشتريات
+    document.addEventListener('click', function(e) {
+        const button = e.target.closest('.js-all-customers-purchase-history');
+        if (!button) return;
+        
+        const customerId = button.getAttribute('data-customer-id');
+        const customerName = button.getAttribute('data-customer-name');
+        
+        if (!customerId) return;
+        
+        // استخدام نفس modal سجل المشتريات الموجود
+        const historyButton = document.querySelector('.rep-history-btn.js-customer-history[data-customer-id="' + customerId + '"]');
+        if (!historyButton) {
+            // إنشاء زر مؤقت إذا لم يوجد
+            const tempButton = document.createElement('button');
+            tempButton.className = 'rep-history-btn js-customer-history';
+            tempButton.setAttribute('data-customer-id', customerId);
+            tempButton.setAttribute('data-customer-name', customerName);
+            tempButton.style.display = 'none';
+            document.body.appendChild(tempButton);
+            tempButton.click();
+            document.body.removeChild(tempButton);
+        } else {
+            historyButton.click();
+        }
+    });
+
+    // معالج أزرار الإرجاع
+    document.addEventListener('click', function(e) {
+        const button = e.target.closest('.js-all-customers-return-products');
+        if (!button) return;
+        
+        const customerId = button.getAttribute('data-customer-id');
+        const customerName = button.getAttribute('data-customer-name');
+        
+        if (!customerId) return;
+        
+        // استخدام نفس modal الإرجاع الموجود
+        const returnButton = document.querySelector('.rep-return-btn.js-customer-purchase-history[data-customer-id="' + customerId + '"]');
+        if (!returnButton) {
+            // إنشاء زر مؤقت إذا لم يوجد
+            const tempButton = document.createElement('button');
+            tempButton.className = 'rep-return-btn js-customer-purchase-history';
+            tempButton.setAttribute('data-customer-id', customerId);
+            tempButton.setAttribute('data-customer-name', customerName);
+            tempButton.style.display = 'none';
+            document.body.appendChild(tempButton);
+            tempButton.click();
+            document.body.removeChild(tempButton);
+        } else {
+            returnButton.click();
+        }
+    });
 });
 </script>
 
