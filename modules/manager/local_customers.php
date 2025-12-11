@@ -3147,38 +3147,92 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     .dashboard-table {
-        min-width: 800px;
-        font-size: 0.8rem;
+        min-width: 1100px;
+        font-size: 0.95rem;
+        width: 100%;
+        table-layout: fixed;
+    }
+    
+    /* تحديد عرض الأعمدة بناءً على طول المحتوى */
+    /* الاسم: 15 حرف (31.25% من 48 حرف) */
+    .dashboard-table thead th:nth-child(1),
+    .dashboard-table tbody td:nth-child(1) {
+        width: 20%;
+        min-width: 165px;
+    }
+    
+    /* رقم الهاتف: 11 حرف (22.92% من 48 حرف) */
+    .dashboard-table thead th:nth-child(2),
+    .dashboard-table tbody td:nth-child(2) {
+        width: 15%;
+        min-width: 125px;
+    }
+    
+    /* الرصيد: 7 حرف (14.58% من 48 حرف) */
+    .dashboard-table thead th:nth-child(3),
+    .dashboard-table tbody td:nth-child(3) {
+        width: 10%;
+        min-width: 90px;
+    }
+    
+    /* العنوان: 8 حرف (16.67% من 48 حرف) */
+    .dashboard-table thead th:nth-child(4),
+    .dashboard-table tbody td:nth-child(4) {
+        width: 12%;
+        min-width: 105px;
+        word-wrap: break-word;
+        white-space: normal;
+    }
+    
+    /* المنطقة: 7 حرف (14.58% من 48 حرف) */
+    .dashboard-table thead th:nth-child(5),
+    .dashboard-table tbody td:nth-child(5) {
+        width: 10%;
+        min-width: 90px;
+    }
+    
+    /* الموقع */
+    .dashboard-table thead th:nth-child(6),
+    .dashboard-table tbody td:nth-child(6) {
+        width: 13%;
+        min-width: 120px;
+    }
+    
+    /* الإجراءات */
+    .dashboard-table thead th:nth-child(7),
+    .dashboard-table tbody td:nth-child(7) {
+        width: 20%;
+        min-width: 185px;
     }
     
     .dashboard-table thead th {
-        font-size: 0.75rem;
-        padding: 0.5rem 0.4rem;
+        font-size: 0.9rem;
+        padding: 0.75rem 0.5rem;
         white-space: nowrap;
         font-weight: 600;
     }
     
     .dashboard-table tbody td {
-        padding: 0.5rem 0.4rem;
-        font-size: 0.8rem;
+        padding: 0.75rem 0.5rem;
+        font-size: 0.9rem;
         vertical-align: middle;
     }
     
     /* تحسين الأزرار في الجدول */
     .dashboard-table .btn {
-        font-size: 0.7rem;
-        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem;
+        padding: 0.35rem 0.6rem;
         white-space: nowrap;
     }
     
     .dashboard-table .btn i {
-        font-size: 0.75rem;
+        font-size: 0.85rem;
     }
     
     /* تحسين الأزرار المتعددة في عمود الإجراءات */
     .dashboard-table tbody td:last-child .d-flex {
         flex-wrap: wrap;
-        gap: 0.25rem;
+        gap: 0.4rem;
     }
     
     .dashboard-table tbody td:last-child .btn {
@@ -3188,25 +3242,18 @@ document.addEventListener('DOMContentLoaded', function() {
     
     /* تحسين Badge الرصيد */
     .dashboard-table .badge {
-        font-size: 0.65rem;
-        padding: 0.2rem 0.4rem;
-    }
-    
-    /* تحسين عمود العنوان */
-    .dashboard-table tbody td:nth-child(4) {
-        max-width: 150px;
-        word-wrap: break-word;
-        white-space: normal;
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
     }
     
     /* تحسين عمود الموقع */
-    .dashboard-table tbody td:nth-child(5) .d-flex {
+    .dashboard-table tbody td:nth-child(6) .d-flex {
         flex-direction: column;
         align-items: flex-start;
-        gap: 0.25rem;
+        gap: 0.3rem;
     }
     
-    .dashboard-table tbody td:nth-child(5) .btn {
+    .dashboard-table tbody td:nth-child(6) .btn {
         width: 100%;
         justify-content: center;
     }
@@ -3214,31 +3261,34 @@ document.addEventListener('DOMContentLoaded', function() {
 
 @media (max-width: 575.98px) {
     .dashboard-table {
-        min-width: 700px;
-        font-size: 0.75rem;
+        min-width: 1000px;
+        font-size: 0.9rem;
     }
     
     .dashboard-table thead th {
-        font-size: 0.7rem;
-        padding: 0.4rem 0.3rem;
+        font-size: 0.85rem;
+        padding: 0.65rem 0.45rem;
     }
     
     .dashboard-table tbody td {
-        font-size: 0.75rem;
-        padding: 0.4rem 0.3rem;
+        font-size: 0.85rem;
+        padding: 0.65rem 0.45rem;
     }
     
     .dashboard-table .btn {
-        font-size: 0.65rem;
-        padding: 0.2rem 0.4rem;
+        font-size: 0.75rem;
+        padding: 0.3rem 0.5rem;
     }
     
     /* عمود العنوان يبقى ظاهراً - مهم جداً */
     .dashboard-table thead th:nth-child(4),
     .dashboard-table tbody td:nth-child(4) {
         display: table-cell !important;
-        max-width: 100px;
-        font-size: 0.65rem !important;
+    }
+    
+    .dashboard-table .badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.45rem;
     }
 }
 </style>
