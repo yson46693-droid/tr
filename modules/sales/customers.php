@@ -3869,13 +3869,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         /* تحسين الأزرار في الجدول */
         .dashboard-table .btn {
-            font-size: 0.6rem;
-            padding: 0.2rem 0.3rem;
+            font-size: 0.7rem;
+            padding: 0.35rem 0.5rem;
             white-space: nowrap;
         }
 
         .dashboard-table .btn i {
-            font-size: 0.65rem;
+            font-size: 0.75rem;
         }
 
         /* تحسين Badge الرصيد */
@@ -3894,8 +3894,8 @@ document.addEventListener('DOMContentLoaded', function () {
         .dashboard-table tbody td:nth-child(6) .btn {
             width: 100%;
             justify-content: center;
-            font-size: 0.55rem;
-            padding: 0.15rem 0.25rem;
+            font-size: 0.65rem;
+            padding: 0.25rem 0.35rem;
         }
     }
 
@@ -3930,12 +3930,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         .dashboard-table .btn {
-            font-size: 0.55rem;
-            padding: 0.15rem 0.25rem;
+            font-size: 0.65rem;
+            padding: 0.3rem 0.4rem;
         }
 
         .dashboard-table .btn i {
-            font-size: 0.6rem;
+            font-size: 0.7rem;
         }
 
         /* عمود العنوان يبقى ظاهراً - مهم جداً */
@@ -4001,8 +4001,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         /* تحسين عمود الموقع على الشاشات الصغيرة */
         .dashboard-table tbody td:nth-child(6) .btn {
-            font-size: 0.5rem;
-            padding: 0.1rem 0.2rem;
+            font-size: 0.6rem;
+            padding: 0.2rem 0.3rem;
         }
 
         .customers-list-card .card-header {

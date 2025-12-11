@@ -886,11 +886,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // تحديث القالب
                 // الحصول على نوع الكرتونة
                 $cartonType = trim($_POST['carton_type'] ?? '');
-                $customCartonQuantity = isset($_POST['custom_carton_quantity']) ? intval($_POST['custom_carton_quantity']) : null;
-                $customCartonTypeId = isset($_POST['custom_carton_type_id']) ? intval($_POST['custom_carton_type_id']) : null;
+                // محاولة جلب القيم من الحقول العادية أولاً، ثم من الحقول المخفية
+                $customCartonQuantity = isset($_POST['custom_carton_quantity']) && $_POST['custom_carton_quantity'] !== '' ? intval($_POST['custom_carton_quantity']) : null;
+                if ($customCartonQuantity === null && isset($_POST['custom_carton_quantity_hidden']) && $_POST['custom_carton_quantity_hidden'] !== '') {
+                    $customCartonQuantity = intval($_POST['custom_carton_quantity_hidden']);
+                }
+                
+                $customCartonTypeId = isset($_POST['custom_carton_type_id']) && $_POST['custom_carton_type_id'] !== '' ? intval($_POST['custom_carton_type_id']) : null;
+                if ($customCartonTypeId === null && isset($_POST['custom_carton_type_id_hidden']) && $_POST['custom_carton_type_id_hidden'] !== '') {
+                    $customCartonTypeId = intval($_POST['custom_carton_type_id_hidden']);
+                }
                 
                 // Log للتحقق من البيانات الواردة
-                error_log('POST data check: carton_type=' . ($cartonType ?: 'EMPTY') . ', custom_carton_quantity=' . ($customCartonQuantity ?? 'NULL') . ', custom_carton_type_id=' . ($customCartonTypeId ?? 'NULL'));
+                error_log('UPDATE POST data check: carton_type=' . ($cartonType ?: 'EMPTY') . ', custom_carton_quantity=' . ($customCartonQuantity ?? 'NULL') . ', custom_carton_type_id=' . ($customCartonTypeId ?? 'NULL'));
+                error_log('UPDATE POST hidden fields: custom_carton_quantity_hidden=' . ($_POST['custom_carton_quantity_hidden'] ?? 'NULL') . ', custom_carton_type_id_hidden=' . ($_POST['custom_carton_type_id_hidden'] ?? 'NULL'));
                 
                 // تنظيف القيم
                 if ($customCartonQuantity <= 0) {
@@ -2114,6 +2123,9 @@ if (file_exists($specificationsModulePath)) {
                             </div>
                         </div>
                     </div>
+                    <!-- حقول hidden للتأكد من إرسال القيم حتى عند إخفاء الحقول -->
+                    <input type="hidden" name="custom_carton_quantity_hidden" id="createCustomCartonQuantityHidden" value="">
+                    <input type="hidden" name="custom_carton_type_id_hidden" id="createCustomCartonTypeIdHidden" value="">
                     
                     <div class="mb-3">
                         <label class="form-label">أدوات التعبئة المستخدمة <span class="text-danger">*</span></label>
@@ -2464,6 +2476,9 @@ document.getElementById('createCartonType')?.addEventListener('change', function
                 typeSelect.required = false;
             }
         }
+        
+        // تحديث الحقول المخفية
+        updateHiddenCartonFields('create');
     }
 });
 
@@ -3705,6 +3720,12 @@ document.getElementById('createTemplateForm')?.addEventListener('submit', functi
     const customQuantity = document.getElementById('createCustomCartonQuantity');
     const customTypeId = document.getElementById('createCustomCartonTypeId');
     
+    console.log('Form submit check:', {
+        cartonType: cartonType ? cartonType.value : 'not found',
+        customQuantity: customQuantity ? customQuantity.value : 'not found',
+        customTypeId: customTypeId ? customTypeId.value : 'not found'
+    });
+    
     if (cartonType && cartonType.value === 'custom') {
         // إذا كان النوع مخصص، تأكد من وجود القيم
         if (!customQuantity || !customQuantity.value || customQuantity.value <= 0) {
@@ -3716,6 +3737,18 @@ document.getElementById('createTemplateForm')?.addEventListener('submit', functi
             e.preventDefault();
             alert('يرجى اختيار نوع الكرتونة');
             return false;
+        }
+        // إظهار الحقول مؤقتاً للتأكد من إرسالها
+        const customFields = document.getElementById('customCartonFields');
+        if (customFields) {
+            customFields.style.display = 'block';
+        }
+    } else if (customQuantity && customQuantity.value && customQuantity.value > 0 && 
+               customTypeId && customTypeId.value && customTypeId.value > 0) {
+        // إذا كانت القيم موجودة لكن carton_type ليس 'custom'، ضع 'custom'
+        if (cartonType) {
+            cartonType.value = 'custom';
+            console.log('Auto-setting carton_type to custom because custom data exists');
         }
         // إظهار الحقول مؤقتاً للتأكد من إرسالها
         const customFields = document.getElementById('customCartonFields');
@@ -3740,6 +3773,12 @@ document.getElementById('editTemplateForm')?.addEventListener('submit', function
     const customQuantity = document.getElementById('editCustomCartonQuantity');
     const customTypeId = document.getElementById('editCustomCartonTypeId');
     
+    console.log('Edit form submit check:', {
+        cartonType: cartonType ? cartonType.value : 'not found',
+        customQuantity: customQuantity ? customQuantity.value : 'not found',
+        customTypeId: customTypeId ? customTypeId.value : 'not found'
+    });
+    
     if (cartonType && cartonType.value === 'custom') {
         // إذا كان النوع مخصص، تأكد من وجود القيم
         if (!customQuantity || !customQuantity.value || customQuantity.value <= 0) {
@@ -3751,6 +3790,18 @@ document.getElementById('editTemplateForm')?.addEventListener('submit', function
             e.preventDefault();
             alert('يرجى اختيار نوع الكرتونة');
             return false;
+        }
+        // إظهار الحقول مؤقتاً للتأكد من إرسالها
+        const customFields = document.getElementById('editCustomCartonFields');
+        if (customFields) {
+            customFields.style.display = 'block';
+        }
+    } else if (customQuantity && customQuantity.value && customQuantity.value > 0 && 
+               customTypeId && customTypeId.value && customTypeId.value > 0) {
+        // إذا كانت القيم موجودة لكن carton_type ليس 'custom'، ضع 'custom'
+        if (cartonType) {
+            cartonType.value = 'custom';
+            console.log('Auto-setting carton_type to custom because custom data exists');
         }
         // إظهار الحقول مؤقتاً للتأكد من إرسالها
         const customFields = document.getElementById('editCustomCartonFields');
