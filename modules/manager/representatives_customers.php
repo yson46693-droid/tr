@@ -241,6 +241,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $_SESSION['success_message'] = implode(' ', array_filter($messageParts));
             error_log('Collection successful, redirecting...');
             
+            redirectAfterPost(
+                'representatives_customers',
+                [],
+                [],
+                $currentRole
+            );
+            
         } catch (Exception $e) {
             if ($transactionStarted) {
                 $db->rollback();
@@ -250,6 +257,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $_SESSION['error_message'] = $errorMsg;
             error_log('Collection ERROR (Exception): ' . $e->getMessage());
             error_log('Stack trace: ' . $e->getTraceAsString());
+            
+            redirectAfterPost(
+                'representatives_customers',
+                [],
+                [],
+                $currentRole
+            );
         } catch (Throwable $e) {
             if ($transactionStarted) {
                 $db->rollback();
@@ -259,24 +273,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $_SESSION['error_message'] = $errorMsg;
             error_log('Collection ERROR (Throwable): ' . $e->getMessage());
             error_log('Stack trace: ' . $e->getTraceAsString());
+            
+            redirectAfterPost(
+                'representatives_customers',
+                [],
+                [],
+                $currentRole
+            );
         }
-    }
-    
-    // إعادة التوجيه بعد معالجة POST (نجاح أو فشل)
-    error_log('Preparing redirect...');
-    $redirectUrl = getRelativeUrl($dashboardScript . '?page=representatives_customers');
-    error_log('Redirect URL: ' . $redirectUrl);
-    error_log('Headers sent: ' . (headers_sent() ? 'yes' : 'no'));
-    
-    if (!headers_sent()) {
-        error_log('Sending Location header...');
-        header('Location: ' . $redirectUrl);
-        error_log('Location header sent, exiting...');
-        exit;
-    } else {
-        error_log('Headers already sent, using JavaScript redirect...');
-        echo '<script>window.location.href = ' . json_encode($redirectUrl) . ';</script>';
-        exit;
     }
 }
 
