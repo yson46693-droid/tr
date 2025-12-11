@@ -2757,6 +2757,17 @@ try {
                 width: 80px;
                 text-align: center;
             }
+            /* إصلاح مشكلة RTL في حقول الإدخال الرقمية */
+            .pos-cart-table input[type="number"],
+            #posPartialAmount[type="number"] {
+                direction: ltr !important;
+                text-align: left !important;
+            }
+            .pos-cart-table input[type="number"]:focus,
+            #posPartialAmount[type="number"]:focus {
+                direction: ltr !important;
+                text-align: left !important;
+            }
             .pos-summary-card-neutral {
                 background: #0f172a;
                 color: #fff;
@@ -3085,10 +3096,10 @@ try {
                                         <thead>
                                             <tr>
                                                 <th>المنتج</th>
-                                                <th width="180">الكمية</th>
-                                                <th width="160">سعر الوحدة</th>
-                                                <th width="160">الإجمالي</th>
-                                                <th width="70"></th>
+                                                <th width="90">الكمية</th>
+                                                <th width="200">سعر الوحدة</th>
+                                                <th width="180">الإجمالي</th>
+                                                <th width="60"></th>
                                             </tr>
                                         </thead>
                                         <tbody id="posCartBody"></tbody>
@@ -3143,7 +3154,7 @@ try {
                                 </div>
                                 <div class="mt-3 d-none" id="posPartialWrapper">
                                     <label class="form-label">مبلغ التحصيل الجزئي</label>
-                                    <input type="number" class="form-control text-muted" id="posPartialAmount" placeholder="0" step="1">
+                                    <input type="number" class="form-control text-muted" id="posPartialAmount" placeholder="0" step="1" dir="ltr" style="text-align: left;">
                                 </div>
                                 <div class="mt-3 d-none" id="posDueDateWrapper">
                                     <label class="form-label">تاريخ الاستحقاق <span class="text-muted">(اختياري)</span></label>
@@ -3504,12 +3515,12 @@ try {
                     <td data-label="الكمية">
                         <div class="pos-qty-control">
                             <button type="button" class="btn btn-light border" data-action="decrease" data-product-id="${item.product_id}"><i class="bi bi-dash"></i></button>
-                            <input type="number" step="0.01" min="0" max="${sanitizedAvailable.toFixed(2)}" class="form-control" data-cart-qty data-product-id="${item.product_id}" value="${sanitizedQty.toFixed(2)}">
+                            <input type="number" step="0.01" min="0" max="${sanitizedAvailable.toFixed(2)}" class="form-control" data-cart-qty data-product-id="${item.product_id}" value="${sanitizedQty.toFixed(2)}" dir="ltr" style="text-align: left;">
                             <button type="button" class="btn btn-light border" data-action="increase" data-product-id="${item.product_id}"><i class="bi bi-plus"></i></button>
                         </div>
                     </td>
                     <td data-label="سعر الوحدة">
-                        <input type="number" step="0.01" min="0" class="form-control" data-cart-price data-product-id="${item.product_id}" value="${sanitizedPrice.toFixed(2)}">
+                        <input type="number" step="0.01" min="0" class="form-control" data-cart-price data-product-id="${item.product_id}" value="${sanitizedPrice.toFixed(2)}" dir="ltr" style="text-align: left;">
                     </td>
                     <td data-label="الإجمالي" class="fw-semibold">${formatCurrency(sanitizedQty * sanitizedPrice)}</td>
                     <td data-label="إجراءات" class="text-end">
