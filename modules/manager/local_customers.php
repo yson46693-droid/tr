@@ -3137,6 +3137,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <style>
 /* تحسين جداول العملاء على الهواتف */
+/* الأزرار في عمود الإجراءات: 2×2 على جميع الشاشات */
+.dashboard-table tbody td:last-child .d-flex {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.25rem !important;
+    width: 100% !important;
+}
+
+.dashboard-table tbody td:last-child .btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+}
+
 @media (max-width: 767.98px) {
     /* تحسين الجدول الرئيسي للعملاء المحليين */
     .dashboard-table-wrapper {
@@ -3229,19 +3243,6 @@ document.addEventListener('DOMContentLoaded', function() {
         font-size: 0.75rem;
     }
     
-    /* تحسين الأزرار المتعددة في عمود الإجراءات */
-    .dashboard-table tbody td:last-child .d-flex {
-        flex-wrap: wrap;
-        gap: 0.25rem;
-        width: 100%;
-    }
-    
-    .dashboard-table tbody td:last-child .btn {
-        flex: 0 0 calc(50% - 0.125rem);
-        min-width: calc(50% - 0.125rem);
-        max-width: calc(50% - 0.125rem);
-        text-align: center;
-    }
     
     /* تحسين Badge الرصيد */
     .dashboard-table .badge {
@@ -3287,17 +3288,6 @@ document.addEventListener('DOMContentLoaded', function() {
         font-size: 0.7rem;
     }
     
-    /* الأزرار في عمود الإجراءات: 2 أزرار في كل صف */
-    .dashboard-table tbody td:last-child .d-flex {
-        width: 100%;
-    }
-    
-    .dashboard-table tbody td:last-child .btn {
-        flex: 0 0 calc(50% - 0.125rem);
-        min-width: calc(50% - 0.125rem);
-        max-width: calc(50% - 0.125rem);
-        text-align: center;
-    }
     
     /* عمود العنوان يبقى ظاهراً - مهم جداً */
     .dashboard-table thead th:nth-child(4),
