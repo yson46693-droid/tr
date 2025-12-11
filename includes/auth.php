@@ -49,10 +49,21 @@ function getPasswordMinLength(): int
 function isLoggedIn() {
     // التحقق من أننا في profile.php - منع حذف الجلسة في profile.php
     $isProfilePage = false;
-    $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
-    if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+    
+    // الطريقة 1: التحقق من الثابت (الأكثر موثوقية)
+    if (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) {
         $isProfilePage = true;
     }
+    
+    // الطريقة 2: التحقق من SCRIPT_NAME و PHP_SELF
+    if (!$isProfilePage) {
+        $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+        if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+            $isProfilePage = true;
+        }
+    }
+    
+    // الطريقة 3: التحقق من REQUEST_URI
     if (!$isProfilePage) {
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         if (strpos($requestUri, 'profile.php') !== false) {
@@ -345,13 +356,20 @@ function getCurrentUserFromDatabase($userId) {
     // استخدام طرق متعددة للتحقق لضمان العمل على جميع الأجهزة (Windows, Android, iOS)
     $isProfilePage = false;
     
-    // الطريقة 1: التحقق من SCRIPT_NAME و PHP_SELF
-    $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
-    if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+    // الطريقة 1: التحقق من الثابت (الأكثر موثوقية)
+    if (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) {
         $isProfilePage = true;
     }
     
-    // الطريقة 2: استخدام debug_backtrace كبديل
+    // الطريقة 2: التحقق من SCRIPT_NAME و PHP_SELF
+    if (!$isProfilePage) {
+        $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+        if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+            $isProfilePage = true;
+        }
+    }
+    
+    // الطريقة 3: استخدام debug_backtrace كبديل
     if (!$isProfilePage) {
         $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
         foreach ($backtrace as $trace) {
@@ -365,7 +383,7 @@ function getCurrentUserFromDatabase($userId) {
         }
     }
     
-    // الطريقة 3: التحقق من REQUEST_URI
+    // الطريقة 4: التحقق من REQUEST_URI
     if (!$isProfilePage) {
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         if (strpos($requestUri, 'profile.php') !== false) {
@@ -773,6 +791,30 @@ function hasAllRoles($roles) {
  * التحقق من الوصول - إعادة توجيه إذا لم يكن مسجلاً
  */
 function requireLogin() {
+    // التحقق من أننا في profile.php - منع إعادة التوجيه في profile.php
+    $isProfilePage = false;
+    
+    // الطريقة 1: التحقق من الثابت (الأكثر موثوقية)
+    if (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) {
+        $isProfilePage = true;
+    }
+    
+    // الطريقة 2: التحقق من SCRIPT_NAME و PHP_SELF
+    if (!$isProfilePage) {
+        $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+        if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+            $isProfilePage = true;
+        }
+    }
+    
+    // الطريقة 3: التحقق من REQUEST_URI
+    if (!$isProfilePage) {
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+        if (strpos($requestUri, 'profile.php') !== false) {
+            $isProfilePage = true;
+        }
+    }
+    
     // التأكد من أن الجلسة نشطة قبل أي فحص
     if (session_status() === PHP_SESSION_NONE) {
         if (!headers_sent()) {
@@ -794,8 +836,8 @@ function requireLogin() {
         return;
     }
 
-    // إذا لم يكن مسجل دخول، إعادة التوجيه
-    if (!isLoggedIn()) {
+    // إذا لم يكن مسجل دخول، إعادة التوجيه فقط إذا لم نكن في profile.php
+    if (!$isProfilePage && !isLoggedIn()) {
         // محاولة تحميل path_helper إذا لم يكن محملاً
         if (!function_exists('getRelativeUrl') && file_exists(__DIR__ . '/path_helper.php')) {
             require_once __DIR__ . '/path_helper.php';

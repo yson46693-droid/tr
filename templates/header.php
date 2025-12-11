@@ -51,10 +51,21 @@ if (!isset($currentUser) || $currentUser === null) {
 
 // التحقق من أننا في profile.php - منع حذف الجلسة في profile.php
 $isProfilePage = false;
-$currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
-if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+
+// الطريقة 1: التحقق من الثابت (الأكثر موثوقية)
+if (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) {
     $isProfilePage = true;
 }
+
+// الطريقة 2: التحقق من SCRIPT_NAME و PHP_SELF
+if (!$isProfilePage) {
+    $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+    if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+        $isProfilePage = true;
+    }
+}
+
+// الطريقة 3: التحقق من REQUEST_URI
 if (!$isProfilePage) {
     $requestUri = $_SERVER['REQUEST_URI'] ?? '';
     if (strpos($requestUri, 'profile.php') !== false) {

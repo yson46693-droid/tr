@@ -4,6 +4,8 @@
  */
 
 define('ACCESS_ALLOWED', true);
+// تعريف ثابت لمنع حذف الجلسة في profile.php
+define('PROFILE_PAGE_ACTIVE', true);
 
 // التأكد من بدء الجلسة قبل أي شيء
 if (session_status() === PHP_SESSION_NONE) {
@@ -26,18 +28,35 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 
 requireLogin();
 
+// تهيئة متغيرات الرسائل
+$error = $_SESSION['error_message'] ?? '';
+$success = $_SESSION['success_message'] ?? '';
+unset($_SESSION['error_message'], $_SESSION['success_message']);
+
 $currentUser = getCurrentUser();
 
 // التحقق من أن المستخدم موجود (حماية إضافية)
+// ملاحظة: لا نعيد التوجيه في profile.php لمنع حذف الجلسة على الأجهزة المحمولة
+// إذا لم يكن المستخدم موجوداً، نعرض رسالة خطأ بدلاً من إعادة التوجيه
 if (!$currentUser || !isset($currentUser['id'])) {
-    // إذا لم يكن المستخدم موجوداً، إعادة التوجيه إلى تسجيل الدخول
-    $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
-    if (!headers_sent()) {
-        header('Location: ' . $loginUrl);
-        exit;
-    } else {
-        echo '<script>window.location.href = "' . htmlspecialchars($loginUrl) . '";</script>';
-        exit;
+    // محاولة إعادة تحميل المستخدم مرة أخرى
+    if (isset($_SESSION['user_id'])) {
+        $currentUser = getCurrentUser();
+    }
+    
+    // إذا استمرت المشكلة، نعرض رسالة خطأ بدلاً من إعادة التوجيه
+    if (!$currentUser || !isset($currentUser['id'])) {
+        // لا نعيد التوجيه - نعرض رسالة خطأ في الصفحة
+        $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.';
+        // محاولة الحصول على بيانات المستخدم مباشرة من قاعدة البيانات
+        if (isset($_SESSION['user_id'])) {
+            $db = db();
+            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
+            if ($userFromDb) {
+                $currentUser = $userFromDb;
+                $error = ''; // إزالة رسالة الخطأ إذا تم تحميل المستخدم بنجاح
+            }
+        }
     }
 }
 
@@ -54,13 +73,20 @@ try {
     $profilePhotoSupported = false;
 }
 
-// استلام رسائل النجاح أو الخطأ من session (بعد redirect)
-$error = $_SESSION['error_message'] ?? '';
-$success = $_SESSION['success_message'] ?? '';
-unset($_SESSION['error_message'], $_SESSION['success_message']);
-
 // الحصول على بيانات المستخدم الكاملة
-$user = getUserById($currentUser['id']);
+$user = null;
+if ($currentUser && isset($currentUser['id'])) {
+    $user = getUserById($currentUser['id']);
+    // إذا لم يتم العثور على المستخدم من getUserById، استخدم $currentUser
+    if (!$user) {
+        $user = $currentUser;
+    }
+} else {
+    // إذا لم يكن هناك currentUser، استخدم بيانات الجلسة
+    if (isset($_SESSION['user_id'])) {
+        $user = getUserById($_SESSION['user_id']);
+    }
+}
 
 // معالجة تحديث البروفايل
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
