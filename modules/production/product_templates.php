@@ -596,7 +596,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($cartonTypeColumnExists) {
                     $columns[] = 'carton_type';
                     $placeholders[] = '?';
-                    $values[] = $cartonType;
+                    $values[] = $cartonType; // قد يكون 'custom' أو null أو نوع آخر
+                    error_log('Creating template with carton_type: ' . ($cartonType ?? 'NULL') . ', custom_carton_quantity=' . ($customCartonQuantity ?? 'NULL') . ', custom_carton_type_id=' . ($customCartonTypeId ?? 'NULL'));
                 }
                 
                 // إضافة custom_carton_quantity إن كان العمود موجودًا
@@ -919,7 +920,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // إضافة carton_type إن كان العمود موجودًا
                 if ($cartonTypeColumnExists) {
                     $updateFields[] = 'carton_type = ?';
-                    $updateValues[] = $cartonType;
+                    $updateValues[] = $cartonType; // قد يكون 'custom' أو null أو نوع آخر
+                    error_log('Updating carton_type: ' . ($cartonType ?? 'NULL') . ', custom_carton_quantity=' . ($customCartonQuantity ?? 'NULL') . ', custom_carton_type_id=' . ($customCartonTypeId ?? 'NULL'));
                 }
                 
                 // إضافة custom_carton_quantity إن كان العمود موجودًا
@@ -2438,16 +2440,14 @@ document.getElementById('createCartonType')?.addEventListener('change', function
             if (typeSelect) typeSelect.required = true;
         } else {
             customFields.style.display = 'none';
-            // إزالة الـ required
+            // إزالة الـ required فقط (لا نمسح القيم لأنها قد تكون موجودة من قبل)
             const quantityInput = document.getElementById('createCustomCartonQuantity');
             const typeSelect = document.getElementById('createCustomCartonTypeId');
             if (quantityInput) {
                 quantityInput.required = false;
-                quantityInput.value = '';
             }
             if (typeSelect) {
                 typeSelect.required = false;
-                typeSelect.value = '';
             }
         }
     }
@@ -2466,16 +2466,16 @@ document.getElementById('editCartonType')?.addEventListener('change', function()
             if (typeSelect) typeSelect.required = true;
         } else {
             customFields.style.display = 'none';
-            // إزالة الـ required
+            // إزالة الـ required فقط (لا نمسح القيم لأنها قد تكون موجودة من قبل)
             const quantityInput = document.getElementById('editCustomCartonQuantity');
             const typeSelect = document.getElementById('editCustomCartonTypeId');
             if (quantityInput) {
                 quantityInput.required = false;
-                quantityInput.value = '';
+                // لا نمسح القيم لأنها قد تكون موجودة من قبل
             }
             if (typeSelect) {
                 typeSelect.required = false;
-                typeSelect.value = '';
+                // لا نمسح القيم لأنها قد تكون موجودة من قبل
             }
         }
     }
