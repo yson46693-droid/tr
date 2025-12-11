@@ -3889,6 +3889,7 @@ document.addEventListener('DOMContentLoaded', function () {
             vertical-align: middle;
         }
 
+        /* تحسين الأزرار في الجدول */
         .customers-table-container .dashboard-table .btn {
             font-size: 0.7rem;
             padding: 0.25rem 0.4rem;
@@ -3899,9 +3900,22 @@ document.addEventListener('DOMContentLoaded', function () {
             font-size: 0.75rem;
         }
 
+        /* تحسين Badge الرصيد */
         .customers-table-container .dashboard-table .badge {
             font-size: 0.65rem;
             padding: 0.2rem 0.4rem;
+        }
+
+        /* تحسين عمود الموقع */
+        .customers-table-container .dashboard-table tbody td:nth-child(6) .d-flex {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.3rem;
+        }
+
+        .customers-table-container .dashboard-table tbody td:nth-child(6) .btn {
+            width: 100%;
+            justify-content: center;
         }
     }
 
@@ -3933,6 +3947,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
         .customers-table-container .dashboard-table .btn i {
             font-size: 0.7rem;
+        }
+
+        /* عمود العنوان يبقى ظاهراً - مهم جداً */
+        .customers-table-container .dashboard-table thead th:nth-child(4),
+        .customers-table-container .dashboard-table tbody td:nth-child(4) {
+            display: table-cell !important;
         }
 
         .customers-table-container .dashboard-table .badge {
