@@ -602,6 +602,32 @@ function formatHoneyVarietyWithCodeLocal(string $variety, array $catalog, $db = 
 $dashboardSlug = $rawMaterialsContext === 'manager' ? 'manager' : 'production';
 $dashboardUrl = getDashboardUrl($dashboardSlug);
 
+// تحويل عمود honey_variety في جدول honey_stock من ENUM إلى VARCHAR لدعم أنواع العسل المخصصة
+try {
+    $honeyStockTableCheck = $db->queryOne("SHOW TABLES LIKE 'honey_stock'");
+    if (!empty($honeyStockTableCheck)) {
+        $honeyVarietyColumn = $db->queryOne("SHOW COLUMNS FROM honey_stock WHERE Field = 'honey_variety'");
+        if (!empty($honeyVarietyColumn)) {
+            $columnType = $honeyVarietyColumn['Type'] ?? '';
+            // التحقق من أن العمود هو ENUM
+            if (stripos($columnType, 'enum') !== false) {
+                // تحويل من ENUM إلى VARCHAR(100) لدعم أنواع العسل المخصصة
+                try {
+                    $db->execute("
+                        ALTER TABLE `honey_stock` 
+                        MODIFY COLUMN `honey_variety` VARCHAR(100) DEFAULT NULL COMMENT 'نوع العسل (يدعم أنواع مخصصة)'
+                    ");
+                    error_log("Successfully converted honey_variety column from ENUM to VARCHAR");
+                } catch (Exception $e) {
+                    error_log("Error converting honey_variety column: " . $e->getMessage());
+                }
+            }
+        }
+    }
+} catch (Exception $e) {
+    error_log("Error checking honey_stock table structure: " . $e->getMessage());
+}
+
 // إنشاء جدول honey_types إذا لم يكن موجوداً
 try {
     $honeyTypesTableCheck = $db->queryOne("SHOW TABLES LIKE 'honey_types'");
