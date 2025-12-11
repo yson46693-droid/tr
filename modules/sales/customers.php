@@ -4734,7 +4734,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                         >
-                                            <i class="bi bi-journal-text me-1"></i>سجل المشتريات
+                                            <i class="bi bi-journal-text me-1"></i>سجل 
                                         </button>
                                         <button
                                             type="button"
@@ -4743,7 +4743,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             title="سجل مشتريات العميل - إنشاء مرتجع"
                                         >
-                                            <i class="bi bi-arrow-return-left me-1"></i>إرجاع
+                                            <i class="bi bi-arrow-return-left me-1"></i>مرتجع
                                         </button>
                                         <?php endif; ?>
                                     </div>

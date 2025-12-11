@@ -5182,6 +5182,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             error_log('Custom carton auto-deduction skipped: custom carton info not found for ID ' . $targetMaterialId);
                         }
                     }
+                } catch (Exception $cartonDeductionError) {
+                    error_log('Carton-based auto-deduction error: ' . $cartonDeductionError->getMessage());
+                }
                 
                 // إنشاء أرقام باركود بعدد الكمية المنتجة
                 $batchNumbersToPrint = [];
