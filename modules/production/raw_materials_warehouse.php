@@ -526,11 +526,17 @@ try {
         
         if (!empty($honeyTypeName) && !empty($honeyTypeId)) {
             // إضافة نوع العسل المخصص إلى القائمة
+            // استخدام الاسم كمفتاح والقيمة تحتوي على code و label
             $honeyVarietiesCatalog[$honeyTypeName] = [
                 'code' => $honeyTypeId,
                 'label' => $honeyTypeName,
             ];
         }
+    }
+    
+    // تسجيل عدد الأنواع المخصصة التي تم جلبها (للتشخيص)
+    if (count($customHoneyTypesRows) > 0) {
+        error_log("Loaded " . count($customHoneyTypesRows) . " custom honey types from database");
     }
 } catch (Exception $e) {
     error_log("Error loading custom honey types: " . $e->getMessage());
@@ -2299,9 +2305,18 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         // في حالة الفشل، نستمر بدون حفظ في الجدول
                     }
                 }
-            } elseif (!in_array($honeyVariety, $validHoneyVarieties, true)) {
-                // إذا كان النوع غير موجود في القائمة ولم يتم إدخال نوع مخصص
-                if (!empty($customHoneyVariety)) {
+            } elseif (!in_array($honeyVariety, $validHoneyVarieties, true) || !isset($honeyVarietiesCatalog[$honeyVariety])) {
+                // إذا كان النوع غير موجود في القائمة الثابتة، تحقق من قاعدة البيانات
+                $existingCustomType = $db->queryOne(
+                    "SELECT honey_type_id, name FROM honey_types WHERE name = ? LIMIT 1",
+                    [$honeyVariety]
+                );
+                
+                if ($existingCustomType) {
+                    // استخدام ID الموجود من قاعدة البيانات
+                    $honeyVarietyCode = $existingCustomType['honey_type_id'];
+                } elseif (!empty($customHoneyVariety)) {
+                    // إذا تم إدخال نوع مخصص في الحقل اليدوي
                     $honeyVariety = trim($customHoneyVariety);
                     
                     // التحقق من وجود نوع العسل المخصص في الجدول
@@ -2333,7 +2348,10 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $honeyVarietyCode = getHoneyVarietyCode($honeyVariety);
                 }
             } else {
-                $honeyVarietyCode = getHoneyVarietyCode($honeyVariety);
+                // النوع موجود في القائمة الثابتة أو المدمجة
+                $honeyVarietyCode = isset($honeyVarietiesCatalog[$honeyVariety]) 
+                    ? $honeyVarietiesCatalog[$honeyVariety]['code'] 
+                    : getHoneyVarietyCode($honeyVariety);
             }
             
             // التحقق من أن نوع العسل غير فارغ
@@ -4746,11 +4764,44 @@ if ($section === 'honey') {
                         <div class="mb-3">
                             <label class="form-label">نوع العسل</label>
                             <select class="form-select honey-variety-select" name="honey_variety" id="honey_variety_select">
-                                <?php foreach ($honeyVarietiesCatalog as $honeyVariety => $meta): ?>
+                                <?php 
+                                // عرض الأنواع الثابتة أولاً
+                                $staticCatalog = getHoneyVarietiesCatalog();
+                                foreach ($staticCatalog as $honeyVariety => $meta): 
+                                ?>
                                     <option value="<?php echo htmlspecialchars($honeyVariety); ?>" data-code="<?php echo htmlspecialchars($meta['code']); ?>" <?php echo $honeyVariety === $defaultHoneyVariety ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars(sprintf('%s - %s', $meta['label'], $meta['code'])); ?>
                                     </option>
                                 <?php endforeach; ?>
+                                
+                                <?php 
+                                // عرض الأنواع المخصصة من قاعدة البيانات
+                                try {
+                                    $customTypes = $db->query(
+                                        "SELECT honey_type_id, name FROM honey_types WHERE is_custom = 1 ORDER BY name ASC"
+                                    );
+                                    
+                                    if (!empty($customTypes)) {
+                                        foreach ($customTypes as $customType) {
+                                            $customName = trim($customType['name']);
+                                            $customId = trim($customType['honey_type_id']);
+                                            
+                                            if (!empty($customName) && !empty($customId)) {
+                                                // التحقق من أن النوع غير موجود في القائمة الثابتة
+                                                if (!isset($staticCatalog[$customName])) {
+                                                ?>
+                                                    <option value="<?php echo htmlspecialchars($customName); ?>" data-code="<?php echo htmlspecialchars($customId); ?>">
+                                                        <?php echo htmlspecialchars(sprintf('%s - %s', $customName, $customId)); ?>
+                                                    </option>
+                                                <?php
+                                                }
+                                            }
+                                        }
+                                    }
+                                } catch (Exception $e) {
+                                    error_log("Error loading custom honey types in dropdown: " . $e->getMessage());
+                                }
+                                ?>
                             </select>
                         </div>
                         <div class="mb-3" id="custom_honey_variety_container" style="display: none;">
