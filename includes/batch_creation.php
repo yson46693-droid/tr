@@ -1391,15 +1391,23 @@ function batchCreationCreate(int $templateId, int $units, array $rawUsage = [], 
             // بناء SQL بناءً على الجدول المستخدم
             // product_template_raw_materials لا يحتوي على material_type, material_id, notes
             if ($templateMaterialsTable === 'product_template_raw_materials') {
+                // التحقق من وجود عمود honey_variety في الجدول
+                $hasHoneyVarietyColumn = batchCreationColumnExists($pdo, $templateMaterialsTable, 'honey_variety');
+                $honeyVarietySelect = $hasHoneyVarietyColumn ? ', honey_variety' : ', NULL as honey_variety';
+                
                 $materialsStmt = $pdo->prepare("
-                    SELECT id, NULL as material_type, material_name, NULL as material_id, quantity_per_unit, unit, NULL as notes
+                    SELECT id, NULL as material_type, material_name, NULL as material_id, quantity_per_unit, unit, NULL as notes{$honeyVarietySelect}
                     FROM {$templateMaterialsTable}
                     WHERE template_id = ?
                 ");
             } else {
                 // product_template_materials يحتوي على جميع الأعمدة
+                // التحقق من وجود عمود honey_variety في الجدول
+                $hasHoneyVarietyColumn = batchCreationColumnExists($pdo, $templateMaterialsTable, 'honey_variety');
+                $honeyVarietySelect = $hasHoneyVarietyColumn ? ', honey_variety' : ', NULL as honey_variety';
+                
                 $materialsStmt = $pdo->prepare("
-                    SELECT id, material_type, material_name, material_id, quantity_per_unit, unit, notes
+                    SELECT id, material_type, material_name, material_id, quantity_per_unit, unit, notes{$honeyVarietySelect}
                     FROM {$templateMaterialsTable}
                     WHERE template_id = ?
                 ");
@@ -1459,13 +1467,21 @@ function batchCreationCreate(int $templateId, int $units, array $rawUsage = [], 
                     $collectSupplier($supplierId, 'raw_material', $supplierMaterialName);
                 }
 
+                // تحديد honey_variety: الأولوية للقيمة من قاعدة البيانات، ثم من detailEntry، ثم من usageEntry
+                $honeyVarietyValue = null;
+                if (!empty($materialRow['honey_variety'])) {
+                    $honeyVarietyValue = trim((string)$materialRow['honey_variety']);
+                } elseif (!empty($detailEntry['honey_variety'])) {
+                    $honeyVarietyValue = trim((string)$detailEntry['honey_variety']);
+                }
+                
                 $materialsForStockDeduction[] = [
                     'material_type'    => $materialType,
                     'material_name'    => $materialName !== '' ? $materialName : ($detailEntry['name'] ?? $detailEntry['material_name'] ?? 'مادة خام'),
                     'supplier_id'      => $supplierId,
                     'quantity_per_unit'=> $quantityPerUnit,
                     'unit'             => $detailEntry['unit'] ?? ($materialRow['unit'] ?? 'كجم'),
-                    'honey_variety'    => $detailEntry['honey_variety'] ?? null,
+                    'honey_variety'    => $honeyVarietyValue,
                     'template_item_id' => (int)($materialRow['id'] ?? 0),
                 ];
             }
@@ -1578,9 +1594,11 @@ function batchCreationCreate(int $templateId, int $units, array $rawUsage = [], 
                         $stockMaterial['supplier_id'] = (int)$usageEntry['supplier_id'];
                     }
 
+                    // تحديث honey_variety من usageEntry إذا كان موجوداً، وإلا الحفاظ على القيمة الحالية
                     if (!empty($usageEntry['honey_variety'])) {
                         $stockMaterial['honey_variety'] = trim((string)$usageEntry['honey_variety']);
                     }
+                    // إذا كان honey_variety موجوداً في stockMaterial ولكن غير موجود في usageEntry، نبقيه كما هو
 
                     if (!empty($usageEntry['material_type'])) {
                         $usageType = trim((string)$usageEntry['material_type']);

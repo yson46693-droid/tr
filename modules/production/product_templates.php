@@ -221,6 +221,7 @@ try {
                   `template_id` int(11) NOT NULL,
                   `material_name` varchar(255) NOT NULL COMMENT 'اسم المادة (مثل: مكسرات، لوز، إلخ)',
                   `material_type` varchar(100) DEFAULT NULL COMMENT 'نوع المادة (مثل: honey_raw, honey_filtered)',
+                  `honey_variety` varchar(50) DEFAULT NULL COMMENT 'نوع العسل المستخدم',
                   `quantity_per_unit` decimal(10,3) NOT NULL DEFAULT 0.000 COMMENT 'الكمية بالجرام',
                   `unit` varchar(50) DEFAULT 'جرام',
                   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -240,6 +241,17 @@ try {
                 $columnCheck = $db->queryOne("SHOW COLUMNS FROM `product_template_raw_materials` LIKE 'material_type'");
                 if (empty($columnCheck)) {
                     $db->execute("ALTER TABLE `product_template_raw_materials` ADD COLUMN `material_type` varchar(100) DEFAULT NULL COMMENT 'نوع المادة (مثل: honey_raw, honey_filtered)' AFTER `material_name`");
+                }
+            } catch (Exception $colError) {
+                error_log("Column addition error (non-critical): " . $colError->getMessage());
+            }
+            
+            // إضافة عمود honey_variety إذا كان الجدول موجوداً ولكن العمود غير موجود
+            try {
+                $honeyVarietyCheck = $db->queryOne("SHOW COLUMNS FROM `product_template_raw_materials` LIKE 'honey_variety'");
+                if (empty($honeyVarietyCheck)) {
+                    $db->execute("ALTER TABLE `product_template_raw_materials` ADD COLUMN `honey_variety` varchar(50) DEFAULT NULL COMMENT 'نوع العسل المستخدم' AFTER `material_type`");
+                    error_log('Column honey_variety added to product_template_raw_materials');
                 }
             } catch (Exception $colError) {
                 error_log("Column addition error (non-critical): " . $colError->getMessage());
@@ -308,6 +320,7 @@ try {
                   `template_id` int(11) NOT NULL,
                   `material_name` varchar(255) NOT NULL COMMENT 'اسم المادة (مثل: مكسرات، لوز، إلخ)',
                   `material_type` varchar(100) DEFAULT NULL COMMENT 'نوع المادة (مثل: honey_raw, honey_filtered)',
+                  `honey_variety` varchar(50) DEFAULT NULL COMMENT 'نوع العسل المستخدم',
                   `quantity_per_unit` decimal(10,3) NOT NULL DEFAULT 0.000 COMMENT 'الكمية بالجرام',
                   `unit` varchar(50) DEFAULT 'جرام',
                   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -327,6 +340,17 @@ try {
                 $columnCheck = $db->queryOne("SHOW COLUMNS FROM `product_template_raw_materials` LIKE 'material_type'");
                 if (empty($columnCheck)) {
                     $db->execute("ALTER TABLE `product_template_raw_materials` ADD COLUMN `material_type` varchar(100) DEFAULT NULL COMMENT 'نوع المادة (مثل: honey_raw, honey_filtered)' AFTER `material_name`");
+                }
+            } catch (Exception $colError) {
+                error_log("Column addition error (non-critical): " . $colError->getMessage());
+            }
+            
+            // إضافة عمود honey_variety إذا كان الجدول موجوداً ولكن العمود غير موجود
+            try {
+                $honeyVarietyCheck = $db->queryOne("SHOW COLUMNS FROM `product_template_raw_materials` LIKE 'honey_variety'");
+                if (empty($honeyVarietyCheck)) {
+                    $db->execute("ALTER TABLE `product_template_raw_materials` ADD COLUMN `honey_variety` varchar(50) DEFAULT NULL COMMENT 'نوع العسل المستخدم' AFTER `material_type`");
+                    error_log('Column honey_variety added to product_template_raw_materials');
                 }
             } catch (Exception $colError) {
                 error_log("Column addition error (non-critical): " . $colError->getMessage());
