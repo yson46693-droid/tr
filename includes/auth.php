@@ -392,8 +392,17 @@ function getCurrentUserFromDatabase($userId) {
     }
     
     // جلب جميع بيانات المستخدم من قاعدة البيانات
-    $db = db();
-    $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$userId]);
+    try {
+        $db = db();
+        $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$userId]);
+    } catch (Exception $e) {
+        error_log("getCurrentUserFromDatabase - Database error for user ID {$userId}: " . $e->getMessage());
+        // في profile.php، لا نحذف الجلسة حتى لو كان هناك خطأ في قاعدة البيانات
+        if ($isProfilePage) {
+            return null; // نرجع null لكن لا نحذف الجلسة
+        }
+        return null;
+    }
     
     // إذا كان المستخدم غير موجود أو محذوف من قاعدة البيانات
     if (!$user) {
@@ -661,24 +670,48 @@ function clearUserCache($userId = null) {
  * تسجيل الخروج
  */
 function logout() {
-    // تنظيف Cache قبل تسجيل الخروج
-    clearUserCache();
+    // الحصول على user_id قبل حذف الجلسة
+    $userId = null;
+    if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['user_id'])) {
+        $userId = $_SESSION['user_id'];
+    }
     
-    // حذف remember token من قاعدة البيانات
-    if (isset($_SESSION['user_id']) && isset($_COOKIE['remember_token'])) {
+    // تنظيف Cache قبل تسجيل الخروج
+    if (function_exists('clearUserCache')) {
+        clearUserCache();
+    }
+    
+    // حذف جميع remember tokens للمستخدم من قاعدة البيانات (ليس فقط token الحالي)
+    if ($userId) {
         try {
             // التأكد من وجود الجدول أولاً
+            if (ensureRememberTokensTable()) {
+                $db = db();
+                // حذف جميع tokens للمستخدم
+                $db->execute(
+                    "DELETE FROM remember_tokens WHERE user_id = ?",
+                    [$userId]
+                );
+            }
+        } catch (Exception $e) {
+            error_log("Logout Remember Token Delete Error: " . $e->getMessage());
+        }
+    }
+    
+    // حذف remember token من cookie أيضاً (إذا كان موجوداً)
+    if (isset($_COOKIE['remember_token'])) {
+        try {
             if (ensureRememberTokensTable()) {
                 $db = db();
                 $decoded = base64_decode($_COOKIE['remember_token']);
                 if ($decoded) {
                     $parts = explode(':', $decoded);
                     if (count($parts) === 2) {
-                        $userId = intval($parts[0]);
+                        $tokenUserId = intval($parts[0]);
                         $token = $parts[1];
                         $db->execute(
                             "DELETE FROM remember_tokens WHERE user_id = ? AND token = ?",
-                            [$userId, $token]
+                            [$tokenUserId, $token]
                         );
                     }
                 }
@@ -688,36 +721,79 @@ function logout() {
         }
     }
     
-    // حذف cookie
+    // حذف جميع الكوكيز المتعلقة بالجلسة
     $isHttps = (
         (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
         (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
     );
-    setcookie(
-        'remember_token',
-        '',
-        [
-            'expires' => time() - 3600,
-            'path' => '/',
-            'domain' => '',
-            'secure' => $isHttps,
-            'httponly' => true,
-            'samesite' => 'Lax'
-        ]
-    );
-    if (isLoggedIn()) {
-        $userId = $_SESSION['user_id'] ?? null;
-        
-        // تسجيل سجل التدقيق
-        if ($userId) {
+    
+    // حذف remember_token cookie بجميع الإعدادات الممكنة
+    $cookieParams = [
+        ['expires' => time() - 3600, 'path' => '/', 'domain' => '', 'secure' => $isHttps, 'httponly' => true, 'samesite' => 'Lax'],
+        ['expires' => time() - 3600, 'path' => '/', 'domain' => null, 'secure' => $isHttps, 'httponly' => true, 'samesite' => 'Lax'],
+        ['expires' => time() - 3600, 'path' => '/', 'domain' => '', 'secure' => false, 'httponly' => true, 'samesite' => 'Lax'],
+    ];
+    
+    foreach ($cookieParams as $params) {
+        @setcookie('remember_token', '', $params);
+    }
+    
+    // تسجيل سجل التدقيق قبل حذف الجلسة
+    if ($userId) {
+        try {
             require_once __DIR__ . '/audit_log.php';
-            logAudit($userId, 'logout', 'user', $userId, null, null);
+            if (function_exists('logAudit')) {
+                logAudit($userId, 'logout', 'user', $userId, null, null);
+            }
+        } catch (Exception $e) {
+            error_log("Logout Audit Log Error: " . $e->getMessage());
         }
     }
     
-    session_unset();
-    unset($_SESSION['csrf_token']);
-    session_destroy();
+    // تنظيف جميع متغيرات الجلسة
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        // حفظ معاملات cookie الجلسة قبل حذفها
+        $sessionCookieParams = session_get_cookie_params();
+        
+        // حذف جميع متغيرات الجلسة
+        $_SESSION = [];
+        
+        // حذف جميع متغيرات الجلسة يدوياً
+        if (isset($_SESSION)) {
+            foreach ($_SESSION as $key => $value) {
+                unset($_SESSION[$key]);
+            }
+        }
+        
+        // إلغاء تسجيل جميع متغيرات الجلسة
+        @session_unset();
+        
+        // حذف session cookie بجميع الإعدادات الممكنة
+        $sessionName = session_name();
+        $sessionCookieOptions = [
+            ['expires' => time() - 3600, 'path' => $sessionCookieParams['path'], 'domain' => $sessionCookieParams['domain'], 'secure' => $sessionCookieParams['secure'], 'httponly' => $sessionCookieParams['httponly']],
+            ['expires' => time() - 3600, 'path' => '/', 'domain' => '', 'secure' => $isHttps, 'httponly' => true],
+            ['expires' => time() - 3600, 'path' => '/', 'domain' => null, 'secure' => $isHttps, 'httponly' => true],
+        ];
+        
+        foreach ($sessionCookieOptions as $options) {
+            @setcookie($sessionName, '', $options);
+        }
+        
+        // تدمير الجلسة نهائياً
+        @session_destroy();
+    }
+    
+    // التأكد من حذف جميع الكوكيز المتعلقة
+    if (isset($_COOKIE)) {
+        foreach ($_COOKIE as $name => $value) {
+            if (strpos($name, 'PHPSESSID') !== false || strpos($name, 'remember_token') !== false || strpos($name, session_name()) !== false) {
+                @setcookie($name, '', time() - 3600, '/');
+                @setcookie($name, '', time() - 3600, '/', '');
+                @setcookie($name, '', time() - 3600);
+            }
+        }
+    }
 }
 
 /**

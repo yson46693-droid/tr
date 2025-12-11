@@ -33,17 +33,89 @@ try {
     error_log("Logout Page Error: " . $e->getMessage());
 }
 
-if (isset($_COOKIE['remember_token'])) {
-    @setcookie('remember_token', '', time() - 3600, '/', '', isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off', true);
+// حذف جميع remember tokens من قاعدة البيانات
+if (isset($_SESSION['user_id'])) {
+    try {
+        require_once __DIR__ . '/includes/db.php';
+        $db = db();
+        $userId = $_SESSION['user_id'];
+        
+        // التحقق من وجود جدول remember_tokens وحذف جميع tokens للمستخدم
+        $tableCheck = $db->queryOne("SHOW TABLES LIKE 'remember_tokens'");
+        if (!empty($tableCheck)) {
+            $db->execute("DELETE FROM remember_tokens WHERE user_id = ?", [$userId]);
+        }
+    } catch (Exception $e) {
+        error_log("Logout: Error deleting remember tokens from database: " . $e->getMessage());
+    }
 }
 
+// حذف remember_token cookie بجميع الإعدادات الممكنة
+$isHttps = (
+    (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+    (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
+);
+
+if (isset($_COOKIE['remember_token'])) {
+    $cookieOptions = [
+        ['expires' => time() - 3600, 'path' => '/', 'domain' => '', 'secure' => $isHttps, 'httponly' => true, 'samesite' => 'Lax'],
+        ['expires' => time() - 3600, 'path' => '/', 'domain' => null, 'secure' => $isHttps, 'httponly' => true, 'samesite' => 'Lax'],
+        ['expires' => time() - 3600, 'path' => '/', 'domain' => '', 'secure' => false, 'httponly' => true, 'samesite' => 'Lax'],
+    ];
+    
+    foreach ($cookieOptions as $options) {
+        @setcookie('remember_token', '', $options);
+    }
+}
+
+// إنهاء الجلسة بشكل نهائي
 if (session_status() === PHP_SESSION_ACTIVE) {
     $cookieParams = session_get_cookie_params();
-    @setcookie(session_name(), '', time() - 3600, $cookieParams['path'], $cookieParams['domain'], $cookieParams['secure'], $cookieParams['httponly']);
+    $sessionName = session_name();
     
+    // حذف جميع متغيرات الجلسة
     $_SESSION = [];
+    
+    // حذف جميع متغيرات الجلسة يدوياً
+    if (isset($_SESSION)) {
+        foreach ($_SESSION as $key => $value) {
+            unset($_SESSION[$key]);
+        }
+    }
+    
+    // إلغاء تسجيل جميع متغيرات الجلسة
     @session_unset();
+    
+    // حذف session cookie بجميع الإعدادات الممكنة
+    $sessionCookieOptions = [
+        ['expires' => time() - 3600, 'path' => $cookieParams['path'], 'domain' => $cookieParams['domain'], 'secure' => $cookieParams['secure'], 'httponly' => $cookieParams['httponly']],
+        ['expires' => time() - 3600, 'path' => '/', 'domain' => '', 'secure' => $isHttps, 'httponly' => true],
+        ['expires' => time() - 3600, 'path' => '/', 'domain' => null, 'secure' => $isHttps, 'httponly' => true],
+        ['expires' => time() - 3600, 'path' => $cookieParams['path'], 'domain' => '', 'secure' => $isHttps, 'httponly' => true],
+    ];
+    
+    foreach ($sessionCookieOptions as $options) {
+        @setcookie($sessionName, '', $options);
+    }
+    
+    // تدمير الجلسة نهائياً
     @session_destroy();
+}
+
+// حذف جميع الكوكيز المتعلقة بالجلسة
+if (isset($_COOKIE)) {
+    foreach ($_COOKIE as $name => $value) {
+        if (strpos($name, 'PHPSESSID') !== false || 
+            strpos($name, 'remember_token') !== false || 
+            strpos($name, session_name()) !== false ||
+            strpos($name, 'session') !== false) {
+            // حذف cookie بجميع الإعدادات الممكنة
+            @setcookie($name, '', time() - 3600, '/');
+            @setcookie($name, '', time() - 3600, '/', '');
+            @setcookie($name, '', time() - 3600, '/', null);
+            @setcookie($name, '', time() - 3600);
+        }
+    }
 }
 
 while (ob_get_level()) {
