@@ -2787,35 +2787,62 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // معالج تعديل العميل المحلي
-var editLocalCustomerButtons = document.querySelectorAll('.edit-local-customer-btn');
-var editLocalCustomerModal = document.getElementById('editLocalCustomerModal');
-
-if (editLocalCustomerModal) {
-    editLocalCustomerButtons.forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var customerId = this.getAttribute('data-customer-id');
-            var customerName = this.getAttribute('data-customer-name');
-            var customerPhone = this.getAttribute('data-customer-phone');
-            var customerAddress = this.getAttribute('data-customer-address');
-            var customerRegionId = this.getAttribute('data-customer-region-id');
-            var customerBalance = this.getAttribute('data-customer-balance');
-            
-            document.getElementById('editLocalCustomerId').value = customerId;
-            document.getElementById('editLocalCustomerName').value = customerName;
-            document.getElementById('editLocalCustomerPhone').value = customerPhone || '';
-            document.getElementById('editLocalCustomerAddress').value = customerAddress || '';
-            document.getElementById('editLocalCustomerRegionId').value = customerRegionId || '';
-            
-            var balanceInput = document.getElementById('editLocalCustomerBalance');
-            if (balanceInput) {
-                balanceInput.value = customerBalance || '0';
-            }
-            
-            var modal = new bootstrap.Modal(editLocalCustomerModal);
-            modal.show();
+document.addEventListener('DOMContentLoaded', function() {
+    var editLocalCustomerButtons = document.querySelectorAll('.edit-local-customer-btn');
+    var editLocalCustomerModal = document.getElementById('editLocalCustomerModal');
+    
+    if (editLocalCustomerModal && editLocalCustomerButtons.length > 0) {
+        editLocalCustomerButtons.forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                var customerId = this.getAttribute('data-customer-id');
+                var customerName = this.getAttribute('data-customer-name');
+                var customerPhone = this.getAttribute('data-customer-phone') || '';
+                var customerAddress = this.getAttribute('data-customer-address') || '';
+                var customerRegionId = this.getAttribute('data-customer-region-id') || '';
+                var customerBalance = this.getAttribute('data-customer-balance') || '0';
+                
+                if (!customerId) {
+                    console.error('Customer ID not found');
+                    return;
+                }
+                
+                var idInput = document.getElementById('editLocalCustomerId');
+                var nameInput = document.getElementById('editLocalCustomerName');
+                var phoneInput = document.getElementById('editLocalCustomerPhone');
+                var addressInput = document.getElementById('editLocalCustomerAddress');
+                var regionInput = document.getElementById('editLocalCustomerRegionId');
+                var balanceInput = document.getElementById('editLocalCustomerBalance');
+                
+                if (idInput) idInput.value = customerId;
+                if (nameInput) nameInput.value = customerName || '';
+                if (phoneInput) phoneInput.value = customerPhone;
+                if (addressInput) addressInput.value = customerAddress;
+                if (regionInput) regionInput.value = customerRegionId;
+                if (balanceInput) balanceInput.value = customerBalance;
+                
+                try {
+                    var modal = bootstrap.Modal.getOrCreateInstance(editLocalCustomerModal);
+                    modal.show();
+                } catch (err) {
+                    console.error('Error showing modal:', err);
+                    // Fallback
+                    var modal = new bootstrap.Modal(editLocalCustomerModal);
+                    modal.show();
+                }
+            });
         });
-    });
-}
+    } else {
+        if (!editLocalCustomerModal) {
+            console.warn('Edit local customer modal not found');
+        }
+        if (editLocalCustomerButtons.length === 0) {
+            console.warn('Edit local customer buttons not found');
+        }
+    }
+});
 </script>
 
 <!-- Modal تعديل عميل محلي -->

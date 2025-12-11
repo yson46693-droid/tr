@@ -4131,31 +4131,56 @@ document.addEventListener('DOMContentLoaded', function () {
     var editCustomerButtons = document.querySelectorAll('.edit-customer-btn');
     var editCustomerModal = document.getElementById('editCustomerModal');
     
-    if (editCustomerModal) {
+    if (editCustomerModal && editCustomerButtons.length > 0) {
         editCustomerButtons.forEach(function(btn) {
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
                 var customerId = this.getAttribute('data-customer-id');
                 var customerName = this.getAttribute('data-customer-name');
-                var customerPhone = this.getAttribute('data-customer-phone');
-                var customerAddress = this.getAttribute('data-customer-address');
-                var customerRegionId = this.getAttribute('data-customer-region-id');
-                var customerBalance = this.getAttribute('data-customer-balance');
+                var customerPhone = this.getAttribute('data-customer-phone') || '';
+                var customerAddress = this.getAttribute('data-customer-address') || '';
+                var customerRegionId = this.getAttribute('data-customer-region-id') || '';
+                var customerBalance = this.getAttribute('data-customer-balance') || '0';
                 
-                document.getElementById('editCustomerId').value = customerId;
-                document.getElementById('editCustomerName').value = customerName;
-                document.getElementById('editCustomerPhone').value = customerPhone || '';
-                document.getElementById('editCustomerAddress').value = customerAddress || '';
-                document.getElementById('editCustomerRegionId').value = customerRegionId || '';
-                
-                var balanceInput = document.getElementById('editCustomerBalance');
-                if (balanceInput) {
-                    balanceInput.value = customerBalance || '0';
+                if (!customerId) {
+                    console.error('Customer ID not found');
+                    return;
                 }
                 
-                var modal = new bootstrap.Modal(editCustomerModal);
-                modal.show();
+                var idInput = document.getElementById('editCustomerId');
+                var nameInput = document.getElementById('editCustomerName');
+                var phoneInput = document.getElementById('editCustomerPhone');
+                var addressInput = document.getElementById('editCustomerAddress');
+                var regionInput = document.getElementById('editCustomerRegionId');
+                var balanceInput = document.getElementById('editCustomerBalance');
+                
+                if (idInput) idInput.value = customerId;
+                if (nameInput) nameInput.value = customerName || '';
+                if (phoneInput) phoneInput.value = customerPhone;
+                if (addressInput) addressInput.value = customerAddress;
+                if (regionInput) regionInput.value = customerRegionId;
+                if (balanceInput) balanceInput.value = customerBalance;
+                
+                try {
+                    var modal = bootstrap.Modal.getOrCreateInstance(editCustomerModal);
+                    modal.show();
+                } catch (err) {
+                    console.error('Error showing modal:', err);
+                    // Fallback
+                    var modal = new bootstrap.Modal(editCustomerModal);
+                    modal.show();
+                }
             });
         });
+    } else {
+        if (!editCustomerModal) {
+            console.warn('Edit customer modal not found');
+        }
+        if (editCustomerButtons.length === 0) {
+            console.warn('Edit customer buttons not found');
+        }
     }
 });
 </script>
@@ -4637,64 +4662,7 @@ document.addEventListener('DOMContentLoaded', function () {
 </div>
 <?php endif; ?>
 
-<!-- Modal تعديل عميل -->
-<?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
-<div class="modal fade" id="editCustomerModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">تعديل بيانات العميل</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
-                <input type="hidden" name="action" value="edit_customer">
-                <input type="hidden" name="customer_id" id="editCustomerId">
-                <input type="hidden" name="section" value="<?php echo htmlspecialchars($section); ?>">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">اسم العميل</label>
-                        <input type="text" class="form-control" id="editCustomerName" disabled>
-                        <small class="text-muted">لا يمكن تعديل اسم العميل</small>
-                    </div>
-                    <?php if ($currentRole === 'manager'): ?>
-                    <div class="mb-3">
-                        <label class="form-label">ديون العميل / رصيد العميل</label>
-                        <input type="number" class="form-control" name="balance" id="editCustomerBalance" step="0.01" placeholder="مثال: 0 أو -500">
-                        <small class="text-muted">
-                            <strong>إدخال قيمة سالبة:</strong> يتم اعتبارها رصيد دائن للعميل (مبلغ متاح للعميل).
-                        </small>
-                    </div>
-                    <?php endif; ?>
-                    <div class="mb-3">
-                        <label class="form-label">رقم الهاتف</label>
-                        <input type="text" class="form-control" name="phone" id="editCustomerPhone" placeholder="مثال: 01234567890">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">العنوان</label>
-                        <textarea class="form-control" name="address" id="editCustomerAddress" rows="2"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">المنطقة</label>
-                        <select class="form-select" name="region_id" id="editCustomerRegionId">
-                            <option value="">اختر المنطقة</option>
-                            <?php
-                            $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
-                            foreach ($regions as $region):
-                            ?>
-                                <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
+<?php endif; // end if ($section === 'company') ?>
 
 <?php endif; // end if ($section === 'company') ?>
 
