@@ -1,4 +1,4 @@
-const CACHE_VERSION = '1.0.4'; // Fixed redirect handling to prevent service worker errors
+const CACHE_VERSION = '1.0.5'; // Complete fix: Never intercept redirects to prevent Safari errors
 const CACHE_NAME = 'company-management-v' + CACHE_VERSION;
 const NAVIGATION_CACHE_NAME = 'navigation-cache-v' + CACHE_VERSION;
 const BASE = '/v1/';
@@ -174,73 +174,108 @@ self.addEventListener('fetch', event => {
 
   // للصفحات (navigation requests): استخدام Network First مع Cache Fallback
   if (isNavigationRequest) {
+    // CRITICAL FIX: Safari لا يسمح بـ Service Worker بتقديم redirect responses
+    // الحل: التحقق من redirects أولاً وإذا كان redirect، لا نعترضه نهائياً
     event.respondWith(
       (async () => {
-        // محاولة جلب من الشبكة أولاً
-        try {
-          const networkResponse = await fetch(event.request, {
-            redirect: 'follow',
-            cache: 'no-store' // عدم استخدام كاش المتصفح
-          });
-          
-          // CRITICAL FIX: إذا كانت الاستجابة redirect، لا نعترضها - ندع المتصفح يتعامل معها
-          if (isRedirectResponse(networkResponse)) {
-            // لا نستخدم event.respondWith() للـ redirects - ندع المتصفح يتعامل معها
-            // لكن بما أننا استخدمنا event.respondWith() بالفعل، يجب إرجاع الاستجابة
-            // لكن الأفضل هو عدم الاعتراض من الأساس
-            return networkResponse;
-          }
-          
-          // إذا كانت الاستجابة ناجحة وليست redirect
-          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-            // حفظ في كاش التنقل
-            const responseClone = networkResponse.clone();
-            const cache = await caches.open(NAVIGATION_CACHE_NAME);
-            const cachedResponse = addCacheMetadata(responseClone);
-            await cache.put(event.request, cachedResponse);
-            await limitCacheSize(NAVIGATION_CACHE_NAME, MAX_NAVIGATION_CACHE_ITEMS);
-            
-            return networkResponse;
-          }
-        } catch (error) {
-          // في حالة خطأ الشبكة، محاولة الكاش
-        }
-        
-        // محاولة جلب من الكاش
+        // التحقق من الكاش أولاً - أسرع وأكثر أماناً
         const cache = await caches.open(NAVIGATION_CACHE_NAME);
         const cachedResponse = await cache.match(event.request);
         
-        if (cachedResponse) {
-          // CRITICAL FIX: التحقق من أن الكاش ليس redirect
-          if (isRedirectResponse(cachedResponse)) {
-            // حذف redirect من الكاش
-            await cache.delete(event.request);
+        if (cachedResponse && !isRedirectResponse(cachedResponse)) {
+          const isValid = await isCacheValid(event.request, NAVIGATION_CACHE_TTL);
+          if (isValid) {
+            return cachedResponse;
           } else {
-            // التحقق من صلاحية الكاش
-            const isValid = await isCacheValid(event.request, NAVIGATION_CACHE_TTL);
-            if (isValid) {
-              return cachedResponse;
-            } else {
-              // حذف الكاش القديم
-              await cache.delete(event.request);
-            }
+            await cache.delete(event.request);
           }
+        } else if (cachedResponse && isRedirectResponse(cachedResponse)) {
+          await cache.delete(event.request);
         }
         
-        // إذا لم يكن في الكاش، محاولة جلب من الكاش العام
+        // التحقق من الكاش العام
         const generalCache = await caches.open(CACHE_NAME);
         const generalCached = await generalCache.match(event.request);
-        if (generalCached) {
-          // CRITICAL FIX: التحقق من أن الكاش ليس redirect
-          if (isRedirectResponse(generalCached)) {
-            await generalCache.delete(event.request);
-          } else {
-            return generalCached;
-          }
+        if (generalCached && !isRedirectResponse(generalCached)) {
+          return generalCached;
+        } else if (generalCached && isRedirectResponse(generalCached)) {
+          await generalCache.delete(event.request);
         }
         
-        // إذا فشل كل شيء، إرجاع offline page
-        return caches.match(BASE + 'offline.html') || new Response('', { status: 503 });
+        // التحقق من الشبكة - استخدام redirect: 'manual' للكشف عن redirects
+        try {
+          const checkResponse = await fetch(event.request.clone(), {
+            redirect: 'manual',
+            cache: 'no-store'
+          });
+          
+          // CRITICAL FIX: إذا كانت redirect، لا نعترضها أبداً
+          // نستخدم HTML redirect page بدلاً من response redirect مباشر
+          if (isRedirectResponse(checkResponse)) {
+            const redirectUrl = checkResponse.headers.get('Location');
+            if (redirectUrl) {
+              // إرجاع صفحة HTML تحتوي على redirect - Safari يقبل هذا
+              return new Response(
+                `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="0;url=${encodeURI(redirectUrl)}"><script>window.location.replace(${JSON.stringify(redirectUrl)});</script></head><body><p>جاري التوجيه...</p><a href="${encodeURI(redirectUrl)}">انقر هنا إذا لم يتم التوجيه تلقائياً</a></body></html>`,
+                {
+                  status: 200,
+                  headers: {
+                    'Content-Type': 'text/html; charset=utf-8',
+                    'Cache-Control': 'no-store, no-cache, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                  }
+                }
+              );
+            }
+          }
+          
+          // إذا لم تكن redirect، جلب المحتوى النهائي
+          const finalResponse = await fetch(event.request, {
+            redirect: 'follow',
+            cache: 'no-store'
+          });
+          
+          // التأكد مرة أخرى أنها ليست redirect (بعد اتباع redirects)
+          if (isRedirectResponse(finalResponse)) {
+            const redirectUrl = finalResponse.headers.get('Location');
+            if (redirectUrl) {
+              return new Response(
+                `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="0;url=${encodeURI(redirectUrl)}"><script>window.location.replace(${JSON.stringify(redirectUrl)});</script></head><body><p>جاري التوجيه...</p><a href="${encodeURI(redirectUrl)}">انقر هنا إذا لم يتم التوجيه تلقائياً</a></body></html>`,
+                {
+                  status: 200,
+                  headers: {
+                    'Content-Type': 'text/html; charset=utf-8',
+                    'Cache-Control': 'no-store, no-cache, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                  }
+                }
+              );
+            }
+            return finalResponse;
+          }
+          
+          // حفظ في الكاش إذا كانت ناجحة وليست redirect
+          if (finalResponse && finalResponse.status === 200 && finalResponse.type === 'basic') {
+            const responseClone = finalResponse.clone();
+            const cachedResponse = addCacheMetadata(responseClone);
+            await cache.put(event.request, cachedResponse);
+            await limitCacheSize(NAVIGATION_CACHE_NAME, MAX_NAVIGATION_CACHE_ITEMS);
+          }
+          
+          return finalResponse;
+        } catch (error) {
+          // في حالة الخطأ، محاولة الكاش أو offline page
+          const offlinePage = await caches.match(BASE + 'offline.html');
+          if (offlinePage) {
+            return offlinePage;
+          }
+          return new Response('لا يوجد اتصال بالشبكة', { 
+            status: 503,
+            headers: { 'Content-Type': 'text/html; charset=utf-8' }
+          });
+        }
       })()
     );
     return;
@@ -299,8 +334,10 @@ self.addEventListener('fetch', event => {
             cache: 'reload'
           });
           
-          // CRITICAL FIX: إذا كانت redirect، إرجاعها مباشرة بدون حفظ في الكاش
+          // CRITICAL FIX: إذا كانت redirect، التحقق من نوع الطلب
           if (isRedirectResponse(response)) {
+            // للملفات الثابتة، إرجاع redirect مباشرة (عادة ما تكون 301/302 للـ CDN)
+            // Safari يتعامل معها بشكل جيد للطلبات غير التنقلية
             return response;
           }
           
@@ -329,7 +366,7 @@ self.addEventListener('fetch', event => {
             credentials: 'same-origin'
           });
           
-          // CRITICAL FIX: إذا كانت redirect، إرجاعها مباشرة
+          // CRITICAL FIX: إذا كانت redirect، إرجاعها مباشرة (API requests عادة لا تكون navigation)
           if (isRedirectResponse(response)) {
             return response;
           }
@@ -371,8 +408,9 @@ self.addEventListener('fetch', event => {
         });
         
         // CRITICAL FIX: إذا كانت redirect، إرجاعها مباشرة بدون حفظ في الكاش
+        // للطلبات غير التنقلية، Safari يتعامل مع redirects بشكل جيد
         if (isRedirectResponse(response)) {
-          return response; // إرجاع إعادة التوجيه كما هي - لا نحفظها في الكاش
+          return response;
         }
         
         // حفظ في الكاش إذا كانت ناجحة وليست redirect

@@ -1684,6 +1684,129 @@ if (isset($_GET['id'])) {
     margin: 0 !important;
     padding: 0 !important;
 }
+
+/* ===== إصلاح ظهور الأزرار في أسفل النموذج على الهاتف ===== */
+@media (max-width: 767.98px) {
+    /* إصلاح Modal إنشاء طلب مندوب */
+    #addOrderModal .modal-dialog {
+        margin: 0.5rem;
+        max-height: calc(100vh - 1rem);
+        height: calc(100vh - 1rem);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #addOrderModal .modal-dialog.modal-dialog-scrollable {
+        overflow: hidden; /* منع السكرول من modal-dialog */
+    }
+    
+    #addOrderModal .modal-content {
+        max-height: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #addOrderModal .modal-header {
+        flex-shrink: 0;
+    }
+    
+    #addOrderModal .modal-body {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 1rem;
+    }
+    
+    #addOrderModal .modal-footer {
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(6px);
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        padding: 1rem;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+        margin-top: 0;
+    }
+    
+    #addOrderModal .modal-footer .btn {
+        width: 100%;
+        margin: 0;
+    }
+    
+    /* إصلاح Modal إنشاء طلب شركة */
+    #addCompanyOrderModal .modal-dialog {
+        margin: 0.5rem;
+        max-height: calc(100vh - 1rem);
+        height: calc(100vh - 1rem);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #addCompanyOrderModal .modal-dialog.modal-dialog-scrollable {
+        overflow: hidden; /* منع السكرول من modal-dialog */
+    }
+    
+    #addCompanyOrderModal .modal-content {
+        max-height: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #addCompanyOrderModal .modal-header {
+        flex-shrink: 0;
+    }
+    
+    #addCompanyOrderModal .modal-body {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 1rem;
+    }
+    
+    #addCompanyOrderModal .modal-footer {
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(6px);
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        padding: 1rem;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+        margin-top: 0;
+    }
+    
+    #addCompanyOrderModal .modal-footer .btn {
+        width: 100%;
+        margin: 0;
+    }
+}
+
+/* تحسينات إضافية للشاشات الصغيرة جداً */
+@media (max-width: 576px) {
+    #addOrderModal .modal-body,
+    #addCompanyOrderModal .modal-body {
+        padding: 1rem;
+        padding-bottom: 5rem;
+    }
+    
+    #addOrderModal .modal-footer,
+    #addCompanyOrderModal .modal-footer {
+        padding: 0.75rem;
+    }
+    
+    #addOrderModal .modal-footer .btn,
+    #addCompanyOrderModal .modal-footer .btn {
+        padding: 0.6rem 1rem;
+        font-size: 0.9rem;
+    }
+}
 </style>
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
     <h2 class="mb-0"><i class="bi bi-cart-check me-2"></i>إدارة طلبات العملاء</h2>

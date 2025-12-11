@@ -115,7 +115,21 @@ if (isset($json['shortcuts'])) {
     unset($shortcut);
 }
 
-// تحديث start_url و scope
+// تحديث id و start_url و scope
+if (isset($json['id'])) {
+    // إذا كان المسار نسبي (لا يبدأ بـ /)، أضف basePath
+    if (strpos($json['id'], '/') !== 0) {
+        $json['id'] = $basePath . '/' . $json['id'];
+    }
+    // إذا كان المسار مطلق (يبدأ بـ /) ولم يكن يحتوي على basePath، أضفه
+    elseif (strpos($json['id'], $basePath) !== 0) {
+        $json['id'] = $basePath . $json['id'];
+    }
+    // التأكد من أن id ينتهي بـ / (مطلوب لـ Android)
+    if (substr($json['id'], -1) !== '/') {
+        $json['id'] .= '/';
+    }
+}
 if (isset($json['start_url'])) {
     // إذا كان المسار نسبي (لا يبدأ بـ /)، أضف basePath
     if (strpos($json['start_url'], '/') !== 0) {

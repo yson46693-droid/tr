@@ -148,74 +148,100 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'يجب إدخال الاسم الكامل';
         } elseif (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'البريد الإلكتروني غير صحيح';
+        } elseif (!$user || !is_array($user) || !isset($user['id'])) {
+            $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.';
         } else {
             // التحقق من البريد الإلكتروني إذا تغير
-            if ($email !== $user['email']) {
+            if (isset($user['email']) && $email !== $user['email']) {
                 $existingUser = getUserByUsername($email);
-                if ($existingUser && $existingUser['id'] != $currentUser['id']) {
+                $userId = ($currentUser && isset($currentUser['id'])) ? $currentUser['id'] : ($user && isset($user['id']) ? $user['id'] : ($_SESSION['user_id'] ?? null));
+                if ($existingUser && $existingUser['id'] != $userId) {
                     $error = 'البريد الإلكتروني مستخدم بالفعل';
                 }
             }
             
             // تحديث البيانات الأساسية
             if (empty($error)) {
-                $updateFields = "full_name = ?, email = ?, phone = ?, updated_at = NOW()";
-                $params = [$fullName, $email, $phone];
-                if ($profilePhotoSupported && $profilePhotoData !== null) {
-                    $updateFields .= ", profile_photo = ?";
-                    $params[] = $profilePhotoData;
-                } elseif ($profilePhotoSupported && $removePhoto) {
-                    $updateFields .= ", profile_photo = NULL";
-                }
-                $params[] = $currentUser['id'];
-                $db->execute(
-                    "UPDATE users SET $updateFields WHERE id = ?",
-                    $params
-                );
-                
-                // تنظيف Cache للمستخدم بعد التحديث
-                if (function_exists('clearUserCache')) {
-                    clearUserCache($currentUser['id']);
+                // الحصول على user_id من $currentUser أو $user أو session
+                $userId = null;
+                if ($currentUser && isset($currentUser['id'])) {
+                    $userId = $currentUser['id'];
+                } elseif ($user && isset($user['id'])) {
+                    $userId = $user['id'];
+                } elseif (isset($_SESSION['user_id'])) {
+                    $userId = $_SESSION['user_id'];
                 }
                 
-                // تحديث كلمة المرور إذا تم إدخالها
-                if (!empty($newPassword)) {
-                    if (empty($currentPassword)) {
-                        $error = 'يجب إدخال كلمة المرور الحالية';
-                    } elseif (!verifyPassword($currentPassword, $user['password_hash'])) {
-                        $error = 'كلمة المرور الحالية غير صحيحة';
-                    } elseif ($newPassword !== $confirmPassword) {
-                        $error = 'كلمة المرور الجديدة غير متطابقة';
-                    } elseif (strlen($newPassword) < $passwordMinLength) {
-                        $error = 'كلمة المرور يجب أن تكون على الأقل ' . $passwordMinLength . ' أحرف';
-                    } else {
-                        $newPasswordHash = hashPassword($newPassword);
-                        $db->execute(
-                            "UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?",
-                            [$newPasswordHash, $currentUser['id']]
-                        );
-                        
-                        logAudit($currentUser['id'], 'change_password', 'user', $currentUser['id'], null, null);
+                if (!$userId) {
+                    $error = 'تعذر تحديد معرف المستخدم';
+                } else {
+                    $updateFields = "full_name = ?, email = ?, phone = ?, updated_at = NOW()";
+                    $params = [$fullName, $email, $phone];
+                    if ($profilePhotoSupported && $profilePhotoData !== null) {
+                        $updateFields .= ", profile_photo = ?";
+                        $params[] = $profilePhotoData;
+                    } elseif ($profilePhotoSupported && $removePhoto) {
+                        $updateFields .= ", profile_photo = NULL";
                     }
-                }
-                
-                if (empty($error)) {
-                    logAudit($currentUser['id'], 'update_profile', 'user', $currentUser['id'], null, ['full_name' => $fullName, 'email' => $email]);
+                    $params[] = $userId;
+                    $db->execute(
+                        "UPDATE users SET $updateFields WHERE id = ?",
+                        $params
+                    );
                     
+                    // تنظيف Cache للمستخدم بعد التحديث
+                    if (function_exists('clearUserCache')) {
+                        clearUserCache($userId);
+                    }
+                    
+                    // تحديث كلمة المرور إذا تم إدخالها
+                    if (!empty($newPassword)) {
+                        if (empty($currentPassword)) {
+                            $error = 'يجب إدخال كلمة المرور الحالية';
+                        } elseif (!$user || !isset($user['password_hash']) || !verifyPassword($currentPassword, $user['password_hash'])) {
+                            $error = 'كلمة المرور الحالية غير صحيحة';
+                        } elseif ($newPassword !== $confirmPassword) {
+                            $error = 'كلمة المرور الجديدة غير متطابقة';
+                        } elseif (strlen($newPassword) < $passwordMinLength) {
+                            $error = 'كلمة المرور يجب أن تكون على الأقل ' . $passwordMinLength . ' أحرف';
+                        } else {
+                            $newPasswordHash = hashPassword($newPassword);
+                            $db->execute(
+                                "UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?",
+                                [$newPasswordHash, $userId]
+                            );
+                            
+                            logAudit($userId, 'change_password', 'user', $userId, null, null);
+                        }
+                    }
+                    
+                    if (empty($error)) {
+                        logAudit($userId, 'update_profile', 'user', $userId, null, ['full_name' => $fullName, 'email' => $email]);
+                        
                     // إعادة تحميل بيانات المستخدم المحدثة من قاعدة البيانات
-                    $user = getUserById($currentUser['id']);
-                    
-                    // تحديث بيانات الجلسة
-                    $_SESSION['username'] = $user['username'];
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['role'] = $user['role'];
-                    $_SESSION['logged_in'] = true;
+                    $updatedUser = getUserById($userId);
+                    if ($updatedUser) {
+                        $user = $updatedUser;
+                        
+                        // تحديث بيانات الجلسة
+                        if (isset($user['username'])) {
+                            $_SESSION['username'] = $user['username'];
+                        }
+                        if (isset($user['id'])) {
+                            $_SESSION['user_id'] = $user['id'];
+                        }
+                        if (isset($user['role'])) {
+                            $_SESSION['role'] = $user['role'];
+                        }
+                        $_SESSION['logged_in'] = true;
+                    }
                     
                     $_SESSION['success_message'] = 'تم تحديث البروفايل بنجاح';
                     
                     // Redirect لتجنب إعادة إرسال الطلب
                     header('Location: ' . $_SERVER['PHP_SELF']);
                     exit;
+                    }
                 }
             }
         }
@@ -248,7 +274,19 @@ if (document.body) {
 
 <!-- القائمة الجانبية يتم تضمينها تلقائياً في header.php -->
 <?php
-$dashboardUrl = getDashboardUrl($currentUser['role']);
+// الحصول على role من $user أو $currentUser أو session
+$userRole = null;
+if ($user && isset($user['role'])) {
+    $userRole = $user['role'];
+} elseif ($currentUser && isset($currentUser['role'])) {
+    $userRole = $currentUser['role'];
+} elseif (isset($_SESSION['role'])) {
+    $userRole = $_SESSION['role'];
+} else {
+    $userRole = 'accountant'; // قيمة افتراضية
+}
+
+$dashboardUrl = getDashboardUrl($userRole);
 ?>
 <div class="page-header mb-4 d-flex justify-content-between align-items-center">
     <h2 class="mb-0"><i class="bi bi-person-circle me-2"></i><?php echo isset($lang['profile']) ? $lang['profile'] : 'الملف الشخصي'; ?></h2>
@@ -273,6 +311,26 @@ $dashboardUrl = getDashboardUrl($currentUser['role']);
     </div>
 <?php endif; ?>
 
+<?php
+// التأكد من أن $user موجود قبل عرض النموذج
+if (!$user || !is_array($user) || !isset($user['id'])) {
+    // محاولة إعادة تحميل المستخدم
+    if (isset($_SESSION['user_id'])) {
+        $user = getUserById($_SESSION['user_id']);
+    }
+    
+    // إذا استمرت المشكلة، عرض رسالة خطأ
+    if (!$user || !is_array($user) || !isset($user['id'])) {
+        echo '<div class="alert alert-danger">';
+        echo '<i class="bi bi-exclamation-triangle-fill me-2"></i>';
+        echo 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . htmlspecialchars($dashboardUrl) . '">العودة</a> والمحاولة مرة أخرى.';
+        echo '</div>';
+        include __DIR__ . '/templates/footer.php';
+        exit;
+    }
+}
+?>
+
 <div class="row g-4">
     <!-- معلومات البروفايل -->
     <div class="col-lg-8">
@@ -290,7 +348,7 @@ $dashboardUrl = getDashboardUrl($currentUser['role']);
                                             <i class="bi bi-person-badge me-2"></i>اسم المستخدم
                                         </label>
                                         <input type="text" class="form-control" id="username" 
-                                               value="<?php echo htmlspecialchars($user['username']); ?>" disabled>
+                                               value="<?php echo htmlspecialchars($user['username'] ?? ''); ?>" disabled>
                                         <small class="text-muted">لا يمكن تغيير اسم المستخدم</small>
                                     </div>
                                     
@@ -318,7 +376,7 @@ $dashboardUrl = getDashboardUrl($currentUser['role']);
                                     <img src="<?php echo htmlspecialchars($user['profile_photo']); ?>" alt="Profile" style="width:100%;height:100%;object-fit:cover;">
                                 <?php else: ?>
                                     <span class="text-white fw-bold" style="font-size:24px;">
-                                        <?php echo htmlspecialchars(mb_substr($user['username'] ?? '', 0, 1)); ?>
+                                        <?php echo htmlspecialchars(mb_substr(($user['username'] ?? ''), 0, 1)); ?>
                                     </span>
                                 <?php endif; ?>
                             </div>
@@ -373,7 +431,7 @@ $dashboardUrl = getDashboardUrl($currentUser['role']);
                                         <i class="bi bi-calendar me-2"></i>تاريخ التسجيل
                                     </label>
                                     <input type="text" class="form-control" 
-                                           value="<?php echo formatDateTime($user['created_at']); ?>" disabled>
+                                           value="<?php echo isset($user['created_at']) ? formatDateTime($user['created_at']) : '-'; ?>" disabled>
                                 </div>
                                 
                                 <div class="d-grid">
