@@ -694,6 +694,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function handleSessionStatus(status) {
+        // منع إعادة التوجيه في profile.php
+        const currentPath = window.location.pathname || '';
+        const isProfilePage = currentPath.includes('profile.php') || 
+                             currentPath.endsWith('/profile') ||
+                             document.querySelector('body[data-page="profile"]');
+        
+        if (isProfilePage) {
+            // في profile.php، لا نعيد التوجيه حتى لو كان status 401/419/440
+            // لأن الجلسة قد تكون صالحة لكن هناك مشكلة في الاتصال
+            return;
+        }
+        
         const numericStatus = Number(status);
         if (!Number.isFinite(numericStatus)) {
             return;

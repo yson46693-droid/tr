@@ -598,9 +598,17 @@ if (ob_get_level() > 0) {
     <meta name="application-name" content="<?php echo APP_NAME; ?>">
     <meta name="msapplication-TileColor" content="#f1c40f">
     <meta name="msapplication-tap-highlight" content="no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="<?php echo APP_NAME; ?>">
     
     <!-- Manifest -->
     <link rel="manifest" href="<?php echo getRelativeUrl('manifest.php'); ?>">
+    
+    <!-- Android Chrome PWA Support -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#f1c40f">
+    <meta name="color-scheme" content="light">
     
     <!-- Modal Fix CSS -->
     <style>

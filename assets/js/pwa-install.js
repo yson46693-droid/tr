@@ -104,7 +104,7 @@ if (isInstalled()) {
 
 // معالجة حدث beforeinstallprompt
 window.addEventListener('beforeinstallprompt', (e) => {
-    console.log('beforeinstallprompt event fired');
+    console.log('beforeinstallprompt event fired', e);
     
     // Stash the event so it can be triggered later
     deferredPrompt = e;
@@ -112,6 +112,14 @@ window.addEventListener('beforeinstallprompt', (e) => {
     // معالجة فورية (لا ننتظر DOMContentLoaded)
     // لأن beforeinstallprompt يُطلق بعد تحميل الصفحة
     handleInstallPrompt(e);
+    
+    // على Android، إظهار البانر فوراً عند استقبال الحدث
+    if (isAndroid()) {
+        console.log('Android beforeinstallprompt received, showing banner');
+        setTimeout(() => {
+            showInstallBanner();
+        }, 500);
+    }
 });
 
 // دالة معالجة beforeinstallprompt
@@ -185,7 +193,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 const banner = document.getElementById('installBanner');
                 if (banner) {
                     console.log('Banner element found, showing install banner on Android');
-                    showInstallBanner();
+                    // التحقق من أن beforeinstallprompt لم يحدث بعد
+                    // إذا لم يكن هناك deferredPrompt، نعرض البانر مع تعليمات يدوية
+                    if (!deferredPrompt) {
+                        console.log('No deferredPrompt yet, showing banner with manual instructions');
+                        showInstallBanner();
+                    } else {
+                        console.log('deferredPrompt available, showing banner');
+                        showInstallBanner();
+                    }
                 } else {
                     console.log('Banner element not found yet, retrying...');
                     // إعادة المحاولة بعد 500ms
@@ -197,16 +213,16 @@ document.addEventListener('DOMContentLoaded', function() {
             // نستخدم window.load للتأكد من تحميل جميع الموارد
             if (document.readyState === 'complete') {
                 // الصفحة محملة بالفعل
-                setTimeout(tryShowBanner, 1000);
+                setTimeout(tryShowBanner, 2000);
             } else {
                 // انتظر تحميل الصفحة بالكامل
                 window.addEventListener('load', function() {
-                    setTimeout(tryShowBanner, 1000);
+                    setTimeout(tryShowBanner, 2000);
                 }, { once: true });
             }
             
             // أيضاً محاولة بعد DOMContentLoaded (للموارد السريعة)
-            setTimeout(tryShowBanner, 2000);
+            setTimeout(tryShowBanner, 3000);
         }
         
         // على iOS، إظهار البانر دائماً مع تعليمات خاصة
@@ -254,7 +270,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.warn('No deferred prompt available');
                 // على Android، إعطاء تعليمات بديلة
                 if (isAndroid()) {
-                    alert('لتثبيت التطبيق:\n\n1. اضغط على القائمة (⋮) في المتصفح\n2. اختر "إضافة إلى الشاشة الرئيسية" أو "Install app"\n3. اضغط "تثبيت" أو "Install"\n\nأو انتظر حتى يظهر إشعار التثبيت تلقائياً.');
+                    // محاولة فتح قائمة التثبيت يدوياً
+                    const instructions = 'لتثبيت التطبيق على Android:\n\n' +
+                        'الطريقة 1 (الأسهل):\n' +
+                        '1. اضغط على القائمة (⋮) في أعلى المتصفح\n' +
+                        '2. اختر "إضافة إلى الشاشة الرئيسية" أو "Install app"\n' +
+                        '3. اضغط "تثبيت" أو "Install"\n\n' +
+                        'الطريقة 2:\n' +
+                        '1. انتظر حتى يظهر إشعار "إضافة إلى الشاشة الرئيسية" تلقائياً\n' +
+                        '2. اضغط على الإشعار واتبع التعليمات\n\n' +
+                        'ملاحظة: يجب أن يكون الموقع على HTTPS أو localhost لعمل التثبيت.';
+                    alert(instructions);
                 } else {
                     alert('زر التثبيت غير متاح حالياً. يرجى المحاولة لاحقاً أو تثبيت التطبيق من قائمة المتصفح.');
                 }
@@ -328,11 +354,105 @@ window.addEventListener('appinstalled', () => {
     }, 5000);
 });
 
+// التحقق من تسجيل Service Worker (مهم لـ Android PWA)
+function checkServiceWorkerRegistration() {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+            if (registrations.length > 0) {
+                console.log('Service Worker is registered:', registrations.length, 'registration(s)');
+                registrations.forEach((reg, index) => {
+                    console.log(`SW ${index + 1}:`, {
+                        scope: reg.scope,
+                        active: reg.active ? 'active' : 'inactive',
+                        installing: reg.installing ? 'installing' : 'none',
+                        waiting: reg.waiting ? 'waiting' : 'none'
+                    });
+                });
+            } else {
+                console.warn('No Service Worker registrations found - PWA installation may not work');
+            }
+        }).catch(err => {
+            console.error('Error checking Service Worker:', err);
+        });
+    } else {
+        console.warn('Service Worker not supported in this browser');
+    }
+}
+
+// التحقق من Manifest (مهم لـ Android PWA)
+function checkManifest() {
+    const manifestLink = document.querySelector('link[rel="manifest"]');
+    if (manifestLink) {
+        const manifestUrl = manifestLink.href;
+        console.log('Manifest link found:', manifestUrl);
+        
+        // محاولة جلب manifest للتحقق من صحته
+        fetch(manifestUrl)
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                }
+                throw new Error('Manifest fetch failed: ' + response.status);
+            })
+            .then(manifest => {
+                console.log('Manifest loaded successfully:', {
+                    name: manifest.name,
+                    short_name: manifest.short_name,
+                    start_url: manifest.start_url,
+                    display: manifest.display,
+                    icons: manifest.icons ? manifest.icons.length : 0,
+                    has_192_icon: manifest.icons?.some(icon => icon.sizes === '192x192'),
+                    has_512_icon: manifest.icons?.some(icon => icon.sizes === '512x512')
+                });
+                
+                // التحقق من المتطلبات الأساسية لـ Android
+                const requirements = {
+                    hasName: !!manifest.name,
+                    hasShortName: !!manifest.short_name,
+                    hasStartUrl: !!manifest.start_url,
+                    hasDisplay: manifest.display === 'standalone' || manifest.display === 'fullscreen',
+                    hasIcons: manifest.icons && manifest.icons.length > 0,
+                    has192Icon: manifest.icons?.some(icon => icon.sizes === '192x192' || icon.sizes?.includes('192')),
+                    has512Icon: manifest.icons?.some(icon => icon.sizes === '512x512' || icon.sizes?.includes('512'))
+                };
+                
+                const allMet = Object.values(requirements).every(v => v === true);
+                if (allMet) {
+                    console.log('✅ All PWA requirements met for Android installation');
+                } else {
+                    console.warn('⚠️ Some PWA requirements not met:', requirements);
+                }
+            })
+            .catch(err => {
+                console.error('Error loading manifest:', err);
+            });
+    } else {
+        console.warn('Manifest link not found in HTML');
+    }
+}
+
+// تشغيل التحقق بعد تحميل الصفحة
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            checkServiceWorkerRegistration();
+            checkManifest();
+        }, 1000);
+    });
+} else {
+    setTimeout(() => {
+        checkServiceWorkerRegistration();
+        checkManifest();
+    }, 1000);
+}
+
 // حفظ في النطاق العام للوصول من أي مكان
 window.pwaInstallHandler = {
     deferredPrompt: () => deferredPrompt,
     showInstallBanner: showInstallBanner,
     hideInstallBanner: hideInstallBanner,
-    isInstalled: isInstalled
+    isInstalled: isInstalled,
+    checkServiceWorker: checkServiceWorkerRegistration,
+    checkManifest: checkManifest
 };
 

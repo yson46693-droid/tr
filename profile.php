@@ -233,6 +233,19 @@ $pageTitle = isset($lang['profile']) ? $lang['profile'] : 'الملف الشخص
 ?>
 <?php include __DIR__ . '/templates/header.php'; ?>
 
+<script>
+// تعيين data attribute للجسم لمساعدة JavaScript في التعرف على profile.php
+if (document.body) {
+    document.body.setAttribute('data-page', 'profile');
+} else {
+    document.addEventListener('DOMContentLoaded', function() {
+        if (document.body) {
+            document.body.setAttribute('data-page', 'profile');
+        }
+    });
+}
+</script>
+
 <!-- القائمة الجانبية يتم تضمينها تلقائياً في header.php -->
 <?php
 $dashboardUrl = getDashboardUrl($currentUser['role']);

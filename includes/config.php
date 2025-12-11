@@ -128,14 +128,35 @@ if (session_status() === PHP_SESSION_ACTIVE) {
             $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
             
             // إذا مر أكثر من وقت الجلسة (7 أيام) + هامش أمان (1 ساعة)
+            // استثناء: لا نحذف الجلسة في profile.php
+            $isProfilePage = defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true;
+            if (!$isProfilePage) {
+                $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+                if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+                    $isProfilePage = true;
+                }
+            }
+            if (!$isProfilePage) {
+                $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+                if (strpos($requestUri, 'profile.php') !== false) {
+                    $isProfilePage = true;
+                }
+            }
+            
             if ($timeSinceActivity > (SESSION_LIFETIME + 3600)) {
                 $userId = $_SESSION['user_id'] ?? 'unknown';
                 error_log("Session expired due to inactivity for user ID: {$userId} (time since activity: {$timeSinceActivity} seconds)");
                 
-                session_unset();
-                session_destroy();
-                session_set_cookie_params($sessionCookieOptions);
-                session_start();
+                // لا نحذف الجلسة في profile.php
+                if (!$isProfilePage) {
+                    session_unset();
+                    session_destroy();
+                    session_set_cookie_params($sessionCookieOptions);
+                    session_start();
+                } else {
+                    // في profile.php، فقط نحدث آخر نشاط بدلاً من حذف الجلسة
+                    $_SESSION['last_activity'] = time();
+                }
             }
         }
         

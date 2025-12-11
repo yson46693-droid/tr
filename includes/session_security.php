@@ -30,20 +30,41 @@ function initSecureSession() {
         // التحقق من انتهاء صلاحية الجلسة فقط إذا كان المستخدم مسجل دخول
         // وإذا كان هناك وقت آخر نشاط سابق محفوظ
         if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+            // التحقق من أننا في profile.php - منع حذف الجلسة في profile.php
+            $isProfilePage = defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true;
+            if (!$isProfilePage) {
+                $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+                if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+                    $isProfilePage = true;
+                }
+            }
+            if (!$isProfilePage) {
+                $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+                if (strpos($requestUri, 'profile.php') !== false) {
+                    $isProfilePage = true;
+                }
+            }
+            
             // إذا كان هناك وقت آخر نشاط سابق، نفحصه
             if (isset($_SESSION['last_activity_previous'])) {
                 $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
                 if ($timeSinceActivity > $timeout) {
-                    // الجلسة انتهت - إلغاؤها
+                    // الجلسة انتهت - إلغاؤها فقط إذا لم نكن في profile.php
                     error_log("Session expired in initSecureSession: time since activity = {$timeSinceActivity} seconds");
-                    session_unset();
-                    session_destroy();
-                    // إعادة بدء جلسة جديدة
-                    if (session_status() !== PHP_SESSION_ACTIVE) {
-                        session_start();
+                    if (!$isProfilePage) {
+                        session_unset();
+                        session_destroy();
+                        // إعادة بدء جلسة جديدة
+                        if (session_status() !== PHP_SESSION_ACTIVE) {
+                            session_start();
+                        }
+                        $_SESSION['last_activity'] = time();
+                        $_SESSION['last_activity_previous'] = time();
+                    } else {
+                        // في profile.php، فقط نحدث آخر نشاط بدلاً من حذف الجلسة
+                        $_SESSION['last_activity'] = time();
+                        $_SESSION['last_activity_previous'] = time();
                     }
-                    $_SESSION['last_activity'] = time();
-                    $_SESSION['last_activity_previous'] = time();
                 } else {
                     // تحديث آخر نشاط
                     $_SESSION['last_activity'] = time();
@@ -125,17 +146,38 @@ function initSecureSession() {
         $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // 7 أيام
         $timeout = $sessionLifetime + 3600; // هامش أمان: ساعة إضافية
         
+        // التحقق من أننا في profile.php - منع حذف الجلسة في profile.php
+        $isProfilePage = defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true;
+        if (!$isProfilePage) {
+            $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+            if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+                $isProfilePage = true;
+            }
+        }
+        if (!$isProfilePage) {
+            $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+            if (strpos($requestUri, 'profile.php') !== false) {
+                $isProfilePage = true;
+            }
+        }
+        
         // التحقق فقط إذا كان هناك وقت آخر نشاط سابق
         if (isset($_SESSION['last_activity_previous'])) {
             $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
             if ($timeSinceActivity > $timeout) {
-                // الجلسة انتهت - إلغاؤها
+                // الجلسة انتهت - إلغاؤها فقط إذا لم نكن في profile.php
                 error_log("Session expired in initSecureSession (new session): time since activity = {$timeSinceActivity} seconds");
-                session_unset();
-                session_destroy();
-                session_start();
-                $_SESSION['last_activity'] = time();
-                $_SESSION['last_activity_previous'] = time();
+                if (!$isProfilePage) {
+                    session_unset();
+                    session_destroy();
+                    session_start();
+                    $_SESSION['last_activity'] = time();
+                    $_SESSION['last_activity_previous'] = time();
+                } else {
+                    // في profile.php، فقط نحدث آخر نشاط بدلاً من حذف الجلسة
+                    $_SESSION['last_activity'] = time();
+                    $_SESSION['last_activity_previous'] = time();
+                }
             } else {
                 // تحديث آخر نشاط
                 $_SESSION['last_activity'] = time();
