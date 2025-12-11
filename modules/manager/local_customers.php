@@ -3233,11 +3233,14 @@ document.addEventListener('DOMContentLoaded', function() {
     .dashboard-table tbody td:last-child .d-flex {
         flex-wrap: wrap;
         gap: 0.25rem;
+        width: 100%;
     }
     
     .dashboard-table tbody td:last-child .btn {
-        flex: 0 0 auto;
-        min-width: auto;
+        flex: 0 0 calc(50% - 0.125rem);
+        min-width: calc(50% - 0.125rem);
+        max-width: calc(50% - 0.125rem);
+        text-align: center;
     }
     
     /* تحسين Badge الرصيد */
@@ -3282,6 +3285,18 @@ document.addEventListener('DOMContentLoaded', function() {
     
     .dashboard-table .btn i {
         font-size: 0.7rem;
+    }
+    
+    /* الأزرار في عمود الإجراءات: 2 أزرار في كل صف */
+    .dashboard-table tbody td:last-child .d-flex {
+        width: 100%;
+    }
+    
+    .dashboard-table tbody td:last-child .btn {
+        flex: 0 0 calc(50% - 0.125rem);
+        min-width: calc(50% - 0.125rem);
+        max-width: calc(50% - 0.125rem);
+        text-align: center;
     }
     
     /* عمود العنوان يبقى ظاهراً - مهم جداً */

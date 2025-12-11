@@ -5194,7 +5194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $rule = $cartonRules[$cartonType];
                         
                         if ($quantity >= $rule['threshold']) {
-                            
+                            $targetCodeKey = $rule['target_code'];
                             $targetDisplayCode = $formatPackagingCode($targetCodeKey) ?? ('PKG-' . substr($targetCodeKey, 3));
                             
                             // حساب الكمية المطلوبة للخصم
@@ -5209,12 +5209,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $targetMaterialName = 'مادة تعبئة ' . $targetDisplayCode;
                                 $targetMaterialUnit = 'قطعة';
                                 
-                                try {
-                } catch (Exception $cartonDeductionError) {
-                    error_log('Carton auto-deduction error: ' . $cartonDeductionError->getMessage());
-                }
-                
-                // تم إزالة منطق الخصم التلقائي القديم - النظام يعتمد الآن فقط على نوع الكرتونة المخزن في القالب
+                                // تم إزالة منطق الخصم التلقائي القديم - النظام يعتمد الآن فقط على نوع الكرتونة المخزن في القالب
+                            }
+                        }
+                    }
                 
                 // إنشاء أرقام باركود بعدد الكمية المنتجة
                 $batchNumbersToPrint = [];
