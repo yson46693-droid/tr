@@ -347,7 +347,7 @@ switch ($role) {
             ],
             [
                 'title' => 'نقطة البيع',
-                'icon' => 'bi-cash-register',
+                'icon' => 'bi-cart4',
                 'url' => $baseUrl . 'accountant.php?page=pos',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'pos'),
                 'badge' => null

@@ -154,7 +154,7 @@ $lang = isset($translations) ? $translations : [];
     <!-- إحصائيات سريعة -->
     <div class="row mb-4">
         <div class="col-md-3 col-sm-6 mb-3">
-            <div class="card shadow-sm">
+            <div class="card">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
@@ -172,7 +172,7 @@ $lang = isset($translations) ? $translations : [];
         </div>
         
         <div class="col-md-3 col-sm-6 mb-3">
-            <div class="card shadow-sm">
+            <div class="card">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
@@ -190,7 +190,7 @@ $lang = isset($translations) ? $translations : [];
         </div>
         
         <div class="col-md-3 col-sm-6 mb-3">
-            <div class="card shadow-sm">
+            <div class="card">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
@@ -209,7 +209,7 @@ $lang = isset($translations) ? $translations : [];
         </div>
         
         <div class="col-md-3 col-sm-6 mb-3">
-            <div class="card shadow-sm">
+            <div class="card">
                 <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
@@ -237,7 +237,7 @@ $lang = isset($translations) ? $translations : [];
     <!-- أزرار تسجيل الحضور والانصراف -->
     <div class="row mb-4">
         <div class="col-md-6 mb-3">
-            <div class="card shadow-sm">
+            <div class="card">
                 <div class="card-header bg-success text-white">
                     <h5 class="mb-0"><i class="bi bi-box-arrow-in-right me-2"></i>تسجيل الحضور</h5>
                 </div>
@@ -259,7 +259,7 @@ $lang = isset($translations) ? $translations : [];
         </div>
         
         <div class="col-md-6 mb-3">
-            <div class="card shadow-sm">
+            <div class="card">
                 <div class="card-header bg-danger text-white">
                     <h5 class="mb-0"><i class="bi bi-box-arrow-right me-2"></i>تسجيل الانصراف</h5>
                 </div>
@@ -282,7 +282,7 @@ $lang = isset($translations) ? $translations : [];
     </div>
     
     <!-- سجلات اليوم -->
-    <div class="card shadow-sm mb-4">
+    <div class="card mb-4">
         <div class="card-header bg-primary text-white">
             <h5 class="mb-0"><i class="bi bi-calendar3 me-2"></i>سجلات اليوم (<?php echo formatDate($today); ?>)</h5>
         </div>
@@ -348,7 +348,7 @@ $lang = isset($translations) ? $translations : [];
     </div>
     
     <!-- سجل الحضور للشهر -->
-    <div class="card shadow-sm">
+    <div class="card">
         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="bi bi-calendar-range me-2"></i>سجل الحضور - الشهر الحالي</h5>
             <?php if (hasRole('accountant')): ?>

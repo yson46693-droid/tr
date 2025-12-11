@@ -10,58 +10,10 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/audit_log.php';
 
-// تحديث أوقات النشاط لضمان عدم انتهاء الجلسة
-// ملاحظة: تحديث الـ cookie يتم تلقائياً في config.php، لا حاجة لتحديثه هنا
-if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-    // حفظ الوقت الحالي كـ previous إذا لم يكن موجوداً
-    if (!isset($_SESSION['last_activity_previous'])) {
-        $_SESSION['last_activity_previous'] = time();
-    }
-    $_SESSION['last_activity'] = time();
-}
-
+// التحقق من تسجيل الدخول فقط
 requireLogin();
 
-// تحديث أوقات النشاط مرة أخرى بعد requireLogin() لضمان عدم انتهاء الجلسة
-if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-    $_SESSION['last_activity'] = time();
-    if (!isset($_SESSION['last_activity_previous'])) {
-        $_SESSION['last_activity_previous'] = time();
-    }
-}
-
 $currentUser = getCurrentUser();
-
-// التحقق من أن المستخدم موجود بالفعل
-if (!$currentUser) {
-    // محاولة إعادة تحميل المستخدم مرة أخرى (في حالة خطأ مؤقت)
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        $currentUser = getUserById($_SESSION['user_id']);
-        if ($currentUser && isset($currentUser['status']) && $currentUser['status'] === 'active') {
-            // المستخدم موجود - المتابعة
-        } else {
-            // إعادة التوجيه لصفحة تسجيل الدخول
-            $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
-            if (!headers_sent()) {
-                header('Location: ' . $loginUrl);
-                exit;
-            } else {
-                echo '<script>window.location.href = "' . htmlspecialchars($loginUrl) . '";</script>';
-                exit;
-            }
-        }
-    } else {
-        // إعادة التوجيه لصفحة تسجيل الدخول
-        $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
-        if (!headers_sent()) {
-            header('Location: ' . $loginUrl);
-            exit;
-        } else {
-            echo '<script>window.location.href = "' . htmlspecialchars($loginUrl) . '";</script>';
-            exit;
-        }
-    }
-}
 
 $db = db();
 $passwordMinLength = getPasswordMinLength();
@@ -86,20 +38,7 @@ $user = getUserById($currentUser['id']);
 
 // معالجة تحديث البروفايل
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // تحديث وقت آخر نشاط في الجلسة قبل معالجة الطلب
-    $_SESSION['last_activity'] = time();
-    $_SESSION['last_activity_previous'] = time();
-    
-    // ملاحظة: تحديث الـ cookie يتم تلقائياً في config.php، لا حاجة لتحديثه هنا
-    
     $action = $_POST['action'] ?? '';
-    
-    // منع حذف الجلسات نهائياً - حماية أمنية
-    if (in_array($action, ['delete_session', 'logout_session', 'destroy_session', 'end_session', 'clear_session'])) {
-        $_SESSION['error_message'] = 'لا يمكن حذف الجلسات من هذه الصفحة لأسباب أمنية';
-        header('Location: ' . $_SERVER['PHP_SELF']);
-        exit;
-    }
     
     if ($action === 'update_profile') {
         $fullName = trim($_POST['full_name'] ?? '');
@@ -214,15 +153,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // إعادة تحميل بيانات المستخدم المحدثة من قاعدة البيانات
                     $user = getUserById($currentUser['id']);
                     
-                    // تحديث بيانات الجلسة بشكل كامل
+                    // تحديث بيانات الجلسة
                     $_SESSION['username'] = $user['username'];
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['role'] = $user['role'];
                     $_SESSION['logged_in'] = true;
-                    $_SESSION['last_activity'] = time();
-                    $_SESSION['last_activity_previous'] = time();
-                    
-                    // ملاحظة: تحديث الـ cookie يتم تلقائياً في config.php، لا حاجة لتحديثه هنا
                     
                     $_SESSION['success_message'] = 'تم تحديث البروفايل بنجاح';
                     
@@ -919,74 +854,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     loadCredentials();
 });
-
-// منع حذف الجلسات نهائياً - حماية JavaScript
-(function() {
-    'use strict';
-    
-    // منع أي محاولة لحذف الجلسة من خلال JavaScript
-    const originalSessionStorage = window.sessionStorage;
-    const originalLocalStorage = window.localStorage;
-    
-    // منع حذف الجلسة من sessionStorage
-    if (originalSessionStorage) {
-        const originalClear = originalSessionStorage.clear.bind(originalSessionStorage);
-        originalSessionStorage.clear = function() {
-            console.warn('محاولة حذف الجلسة تم منعها لأسباب أمنية');
-            return false;
-        };
-        
-        const originalRemoveItem = originalSessionStorage.removeItem.bind(originalSessionStorage);
-        originalSessionStorage.removeItem = function(key) {
-            if (key && (key.includes('session') || key.includes('auth') || key.includes('login'))) {
-                console.warn('محاولة حذف بيانات الجلسة تم منعها لأسباب أمنية');
-                return false;
-            }
-            return originalRemoveItem(key);
-        };
-    }
-    
-    // منع أي محاولة لحذف الجلسة من خلال fetch/XMLHttpRequest
-    const originalFetch = window.fetch;
-    window.fetch = function(...args) {
-        const url = args[0];
-        const options = args[1] || {};
-        
-        // منع أي طلب لحذف الجلسة
-        if (typeof url === 'string' && (
-            url.includes('delete_session') || 
-            url.includes('logout_session') || 
-            url.includes('destroy_session') ||
-            url.includes('end_session') ||
-            url.includes('clear_session') ||
-            (options.method && options.method.toUpperCase() === 'DELETE' && url.includes('session'))
-        )) {
-            console.warn('محاولة حذف الجلسة من خلال API تم منعها لأسباب أمنية');
-            return Promise.reject(new Error('لا يمكن حذف الجلسات من هذه الصفحة لأسباب أمنية'));
-        }
-        
-        return originalFetch.apply(this, args);
-    };
-    
-    // منع أي محاولة لحذف الجلسة من خلال XMLHttpRequest
-    const originalXHROpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-        if (typeof url === 'string' && (
-            url.includes('delete_session') || 
-            url.includes('logout_session') || 
-            url.includes('destroy_session') ||
-            url.includes('end_session') ||
-            url.includes('clear_session') ||
-            (method && method.toUpperCase() === 'DELETE' && url.includes('session'))
-        )) {
-            console.warn('محاولة حذف الجلسة من خلال XMLHttpRequest تم منعها لأسباب أمنية');
-            throw new Error('لا يمكن حذف الجلسات من هذه الصفحة لأسباب أمنية');
-        }
-        return originalXHROpen.apply(this, [method, url, ...rest]);
-    };
-    
-    console.log('حماية الجلسات مفعّلة - لا يمكن حذف الجلسات من هذه الصفحة');
-})();
 </script>
 
 

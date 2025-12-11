@@ -207,6 +207,73 @@ body.attendance-page.modal-open .dashboard-main {
     }
 }
 
+/* ===== إزالة Shadow والتأثيرات ===== */
+.attendance-page .card {
+    box-shadow: none !important;
+    border: 1px solid #dee2e6;
+}
+
+.attendance-page .card:hover {
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.attendance-page .btn {
+    box-shadow: none !important;
+    transition: none !important;
+}
+
+.attendance-page .btn:hover,
+.attendance-page .btn:focus,
+.attendance-page .btn:active {
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.attendance-page .btn:active {
+    transform: none !important;
+}
+
+/* إزالة أي تأثيرات انبثاق */
+.attendance-page * {
+    pointer-events: auto !important;
+    touch-action: manipulation !important;
+}
+
+/* ضمان أن جميع العناصر قابلة للنقر */
+.attendance-page .card,
+.attendance-page .btn,
+.attendance-page .card-body,
+.attendance-page .card-header {
+    pointer-events: auto !important;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* إزالة shadow من Modal الكاميرا */
+.attendance-page #cameraModal .modal-content {
+    box-shadow: none !important;
+    border: 1px solid #dee2e6;
+}
+
+.attendance-page #cameraModal .modal-header,
+.attendance-page #cameraModal .modal-footer {
+    box-shadow: none !important;
+}
+
+/* إزالة أي تأثيرات من badges */
+.attendance-page .badge {
+    box-shadow: none !important;
+    transition: none !important;
+}
+
+/* إزالة تأثيرات من alert */
+.attendance-page .alert {
+    box-shadow: none !important;
+    border: 1px solid;
+}
+
 /* ===== Touch Device Optimizations ===== */
 @media (hover: none) and (pointer: coarse) {
     /* تحسين التمرير على الأجهزة اللمسية */
@@ -220,6 +287,13 @@ body.attendance-page.modal-open .dashboard-main {
     .btn-lg {
         min-height: 48px;
         min-width: 48px;
+    }
+    
+    /* إزالة جميع التأثيرات على الأجهزة اللمسية */
+    .attendance-page .card:hover,
+    .attendance-page .btn:hover {
+        transform: none !important;
+        box-shadow: none !important;
     }
 }
 

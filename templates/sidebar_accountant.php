@@ -109,7 +109,7 @@ $baseUrl = getDashboardUrl();
             <li class="nav-item">
                 <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'pos') ? 'active' : ''; ?>" 
                    href="<?php echo $baseUrl; ?>accountant.php?page=pos">
-                    <i class="bi bi-cash-register"></i>
+                    <i class="bi bi-cart4"></i>
                     <span>نقطة البيع</span>
                 </a>
             </li>
