@@ -4246,33 +4246,35 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     
     // معالج إضافة منطقة جديدة من نموذج العميل (للمدير فقط)
-    var currentUserRole = '<?php echo htmlspecialchars($currentRole, ENT_QUOTES, 'UTF-8'); ?>';
-    if (currentUserRole === 'manager') {
-        var addRegionFromCustomerForm = document.getElementById('addRegionFromCustomerForm');
-        var addRegionFromCustomerModal = document.getElementById('addRegionFromCustomerModal');
-        var addCustomerRegionSelect = document.getElementById('addCustomerRegionId');
-        var editCustomerRegionSelect = document.getElementById('editCustomerRegionId');
-        
-        if (addRegionFromCustomerForm) {
+    var addRegionFromCustomerForm = document.getElementById('addRegionFromCustomerForm');
+    var addRegionFromCustomerModal = document.getElementById('addRegionFromCustomerModal');
+    var addCustomerRegionSelect = document.getElementById('addCustomerRegionId');
+    var editCustomerRegionSelect = document.getElementById('editCustomerRegionId');
+    
+    if (addRegionFromCustomerForm && addRegionFromCustomerModal) {
         addRegionFromCustomerForm.addEventListener('submit', function(e) {
             e.preventDefault();
+            e.stopPropagation();
             
-            var regionName = document.getElementById('newRegionName').value.trim();
+            var regionNameInput = document.getElementById('newRegionName');
+            var regionName = regionNameInput ? regionNameInput.value.trim() : '';
             var messageDiv = document.getElementById('addRegionMessage');
             var submitBtn = document.getElementById('addRegionSubmitBtn');
             var spinner = document.getElementById('addRegionSpinner');
             
             if (!regionName) {
-                messageDiv.className = 'alert alert-danger';
-                messageDiv.textContent = 'يجب إدخال اسم المنطقة';
-                messageDiv.classList.remove('d-none');
+                if (messageDiv) {
+                    messageDiv.className = 'alert alert-danger';
+                    messageDiv.textContent = 'يجب إدخال اسم المنطقة';
+                    messageDiv.classList.remove('d-none');
+                }
                 return;
             }
             
             // إظهار loading
-            submitBtn.disabled = true;
-            spinner.classList.remove('d-none');
-            messageDiv.classList.add('d-none');
+            if (submitBtn) submitBtn.disabled = true;
+            if (spinner) spinner.classList.remove('d-none');
+            if (messageDiv) messageDiv.classList.add('d-none');
             
             // إرسال طلب AJAX
             var formData = new FormData();
@@ -4284,13 +4286,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 body: formData
             })
             .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
                 return response.json();
             })
             .then(function(data) {
-                submitBtn.disabled = false;
-                spinner.classList.add('d-none');
+                if (submitBtn) submitBtn.disabled = false;
+                if (spinner) spinner.classList.add('d-none');
                 
-                if (data.success) {
+                if (data && data.success) {
                     // إضافة المنطقة الجديدة إلى select
                     var newOption = document.createElement('option');
                     newOption.value = data.region.id;
@@ -4308,35 +4313,49 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                     
                     // إظهار رسالة نجاح
-                    messageDiv.className = 'alert alert-success';
-                    messageDiv.textContent = data.message;
-                    messageDiv.classList.remove('d-none');
+                    if (messageDiv) {
+                        messageDiv.className = 'alert alert-success';
+                        messageDiv.textContent = data.message || 'تم إضافة المنطقة بنجاح';
+                        messageDiv.classList.remove('d-none');
+                    }
                     
                     // إغلاق modal بعد ثانيتين
                     setTimeout(function() {
-                        var modal = bootstrap.Modal.getInstance(addRegionFromCustomerModal);
-                        if (modal) {
-                            modal.hide();
+                        if (addRegionFromCustomerModal) {
+                            var modal = bootstrap.Modal.getInstance(addRegionFromCustomerModal);
+                            if (modal) {
+                                modal.hide();
+                            }
                         }
                         // مسح الحقول
-                        document.getElementById('newRegionName').value = '';
-                        messageDiv.classList.add('d-none');
+                        if (regionNameInput) regionNameInput.value = '';
+                        if (messageDiv) messageDiv.classList.add('d-none');
                     }, 1500);
                 } else {
-                    messageDiv.className = 'alert alert-danger';
-                    messageDiv.textContent = data.message || 'حدث خطأ أثناء إضافة المنطقة';
-                    messageDiv.classList.remove('d-none');
+                    if (messageDiv) {
+                        messageDiv.className = 'alert alert-danger';
+                        messageDiv.textContent = (data && data.message) ? data.message : 'حدث خطأ أثناء إضافة المنطقة';
+                        messageDiv.classList.remove('d-none');
+                    }
                 }
             })
             .catch(function(error) {
-                submitBtn.disabled = false;
-                spinner.classList.add('d-none');
+                if (submitBtn) submitBtn.disabled = false;
+                if (spinner) spinner.classList.add('d-none');
                 console.error('Error adding region:', error);
-                messageDiv.className = 'alert alert-danger';
-                messageDiv.textContent = 'حدث خطأ أثناء الاتصال بالخادم';
-                messageDiv.classList.remove('d-none');
+                if (messageDiv) {
+                    messageDiv.className = 'alert alert-danger';
+                    messageDiv.textContent = 'حدث خطأ أثناء الاتصال بالخادم: ' + error.message;
+                    messageDiv.classList.remove('d-none');
+                }
             });
         });
+    } else {
+        if (!addRegionFromCustomerForm) {
+            console.warn('Add region form not found');
+        }
+        if (!addRegionFromCustomerModal) {
+            console.warn('Add region modal not found');
         }
     }
 });
