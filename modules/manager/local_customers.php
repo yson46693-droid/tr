@@ -229,6 +229,68 @@ try {
     error_log('Error checking local_customers tables: ' . $e->getMessage());
 }
 
+// معالجة add_region_ajax قبل أي شيء آخر لمنع أي output
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_POST['action']) === 'add_region_ajax') {
+    // تنظيف أي output سابق بشكل كامل
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-cache, must-revalidate');
+    
+    $userRole = strtolower($currentUser['role'] ?? '');
+    if ($userRole !== 'manager') {
+        echo json_encode([
+            'success' => false,
+            'message' => 'غير مصرح لك بإضافة مناطق'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
+    $name = trim($_POST['name'] ?? '');
+    if (empty($name)) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'يجب إدخال اسم المنطقة'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
+    try {
+        // التحقق من عدم التكرار
+        $existing = $db->queryOne("SELECT id FROM regions WHERE name = ?", [$name]);
+        if ($existing) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'المنطقة موجودة بالفعل'
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        
+        $db->execute("INSERT INTO regions (name) VALUES (?)", [$name]);
+        $regionId = $db->getLastInsertId();
+        
+        logAudit($currentUser['id'], 'add_region', 'region', $regionId, null, ['name' => $name]);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'تم إضافة المنطقة بنجاح',
+            'region' => [
+                'id' => $regionId,
+                'name' => $name
+            ]
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        error_log('Add region AJAX error: ' . $e->getMessage());
+        echo json_encode([
+            'success' => false,
+            'message' => 'حدث خطأ أثناء إضافة المنطقة'
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
 // معالجة update_location قبل أي شيء آخر
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_POST['action']) === 'update_location') {
     while (ob_get_level() > 0) {
@@ -812,65 +874,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'حدث خطأ أثناء إضافة العميل. يرجى المحاولة لاحقاً.';
             }
         }
-    } elseif ($action === 'add_region_ajax') {
-        // معالجة AJAX لإضافة منطقة جديدة (فقط للمدير)
-        while (ob_get_level() > 0) {
-            ob_end_clean();
-        }
-        
-        header('Content-Type: application/json; charset=utf-8');
-        header('Cache-Control: no-cache, must-revalidate');
-        
-        $userRole = strtolower($currentUser['role'] ?? '');
-        if ($userRole !== 'manager') {
-            echo json_encode([
-                'success' => false,
-                'message' => 'غير مصرح لك بإضافة مناطق'
-            ], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        
-        $name = trim($_POST['name'] ?? '');
-        if (empty($name)) {
-            echo json_encode([
-                'success' => false,
-                'message' => 'يجب إدخال اسم المنطقة'
-            ], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        
-        try {
-            // التحقق من عدم التكرار
-            $existing = $db->queryOne("SELECT id FROM regions WHERE name = ?", [$name]);
-            if ($existing) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'المنطقة موجودة بالفعل'
-                ], JSON_UNESCAPED_UNICODE);
-                exit;
-            }
-            
-            $db->execute("INSERT INTO regions (name) VALUES (?)", [$name]);
-            $regionId = $db->getLastInsertId();
-            
-            logAudit($currentUser['id'], 'add_region', 'region', $regionId, null, ['name' => $name]);
-            
-            echo json_encode([
-                'success' => true,
-                'message' => 'تم إضافة المنطقة بنجاح',
-                'region' => [
-                    'id' => $regionId,
-                    'name' => $name
-                ]
-            ], JSON_UNESCAPED_UNICODE);
-        } catch (Throwable $e) {
-            error_log('Add region AJAX error: ' . $e->getMessage());
-            echo json_encode([
-                'success' => false,
-                'message' => 'حدث خطأ أثناء إضافة المنطقة'
-            ], JSON_UNESCAPED_UNICODE);
-        }
-        exit;
     }
 }
 
@@ -1221,7 +1224,6 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                         <th>العنوان</th>
                         <th>المنطقة</th>
                         <th>الموقع</th>
-                        <th>تاريخ الإضافة</th>
                         <th>الإجراءات</th>
                     </tr>
                 </thead>
@@ -2910,13 +2912,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // معالج إضافة منطقة جديدة من نموذج العميل المحلي (للمدير فقط)
-    <?php if ($currentRole === 'manager'): ?>
-    var addRegionFromLocalCustomerForm = document.getElementById('addRegionFromLocalCustomerForm');
-    var addRegionFromLocalCustomerModal = document.getElementById('addRegionFromLocalCustomerModal');
-    var addLocalCustomerRegionSelect = document.getElementById('addLocalCustomerRegionId');
-    var editLocalCustomerRegionSelect = document.getElementById('editLocalCustomerRegionId');
-    
-    if (addRegionFromLocalCustomerForm) {
+    var currentUserRoleLocal = '<?php echo htmlspecialchars($currentRole, ENT_QUOTES, 'UTF-8'); ?>';
+    if (currentUserRoleLocal === 'manager') {
+        var addRegionFromLocalCustomerForm = document.getElementById('addRegionFromLocalCustomerForm');
+        var addRegionFromLocalCustomerModal = document.getElementById('addRegionFromLocalCustomerModal');
+        var addLocalCustomerRegionSelect = document.getElementById('addLocalCustomerRegionId');
+        var editLocalCustomerRegionSelect = document.getElementById('editLocalCustomerRegionId');
+        
+        if (addRegionFromLocalCustomerForm) {
         addRegionFromLocalCustomerForm.addEventListener('submit', function(e) {
             e.preventDefault();
             
@@ -3000,8 +3003,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 messageDiv.classList.remove('d-none');
             });
         });
+        }
     }
-    <?php endif; ?>
 });
 </script>
 
