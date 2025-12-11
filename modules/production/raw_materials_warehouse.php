@@ -2277,34 +2277,42 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $honeyType = $_POST['honey_type'] ?? 'raw';
             $supplyStockId = null;
             
-            // إذا كان المستخدم اختار "أخرى" وأدخل نوع عسل مخصص
-            if ($honeyVariety === 'أخرى' && !empty($customHoneyVariety)) {
+            // إذا كان المستخدم اختار "إضافة نوع مخصص" وأدخل نوع عسل مخصص
+            if ($honeyVariety === '__add_custom__' && !empty($customHoneyVariety)) {
                 $honeyVariety = trim($customHoneyVariety);
                 
-                // التحقق من وجود نوع العسل المخصص في الجدول
-                $existingCustomType = $db->queryOne(
-                    "SELECT honey_type_id, name FROM honey_types WHERE name = ? LIMIT 1",
-                    [$honeyVariety]
-                );
-                
-                if ($existingCustomType) {
-                    // استخدام ID الموجود
-                    $honeyVarietyCode = $existingCustomType['honey_type_id'];
+                // التحقق من أن اسم نوع العسل غير فارغ
+                if (empty($honeyVariety)) {
+                    $error = 'يجب إدخال اسم نوع العسل المخصص';
                 } else {
-                    // إنشاء نوع عسل جديد مع ID عشوائي
-                    $honeyVarietyCode = generateUniqueHoneyTypeId($db);
+                    // التحقق من وجود نوع العسل المخصص في الجدول
+                    $existingCustomType = $db->queryOne(
+                        "SELECT honey_type_id, name FROM honey_types WHERE name = ? LIMIT 1",
+                        [$honeyVariety]
+                    );
                     
-                    // حفظ نوع العسل الجديد في الجدول
-                    try {
-                        $db->execute(
-                            "INSERT INTO honey_types (honey_type_id, name, is_custom, created_by) VALUES (?, ?, 1, ?)",
-                            [$honeyVarietyCode, $honeyVariety, $currentUser['id']]
-                        );
-                    } catch (Exception $e) {
-                        error_log("Error saving custom honey type: " . $e->getMessage());
-                        // في حالة الفشل، نستمر بدون حفظ في الجدول
+                    if ($existingCustomType) {
+                        // استخدام ID الموجود
+                        $honeyVarietyCode = $existingCustomType['honey_type_id'];
+                    } else {
+                        // إنشاء نوع عسل جديد مع ID عشوائي
+                        $honeyVarietyCode = generateUniqueHoneyTypeId($db);
+                        
+                        // حفظ نوع العسل الجديد في الجدول
+                        try {
+                            $db->execute(
+                                "INSERT INTO honey_types (honey_type_id, name, is_custom, created_by) VALUES (?, ?, 1, ?)",
+                                [$honeyVarietyCode, $honeyVariety, $currentUser['id']]
+                            );
+                        } catch (Exception $e) {
+                            error_log("Error saving custom honey type: " . $e->getMessage());
+                            $error = 'حدث خطأ أثناء حفظ نوع العسل الجديد. يرجى المحاولة مرة أخرى.';
+                        }
                     }
                 }
+            } elseif ($honeyVariety === '__add_custom__' && empty($customHoneyVariety)) {
+                // إذا اختار "إضافة نوع مخصص" ولم يدخل اسم النوع
+                $error = 'يجب إدخال اسم نوع العسل المخصص عند اختيار "إضافة نوع مخصص"';
             } elseif (!in_array($honeyVariety, $validHoneyVarieties, true) || !isset($honeyVarietiesCatalog[$honeyVariety])) {
                 // إذا كان النوع غير موجود في القائمة الثابتة، تحقق من قاعدة البيانات
                 $existingCustomType = $db->queryOne(
@@ -2359,9 +2367,9 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'يجب إدخال نوع العسل';
             }
             
-            // التحقق من أنه إذا اختار "أخرى"، يجب إدخال نوع عسل مخصص
-            if ($_POST['honey_variety'] === 'أخرى' && empty($customHoneyVariety)) {
-                $error = 'يجب إدخال نوع العسل يدوياً عند اختيار "أخرى"';
+            // التحقق من أنه إذا اختار "إضافة نوع مخصص"، يجب إدخال نوع عسل مخصص
+            if ($_POST['honey_variety'] === '__add_custom__' && empty($customHoneyVariety)) {
+                $error = 'يجب إدخال اسم نوع العسل المخصص عند اختيار "إضافة نوع مخصص"';
             }
             
             if ($supplierId <= 0) {
@@ -4765,9 +4773,13 @@ if ($section === 'honey') {
                             <label class="form-label">نوع العسل</label>
                             <select class="form-select honey-variety-select" name="honey_variety" id="honey_variety_select">
                                 <?php 
-                                // عرض الأنواع الثابتة أولاً
+                                // عرض الأنواع الثابتة أولاً (باستثناء "أخرى")
                                 $staticCatalog = getHoneyVarietiesCatalog();
                                 foreach ($staticCatalog as $honeyVariety => $meta): 
+                                    // تخطي "أخرى" لأننا سنستبدلها بخيار "إضافة نوع مخصص"
+                                    if ($honeyVariety === 'أخرى') {
+                                        continue;
+                                    }
                                 ?>
                                     <option value="<?php echo htmlspecialchars($honeyVariety); ?>" data-code="<?php echo htmlspecialchars($meta['code']); ?>" <?php echo $honeyVariety === $defaultHoneyVariety ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars(sprintf('%s - %s', $meta['label'], $meta['code'])); ?>
@@ -4802,12 +4814,15 @@ if ($section === 'honey') {
                                     error_log("Error loading custom honey types in dropdown: " . $e->getMessage());
                                 }
                                 ?>
+                                
+                                <!-- خيار إضافة نوع مخصص -->
+                                <option value="__add_custom__" data-code="">إضافة نوع مخصص</option>
                             </select>
                         </div>
                         <div class="mb-3" id="custom_honey_variety_container" style="display: none;">
-                            <label class="form-label">أدخل نوع العسل يدوياً <span class="text-danger">*</span></label>
+                            <label class="form-label">اسم نوع العسل المخصص <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" name="custom_honey_variety" id="custom_honey_variety" placeholder="مثال: عسل الكينا" maxlength="100">
-                            <small class="text-muted">سيتم حفظ نوع العسل الجديد كما أدخلته</small>
+                            <small class="text-muted">سيتم إنشاء ID تلقائياً وحفظ نوع العسل الجديد في النظام</small>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">الحالة</label>
@@ -4992,9 +5007,10 @@ if ($section === 'honey') {
             // دالة للتحقق من القيمة المحددة
             function toggleCustomHoneyField() {
                 const selectedValue = honeyVarietySelect.value;
-                if (selectedValue === 'أخرى') {
+                if (selectedValue === '__add_custom__') {
                     customHoneyVarietyContainer.style.display = 'block';
                     customHoneyVarietyInput.required = true;
+                    customHoneyVarietyInput.focus();
                 } else {
                     customHoneyVarietyContainer.style.display = 'none';
                     customHoneyVarietyInput.required = false;
@@ -5007,6 +5023,11 @@ if ($section === 'honey') {
             
             // التحقق عند فتح modal
             addHoneyModal.addEventListener('show.bs.modal', function() {
+                // إعادة تعيين القائمة إلى القيمة الافتراضية
+                const defaultOption = honeyVarietySelect.querySelector('option[selected]');
+                if (defaultOption) {
+                    honeyVarietySelect.value = defaultOption.value;
+                }
                 toggleCustomHoneyField();
             });
             

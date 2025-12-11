@@ -550,30 +550,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // الحصول على نوع الكرتونة
                 $cartonType = trim($_POST['carton_type'] ?? '');
-                $customCartonQuantity = null;
-                $customCartonTypeId = null;
+                $customCartonQuantity = isset($_POST['custom_carton_quantity']) ? intval($_POST['custom_carton_quantity']) : null;
+                $customCartonTypeId = isset($_POST['custom_carton_type_id']) ? intval($_POST['custom_carton_type_id']) : null;
                 
-                if ($cartonType === 'custom') {
-                    // النوع المخصص
-                    $customCartonQuantity = isset($_POST['custom_carton_quantity']) ? intval($_POST['custom_carton_quantity']) : null;
-                    $customCartonTypeId = isset($_POST['custom_carton_type_id']) ? intval($_POST['custom_carton_type_id']) : null;
-                    
-                    if ($customCartonQuantity <= 0) {
-                        $customCartonQuantity = null;
-                    }
-                    if ($customCartonTypeId <= 0) {
-                        $customCartonTypeId = null;
-                    }
-                    
-                    // التأكد من أن carton_type = 'custom' إذا كانت البيانات المخصصة موجودة
-                    if ($customCartonQuantity > 0 && $customCartonTypeId > 0) {
-                        $cartonType = 'custom';
-                    } else {
-                        $cartonType = null;
-                    }
+                // Log للتحقق من البيانات الواردة
+                error_log('CREATE POST data check: carton_type=' . ($cartonType ?: 'EMPTY') . ', custom_carton_quantity=' . ($customCartonQuantity ?? 'NULL') . ', custom_carton_type_id=' . ($customCartonTypeId ?? 'NULL'));
+                
+                // تنظيف القيم
+                if ($customCartonQuantity <= 0) {
+                    $customCartonQuantity = null;
+                }
+                if ($customCartonTypeId <= 0) {
+                    $customCartonTypeId = null;
+                }
+                
+                // إذا كانت البيانات المخصصة موجودة، تأكد من أن carton_type = 'custom'
+                if ($customCartonQuantity > 0 && $customCartonTypeId > 0) {
+                    $cartonType = 'custom';
+                    error_log('CREATE: Setting carton_type to custom because custom data exists: quantity=' . $customCartonQuantity . ', type_id=' . $customCartonTypeId);
+                } elseif ($cartonType === 'custom') {
+                    // إذا تم اختيار 'custom' لكن البيانات غير كاملة، إلغاء النوع
+                    error_log('CREATE: Carton type is custom but data incomplete, clearing');
+                    $cartonType = null;
+                    $customCartonQuantity = null;
+                    $customCartonTypeId = null;
                 } elseif (!in_array($cartonType, ['kilo', 'half', 'quarter', 'third'])) {
                     $cartonType = null;
                 }
+                
+                error_log('CREATE Final carton_type value: ' . ($cartonType ?? 'NULL'));
                 
                 // التحقق من وجود عمود carton_type في الجدول
                 $cartonTypeColumnExists = !empty($db->queryOne("SHOW COLUMNS FROM product_templates LIKE 'carton_type'"));
@@ -882,6 +887,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $customCartonQuantity = isset($_POST['custom_carton_quantity']) ? intval($_POST['custom_carton_quantity']) : null;
                 $customCartonTypeId = isset($_POST['custom_carton_type_id']) ? intval($_POST['custom_carton_type_id']) : null;
                 
+                // Log للتحقق من البيانات الواردة
+                error_log('POST data check: carton_type=' . ($cartonType ?: 'EMPTY') . ', custom_carton_quantity=' . ($customCartonQuantity ?? 'NULL') . ', custom_carton_type_id=' . ($customCartonTypeId ?? 'NULL'));
+                
                 // تنظيف القيم
                 if ($customCartonQuantity <= 0) {
                     $customCartonQuantity = null;
@@ -893,14 +901,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // إذا كانت البيانات المخصصة موجودة، تأكد من أن carton_type = 'custom'
                 if ($customCartonQuantity > 0 && $customCartonTypeId > 0) {
                     $cartonType = 'custom';
+                    error_log('Setting carton_type to custom because custom data exists: quantity=' . $customCartonQuantity . ', type_id=' . $customCartonTypeId);
                 } elseif ($cartonType === 'custom') {
                     // إذا تم اختيار 'custom' لكن البيانات غير كاملة، إلغاء النوع
+                    error_log('Carton type is custom but data incomplete, clearing');
                     $cartonType = null;
                     $customCartonQuantity = null;
                     $customCartonTypeId = null;
                 } elseif (!in_array($cartonType, ['kilo', 'half', 'quarter', 'third'])) {
                     $cartonType = null;
                 }
+                
+                error_log('Final carton_type value: ' . ($cartonType ?? 'NULL'));
                 
                 // التحقق من وجود عمود carton_type في الجدول
                 $cartonTypeColumnExists = !empty($db->queryOne("SHOW COLUMNS FROM product_templates LIKE 'carton_type'"));
