@@ -4630,12 +4630,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <!-- قائمة العملاء -->
 <div class="card shadow-sm customers-list-card">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">
-            <?php echo $isSalesUser ? 'قائمة عملائي' : 'قائمة عملاء الشركة'; ?>
-            (<?php echo $totalCustomers; ?>)
-        </h5>
-    </div>
+    
     <div class="card-body">
         <div class="table-responsive dashboard-table-wrapper customers-table-container">
             <table class="table dashboard-table align-middle">

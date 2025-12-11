@@ -878,27 +878,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // تحديث القالب
                 // الحصول على نوع الكرتونة
                 $cartonType = trim($_POST['carton_type'] ?? '');
-                $customCartonQuantity = null;
-                $customCartonTypeId = null;
+                $customCartonQuantity = isset($_POST['custom_carton_quantity']) ? intval($_POST['custom_carton_quantity']) : null;
+                $customCartonTypeId = isset($_POST['custom_carton_type_id']) ? intval($_POST['custom_carton_type_id']) : null;
                 
-                if ($cartonType === 'custom') {
-                    // النوع المخصص
-                    $customCartonQuantity = isset($_POST['custom_carton_quantity']) ? intval($_POST['custom_carton_quantity']) : null;
-                    $customCartonTypeId = isset($_POST['custom_carton_type_id']) ? intval($_POST['custom_carton_type_id']) : null;
-                    
-                    if ($customCartonQuantity <= 0) {
-                        $customCartonQuantity = null;
-                    }
-                    if ($customCartonTypeId <= 0) {
-                        $customCartonTypeId = null;
-                    }
-                    
-                    // التأكد من أن carton_type = 'custom' إذا كانت البيانات المخصصة موجودة
-                    if ($customCartonQuantity > 0 && $customCartonTypeId > 0) {
-                        $cartonType = 'custom';
-                    } else {
-                        $cartonType = null;
-                    }
+                // تنظيف القيم
+                if ($customCartonQuantity <= 0) {
+                    $customCartonQuantity = null;
+                }
+                if ($customCartonTypeId <= 0) {
+                    $customCartonTypeId = null;
+                }
+                
+                // إذا كانت البيانات المخصصة موجودة، تأكد من أن carton_type = 'custom'
+                if ($customCartonQuantity > 0 && $customCartonTypeId > 0) {
+                    $cartonType = 'custom';
+                } elseif ($cartonType === 'custom') {
+                    // إذا تم اختيار 'custom' لكن البيانات غير كاملة، إلغاء النوع
+                    $cartonType = null;
+                    $customCartonQuantity = null;
+                    $customCartonTypeId = null;
                 } elseif (!in_array($cartonType, ['kilo', 'half', 'quarter', 'third'])) {
                     $cartonType = null;
                 }
