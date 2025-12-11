@@ -244,6 +244,31 @@ try {
             }
         }
     } else {
+        // إضافة أعمدة النوع المخصص للكرتونة إذا لم تكن موجودة
+        try {
+            $customCartonQuantityColumn = $db->queryOne("SHOW COLUMNS FROM product_templates LIKE 'custom_carton_quantity'");
+            if (empty($customCartonQuantityColumn)) {
+                $db->execute("ALTER TABLE `product_templates` ADD COLUMN `custom_carton_quantity` int(11) DEFAULT NULL COMMENT 'عدد المنتجات لكل كرتونة (للنوع المخصص)' AFTER `carton_type`");
+                error_log('Column custom_carton_quantity added to product_templates');
+            }
+            
+            $customCartonTypeIdColumn = $db->queryOne("SHOW COLUMNS FROM product_templates LIKE 'custom_carton_type_id'");
+            if (empty($customCartonTypeIdColumn)) {
+                $db->execute("ALTER TABLE `product_templates` ADD COLUMN `custom_carton_type_id` int(11) DEFAULT NULL COMMENT 'معرف نوع الكرتونة من packaging_materials (للنوع المخصص)' AFTER `custom_carton_quantity`");
+                // إضافة foreign key constraint
+                $packagingMaterialsTableCheck = $db->queryOne("SHOW TABLES LIKE 'packaging_materials'");
+                if (!empty($packagingMaterialsTableCheck)) {
+                    $fkCheck = $db->queryOne("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'product_templates' AND CONSTRAINT_NAME = 'product_templates_ibfk_custom_carton'");
+                    if (empty($fkCheck)) {
+                        $db->execute("ALTER TABLE `product_templates` ADD CONSTRAINT `product_templates_ibfk_custom_carton` FOREIGN KEY (`custom_carton_type_id`) REFERENCES `packaging_materials` (`id`) ON DELETE SET NULL");
+                    }
+                }
+                error_log('Column custom_carton_type_id added to product_templates');
+            }
+        } catch (Exception $colError) {
+            error_log("Column addition error (non-critical): " . $colError->getMessage());
+        }
+        
         // التحقق من وجود الجداول المرتبطة حتى لو كان product_templates موجوداً
         $packagingTableCheck = $db->queryOne("SHOW TABLES LIKE 'product_template_packaging'");
         if (empty($packagingTableCheck)) {
@@ -525,12 +550,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // الحصول على نوع الكرتونة
                 $cartonType = trim($_POST['carton_type'] ?? '');
-                if (!in_array($cartonType, ['kilo', 'half', 'quarter', 'third'])) {
+                $customCartonQuantity = null;
+                $customCartonTypeId = null;
+                
+                if ($cartonType === 'custom') {
+                    // النوع المخصص
+                    $customCartonQuantity = isset($_POST['custom_carton_quantity']) ? intval($_POST['custom_carton_quantity']) : null;
+                    $customCartonTypeId = isset($_POST['custom_carton_type_id']) ? intval($_POST['custom_carton_type_id']) : null;
+                    
+                    if ($customCartonQuantity <= 0) {
+                        $customCartonQuantity = null;
+                    }
+                    if ($customCartonTypeId <= 0) {
+                        $customCartonTypeId = null;
+                    }
+                } elseif (!in_array($cartonType, ['kilo', 'half', 'quarter', 'third'])) {
                     $cartonType = null;
                 }
                 
                 // التحقق من وجود عمود carton_type في الجدول
                 $cartonTypeColumnExists = !empty($db->queryOne("SHOW COLUMNS FROM product_templates LIKE 'carton_type'"));
+                $customCartonQuantityColumnExists = !empty($db->queryOne("SHOW COLUMNS FROM product_templates LIKE 'custom_carton_quantity'"));
+                $customCartonTypeIdColumnExists = !empty($db->queryOne("SHOW COLUMNS FROM product_templates LIKE 'custom_carton_type_id'"));
                 
                 // بناء الاستعلام ديناميكيًا بناءً على وجود الأعمدة
                 $columns = ['product_name', 'honey_quantity', 'created_by', 'status', 'template_type', 'main_supplier_id', 'notes', 'details_json'];
@@ -549,6 +590,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $columns[] = 'carton_type';
                     $placeholders[] = '?';
                     $values[] = $cartonType;
+                }
+                
+                // إضافة custom_carton_quantity إن كان العمود موجودًا
+                if ($customCartonQuantityColumnExists) {
+                    $columns[] = 'custom_carton_quantity';
+                    $placeholders[] = '?';
+                    $values[] = $customCartonQuantity;
+                }
+                
+                // إضافة custom_carton_type_id إن كان العمود موجودًا
+                if ($customCartonTypeIdColumnExists) {
+                    $columns[] = 'custom_carton_type_id';
+                    $placeholders[] = '?';
+                    $values[] = $customCartonTypeId;
                 }
                 
                 // إنشاء القالب
@@ -816,12 +871,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // تحديث القالب
                 // الحصول على نوع الكرتونة
                 $cartonType = trim($_POST['carton_type'] ?? '');
-                if (!in_array($cartonType, ['kilo', 'half', 'quarter', 'third'])) {
+                $customCartonQuantity = null;
+                $customCartonTypeId = null;
+                
+                if ($cartonType === 'custom') {
+                    // النوع المخصص
+                    $customCartonQuantity = isset($_POST['custom_carton_quantity']) ? intval($_POST['custom_carton_quantity']) : null;
+                    $customCartonTypeId = isset($_POST['custom_carton_type_id']) ? intval($_POST['custom_carton_type_id']) : null;
+                    
+                    if ($customCartonQuantity <= 0) {
+                        $customCartonQuantity = null;
+                    }
+                    if ($customCartonTypeId <= 0) {
+                        $customCartonTypeId = null;
+                    }
+                } elseif (!in_array($cartonType, ['kilo', 'half', 'quarter', 'third'])) {
                     $cartonType = null;
                 }
                 
                 // التحقق من وجود عمود carton_type في الجدول
                 $cartonTypeColumnExists = !empty($db->queryOne("SHOW COLUMNS FROM product_templates LIKE 'carton_type'"));
+                $customCartonQuantityColumnExists = !empty($db->queryOne("SHOW COLUMNS FROM product_templates LIKE 'custom_carton_quantity'"));
+                $customCartonTypeIdColumnExists = !empty($db->queryOne("SHOW COLUMNS FROM product_templates LIKE 'custom_carton_type_id'"));
                 
                 // بناء استعلام UPDATE ديناميكيًا
                 $updateFields = ['product_name = ?', 'details_json = ?', 'updated_at = NOW()'];
@@ -837,6 +908,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($cartonTypeColumnExists) {
                     $updateFields[] = 'carton_type = ?';
                     $updateValues[] = $cartonType;
+                }
+                
+                // إضافة custom_carton_quantity إن كان العمود موجودًا
+                if ($customCartonQuantityColumnExists) {
+                    $updateFields[] = 'custom_carton_quantity = ?';
+                    $updateValues[] = $customCartonQuantity;
+                }
+                
+                // إضافة custom_carton_type_id إن كان العمود موجودًا
+                if ($customCartonTypeIdColumnExists) {
+                    $updateFields[] = 'custom_carton_type_id = ?';
+                    $updateValues[] = $customCartonTypeId;
                 }
                 
                 $updateValues[] = $templateId;
@@ -1972,14 +2055,36 @@ if (file_exists($specificationsModulePath)) {
                     
                     <div class="mb-3">
                         <label class="form-label">نوع الكرتونة</label>
-                        <select class="form-select" name="carton_type">
+                        <select class="form-select" name="carton_type" id="createCartonType">
                             <option value="">اختر نوع الكرتونة (اختياري)</option>
                             <option value="kilo">كيلو (PKG-002)</option>
                             <option value="half">نص (PKG-001)</option>
                             <option value="quarter">ربع (PKG-041)</option>
                             <option value="third">ثلث (PKG-041)</option>
+                            <option value="custom">نوع مخصص</option>
                         </select>
                         <small class="text-muted">اختر نوع الكرتونة المستخدمة في تعبئة المنتج (اختياري - سيتم تطبيق الخصم التلقائي إذا تم اختياره)</small>
+                    </div>
+                    
+                    <!-- حقول النوع المخصص -->
+                    <div class="mb-3" id="customCartonFields" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">عدد المنتجات لكل كرتونة <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" name="custom_carton_quantity" id="createCustomCartonQuantity" min="1" placeholder="مثال: 11">
+                                <small class="text-muted">عدد المنتجات المطلوبة لخصم كرتونة واحدة</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">نوع الكرتونة <span class="text-danger">*</span></label>
+                                <select class="form-select" name="custom_carton_type_id" id="createCustomCartonTypeId">
+                                    <option value="">-- اختر نوع الكرتونة --</option>
+                                    <?php foreach ($packagingMaterials as $pkg): ?>
+                                        <option value="<?php echo $pkg['id']; ?>"><?php echo htmlspecialchars($pkg['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <small class="text-muted">اختر نوع الكرتونة من قائمة أدوات التعبئة</small>
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="mb-3">
@@ -2082,8 +2187,30 @@ if (file_exists($specificationsModulePath)) {
                             <option value="half">نص (PKG-001)</option>
                             <option value="quarter">ربع (PKG-041)</option>
                             <option value="third">ثلث (PKG-041)</option>
+                            <option value="custom">نوع مخصص</option>
                         </select>
                         <small class="text-muted">اختر نوع الكرتونة المستخدمة في تعبئة المنتج (اختياري - سيتم تطبيق الخصم التلقائي إذا تم اختياره)</small>
+                    </div>
+                    
+                    <!-- حقول النوع المخصص للتعديل -->
+                    <div class="mb-3" id="editCustomCartonFields" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">عدد المنتجات لكل كرتونة <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" name="custom_carton_quantity" id="editCustomCartonQuantity" min="1" placeholder="مثال: 11">
+                                <small class="text-muted">عدد المنتجات المطلوبة لخصم كرتونة واحدة</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">نوع الكرتونة <span class="text-danger">*</span></label>
+                                <select class="form-select" name="custom_carton_type_id" id="editCustomCartonTypeId">
+                                    <option value="">-- اختر نوع الكرتونة --</option>
+                                    <?php foreach ($packagingMaterials as $pkg): ?>
+                                        <option value="<?php echo $pkg['id']; ?>"><?php echo htmlspecialchars($pkg['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <small class="text-muted">اختر نوع الكرتونة من قائمة أدوات التعبئة</small>
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="mb-3">
@@ -2285,6 +2412,62 @@ let rawMaterialIndex = 0;
 
 const PRINT_BARCODE_URL = '<?php echo addslashes(getRelativeUrl("print_barcode.php")); ?>';
 let lastCreatedBatchInfo = null;
+
+// معالجة تغيير نوع الكرتونة في نموذج الإنشاء
+document.getElementById('createCartonType')?.addEventListener('change', function() {
+    const customFields = document.getElementById('customCartonFields');
+    if (customFields) {
+        if (this.value === 'custom') {
+            customFields.style.display = 'block';
+            // جعل الحقول مطلوبة
+            const quantityInput = document.getElementById('createCustomCartonQuantity');
+            const typeSelect = document.getElementById('createCustomCartonTypeId');
+            if (quantityInput) quantityInput.required = true;
+            if (typeSelect) typeSelect.required = true;
+        } else {
+            customFields.style.display = 'none';
+            // إزالة الـ required
+            const quantityInput = document.getElementById('createCustomCartonQuantity');
+            const typeSelect = document.getElementById('createCustomCartonTypeId');
+            if (quantityInput) {
+                quantityInput.required = false;
+                quantityInput.value = '';
+            }
+            if (typeSelect) {
+                typeSelect.required = false;
+                typeSelect.value = '';
+            }
+        }
+    }
+});
+
+// معالجة تغيير نوع الكرتونة في نموذج التعديل
+document.getElementById('editCartonType')?.addEventListener('change', function() {
+    const customFields = document.getElementById('editCustomCartonFields');
+    if (customFields) {
+        if (this.value === 'custom') {
+            customFields.style.display = 'block';
+            // جعل الحقول مطلوبة
+            const quantityInput = document.getElementById('editCustomCartonQuantity');
+            const typeSelect = document.getElementById('editCustomCartonTypeId');
+            if (quantityInput) quantityInput.required = true;
+            if (typeSelect) typeSelect.required = true;
+        } else {
+            customFields.style.display = 'none';
+            // إزالة الـ required
+            const quantityInput = document.getElementById('editCustomCartonQuantity');
+            const typeSelect = document.getElementById('editCustomCartonTypeId');
+            if (quantityInput) {
+                quantityInput.required = false;
+                quantityInput.value = '';
+            }
+            if (typeSelect) {
+                typeSelect.required = false;
+                typeSelect.value = '';
+            }
+        }
+    }
+});
 
 document.getElementById('createTemplateModal')?.addEventListener('show.bs.modal', function () {
     const container = document.getElementById('rawMaterialsContainer');
@@ -3020,6 +3203,29 @@ function editTemplate(templateId, templateDataJson, isBase64 = false) {
     if (editCartonTypeEl) {
         const cartonType = templateData.carton_type || '';
         editCartonTypeEl.value = cartonType;
+        
+        // إظهار/إخفاء حقول النوع المخصص
+        const editCustomFields = document.getElementById('editCustomCartonFields');
+        if (editCustomFields) {
+            if (cartonType === 'custom') {
+                editCustomFields.style.display = 'block';
+                // ملء القيم إذا كانت موجودة
+                if (templateData.custom_carton_quantity) {
+                    const quantityInput = document.getElementById('editCustomCartonQuantity');
+                    if (quantityInput) {
+                        quantityInput.value = templateData.custom_carton_quantity;
+                    }
+                }
+                if (templateData.custom_carton_type_id) {
+                    const typeSelect = document.getElementById('editCustomCartonTypeId');
+                    if (typeSelect) {
+                        typeSelect.value = templateData.custom_carton_type_id;
+                    }
+                }
+            } else {
+                editCustomFields.style.display = 'none';
+            }
+        }
     }
     
     // ملء حقل السعر

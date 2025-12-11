@@ -1163,7 +1163,321 @@ if (isset($_GET['id'])) {
 }
 ?>
 <style>
-/* تحسينات عرض الفلترة على الهواتف الصغيرة */
+/* ===== تصميم احترافي لعرض تفاصيل الطلب ===== */
+.order-details-card {
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.order-details-card .card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    padding: 1rem 1.5rem;
+}
+
+.order-details-card .card-body {
+    padding: 1.5rem;
+}
+
+.section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.order-info-section,
+.order-status-section {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.25rem;
+    height: 100%;
+}
+
+.info-grid,
+.status-grid {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.info-item:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-size: 0.85rem;
+    color: #6c757d;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+}
+
+.info-value {
+    font-size: 0.95rem;
+    color: #2d3748;
+    font-weight: 600;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: #fff;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.status-item:last-child {
+    margin-bottom: 0;
+}
+
+.status-label {
+    font-size: 0.9rem;
+    color: #495057;
+    font-weight: 500;
+}
+
+.status-badge,
+.priority-badge {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.75rem;
+    font-weight: 600;
+}
+
+/* ===== جدول عناصر الطلب الاحترافي ===== */
+.order-items-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 2px solid #e2e8f0;
+}
+
+.order-items-table-wrapper {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.order-items-table {
+    margin: 0;
+    background: #fff;
+}
+
+.order-items-table thead {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+}
+
+.order-items-table thead th {
+    border: none;
+    padding: 1rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-align: right;
+}
+
+.order-items-table tbody tr {
+    transition: all 0.2s ease;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.order-items-table tbody tr:hover {
+    background-color: #f8f9fa;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.order-items-table tbody td {
+    padding: 1rem;
+    vertical-align: middle;
+    border: none;
+}
+
+.quantity-badge {
+    display: inline-block;
+    background: #e3f2fd;
+    color: #1976d2;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.production-status-badge {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.75rem;
+    font-weight: 600;
+}
+
+.order-notes-section {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.notes-content {
+    color: #856404;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* ===== Responsive Design للهواتف ===== */
+@media (max-width: 767.98px) {
+    .order-details-card .card-header {
+        padding: 0.75rem 1rem;
+    }
+    
+    .order-details-card .card-body {
+        padding: 1rem;
+    }
+    
+    .section-title {
+        font-size: 1rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .order-info-section,
+    .order-status-section {
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .info-item {
+        padding: 0.4rem 0;
+    }
+    
+    .info-label {
+        font-size: 0.8rem;
+    }
+    
+    .info-value {
+        font-size: 0.9rem;
+    }
+    
+    .status-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 0.6rem;
+    }
+    
+    /* جدول عناصر الطلب على الموبايل */
+    .order-items-table-wrapper {
+        border-radius: 6px;
+    }
+    
+    .order-items-table thead {
+        display: none;
+    }
+    
+    .order-items-table tbody {
+        display: block;
+    }
+    
+    .order-items-table tbody tr {
+        display: block;
+        margin-bottom: 0.75rem;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 0.75rem;
+        background: #fff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    }
+    
+    .order-items-table tbody tr:last-child {
+        margin-bottom: 0;
+    }
+    
+    .order-items-table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f0f0f0;
+        text-align: right;
+    }
+    
+    .order-items-table tbody td:last-child {
+        border-bottom: none;
+    }
+    
+    .order-items-table tbody td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #495057;
+        font-size: 0.85rem;
+        margin-left: 0.5rem;
+    }
+    
+    .order-items-table tbody td:first-child::before {
+        content: "رقم:";
+    }
+    
+    .order-items-table tbody td:nth-child(2)::before {
+        content: "المنتج:";
+    }
+    
+    .order-items-table tbody td:nth-child(3)::before {
+        content: "الكمية:";
+    }
+    
+    .order-items-table tbody td:nth-child(4)::before {
+        content: "حالة الإنتاج:";
+    }
+    
+    .order-items-table tbody td:first-child {
+        font-weight: 600;
+        color: #6c757d;
+    }
+    
+    .quantity-badge {
+        font-size: 0.85rem;
+        padding: 0.3rem 0.6rem;
+    }
+    
+    .production-status-badge {
+        font-size: 0.8rem;
+        padding: 0.35rem 0.6rem;
+    }
+}
+
+/* ===== تحسينات للشاشات الصغيرة جداً ===== */
+@media (max-width: 576px) {
+    .order-details-card .card-header h5 {
+        font-size: 0.95rem;
+    }
+    
+    .section-title {
+        font-size: 0.95rem;
+    }
+    
+    .info-label,
+    .status-label {
+        font-size: 0.75rem;
+    }
+    
+    .info-value {
+        font-size: 0.85rem;
+    }
+    
+    .order-items-table tbody td {
+        font-size: 0.85rem;
+    }
+}
+
+/* ===== تحسينات عرض الفلترة على الهواتف الصغيرة ===== */
 @media (max-width: 767.98px) {
     /* تقليل المسافات بين الحقول على الهواتف */
     .card-body form.row {
@@ -1224,158 +1538,6 @@ if (isset($_GET['id'])) {
     }
 }
 
-/* تحسينات الجداول على الهواتف - فقط لعناصر الطلب */
-@media (max-width: 767.98px) {
-    /* تحسين جدول تفاصيل الطلب - كل عنوان وقيمته على سطر واحد - محكم داخل الإطار */
-    .dashboard-table-details {
-        width: 100%;
-        max-width: 100%;
-        font-size: 0.9rem;
-        margin: 0 !important;
-        padding: 0 !important;
-        border-spacing: 0 !important;
-        border-collapse: collapse !important;
-        table-layout: fixed !important;
-        overflow-x: hidden !important;
-    }
-    
-    .dashboard-table-details tr {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        margin-bottom: 0.25rem !important;
-        padding: 0.2rem 0 !important;
-        border-bottom: 1px solid #e9ecef;
-    }
-    
-    .dashboard-table-details tr:first-child {
-        padding-top: 0 !important;
-        margin-top: 0 !important;
-    }
-    
-    .dashboard-table-details tr:last-child {
-        border-bottom: none;
-        margin-bottom: 0 !important;
-        padding-bottom: 0 !important;
-    }
-    
-    .dashboard-table-details th {
-        width: auto;
-        min-width: 35%;
-        max-width: 45%;
-        font-size: 0.85rem;
-        font-weight: 600;
-        padding: 0.2rem 0.4rem 0.2rem 0 !important;
-        margin: 0 !important;
-        vertical-align: middle;
-        color: #495057;
-        flex-shrink: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    
-    .dashboard-table-details td {
-        font-size: 0.9rem;
-        padding: 0.2rem 0 !important;
-        margin: 0 !important;
-        word-break: break-word;
-        flex: 1;
-        min-width: 0;
-        vertical-align: middle;
-    }
-    
-    /* تحسين جدول عناصر الطلب - تقليل المسافات الفارغة */
-    .dashboard-table--compact {
-        font-size: 0.85rem;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-    
-    .dashboard-table--compact thead {
-        display: none;
-    }
-    
-    .dashboard-table--compact tbody {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-    
-    .dashboard-table--compact tbody tr {
-        display: block;
-        margin-bottom: 0.25rem !important;
-        margin-top: 0 !important;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        padding: 0.25rem 0.4rem !important;
-        background: #fff;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-    }
-    
-    .dashboard-table--compact tbody tr:first-child {
-        margin-top: 0 !important;
-        padding-top: 0.25rem !important;
-    }
-    
-    .dashboard-table--compact tbody tr:last-child {
-        margin-bottom: 0 !important;
-        padding-bottom: 0.25rem !important;
-    }
-    
-    .dashboard-table--compact tbody td {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.15rem 0 !important;
-        border: none !important;
-        border-bottom: 1px solid #f0f0f0;
-        margin: 0 !important;
-    }
-    
-    .dashboard-table--compact tbody td:first-child {
-        padding-top: 0.15rem !important;
-        margin-top: 0 !important;
-    }
-    
-    .dashboard-table--compact tbody td:last-child {
-        border-bottom: none !important;
-        padding-bottom: 0.15rem !important;
-        margin-bottom: 0 !important;
-    }
-    
-    .dashboard-table--compact tbody td::before {
-        content: attr(data-label) ":";
-        font-weight: 600;
-        color: #495057;
-        margin-left: 0.4rem;
-        text-align: right;
-        flex-shrink: 0;
-        font-size: 0.8rem;
-    }
-    
-    /* تحسين عرض تفاصيل الطلب - إزالة جميع المسافات */
-    .card-body {
-        padding: 0.75rem !important;
-    }
-    
-    .card-body .row {
-        margin: 0 !important;
-    }
-    
-    .card-body .row > .col-md-6 {
-        margin-bottom: 0 !important;
-        padding: 0.5rem !important;
-    }
-    
-    .card-body .row > .col-md-6:last-child {
-        margin-bottom: 0 !important;
-    }
-    
-    /* إزالة المسافات من dashboard-table-wrapper */
-    .dashboard-table-wrapper {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
     
     /* تحسين النموذج في Modal */
     .modal-xl .modal-body .row > div {
@@ -1548,69 +1710,73 @@ if (isset($_GET['id'])) {
 
 <?php if ($selectedOrder): ?>
     <!-- عرض طلب محدد -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center" style="padding: 0.75rem 1rem !important;">
-            <h5 class="mb-0" style="margin: 0 !important;">طلب رقم: <?php echo htmlspecialchars($selectedOrder['order_number']); ?></h5>
+    <div class="card shadow-sm mb-4 order-details-card">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-file-earmark-text me-2"></i>
+                طلب رقم: <?php echo htmlspecialchars($selectedOrder['order_number']); ?>
+            </h5>
             <a href="?page=orders" class="btn btn-light btn-sm">
-                <i class="bi bi-x"></i>
+                <i class="bi bi-x-lg"></i>
             </a>
         </div>
-        <div class="card-body" style="padding: 0.75rem 1rem !important; overflow-x: hidden !important;">
-            <div class="row" style="margin: 0 !important; --bs-gutter-x: 0.5rem; --bs-gutter-y: 0;">
-                <div class="col-12 col-md-6" style="padding: 0.5rem !important; margin-bottom: 0 !important; max-width: 100% !important; overflow-x: hidden !important;">
-                    <table class="table dashboard-table-details" style="margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; table-layout: fixed !important;">
-                        <tr>
-                            <th width="40%">العميل:</th>
-                            <td><?php echo htmlspecialchars($selectedOrder['customer_name'] ?? '-'); ?></td>
-                        </tr>
-                        <tr>
-                            <th>رقم العميل:</th>
-                            <td><?php echo htmlspecialchars($selectedOrder['customer_phone'] ?? '-'); ?></td>
-                        </tr>
-                        <tr>
-                            <th>عنوان العميل:</th>
-                            <td><?php echo htmlspecialchars($selectedOrder['customer_address'] ?? '-'); ?></td>
-                        </tr>
-                        <tr>
-                            <th>تاريخ الطلب:</th>
-                            <td><?php echo formatDate($selectedOrder['order_date']); ?></td>
-                        </tr>
-                        <tr>
-                            <th>تاريخ التسليم المطلوب:</th>
-                            <td><?php echo $selectedOrder['delivery_date'] ? formatDate($selectedOrder['delivery_date']) : '-'; ?></td>
-                        </tr>
-                        <tr>
-                            <th>مندوب المبيعات:</th>
-                            <td><?php echo htmlspecialchars($selectedOrder['sales_rep_name'] ?? '-'); ?></td>
-                        </tr>
-                        <tr>
-                            <th>الأولوية:</th>
-                            <td>
-                                <span class="badge bg-<?php 
-                                    echo $selectedOrder['priority'] === 'urgent' ? 'danger' : 
-                                        ($selectedOrder['priority'] === 'high' ? 'warning' : 
-                                        ($selectedOrder['priority'] === 'normal' ? 'info' : 'secondary')); 
-                                ?>">
-                                    <?php 
-                                    $priorities = [
-                                        'low' => 'منخفضة',
-                                        'normal' => 'عادية',
-                                        'high' => 'عالية',
-                                        'urgent' => 'عاجلة'
-                                    ];
-                                    echo $priorities[$selectedOrder['priority']] ?? $selectedOrder['priority'];
-                                    ?>
+        <div class="card-body">
+            <!-- معلومات الطلب -->
+            <div class="row g-3 mb-4">
+                <div class="col-12 col-lg-6">
+                    <div class="order-info-section">
+                        <h6 class="section-title">
+                            <i class="bi bi-info-circle me-2"></i>معلومات الطلب
+                        </h6>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="info-label">
+                                    <i class="bi bi-person me-1"></i>العميل:
                                 </span>
-                            </td>
-                        </tr>
-                    </table>
+                                <span class="info-value"><?php echo htmlspecialchars($selectedOrder['customer_name'] ?? '-'); ?></span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">
+                                    <i class="bi bi-telephone me-1"></i>رقم العميل:
+                                </span>
+                                <span class="info-value"><?php echo htmlspecialchars($selectedOrder['customer_phone'] ?? '-'); ?></span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">
+                                    <i class="bi bi-geo-alt me-1"></i>عنوان العميل:
+                                </span>
+                                <span class="info-value"><?php echo htmlspecialchars($selectedOrder['customer_address'] ?? '-'); ?></span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">
+                                    <i class="bi bi-calendar-event me-1"></i>تاريخ الطلب:
+                                </span>
+                                <span class="info-value"><?php echo formatDate($selectedOrder['order_date']); ?></span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">
+                                    <i class="bi bi-calendar-check me-1"></i>تاريخ التسليم المطلوب:
+                                </span>
+                                <span class="info-value"><?php echo $selectedOrder['delivery_date'] ? formatDate($selectedOrder['delivery_date']) : '-'; ?></span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">
+                                    <i class="bi bi-person-badge me-1"></i>مندوب المبيعات:
+                                </span>
+                                <span class="info-value"><?php echo htmlspecialchars($selectedOrder['sales_rep_name'] ?? '-'); ?></span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-12 col-md-6" style="padding: 0.5rem !important; margin-bottom: 0 !important; max-width: 100% !important; overflow-x: hidden !important;">
-                    <table class="table dashboard-table-details" style="margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; table-layout: fixed !important;">
-                        <tr>
-                            <th width="40%">الحالة:</th>
-                            <td>
-                                <span class="badge bg-<?php 
+                <div class="col-12 col-lg-6">
+                    <div class="order-status-section">
+                        <h6 class="section-title">
+                            <i class="bi bi-clipboard-check me-2"></i>حالة الطلب
+                        </h6>
+                        <div class="status-grid">
+                            <div class="status-item">
+                                <span class="status-label">الحالة:</span>
+                                <span class="badge status-badge bg-<?php 
                                     echo $selectedOrder['status'] === 'delivered' ? 'success' : 
                                         ($selectedOrder['status'] === 'in_production' ? 'info' : 
                                         ($selectedOrder['status'] === 'cancelled' ? 'danger' : 'warning')); 
@@ -1627,59 +1793,89 @@ if (isset($_GET['id'])) {
                                     echo $statuses[$selectedOrder['status']] ?? $selectedOrder['status'];
                                     ?>
                                 </span>
-                            </td>
-                        </tr>
-                    </table>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-label">الأولوية:</span>
+                                <span class="badge priority-badge bg-<?php 
+                                    echo $selectedOrder['priority'] === 'urgent' ? 'danger' : 
+                                        ($selectedOrder['priority'] === 'high' ? 'warning' : 
+                                        ($selectedOrder['priority'] === 'normal' ? 'info' : 'secondary')); 
+                                ?>">
+                                    <?php 
+                                    $priorities = [
+                                        'low' => 'منخفضة',
+                                        'normal' => 'عادية',
+                                        'high' => 'عالية',
+                                        'urgent' => 'عاجلة'
+                                    ];
+                                    echo $priorities[$selectedOrder['priority']] ?? $selectedOrder['priority'];
+                                    ?>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
+            <!-- عناصر الطلب -->
             <?php if (!empty($selectedOrder['items'])): ?>
-                <h6 class="mt-2 mb-1" style="margin-top: 0.5rem !important; margin-bottom: 0.25rem !important; padding: 0 !important;">عناصر الطلب:</h6>
-                <div class="table-responsive dashboard-table-wrapper" style="margin: 0 !important; padding: 0 !important; border: none !important; box-shadow: none !important; border-radius: 0 !important;">
-                    <table class="table dashboard-table dashboard-table--compact align-middle" style="margin: 0 !important; padding: 0 !important; border-spacing: 0 !important; border-collapse: collapse !important;">
-                        <thead style="display: none !important;">
-                            <tr>
-                                <th>المنتج</th>
-                                <th>الكمية</th>
-                                <th>حالة الإنتاج</th>
-                            </tr>
-                        </thead>
-                        <tbody style="margin: 0 !important; padding: 0 !important; display: block !important;">
-                            <?php foreach ($selectedOrder['items'] as $item): ?>
-                                <tr style="margin: 0 0 0.25rem 0 !important; padding: 0.25rem 0.4rem !important; display: block !important; border: 1px solid #dee2e6; border-radius: 4px; background: #fff;">
-                                    <td data-label="المنتج" style="margin: 0 !important; padding: 0.15rem 0 !important; display: flex !important; justify-content: space-between !important; align-items: center !important; border-bottom: 1px solid #f0f0f0;">
-                                        <span><?php echo htmlspecialchars($item['product_name'] ?? '-'); ?></span>
-                                    </td>
-                                    <td data-label="الكمية" style="margin: 0 !important; padding: 0.15rem 0 !important; display: flex !important; justify-content: space-between !important; align-items: center !important; border-bottom: 1px solid #f0f0f0;">
-                                        <span><?php echo number_format($item['quantity'], 2); ?></span>
-                                    </td>
-                                    <td data-label="حالة الإنتاج" style="margin: 0 !important; padding: 0.15rem 0 !important; display: flex !important; justify-content: space-between !important; align-items: center !important;">
-                                        <span class="badge bg-<?php 
-                                            $productionStatus = $item['production_status'] ?? 'pending';
-                                            echo $productionStatus === 'completed' ? 'success' : 
-                                                ($productionStatus === 'in_production' ? 'info' : 'warning'); 
-                                        ?>">
+                <div class="order-items-section">
+                    <h6 class="section-title mb-3">
+                        <i class="bi bi-list-ul me-2"></i>عناصر الطلب
+                    </h6>
+                    <div class="table-responsive order-items-table-wrapper">
+                        <table class="table table-hover order-items-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">#</th>
+                                    <th>اسم المنتج</th>
+                                    <th class="text-center" style="width: 120px;">الكمية</th>
+                                    <th class="text-center" style="width: 150px;">حالة الإنتاج</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($selectedOrder['items'] as $index => $item): ?>
+                                    <tr>
+                                        <td class="text-muted" data-label="رقم"><?php echo $index + 1; ?></td>
+                                        <td data-label="المنتج">
+                                            <strong><?php echo htmlspecialchars($item['product_name'] ?? '-'); ?></strong>
+                                        </td>
+                                        <td class="text-center" data-label="الكمية">
+                                            <span class="quantity-badge"><?php echo number_format($item['quantity'], 2); ?></span>
+                                        </td>
+                                        <td class="text-center" data-label="حالة الإنتاج">
                                             <?php 
+                                            $productionStatus = $item['production_status'] ?? 'pending';
                                             $productionStatuses = [
                                                 'pending' => 'معلق',
                                                 'in_production' => 'قيد الإنتاج',
                                                 'completed' => 'مكتمل'
                                             ];
-                                            echo $productionStatuses[$productionStatus] ?? $productionStatus;
                                             ?>
-                                        </span>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                                            <span class="badge production-status-badge bg-<?php 
+                                                echo $productionStatus === 'completed' ? 'success' : 
+                                                    ($productionStatus === 'in_production' ? 'info' : 'warning'); 
+                                            ?>">
+                                                <?php echo $productionStatuses[$productionStatus] ?? $productionStatus; ?>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             <?php endif; ?>
             
-            <?php if ($selectedOrder['notes']): ?>
-                <div class="mt-2" style="margin-top: 0.5rem !important; padding-top: 0.5rem !important; border-top: 1px solid #e9ecef;">
-                    <h6 style="margin-bottom: 0.25rem !important;">ملاحظات:</h6>
-                    <p style="margin: 0 !important; padding: 0 !important;"><?php echo nl2br(htmlspecialchars($selectedOrder['notes'])); ?></p>
+            <!-- الملاحظات -->
+            <?php if (!empty($selectedOrder['notes'])): ?>
+                <div class="order-notes-section mt-4">
+                    <h6 class="section-title">
+                        <i class="bi bi-sticky me-2"></i>ملاحظات
+                    </h6>
+                    <div class="notes-content">
+                        <?php echo nl2br(htmlspecialchars($selectedOrder['notes'])); ?>
+                    </div>
                 </div>
             <?php endif; ?>
         </div>
