@@ -620,7 +620,38 @@ try {
                     error_log("Successfully converted honey_variety column from ENUM to VARCHAR");
                 } catch (Exception $e) {
                     error_log("Error converting honey_variety column: " . $e->getMessage());
+                    // محاولة بديلة: حذف العمود وإعادة إنشائه
+                    try {
+                        $db->execute("ALTER TABLE `honey_stock` DROP COLUMN `honey_variety`");
+                        $db->execute("ALTER TABLE `honey_stock` ADD COLUMN `honey_variety` VARCHAR(100) DEFAULT NULL COMMENT 'نوع العسل (يدعم أنواع مخصصة)' AFTER `supplier_id`");
+                        $db->execute("ALTER TABLE `honey_stock` ADD KEY `honey_variety` (`honey_variety`)");
+                        $db->execute("ALTER TABLE `honey_stock` ADD KEY `supplier_variety` (`supplier_id`, `honey_variety`)");
+                        error_log("Successfully recreated honey_variety column as VARCHAR");
+                    } catch (Exception $e2) {
+                        error_log("Error recreating honey_variety column: " . $e2->getMessage());
+                    }
                 }
+            } elseif (stripos($columnType, 'varchar') === false && stripos($columnType, 'char') === false) {
+                // إذا كان نوع العمود غير VARCHAR أو CHAR، حاول تحويله
+                try {
+                    $db->execute("
+                        ALTER TABLE `honey_stock` 
+                        MODIFY COLUMN `honey_variety` VARCHAR(100) DEFAULT NULL COMMENT 'نوع العسل (يدعم أنواع مخصصة)'
+                    ");
+                    error_log("Successfully converted honey_variety column to VARCHAR");
+                } catch (Exception $e) {
+                    error_log("Error converting honey_variety column to VARCHAR: " . $e->getMessage());
+                }
+            }
+        } else {
+            // إذا لم يكن العمود موجوداً، أضفه
+            try {
+                $db->execute("ALTER TABLE `honey_stock` ADD COLUMN `honey_variety` VARCHAR(100) DEFAULT NULL COMMENT 'نوع العسل (يدعم أنواع مخصصة)' AFTER `supplier_id`");
+                $db->execute("ALTER TABLE `honey_stock` ADD KEY `honey_variety` (`honey_variety`)");
+                $db->execute("ALTER TABLE `honey_stock` ADD KEY `supplier_variety` (`supplier_id`, `honey_variety`)");
+                error_log("Successfully added honey_variety column as VARCHAR");
+            } catch (Exception $e) {
+                error_log("Error adding honey_variety column: " . $e->getMessage());
             }
         }
     }
@@ -2340,6 +2371,7 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($existingCustomType) {
                         // استخدام ID الموجود
                         $honeyVarietyCode = $existingCustomType['honey_type_id'];
+                        error_log("Using existing custom honey type: {$honeyVariety} with ID: {$honeyVarietyCode}");
                     } else {
                         // إنشاء نوع عسل جديد مع ID عشوائي
                         $honeyVarietyCode = generateUniqueHoneyTypeId($db);
@@ -2350,6 +2382,7 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                                 "INSERT INTO honey_types (honey_type_id, name, is_custom, created_by) VALUES (?, ?, 1, ?)",
                                 [$honeyVarietyCode, $honeyVariety, $currentUser['id']]
                             );
+                            error_log("Created new custom honey type: {$honeyVariety} with ID: {$honeyVarietyCode}");
                         } catch (Exception $e) {
                             error_log("Error saving custom honey type: " . $e->getMessage());
                             $error = 'حدث خطأ أثناء حفظ نوع العسل الجديد. يرجى المحاولة مرة أخرى.';
@@ -2408,6 +2441,9 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     : getHoneyVarietyCode($honeyVariety);
             }
             
+            // التأكد من أن $honeyVariety غير فارغ بعد كل المعالجة
+            $honeyVariety = trim($honeyVariety ?? '');
+            
             // التحقق من أن نوع العسل غير فارغ
             if (empty($honeyVariety)) {
                 $error = 'يجب إدخال نوع العسل';
@@ -2418,27 +2454,52 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'يجب إدخال اسم نوع العسل المخصص عند اختيار "إضافة نوع مخصص"';
             }
             
+            // تسجيل للتشخيص قبل التحقق النهائي
+            error_log("Before validation - honey_variety: '{$honeyVariety}', customHoneyVariety: '{$customHoneyVariety}', POST honey_variety: '" . ($_POST['honey_variety'] ?? '') . "'");
+            
             if ($supplierId <= 0) {
                 $error = 'يجب اختيار المورد';
             } elseif ($quantity <= 0) {
                 $error = 'يجب إدخال كمية صحيحة';
+            } elseif (empty($honeyVariety) || trim($honeyVariety) === '') {
+                $error = 'يجب تحديد نوع العسل';
             } elseif (empty($error)) {
-                $existingStock = $db->queryOne("SELECT * FROM honey_stock WHERE supplier_id = ? AND honey_variety = ?", [$supplierId, $honeyVariety]);
+                // تسجيل قبل الحفظ
+                error_log("Saving honey - supplier_id: {$supplierId}, honey_variety: '{$honeyVariety}', quantity: {$quantity}, honey_type: {$honeyType}");
+                // التأكد من أن honey_variety غير NULL قبل الاستعلام
+                $honeyVarietyForQuery = $honeyVariety ?: null;
+                $existingStock = $db->queryOne("SELECT * FROM honey_stock WHERE supplier_id = ? AND (honey_variety = ? OR (honey_variety IS NULL AND ? IS NULL))", [$supplierId, $honeyVarietyForQuery, $honeyVarietyForQuery]);
                 if ($existingStock && isset($existingStock['id'])) {
                     $supplyStockId = (int)$existingStock['id'];
                 }
                 
                 if ($existingStock) {
                     if ($honeyType === 'raw') {
-                        $db->execute("UPDATE honey_stock SET raw_honey_quantity = raw_honey_quantity + ?, updated_at = NOW() WHERE supplier_id = ? AND honey_variety = ?", [$quantity, $supplierId, $honeyVariety]);
+                        $db->execute("UPDATE honey_stock SET raw_honey_quantity = raw_honey_quantity + ?, honey_variety = ?, updated_at = NOW() WHERE supplier_id = ? AND (honey_variety = ? OR (honey_variety IS NULL AND ? IS NULL))", [$quantity, $honeyVariety, $supplierId, $honeyVarietyForQuery, $honeyVarietyForQuery]);
                     } else {
-                        $db->execute("UPDATE honey_stock SET filtered_honey_quantity = filtered_honey_quantity + ?, updated_at = NOW() WHERE supplier_id = ? AND honey_variety = ?", [$quantity, $supplierId, $honeyVariety]);
+                        $db->execute("UPDATE honey_stock SET filtered_honey_quantity = filtered_honey_quantity + ?, honey_variety = ?, updated_at = NOW() WHERE supplier_id = ? AND (honey_variety = ? OR (honey_variety IS NULL AND ? IS NULL))", [$quantity, $honeyVariety, $supplierId, $honeyVarietyForQuery, $honeyVarietyForQuery]);
                     }
                 } else {
-                    if ($honeyType === 'raw') {
-                        $insertResult = $db->execute("INSERT INTO honey_stock (supplier_id, honey_variety, raw_honey_quantity, filtered_honey_quantity) VALUES (?, ?, ?, 0)", [$supplierId, $honeyVariety, $quantity]);
+                    // التأكد من أن honey_variety غير فارغ قبل الإدراج
+                    if (empty($honeyVariety) || trim($honeyVariety) === '') {
+                        $error = 'يجب تحديد نوع العسل قبل الحفظ';
+                        error_log("ERROR: honey_variety is empty before INSERT - supplier_id: {$supplierId}, quantity: {$quantity}");
                     } else {
-                        $insertResult = $db->execute("INSERT INTO honey_stock (supplier_id, honey_variety, raw_honey_quantity, filtered_honey_quantity) VALUES (?, ?, 0, ?)", [$supplierId, $honeyVariety, $quantity]);
+                        // تسجيل قبل الإدراج
+                        error_log("INSERTING honey_stock - supplier_id: {$supplierId}, honey_variety: '{$honeyVariety}', quantity: {$quantity}, honey_type: {$honeyType}");
+                        
+                        if ($honeyType === 'raw') {
+                            $insertResult = $db->execute("INSERT INTO honey_stock (supplier_id, honey_variety, raw_honey_quantity, filtered_honey_quantity) VALUES (?, ?, ?, 0)", [$supplierId, $honeyVariety, $quantity]);
+                        } else {
+                            $insertResult = $db->execute("INSERT INTO honey_stock (supplier_id, honey_variety, raw_honey_quantity, filtered_honey_quantity) VALUES (?, ?, 0, ?)", [$supplierId, $honeyVariety, $quantity]);
+                        }
+                        
+                        // التحقق من نجاح الإدراج
+                        if (!empty($insertResult)) {
+                            error_log("SUCCESS: honey_stock inserted - supplier_id: {$supplierId}, honey_variety: '{$honeyVariety}'");
+                        } else {
+                            error_log("WARNING: honey_stock insert may have failed - supplier_id: {$supplierId}, honey_variety: '{$honeyVariety}'");
+                        }
                     }
                     if (!empty($insertResult['insert_id'])) {
                         $supplyStockId = (int)$insertResult['insert_id'];
