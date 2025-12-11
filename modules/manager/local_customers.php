@@ -2916,10 +2916,19 @@ document.addEventListener('DOMContentLoaded', function() {
     var addLocalCustomerRegionSelect = document.getElementById('addLocalCustomerRegionId');
     var editLocalCustomerRegionSelect = document.getElementById('editLocalCustomerRegionId');
     
+    console.log('Local region form elements:', {
+        form: addRegionFromLocalCustomerForm,
+        modal: addRegionFromLocalCustomerModal,
+        addSelect: addLocalCustomerRegionSelect,
+        editSelect: editLocalCustomerRegionSelect
+    });
+    
     if (addRegionFromLocalCustomerForm && addRegionFromLocalCustomerModal) {
+        console.log('Setting up add region from local customer form handler');
         addRegionFromLocalCustomerForm.addEventListener('submit', function(e) {
             e.preventDefault();
             e.stopPropagation();
+            console.log('Add region from local customer form submitted');
             
             var regionNameInput = document.getElementById('newLocalRegionName');
             var regionName = regionNameInput ? regionNameInput.value.trim() : '';
@@ -2946,21 +2955,25 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('action', 'add_region_ajax');
             formData.append('name', regionName);
             
+            console.log('Sending AJAX request to add region:', regionName);
             fetch(window.location.href, {
                 method: 'POST',
                 body: formData
             })
             .then(function(response) {
+                console.log('Response status:', response.status);
                 if (!response.ok) {
-                    throw new Error('Network response was not ok');
+                    throw new Error('Network response was not ok: ' + response.status);
                 }
                 return response.json();
             })
             .then(function(data) {
+                console.log('Response data:', data);
                 if (submitBtn) submitBtn.disabled = false;
                 if (spinner) spinner.classList.add('d-none');
                 
                 if (data && data.success) {
+                    console.log('Region added successfully:', data.region);
                     // إضافة المنطقة الجديدة إلى select
                     var newOption = document.createElement('option');
                     newOption.value = data.region.id;

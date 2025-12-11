@@ -4251,10 +4251,19 @@ document.addEventListener('DOMContentLoaded', function () {
     var addCustomerRegionSelect = document.getElementById('addCustomerRegionId');
     var editCustomerRegionSelect = document.getElementById('editCustomerRegionId');
     
+    console.log('Region form elements:', {
+        form: addRegionFromCustomerForm,
+        modal: addRegionFromCustomerModal,
+        addSelect: addCustomerRegionSelect,
+        editSelect: editCustomerRegionSelect
+    });
+    
     if (addRegionFromCustomerForm && addRegionFromCustomerModal) {
+        console.log('Setting up add region form handler');
         addRegionFromCustomerForm.addEventListener('submit', function(e) {
             e.preventDefault();
             e.stopPropagation();
+            console.log('Add region form submitted');
             
             var regionNameInput = document.getElementById('newRegionName');
             var regionName = regionNameInput ? regionNameInput.value.trim() : '';
@@ -4292,10 +4301,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 return response.json();
             })
             .then(function(data) {
+                console.log('Response data:', data);
                 if (submitBtn) submitBtn.disabled = false;
                 if (spinner) spinner.classList.add('d-none');
                 
                 if (data && data.success) {
+                    console.log('Region added successfully:', data.region);
                     // إضافة المنطقة الجديدة إلى select
                     var newOption = document.createElement('option');
                     newOption.value = data.region.id;
