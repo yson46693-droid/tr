@@ -550,33 +550,53 @@ $defaultHoneyVariety = 'سدر';
  * تستخدم القائمة المدمجة التي تحتوي على الأنواع المخصصة
  */
 function formatHoneyVarietyWithCodeLocal(string $variety, array $catalog, $db = null): string {
-    if (empty($variety)) {
+    if (empty($variety) || trim($variety) === '' || $variety === 'أخرى') {
         return 'أخرى';
     }
     
-    if (!isset($catalog[$variety])) {
-        // إذا لم يكن موجوداً في القائمة، حاول البحث في قاعدة البيانات
-        if ($db) {
-            try {
-                $customType = $db->queryOne(
-                    "SELECT honey_type_id, name FROM honey_types WHERE name = ? LIMIT 1",
-                    [$variety]
-                );
-                
-                if ($customType) {
-                    return sprintf('%s (%s)', $customType['name'], $customType['honey_type_id']);
-                }
-            } catch (Exception $e) {
-                error_log("Error fetching custom honey type: " . $e->getMessage());
-            }
+    $variety = trim($variety);
+    
+    // البحث أولاً في القائمة المدمجة
+    if (isset($catalog[$variety])) {
+        $entry = $catalog[$variety];
+        if (!empty($entry['code']) && !empty($entry['label'])) {
+            return sprintf('%s (%s)', $entry['label'], $entry['code']);
         }
-        
-        // إذا لم يتم العثور عليه، أرجع الاسم كما هو
-        return $variety;
     }
     
-    $entry = $catalog[$variety];
-    return sprintf('%s (%s)', $entry['label'], $entry['code']);
+    // إذا لم يكن موجوداً في القائمة، ابحث في قاعدة البيانات
+    if ($db) {
+        try {
+            // البحث بالاسم الدقيق أولاً
+            $customType = $db->queryOne(
+                "SELECT honey_type_id, name FROM honey_types WHERE name = ? LIMIT 1",
+                [$variety]
+            );
+            
+            if ($customType && !empty($customType['name']) && !empty($customType['honey_type_id'])) {
+                return sprintf('%s (%s)', $customType['name'], $customType['honey_type_id']);
+            }
+            
+            // إذا لم يتم العثور عليه بالاسم الدقيق، جرب البحث بدون مسافات
+            $varietyNoSpaces = str_replace(' ', '', $variety);
+            if ($varietyNoSpaces !== $variety) {
+                $customType = $db->queryOne(
+                    "SELECT honey_type_id, name FROM honey_types WHERE REPLACE(name, ' ', '') = ? LIMIT 1",
+                    [$varietyNoSpaces]
+                );
+                
+                if ($customType && !empty($customType['name']) && !empty($customType['honey_type_id'])) {
+                    return sprintf('%s (%s)', $customType['name'], $customType['honey_type_id']);
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Error fetching custom honey type for '{$variety}': " . $e->getMessage());
+        }
+    }
+    
+    // إذا لم يتم العثور عليه في أي مكان، أرجع الاسم كما هو (بدون ID)
+    // لكن لا نرجع "أخرى" لأن هذا قد يكون نوع مخصص حقيقي
+    return $variety;
 }
 
 $dashboardSlug = $rawMaterialsContext === 'manager' ? 'manager' : 'production';
@@ -4506,6 +4526,33 @@ if ($section === 'honey') {
         LEFT JOIN suppliers s ON hs.supplier_id = s.id
         ORDER BY s.name ASC, hs.honey_variety ASC
     ");
+    
+    // تحديث القائمة المدمجة بجميع أنواع العسل الموجودة في المخزون
+    // لضمان تضمين جميع الأنواع المخصصة
+    try {
+        $stockVarieties = array_unique(array_filter(array_map(function($stock) {
+            return trim($stock['honey_variety'] ?? '');
+        }, $honeyStock)));
+        
+        foreach ($stockVarieties as $variety) {
+            if (!empty($variety) && $variety !== 'أخرى' && !isset($honeyVarietiesCatalog[$variety])) {
+                // البحث في قاعدة البيانات
+                $customType = $db->queryOne(
+                    "SELECT honey_type_id, name FROM honey_types WHERE name = ? LIMIT 1",
+                    [$variety]
+                );
+                
+                if ($customType && !empty($customType['name']) && !empty($customType['honey_type_id'])) {
+                    $honeyVarietiesCatalog[$customType['name']] = [
+                        'code' => $customType['honey_type_id'],
+                        'label' => $customType['name'],
+                    ];
+                }
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Error updating honey varieties catalog from stock: " . $e->getMessage());
+    }
 
     // تنظيم المخزون حسب المورد
     $groupedHoneyStock = [];
@@ -4527,7 +4574,29 @@ if ($section === 'honey') {
             ];
         }
 
-        $varietyDisplay = formatHoneyVarietyWithCodeLocal($stock['honey_variety'] ?? 'أخرى', $honeyVarietiesCatalog, $db);
+        // تحديث القائمة المدمجة قبل التنسيق (لضمان تضمين أحدث الأنواع المخصصة)
+        $currentVariety = trim($stock['honey_variety'] ?? '');
+        if (!empty($currentVariety) && !isset($honeyVarietiesCatalog[$currentVariety])) {
+            // محاولة جلب النوع من قاعدة البيانات إذا لم يكن في القائمة
+            try {
+                $customType = $db->queryOne(
+                    "SELECT honey_type_id, name FROM honey_types WHERE name = ? LIMIT 1",
+                    [$currentVariety]
+                );
+                
+                if ($customType && !empty($customType['name']) && !empty($customType['honey_type_id'])) {
+                    // إضافة النوع إلى القائمة المدمجة
+                    $honeyVarietiesCatalog[$customType['name']] = [
+                        'code' => $customType['honey_type_id'],
+                        'label' => $customType['name'],
+                    ];
+                }
+            } catch (Exception $e) {
+                error_log("Error fetching honey type for display: " . $e->getMessage());
+            }
+        }
+        
+        $varietyDisplay = formatHoneyVarietyWithCodeLocal($currentVariety ?: 'أخرى', $honeyVarietiesCatalog, $db);
         $createdAtTs = null;
         $updatedAtTs = null;
         if (!empty($stock['created_at'])) {
