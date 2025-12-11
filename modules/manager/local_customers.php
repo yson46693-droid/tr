@@ -1287,7 +1287,6 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <?php endif; ?>
                                     </div>
                                 </td>
-                                <td><?php echo formatDate($customer['created_at']); ?></td>
                                 <td>
                                     <?php
                                     $customerBalance = isset($customer['balance']) ? (float)$customer['balance'] : 0.0;
