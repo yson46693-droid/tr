@@ -9504,6 +9504,13 @@ document.getElementById('createFromTemplateModal')?.addEventListener('shown.bs.m
         modalBody.scrollTop = 0;
         modalBody.style.overflowY = 'auto';
     }
+    // السماح بالتمرير خارج النموذج
+    document.body.style.overflow = 'auto';
+    document.body.style.paddingRight = '0';
+    const backdrop = document.querySelector('.modal-backdrop');
+    if (backdrop) {
+        backdrop.style.display = 'none';
+    }
 });
 
 document.getElementById('createFromTemplateModal')?.addEventListener('hidden.bs.modal', function() {
@@ -9512,6 +9519,9 @@ document.getElementById('createFromTemplateModal')?.addEventListener('hidden.bs.
         modalBody.scrollTop = 0;
         modalBody.style.overflowY = '';
     }
+    // إعادة تعيين overflow للجسم
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
 });
 
 document.getElementById('printBarcodesModal')?.addEventListener('hidden.bs.modal', function() {
@@ -10129,3 +10139,76 @@ observer.observe(document.body, {
     subtree: true
 });
 </script>
+
+<style>
+/* جعل نموذج إنشاء تشغيلة الإنتاج قابل للتمرير خارج النموذج */
+body.modal-open {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding-right: 0 !important;
+}
+
+body.modal-open .dashboard-wrapper,
+body.modal-open .dashboard-main {
+    overflow-y: visible !important;
+    padding-right: 0 !important;
+}
+
+/* جعل النموذج نفسه قابل للتمرير */
+#createFromTemplateModal .modal-dialog {
+    max-height: calc(100vh - 2rem);
+    margin: 1rem auto;
+}
+
+#createFromTemplateModal .modal-content {
+    max-height: calc(100vh - 2rem);
+    display: flex;
+    flex-direction: column;
+}
+
+#createFromTemplateModal .modal-body {
+    overflow-y: auto;
+    flex: 1 1 auto;
+    max-height: calc(100vh - 200px);
+}
+
+#createFromTemplateModal .modal-header,
+#createFromTemplateModal .modal-footer {
+    flex-shrink: 0;
+}
+
+/* على الشاشات الصغيرة */
+@media (max-width: 768px) {
+    body.modal-open {
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        position: relative !important;
+        height: auto !important;
+        padding-right: 0 !important;
+    }
+    
+    #createFromTemplateModal .modal-dialog {
+        max-height: calc(100vh - 1rem);
+        margin: 0.5rem;
+        width: calc(100% - 1rem);
+    }
+    
+    #createFromTemplateModal .modal-content {
+        max-height: calc(100vh - 1rem);
+    }
+    
+    #createFromTemplateModal .modal-body {
+        max-height: calc(100vh - 150px);
+        overflow-y: auto;
+    }
+}
+
+/* إزالة backdrop الذي يمنع التمرير */
+#createFromTemplateModal.modal {
+    z-index: 1050;
+}
+
+body.modal-open .modal-backdrop {
+    display: none !important;
+}
+</style>
