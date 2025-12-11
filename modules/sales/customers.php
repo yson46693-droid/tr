@@ -859,6 +859,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $error = 'حدث خطأ أثناء تحصيل المبلغ. يرجى المحاولة مرة أخرى.';
             }
         }
+    } elseif ($action === 'add_region_ajax') {
+        // معالجة AJAX لإضافة منطقة جديدة (فقط للمدير)
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-cache, must-revalidate');
+        
+        $userRole = strtolower($currentUser['role'] ?? '');
+        if ($userRole !== 'manager') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'غير مصرح لك بإضافة مناطق'
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        
+        $name = trim($_POST['name'] ?? '');
+        if (empty($name)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'يجب إدخال اسم المنطقة'
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        
+        try {
+            // التحقق من عدم التكرار
+            $existing = $db->queryOne("SELECT id FROM regions WHERE name = ?", [$name]);
+            if ($existing) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'المنطقة موجودة بالفعل'
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            
+            $db->execute("INSERT INTO regions (name) VALUES (?)", [$name]);
+            $regionId = $db->getLastInsertId();
+            
+            logAudit($currentUser['id'], 'add_region', 'region', $regionId, null, ['name' => $name]);
+            
+            echo json_encode([
+                'success' => true,
+                'message' => 'تم إضافة المنطقة بنجاح',
+                'region' => [
+                    'id' => $regionId,
+                    'name' => $name
+                ]
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (Throwable $e) {
+            error_log('Add region AJAX error: ' . $e->getMessage());
+            echo json_encode([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء إضافة المنطقة'
+            ], JSON_UNESCAPED_UNICODE);
+        }
+        exit;
     } elseif ($action === 'edit_customer') {
         $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
         $phone = trim($_POST['phone'] ?? '');
@@ -4179,9 +4238,197 @@ document.addEventListener('DOMContentLoaded', function () {
             console.warn('Edit customer modal not found');
         }
         if (editCustomerButtons.length === 0) {
-            console.warn('Edit customer buttons not found');
+                console.warn('Edit customer buttons not found');
         }
     }
+    
+    // معالج إضافة منطقة جديدة من نموذج العميل (للمدير فقط)
+    <?php if ($currentRole === 'manager'): ?>
+    var addRegionFromCustomerForm = document.getElementById('addRegionFromCustomerForm');
+    var addRegionFromCustomerModal = document.getElementById('addRegionFromCustomerModal');
+    var addCustomerRegionSelect = document.getElementById('addCustomerRegionId');
+    var editCustomerRegionSelect = document.getElementById('editCustomerRegionId');
+    
+    if (addRegionFromCustomerForm) {
+        addRegionFromCustomerForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            var regionName = document.getElementById('newRegionName').value.trim();
+            var messageDiv = document.getElementById('addRegionMessage');
+            var submitBtn = document.getElementById('addRegionSubmitBtn');
+            var spinner = document.getElementById('addRegionSpinner');
+            
+            if (!regionName) {
+                messageDiv.className = 'alert alert-danger';
+                messageDiv.textContent = 'يجب إدخال اسم المنطقة';
+                messageDiv.classList.remove('d-none');
+                return;
+            }
+            
+            // إظهار loading
+            submitBtn.disabled = true;
+            spinner.classList.remove('d-none');
+            messageDiv.classList.add('d-none');
+            
+            // إرسال طلب AJAX
+            var formData = new FormData();
+            formData.append('action', 'add_region_ajax');
+            formData.append('name', regionName);
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                submitBtn.disabled = false;
+                spinner.classList.add('d-none');
+                
+                if (data.success) {
+                    // إضافة المنطقة الجديدة إلى select
+                    var newOption = document.createElement('option');
+                    newOption.value = data.region.id;
+                    newOption.textContent = data.region.name;
+                    newOption.selected = true;
+                    
+                    if (addCustomerRegionSelect) {
+                        addCustomerRegionSelect.appendChild(newOption);
+                        addCustomerRegionSelect.value = data.region.id;
+                    }
+                    
+                    if (editCustomerRegionSelect) {
+                        var editOption = newOption.cloneNode(true);
+                        editCustomerRegionSelect.appendChild(editOption);
+                    }
+                    
+                    // إظهار رسالة نجاح
+                    messageDiv.className = 'alert alert-success';
+                    messageDiv.textContent = data.message;
+                    messageDiv.classList.remove('d-none');
+                    
+                    // إغلاق modal بعد ثانيتين
+                    setTimeout(function() {
+                        var modal = bootstrap.Modal.getInstance(addRegionFromCustomerModal);
+                        if (modal) {
+                            modal.hide();
+                        }
+                        // مسح الحقول
+                        document.getElementById('newRegionName').value = '';
+                        messageDiv.classList.add('d-none');
+                    }, 1500);
+                } else {
+                    messageDiv.className = 'alert alert-danger';
+                    messageDiv.textContent = data.message || 'حدث خطأ أثناء إضافة المنطقة';
+                    messageDiv.classList.remove('d-none');
+                }
+            })
+            .catch(function(error) {
+                submitBtn.disabled = false;
+                spinner.classList.add('d-none');
+                console.error('Error adding region:', error);
+                messageDiv.className = 'alert alert-danger';
+                messageDiv.textContent = 'حدث خطأ أثناء الاتصال بالخادم';
+                messageDiv.classList.remove('d-none');
+            });
+        });
+    }
+    <?php endif; ?>
+    
+    // معالج إضافة منطقة جديدة من نموذج العميل (للمدير فقط)
+    <?php if ($currentRole === 'manager'): ?>
+    var addRegionFromCustomerForm = document.getElementById('addRegionFromCustomerForm');
+    var addRegionFromCustomerModal = document.getElementById('addRegionFromCustomerModal');
+    var addCustomerRegionSelect = document.getElementById('addCustomerRegionId');
+    var editCustomerRegionSelect = document.getElementById('editCustomerRegionId');
+    
+    if (addRegionFromCustomerForm) {
+        addRegionFromCustomerForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            var regionName = document.getElementById('newRegionName').value.trim();
+            var messageDiv = document.getElementById('addRegionMessage');
+            var submitBtn = document.getElementById('addRegionSubmitBtn');
+            var spinner = document.getElementById('addRegionSpinner');
+            
+            if (!regionName) {
+                messageDiv.className = 'alert alert-danger';
+                messageDiv.textContent = 'يجب إدخال اسم المنطقة';
+                messageDiv.classList.remove('d-none');
+                return;
+            }
+            
+            // إظهار loading
+            submitBtn.disabled = true;
+            spinner.classList.remove('d-none');
+            messageDiv.classList.add('d-none');
+            
+            // إرسال طلب AJAX
+            var formData = new FormData();
+            formData.append('action', 'add_region_ajax');
+            formData.append('name', regionName);
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                submitBtn.disabled = false;
+                spinner.classList.add('d-none');
+                
+                if (data.success) {
+                    // إضافة المنطقة الجديدة إلى select
+                    var newOption = document.createElement('option');
+                    newOption.value = data.region.id;
+                    newOption.textContent = data.region.name;
+                    newOption.selected = true;
+                    
+                    if (addCustomerRegionSelect) {
+                        addCustomerRegionSelect.appendChild(newOption);
+                        addCustomerRegionSelect.value = data.region.id;
+                    }
+                    
+                    if (editCustomerRegionSelect) {
+                        var editOption = newOption.cloneNode(true);
+                        editCustomerRegionSelect.appendChild(editOption);
+                    }
+                    
+                    // إظهار رسالة نجاح
+                    messageDiv.className = 'alert alert-success';
+                    messageDiv.textContent = data.message;
+                    messageDiv.classList.remove('d-none');
+                    
+                    // إغلاق modal بعد ثانيتين
+                    setTimeout(function() {
+                        var modal = bootstrap.Modal.getInstance(addRegionFromCustomerModal);
+                        if (modal) {
+                            modal.hide();
+                        }
+                        // مسح الحقول
+                        document.getElementById('newRegionName').value = '';
+                        messageDiv.classList.add('d-none');
+                    }, 1500);
+                } else {
+                    messageDiv.className = 'alert alert-danger';
+                    messageDiv.textContent = data.message || 'حدث خطأ أثناء إضافة المنطقة';
+                    messageDiv.classList.remove('d-none');
+                }
+            })
+            .catch(function(error) {
+                submitBtn.disabled = false;
+                spinner.classList.add('d-none');
+                console.error('Error adding region:', error);
+                messageDiv.className = 'alert alert-danger';
+                messageDiv.textContent = 'حدث خطأ أثناء الاتصال بالخادم';
+                messageDiv.classList.remove('d-none');
+            });
+        });
+    }
+    <?php endif; ?>
 });
 </script>
 
@@ -4566,15 +4813,22 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
                     <div class="mb-3">
                         <label class="form-label">المنطقة</label>
-                        <select class="form-select" name="region_id">
-                            <option value="">اختر المنطقة</option>
-                            <?php
-                            $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
-                            foreach ($regions as $region):
-                            ?>
-                                <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <div class="input-group">
+                            <select class="form-select" name="region_id" id="addCustomerRegionId">
+                                <option value="">اختر المنطقة</option>
+                                <?php
+                                $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                                foreach ($regions as $region):
+                                ?>
+                                    <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <?php if ($currentRole === 'manager'): ?>
+                            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRegionFromCustomerModal">
+                                <i class="bi bi-plus-circle"></i>
+                            </button>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">الموقع الجغرافي</label>
@@ -4662,7 +4916,65 @@ document.addEventListener('DOMContentLoaded', function () {
 </div>
 <?php endif; ?>
 
-<?php endif; // end if ($section === 'company') ?>
+<!-- Modal إضافة منطقة جديدة (من نموذج العميل) -->
+<?php if ($currentRole === 'manager'): ?>
+<div class="modal fade" id="addRegionFromCustomerModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">إضافة منطقة جديدة</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addRegionFromCustomerForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم المنطقة <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newRegionName" required>
+                    </div>
+                    <div id="addRegionMessage" class="alert d-none"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary" id="addRegionSubmitBtn">
+                        <span class="spinner-border spinner-border-sm d-none me-2" id="addRegionSpinner"></span>
+                        إضافة
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- Modal إضافة منطقة جديدة (من نموذج العميل) -->
+<?php if ($currentRole === 'manager'): ?>
+<div class="modal fade" id="addRegionFromCustomerModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">إضافة منطقة جديدة</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addRegionFromCustomerForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم المنطقة <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newRegionName" required>
+                    </div>
+                    <div id="addRegionMessage" class="alert d-none"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary" id="addRegionSubmitBtn">
+                        <span class="spinner-border spinner-border-sm d-none me-2" id="addRegionSpinner"></span>
+                        إضافة
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php endif; // end if ($section === 'company') ?>
 
