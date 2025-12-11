@@ -2084,21 +2084,44 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
         // عمليات العسل
         if ($action === 'add_honey') {
             $supplierId = intval($_POST['supplier_id'] ?? 0);
-            $honeyVariety = $_POST['honey_variety'] ?? 'أخرى';
+            $honeyVariety = trim($_POST['honey_variety'] ?? 'أخرى');
+            $customHoneyVariety = trim($_POST['custom_honey_variety'] ?? '');
             $quantity = floatval($_POST['quantity'] ?? 0);
             $honeyType = $_POST['honey_type'] ?? 'raw';
             $supplyStockId = null;
             
-            if (!in_array($honeyVariety, $validHoneyVarieties, true)) {
-                $honeyVariety = 'أخرى';
+            // إذا كان المستخدم اختار "أخرى" وأدخل نوع عسل مخصص
+            if ($honeyVariety === 'أخرى' && !empty($customHoneyVariety)) {
+                $honeyVariety = $customHoneyVariety;
+                $honeyVarietyCode = null; // لا يوجد كود لأنواع العسل المخصصة
+            } elseif (!in_array($honeyVariety, $validHoneyVarieties, true)) {
+                // إذا كان النوع غير موجود في القائمة ولم يتم إدخال نوع مخصص
+                if (!empty($customHoneyVariety)) {
+                    $honeyVariety = $customHoneyVariety;
+                    $honeyVarietyCode = null;
+                } else {
+                    $honeyVariety = 'أخرى';
+                    $honeyVarietyCode = getHoneyVarietyCode($honeyVariety);
+                }
+            } else {
+                $honeyVarietyCode = getHoneyVarietyCode($honeyVariety);
             }
-            $honeyVarietyCode = getHoneyVarietyCode($honeyVariety);
+            
+            // التحقق من أن نوع العسل غير فارغ
+            if (empty($honeyVariety)) {
+                $error = 'يجب إدخال نوع العسل';
+            }
+            
+            // التحقق من أنه إذا اختار "أخرى"، يجب إدخال نوع عسل مخصص
+            if ($_POST['honey_variety'] === 'أخرى' && empty($customHoneyVariety)) {
+                $error = 'يجب إدخال نوع العسل يدوياً عند اختيار "أخرى"';
+            }
             
             if ($supplierId <= 0) {
                 $error = 'يجب اختيار المورد';
             } elseif ($quantity <= 0) {
                 $error = 'يجب إدخال كمية صحيحة';
-            } else {
+            } elseif (empty($error)) {
                 $existingStock = $db->queryOne("SELECT * FROM honey_stock WHERE supplier_id = ? AND honey_variety = ?", [$supplierId, $honeyVariety]);
                 if ($existingStock && isset($existingStock['id'])) {
                     $supplyStockId = (int)$existingStock['id'];
@@ -4493,13 +4516,18 @@ if ($section === 'honey') {
                         </div>
                         <div class="mb-3">
                             <label class="form-label">نوع العسل</label>
-                            <select class="form-select honey-variety-select" name="honey_variety">
+                            <select class="form-select honey-variety-select" name="honey_variety" id="honey_variety_select">
                                 <?php foreach ($honeyVarietiesCatalog as $honeyVariety => $meta): ?>
                                     <option value="<?php echo htmlspecialchars($honeyVariety); ?>" data-code="<?php echo htmlspecialchars($meta['code']); ?>" <?php echo $honeyVariety === $defaultHoneyVariety ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars(sprintf('%s - %s', $meta['label'], $meta['code'])); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
+                        </div>
+                        <div class="mb-3" id="custom_honey_variety_container" style="display: none;">
+                            <label class="form-label">أدخل نوع العسل يدوياً <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="custom_honey_variety" id="custom_honey_variety" placeholder="مثال: عسل الكينا" maxlength="100">
+                            <small class="text-muted">سيتم حفظ نوع العسل الجديد كما أدخلته</small>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">الحالة</label>
@@ -4672,6 +4700,40 @@ if ($section === 'honey') {
 
     <script>
     let honeyDamageMax = { raw: 0, filtered: 0 };
+
+    // إظهار/إخفاء حقل نوع العسل المخصص عند اختيار "أخرى"
+    document.addEventListener('DOMContentLoaded', function() {
+        const honeyVarietySelect = document.getElementById('honey_variety_select');
+        const customHoneyVarietyContainer = document.getElementById('custom_honey_variety_container');
+        const customHoneyVarietyInput = document.getElementById('custom_honey_variety');
+        const addHoneyModal = document.getElementById('addHoneyModal');
+        
+        if (honeyVarietySelect && customHoneyVarietyContainer && customHoneyVarietyInput && addHoneyModal) {
+            // دالة للتحقق من القيمة المحددة
+            function toggleCustomHoneyField() {
+                const selectedValue = honeyVarietySelect.value;
+                if (selectedValue === 'أخرى') {
+                    customHoneyVarietyContainer.style.display = 'block';
+                    customHoneyVarietyInput.required = true;
+                } else {
+                    customHoneyVarietyContainer.style.display = 'none';
+                    customHoneyVarietyInput.required = false;
+                    customHoneyVarietyInput.value = '';
+                }
+            }
+            
+            // إضافة event listener عند تغيير الاختيار
+            honeyVarietySelect.addEventListener('change', toggleCustomHoneyField);
+            
+            // التحقق عند فتح modal
+            addHoneyModal.addEventListener('show.bs.modal', function() {
+                toggleCustomHoneyField();
+            });
+            
+            // التحقق الأولي
+            toggleCustomHoneyField();
+        }
+    });
 
     function filterHoney(id, supplier, variety, available) {
         document.getElementById('filter_stock_id').value = id;
