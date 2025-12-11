@@ -610,6 +610,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'حدث خطأ أثناء تحصيل المبلغ. يرجى المحاولة مرة أخرى.';
             }
         }
+    } elseif ($action === 'edit_customer') {
+        $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
+        $phone = trim($_POST['phone'] ?? '');
+        $address = trim($_POST['address'] ?? '');
+        $regionId = isset($_POST['region_id']) && $_POST['region_id'] !== '' ? (int)$_POST['region_id'] : null;
+        
+        if ($customerId <= 0) {
+            $error = 'معرف العميل غير صحيح';
+        } else {
+            try {
+                // التحقق من وجود العميل
+                $customer = $db->queryOne("SELECT id, name FROM local_customers WHERE id = ?", [$customerId]);
+                if (!$customer) {
+                    $error = 'العميل غير موجود';
+                } else {
+                    // التحقق من الصلاحيات
+                    $canEdit = false;
+                    $allowedFields = [];
+                    
+                    if ($currentRole === 'manager') {
+                        // المدير يعدل جميع البيانات ما عدا اسم العميل
+                        $canEdit = true;
+                        $allowedFields = ['phone', 'address', 'region_id', 'balance'];
+                    } elseif (in_array($currentRole, ['accountant', 'sales'], true)) {
+                        // المحاسب والمندوب يعدلون فقط (العنوان – الهاتف – المنطقة)
+                        $canEdit = true;
+                        $allowedFields = ['phone', 'address', 'region_id'];
+                    }
+                    
+                    if (!$canEdit) {
+                        $error = 'غير مصرح لك بتعديل هذا العميل';
+                    } else {
+                        $updateFields = [];
+                        $updateValues = [];
+                        
+                        if (in_array('phone', $allowedFields)) {
+                            $updateFields[] = 'phone = ?';
+                            $updateValues[] = $phone ?: null;
+                        }
+                        
+                        if (in_array('address', $allowedFields)) {
+                            $updateFields[] = 'address = ?';
+                            $updateValues[] = $address ?: null;
+                        }
+                        
+                        if (in_array('region_id', $allowedFields)) {
+                            $updateFields[] = 'region_id = ?';
+                            $updateValues[] = $regionId;
+                        }
+                        
+                        if (in_array('balance', $allowedFields)) {
+                            $balance = isset($_POST['balance']) ? cleanFinancialValue($_POST['balance'], true) : null;
+                            if ($balance !== null) {
+                                $updateFields[] = 'balance = ?';
+                                $updateValues[] = $balance;
+                            }
+                        }
+                        
+                        if (!empty($updateFields)) {
+                            $updateValues[] = $customerId;
+                            $db->execute(
+                                "UPDATE local_customers SET " . implode(', ', $updateFields) . " WHERE id = ?",
+                                $updateValues
+                            );
+                            
+                            logAudit($currentUser['id'], 'edit_local_customer', 'local_customer', $customerId, null, [
+                                'name' => $customer['name'],
+                                'updated_fields' => $allowedFields
+                            ]);
+                            
+                            $_SESSION['success_message'] = 'تم تعديل بيانات العميل بنجاح';
+                            
+                            redirectAfterPost(
+                                'local_customers',
+                                [],
+                                [],
+                                $currentRole
+                            );
+                        } else {
+                            $error = 'لم يتم تحديد أي حقول للتعديل';
+                        }
+                    }
+                }
+            } catch (Throwable $editError) {
+                error_log('Edit local customer error: ' . $editError->getMessage());
+                $error = 'حدث خطأ أثناء تعديل بيانات العميل';
+            }
+        }
     } elseif ($action === 'add_customer') {
         $name = trim($_POST['name'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
@@ -1305,6 +1393,18 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                     <div class="mb-3">
                         <label class="form-label">العنوان</label>
                         <textarea class="form-control" name="address" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">المنطقة</label>
+                        <select class="form-select" name="region_id">
+                            <option value="">اختر المنطقة</option>
+                            <?php
+                            $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                            foreach ($regions as $region):
+                            ?>
+                                <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">الموقع الجغرافي</label>
