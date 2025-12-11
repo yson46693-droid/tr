@@ -2112,12 +2112,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 } else {
                     // القوالب التقليدية من جدول product_templates
-                    // التأكد من جلب جميع الأعمدة بما فيها custom_carton_quantity و custom_carton_type_id
+                    // التأكد من جلب جميع الأعمدة بما فيها carton_type و custom_carton_quantity و custom_carton_type_id
                     $template = $db->queryOne(
                         "SELECT pt.*, 
                                 pr.id as product_id, 
                                 pr.name as product_name, 
                                 pr.unit_price as product_unit_price,
+                                pt.carton_type,
                                 pt.custom_carton_quantity,
                                 pt.custom_carton_type_id
                          FROM product_templates pt
@@ -2129,6 +2130,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Log للتحقق من البيانات المسترجعة
                     if ($template) {
                         error_log('Template loaded: id=' . $templateId . ', carton_type=' . ($template['carton_type'] ?? 'NULL') . ', custom_carton_quantity=' . ($template['custom_carton_quantity'] ?? 'NULL') . ', custom_carton_type_id=' . ($template['custom_carton_type_id'] ?? 'NULL'));
+                        
+                        // إذا كان carton_type فارغاً لكن البيانات المخصصة موجودة، ضع 'custom'
+                        if ((empty($template['carton_type']) || trim($template['carton_type']) === '') && 
+                            isset($template['custom_carton_quantity']) && $template['custom_carton_quantity'] > 0 && 
+                            isset($template['custom_carton_type_id']) && $template['custom_carton_type_id'] > 0) {
+                            $template['carton_type'] = 'custom';
+                            error_log('Auto-setting carton_type to custom for template ' . $templateId . ' based on custom data');
+                        }
                     }
                 }
 

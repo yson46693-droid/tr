@@ -3746,48 +3746,15 @@ document.addEventListener('DOMContentLoaded', function () {
         padding: 1.35rem 1.25rem;
     }
 
-    .customers-table-container.dashboard-table-wrapper {
-        overflow-x: auto;
-        overflow-y: hidden;
-        border-radius: 18px;
-    }
-
-    .customers-table-container .table {
-        min-width: 780px;
-    }
-
-    .customers-table-container .table thead th,
-    .customers-table-container .table tbody td {
-        white-space: nowrap;
-    }
-
-    .customers-table-container::-webkit-scrollbar {
-        height: 8px;
-    }
-
-    .customers-table-container::-webkit-scrollbar-track {
-        background: rgba(226, 232, 240, 0.6);
-        border-radius: 999px;
-    }
-
-    .customers-table-container::-webkit-scrollbar-thumb {
-        background: rgba(37, 99, 235, 0.35);
-        border-radius: 999px;
-    }
-
-    .customers-table-container::-webkit-scrollbar-thumb:hover {
-        background: rgba(37, 99, 235, 0.55);
-    }
-
     /* الأزرار في عمود الإجراءات: 2×2 على جميع الشاشات */
-    .customers-table-container .dashboard-table tbody td:last-child .d-flex {
+    .dashboard-table tbody td:last-child .d-flex {
         display: grid !important;
         grid-template-columns: 1fr 1fr !important;
         gap: 0.25rem !important;
         width: 100% !important;
     }
 
-    .customers-table-container .dashboard-table tbody td:last-child .btn {
+    .dashboard-table tbody td:last-child .btn {
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
@@ -3810,14 +3777,15 @@ document.addEventListener('DOMContentLoaded', function () {
             padding: 1.1rem 0.75rem 1rem;
         }
 
-        .customers-table-container.dashboard-table-wrapper {
+        /* تحسين الجدول الرئيسي للعملاء */
+        .dashboard-table-wrapper {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
             margin: 0 -0.75rem;
             padding: 0 0.75rem;
         }
 
-        .customers-table-container .dashboard-table {
+        .dashboard-table {
             min-width: 850px;
             font-size: 0.85rem;
             width: 100%;
@@ -3826,29 +3794,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
         /* تحديد عرض الأعمدة بناءً على طول المحتوى */
         /* الاسم: 15 حرف */
-        .customers-table-container .dashboard-table thead th:nth-child(1),
-        .customers-table-container .dashboard-table tbody td:nth-child(1) {
+        .dashboard-table thead th:nth-child(1),
+        .dashboard-table tbody td:nth-child(1) {
             width: 20%;
             min-width: 110px;
         }
 
         /* رقم الهاتف: 11 حرف */
-        .customers-table-container .dashboard-table thead th:nth-child(2),
-        .customers-table-container .dashboard-table tbody td:nth-child(2) {
+        .dashboard-table thead th:nth-child(2),
+        .dashboard-table tbody td:nth-child(2) {
             width: 15%;
             min-width: 85px;
         }
 
         /* الرصيد: 7 حرف */
-        .customers-table-container .dashboard-table thead th:nth-child(3),
-        .customers-table-container .dashboard-table tbody td:nth-child(3) {
+        .dashboard-table thead th:nth-child(3),
+        .dashboard-table tbody td:nth-child(3) {
             width: 10%;
             min-width: 65px;
         }
 
         /* العنوان: 8 حرف */
-        .customers-table-container .dashboard-table thead th:nth-child(4),
-        .customers-table-container .dashboard-table tbody td:nth-child(4) {
+        .dashboard-table thead th:nth-child(4),
+        .dashboard-table tbody td:nth-child(4) {
             width: 12%;
             min-width: 75px;
             word-wrap: break-word;
@@ -3856,64 +3824,64 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         /* المنطقة: 7 حرف */
-        .customers-table-container .dashboard-table thead th:nth-child(5),
-        .customers-table-container .dashboard-table tbody td:nth-child(5) {
+        .dashboard-table thead th:nth-child(5),
+        .dashboard-table tbody td:nth-child(5) {
             width: 10%;
             min-width: 65px;
         }
 
         /* الموقع */
-        .customers-table-container .dashboard-table thead th:nth-child(6),
-        .customers-table-container .dashboard-table tbody td:nth-child(6) {
+        .dashboard-table thead th:nth-child(6),
+        .dashboard-table tbody td:nth-child(6) {
             width: 13%;
             min-width: 90px;
         }
 
         /* الإجراءات */
-        .customers-table-container .dashboard-table thead th:nth-child(7),
-        .customers-table-container .dashboard-table tbody td:nth-child(7) {
+        .dashboard-table thead th:nth-child(7),
+        .dashboard-table tbody td:nth-child(7) {
             width: 20%;
             min-width: 140px;
         }
 
-        .customers-table-container .dashboard-table thead th {
+        .dashboard-table thead th {
             font-size: 0.8rem;
             padding: 0.5rem 0.35rem;
             white-space: nowrap;
             font-weight: 600;
         }
 
-        .customers-table-container .dashboard-table tbody td {
+        .dashboard-table tbody td {
             padding: 0.5rem 0.35rem;
             font-size: 0.8rem;
             vertical-align: middle;
         }
 
         /* تحسين الأزرار في الجدول */
-        .customers-table-container .dashboard-table .btn {
+        .dashboard-table .btn {
             font-size: 0.7rem;
             padding: 0.25rem 0.4rem;
             white-space: nowrap;
         }
 
-        .customers-table-container .dashboard-table .btn i {
+        .dashboard-table .btn i {
             font-size: 0.75rem;
         }
 
         /* تحسين Badge الرصيد */
-        .customers-table-container .dashboard-table .badge {
+        .dashboard-table .badge {
             font-size: 0.65rem;
             padding: 0.2rem 0.4rem;
         }
 
         /* تحسين عمود الموقع */
-        .customers-table-container .dashboard-table tbody td:nth-child(6) .d-flex {
+        .dashboard-table tbody td:nth-child(6) .d-flex {
             flex-direction: column;
             align-items: flex-start;
             gap: 0.3rem;
         }
 
-        .customers-table-container .dashboard-table tbody td:nth-child(6) .btn {
+        .dashboard-table tbody td:nth-child(6) .btn {
             width: 100%;
             justify-content: center;
         }
@@ -3925,74 +3893,74 @@ document.addEventListener('DOMContentLoaded', function () {
             border-radius: 16px;
         }
 
-        .customers-table-container .dashboard-table {
+        .dashboard-table {
             min-width: 800px;
             font-size: 0.8rem;
         }
 
-        .customers-table-container .dashboard-table thead th {
+        .dashboard-table thead th {
             font-size: 0.75rem;
             padding: 0.45rem 0.3rem;
         }
 
-        .customers-table-container .dashboard-table tbody td {
+        .dashboard-table tbody td {
             font-size: 0.75rem;
             padding: 0.45rem 0.3rem;
         }
 
-        .customers-table-container .dashboard-table .btn {
+        .dashboard-table .btn {
             font-size: 0.65rem;
             padding: 0.2rem 0.35rem;
         }
 
-        .customers-table-container .dashboard-table .btn i {
+        .dashboard-table .btn i {
             font-size: 0.7rem;
         }
 
         /* عمود العنوان يبقى ظاهراً - مهم جداً */
-        .customers-table-container .dashboard-table thead th:nth-child(4),
-        .customers-table-container .dashboard-table tbody td:nth-child(4) {
+        .dashboard-table thead th:nth-child(4),
+        .dashboard-table tbody td:nth-child(4) {
             display: table-cell !important;
         }
 
-        .customers-table-container .dashboard-table .badge {
+        .dashboard-table .badge {
             font-size: 0.6rem;
             padding: 0.15rem 0.35rem;
         }
 
         /* تقليل min-width للأعمدة على الشاشات الصغيرة */
-        .customers-table-container .dashboard-table thead th:nth-child(1),
-        .customers-table-container .dashboard-table tbody td:nth-child(1) {
+        .dashboard-table thead th:nth-child(1),
+        .dashboard-table tbody td:nth-child(1) {
             min-width: 100px;
         }
 
-        .customers-table-container .dashboard-table thead th:nth-child(2),
-        .customers-table-container .dashboard-table tbody td:nth-child(2) {
+        .dashboard-table thead th:nth-child(2),
+        .dashboard-table tbody td:nth-child(2) {
             min-width: 80px;
         }
 
-        .customers-table-container .dashboard-table thead th:nth-child(3),
-        .customers-table-container .dashboard-table tbody td:nth-child(3) {
+        .dashboard-table thead th:nth-child(3),
+        .dashboard-table tbody td:nth-child(3) {
             min-width: 60px;
         }
 
-        .customers-table-container .dashboard-table thead th:nth-child(4),
-        .customers-table-container .dashboard-table tbody td:nth-child(4) {
+        .dashboard-table thead th:nth-child(4),
+        .dashboard-table tbody td:nth-child(4) {
             min-width: 70px;
         }
 
-        .customers-table-container .dashboard-table thead th:nth-child(5),
-        .customers-table-container .dashboard-table tbody td:nth-child(5) {
+        .dashboard-table thead th:nth-child(5),
+        .dashboard-table tbody td:nth-child(5) {
             min-width: 60px;
         }
 
-        .customers-table-container .dashboard-table thead th:nth-child(6),
-        .customers-table-container .dashboard-table tbody td:nth-child(6) {
+        .dashboard-table thead th:nth-child(6),
+        .dashboard-table tbody td:nth-child(6) {
             min-width: 85px;
         }
 
-        .customers-table-container .dashboard-table thead th:nth-child(7),
-        .customers-table-container .dashboard-table tbody td:nth-child(7) {
+        .dashboard-table thead th:nth-child(7),
+        .dashboard-table tbody td:nth-child(7) {
             min-width: 130px;
         }
 
@@ -4630,7 +4598,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <!-- قائمة العملاء -->    
     <div class="card-body">
-        <div class="table-responsive dashboard-table-wrapper customers-table-container">
+        <div class="table-responsive dashboard-table-wrapper">
             <table class="table dashboard-table align-middle">
                 <thead>
                     <tr>
@@ -4713,19 +4681,6 @@ document.addEventListener('DOMContentLoaded', function () {
                                     $rawBalance = number_format($customerBalance, 2, '.', '');
                                     ?>
                                     <div class="d-flex flex-wrap align-items-center gap-2">
-                                        <button
-                                            type="button"
-                                            class="btn btn-sm <?php echo $customerBalance > 0 ? 'btn-success' : 'btn-outline-secondary'; ?>"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#collectPaymentModal"
-                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
-                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
-                                            data-customer-balance="<?php echo $rawBalance; ?>"
-                                            data-customer-balance-formatted="<?php echo htmlspecialchars($formattedBalance); ?>"
-                                            <?php echo $customerBalance > 0 ? '' : 'disabled'; ?>
-                                        >
-                                            <i class="bi bi-cash-coin me-1"></i>تحصيل
-                                        </button>
                                         <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
                                         <button
                                             type="button"
@@ -4740,21 +4695,33 @@ document.addEventListener('DOMContentLoaded', function () {
                                             <i class="bi bi-pencil me-1"></i>تعديل
                                         </button>
                                         <?php endif; ?>
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm <?php echo $customerBalance > 0 ? 'btn-success' : 'btn-outline-secondary'; ?>"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#collectPaymentModal"
+                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
+                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
+                                            data-customer-balance="<?php echo $rawBalance; ?>"
+                                            data-customer-balance-formatted="<?php echo htmlspecialchars($formattedBalance); ?>"
+                                            <?php echo $customerBalance > 0 ? '' : 'disabled'; ?>
+                                        >
+                                            <i class="bi bi-cash-coin me-1"></i>تحصيل
+                                        </button>
                                         <?php if (in_array($currentRole, ['manager', 'sales'], true)): ?>
                                         <button
                                             type="button"
-                                            class="btn btn-sm btn-outline-dark js-customer-history"
+                                            class="btn btn-sm btn-outline-info js-customer-history"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                         >
-                                            <i class="bi bi-journal-text me-1"></i>سجل 
+                                            <i class="bi bi-receipt me-1"></i>سجل 
                                         </button>
                                         <button
                                             type="button"
-                                            class="btn btn-sm btn-outline-primary js-customer-purchase-history"
+                                            class="btn btn-sm btn-outline-warning js-customer-purchase-history"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
-                                            title="سجل مشتريات العميل - إنشاء مرتجع"
                                         >
                                             <i class="bi bi-arrow-return-left me-1"></i>مرتجع
                                         </button>
