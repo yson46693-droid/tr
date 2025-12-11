@@ -326,12 +326,28 @@ function getCurrentUser() {
  * @return array|null بيانات المستخدم أو null
  */
 function getCurrentUserFromDatabase($userId) {
+    // التحقق من الملف الذي يستدعي هذه الدالة - منع حذف الجلسة في profile.php
+    $isProfilePage = false;
+    $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 10);
+    foreach ($backtrace as $trace) {
+        if (isset($trace['file']) && basename($trace['file']) === 'profile.php') {
+            $isProfilePage = true;
+            break;
+        }
+    }
+    
     // جلب جميع بيانات المستخدم من قاعدة البيانات
     $db = db();
     $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$userId]);
     
     // إذا كان المستخدم غير موجود أو محذوف من قاعدة البيانات
     if (!$user) {
+        // منع حذف الجلسة إذا كان الطلب من profile.php
+        if ($isProfilePage) {
+            error_log("Security: User ID {$userId} not found in database - Skipping session destruction in profile.php");
+            return null;
+        }
+        
         // إلغاء تسجيل الدخول تلقائياً لأسباب أمنية
         error_log("Security: User ID {$userId} not found in database - Auto logout");
         // حذف الجلسة مباشرة دون استدعاء logout() لتجنب حلقة لا نهائية
@@ -363,6 +379,12 @@ function getCurrentUserFromDatabase($userId) {
     
     // التحقق من حالة المستخدم - إذا كان غير مفعّل
     if (isset($user['status']) && $user['status'] !== 'active') {
+        // منع حذف الجلسة إذا كان الطلب من profile.php
+        if ($isProfilePage) {
+            error_log("Security: User ID {$userId} status is '{$user['status']}' - Skipping session destruction in profile.php");
+            return $user; // إرجاع بيانات المستخدم حتى لو كان غير مفعّل
+        }
+        
         // إلغاء تسجيل الدخول تلقائياً لأسباب أمنية
         error_log("Security: User ID {$userId} status is '{$user['status']}' - Auto logout");
         // حذف الجلسة مباشرة دون استدعاء logout() لتجنب حلقة لا نهائية
