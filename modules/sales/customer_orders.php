@@ -1188,7 +1188,14 @@ if (isset($_GET['id'])) {
     border-bottom: 2px solid #e2e8f0;
 }
 
-.order-info-section,
+.order-info-section {
+    background: #e3f2fd;
+    border-radius: 8px;
+    padding: 1.25rem;
+    height: 100%;
+    border: 1px solid #90caf9;
+}
+
 .order-status-section {
     background: #f8f9fa;
     border-radius: 8px;
