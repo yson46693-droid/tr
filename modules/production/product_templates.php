@@ -106,6 +106,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'template_details' && isset($_GET[
             'template_type' => $template['template_type'] ?? 'general',
             'unit_price' => $template['unit_price'] ?? null,
             'carton_type' => $template['carton_type'] ?? null,
+            'custom_carton_quantity' => isset($template['custom_carton_quantity']) ? (int)$template['custom_carton_quantity'] : null,
+            'custom_carton_type_id' => isset($template['custom_carton_type_id']) ? (int)$template['custom_carton_type_id'] : null,
             'notes' => trim((string)($template['notes'] ?? '')),
             'raw_materials' => $materialDetails,
             'packaging' => $normalisedPackaging,
@@ -3225,8 +3227,20 @@ function editTemplate(templateId, templateDataJson, isBase64 = false) {
     // ملء حقل نوع الكرتونة
     const editCartonTypeEl = document.getElementById('editCartonType');
     if (editCartonTypeEl) {
-        const cartonType = templateData.carton_type || '';
+        let cartonType = templateData.carton_type || '';
+        
+        // إذا كانت البيانات المخصصة موجودة لكن carton_type فارغ، ضع 'custom'
+        if ((!cartonType || cartonType === '') && templateData.custom_carton_quantity && templateData.custom_carton_quantity > 0 && templateData.custom_carton_type_id && templateData.custom_carton_type_id > 0) {
+            cartonType = 'custom';
+            console.log('Setting carton_type to custom based on custom data:', templateData.custom_carton_quantity, templateData.custom_carton_type_id);
+        }
+        
         editCartonTypeEl.value = cartonType;
+        console.log('Setting editCartonTypeEl.value to:', cartonType, 'from templateData:', {
+            carton_type: templateData.carton_type,
+            custom_carton_quantity: templateData.custom_carton_quantity,
+            custom_carton_type_id: templateData.custom_carton_type_id
+        });
         
         // إظهار/إخفاء حقول النوع المخصص
         const editCustomFields = document.getElementById('editCustomCartonFields');
@@ -3238,18 +3252,23 @@ function editTemplate(templateId, templateDataJson, isBase64 = false) {
                     const quantityInput = document.getElementById('editCustomCartonQuantity');
                     if (quantityInput) {
                         quantityInput.value = templateData.custom_carton_quantity;
+                        console.log('Set editCustomCartonQuantity to:', templateData.custom_carton_quantity);
                     }
                 }
                 if (templateData.custom_carton_type_id) {
                     const typeSelect = document.getElementById('editCustomCartonTypeId');
                     if (typeSelect) {
                         typeSelect.value = templateData.custom_carton_type_id;
+                        console.log('Set editCustomCartonTypeId to:', templateData.custom_carton_type_id);
                     }
                 }
             } else {
                 editCustomFields.style.display = 'none';
             }
         }
+        
+        // إطلاق حدث change لتحديث الحقول المخصصة
+        editCartonTypeEl.dispatchEvent(new Event('change'));
     }
     
     // ملء حقل السعر

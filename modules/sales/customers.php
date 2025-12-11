@@ -4628,9 +4628,7 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
 </div>
 
-<!-- قائمة العملاء -->
-<div class="card shadow-sm customers-list-card">
-    
+<!-- قائمة العملاء -->    
     <div class="card-body">
         <div class="table-responsive dashboard-table-wrapper customers-table-container">
             <table class="table dashboard-table align-middle">
