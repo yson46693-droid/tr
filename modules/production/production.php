@@ -10183,14 +10183,14 @@ body.modal-open .dashboard-main {
     padding-right: 0 !important;
 }
 
-/* جعل النموذج نفسه قابل للتمرير */
+/* جعل النموذج نفسه قابل للتمرير - تصغير الطول */
 #createFromTemplateModal .modal-dialog {
-    max-height: calc(100vh - 2rem);
-    margin: 1rem auto;
+    max-height: calc(100vh - 4rem);
+    margin: 2rem auto;
 }
 
 #createFromTemplateModal .modal-content {
-    max-height: calc(100vh - 2rem);
+    max-height: calc(100vh - 4rem);
     display: flex;
     flex-direction: column;
 }
@@ -10198,12 +10198,18 @@ body.modal-open .dashboard-main {
 #createFromTemplateModal .modal-body {
     overflow-y: auto;
     flex: 1 1 auto;
-    max-height: calc(100vh - 200px);
+    max-height: calc(100vh - 250px);
+    padding: 1rem 1.25rem;
 }
 
-#createFromTemplateModal .modal-header,
+#createFromTemplateModal .modal-header {
+    flex-shrink: 0;
+    padding: 0.75rem 1.25rem;
+}
+
 #createFromTemplateModal .modal-footer {
     flex-shrink: 0;
+    padding: 0.75rem 1.25rem;
 }
 
 /* على الشاشات الصغيرة */
@@ -10217,18 +10223,24 @@ body.modal-open .dashboard-main {
     }
     
     #createFromTemplateModal .modal-dialog {
-        max-height: calc(100vh - 1rem);
-        margin: 0.5rem;
+        max-height: calc(100vh - 2rem);
+        margin: 1rem 0.5rem;
         width: calc(100% - 1rem);
     }
     
     #createFromTemplateModal .modal-content {
-        max-height: calc(100vh - 1rem);
+        max-height: calc(100vh - 2rem);
     }
     
     #createFromTemplateModal .modal-body {
-        max-height: calc(100vh - 150px);
+        max-height: calc(100vh - 180px);
         overflow-y: auto;
+        padding: 0.75rem 1rem;
+    }
+    
+    #createFromTemplateModal .modal-header,
+    #createFromTemplateModal .modal-footer {
+        padding: 0.5rem 1rem;
     }
 }
 
