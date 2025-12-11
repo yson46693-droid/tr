@@ -2247,11 +2247,7 @@ if (file_exists($specificationsModulePath)) {
                         <label class="form-label">نوع الكرتونة</label>
                         <select class="form-select" name="carton_type" id="editCartonType">
                             <option value="">اختر نوع الكرتونة (اختياري)</option>
-                            <option value="kilo">كيلو (PKG-002)</option>
-                            <option value="half">نص (PKG-001)</option>
-                            <option value="quarter">ربع (PKG-041)</option>
-                            <option value="third">ثلث (PKG-041)</option>
-                            <option value="custom">نوع مخصص</option>
+                            <option value="custom" selected>نوع مخصص</option>
                         </select>
                         <small class="text-muted">اختر نوع الكرتونة المستخدمة في تعبئة المنتج (اختياري - سيتم تطبيق الخصم التلقائي إذا تم اختياره)</small>
                     </div>
