@@ -517,6 +517,128 @@ $defaultHoneyVariety = 'سدر';
 $dashboardSlug = $rawMaterialsContext === 'manager' ? 'manager' : 'production';
 $dashboardUrl = getDashboardUrl($dashboardSlug);
 
+// إنشاء جدول honey_types إذا لم يكن موجوداً
+try {
+    $honeyTypesTableCheck = $db->queryOne("SHOW TABLES LIKE 'honey_types'");
+    if (empty($honeyTypesTableCheck)) {
+        $db->execute("
+            CREATE TABLE IF NOT EXISTS `honey_types` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `honey_type_id` varchar(10) NOT NULL COMMENT 'معرف نوع العسل (مثل KI001)',
+                `name` varchar(100) NOT NULL COMMENT 'اسم نوع العسل',
+                `is_custom` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'هل هو نوع مخصص (يدوي)',
+                `created_by` int(11) DEFAULT NULL,
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `honey_type_id` (`honey_type_id`),
+                UNIQUE KEY `name` (`name`),
+                KEY `created_by` (`created_by`),
+                KEY `is_custom` (`is_custom`),
+                CONSTRAINT `honey_types_created_fk` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    }
+} catch (Exception $e) {
+    error_log("Error creating honey_types table: " . $e->getMessage());
+}
+
+/**
+ * توليد ID عشوائي لنوع العسل بنفس تنسيق ID أنواع العسل (KI + 3 أرقام)
+ * مع التأكد من عدم وجود تضارب
+ */
+function generateUniqueHoneyTypeId($db): string {
+    $maxAttempts = 100; // حد أقصى للمحاولات
+    $attempt = 0;
+    
+    do {
+        // توليد رقم عشوائي من 100 إلى 998 (تجنب 999 لأنه محجوز لـ "أخرى")
+        $randomNumber = rand(100, 998);
+        $honeyTypeId = 'KI' . str_pad((string)$randomNumber, 3, '0', STR_PAD_LEFT);
+        
+        // التحقق من عدم وجود ID مشابه في الجدول
+        $existing = $db->queryOne(
+            "SELECT id FROM honey_types WHERE honey_type_id = ? LIMIT 1",
+            [$honeyTypeId]
+        );
+        
+        // التحقق أيضاً من عدم وجود ID مشابه في القائمة الثابتة
+        $catalog = getHoneyVarietiesCatalog();
+        $existsInCatalog = false;
+        foreach ($catalog as $variety => $meta) {
+            if (isset($meta['code']) && $meta['code'] === $honeyTypeId) {
+                $existsInCatalog = true;
+                break;
+            }
+        }
+        
+        if (empty($existing) && !$existsInCatalog) {
+            return $honeyTypeId;
+        }
+        
+        $attempt++;
+    } while ($attempt < $maxAttempts);
+    
+    // في حالة فشل جميع المحاولات، استخدم timestamp كجزء من ID
+    $timestamp = substr((string)time(), -3);
+    $honeyTypeId = 'KI' . str_pad($timestamp, 3, '0', STR_PAD_LEFT);
+    
+    // التحقق مرة أخرى
+    $existing = $db->queryOne(
+        "SELECT id FROM honey_types WHERE honey_type_id = ? LIMIT 1",
+        [$honeyTypeId]
+    );
+    
+    if (empty($existing)) {
+        return $honeyTypeId;
+    }
+    
+    // كحل أخير، استخدم رقم فريد من 100 إلى 998
+    // نحاول 50 مرة إضافية
+    for ($i = 0; $i < 50; $i++) {
+        $randomNumber = rand(100, 998);
+        $honeyTypeId = 'KI' . str_pad((string)$randomNumber, 3, '0', STR_PAD_LEFT);
+        
+        $existing = $db->queryOne(
+            "SELECT id FROM honey_types WHERE honey_type_id = ? LIMIT 1",
+            [$honeyTypeId]
+        );
+        
+        $catalog = getHoneyVarietiesCatalog();
+        $existsInCatalog = false;
+        foreach ($catalog as $variety => $meta) {
+            if (isset($meta['code']) && $meta['code'] === $honeyTypeId) {
+                $existsInCatalog = true;
+                break;
+            }
+        }
+        
+        if (empty($existing) && !$existsInCatalog) {
+            return $honeyTypeId;
+        }
+        
+        // انتظار قصير لتغيير seed
+        usleep(1000);
+    }
+    
+    // إذا فشلت جميع المحاولات، استخدم رقم فريد بناءً على الوقت
+    $uniqueSuffix = substr((string)(microtime(true) * 1000), -3);
+    $honeyTypeId = 'KI' . str_pad($uniqueSuffix, 3, '0', STR_PAD_LEFT);
+    
+    // التحقق النهائي
+    $existing = $db->queryOne(
+        "SELECT id FROM honey_types WHERE honey_type_id = ? LIMIT 1",
+        [$honeyTypeId]
+    );
+    
+    if (empty($existing)) {
+        return $honeyTypeId;
+    }
+    
+    // كحل أخير جداً، استخدم رقم عشوائي مع timestamp
+    return 'KI' . str_pad((string)(rand(100, 998) + (int)substr(time(), -1)), 3, '0', STR_PAD_LEFT);
+}
+
 // الحصول على رسالة النجاح من session
 $sessionSuccess = getSuccessMessage();
 if ($sessionSuccess) {
@@ -2092,13 +2214,61 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
             
             // إذا كان المستخدم اختار "أخرى" وأدخل نوع عسل مخصص
             if ($honeyVariety === 'أخرى' && !empty($customHoneyVariety)) {
-                $honeyVariety = $customHoneyVariety;
-                $honeyVarietyCode = null; // لا يوجد كود لأنواع العسل المخصصة
+                $honeyVariety = trim($customHoneyVariety);
+                
+                // التحقق من وجود نوع العسل المخصص في الجدول
+                $existingCustomType = $db->queryOne(
+                    "SELECT honey_type_id, name FROM honey_types WHERE name = ? LIMIT 1",
+                    [$honeyVariety]
+                );
+                
+                if ($existingCustomType) {
+                    // استخدام ID الموجود
+                    $honeyVarietyCode = $existingCustomType['honey_type_id'];
+                } else {
+                    // إنشاء نوع عسل جديد مع ID عشوائي
+                    $honeyVarietyCode = generateUniqueHoneyTypeId($db);
+                    
+                    // حفظ نوع العسل الجديد في الجدول
+                    try {
+                        $db->execute(
+                            "INSERT INTO honey_types (honey_type_id, name, is_custom, created_by) VALUES (?, ?, 1, ?)",
+                            [$honeyVarietyCode, $honeyVariety, $currentUser['id']]
+                        );
+                    } catch (Exception $e) {
+                        error_log("Error saving custom honey type: " . $e->getMessage());
+                        // في حالة الفشل، نستمر بدون حفظ في الجدول
+                    }
+                }
             } elseif (!in_array($honeyVariety, $validHoneyVarieties, true)) {
                 // إذا كان النوع غير موجود في القائمة ولم يتم إدخال نوع مخصص
                 if (!empty($customHoneyVariety)) {
-                    $honeyVariety = $customHoneyVariety;
-                    $honeyVarietyCode = null;
+                    $honeyVariety = trim($customHoneyVariety);
+                    
+                    // التحقق من وجود نوع العسل المخصص في الجدول
+                    $existingCustomType = $db->queryOne(
+                        "SELECT honey_type_id, name FROM honey_types WHERE name = ? LIMIT 1",
+                        [$honeyVariety]
+                    );
+                    
+                    if ($existingCustomType) {
+                        // استخدام ID الموجود
+                        $honeyVarietyCode = $existingCustomType['honey_type_id'];
+                    } else {
+                        // إنشاء نوع عسل جديد مع ID عشوائي
+                        $honeyVarietyCode = generateUniqueHoneyTypeId($db);
+                        
+                        // حفظ نوع العسل الجديد في الجدول
+                        try {
+                            $db->execute(
+                                "INSERT INTO honey_types (honey_type_id, name, is_custom, created_by) VALUES (?, ?, 1, ?)",
+                                [$honeyVarietyCode, $honeyVariety, $currentUser['id']]
+                            );
+                        } catch (Exception $e) {
+                            error_log("Error saving custom honey type: " . $e->getMessage());
+                            // في حالة الفشل، نستمر بدون حفظ في الجدول
+                        }
+                    }
                 } else {
                     $honeyVariety = 'أخرى';
                     $honeyVarietyCode = getHoneyVarietyCode($honeyVariety);
