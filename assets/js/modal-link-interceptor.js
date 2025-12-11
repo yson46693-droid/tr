@@ -75,6 +75,40 @@
         setOpener(options.opener);
         try {
             const absoluteUrl = new URL(href, window.location.href).toString();
+            
+            // إضافة معالج للتحقق من محتوى iframe بعد التحميل
+            const checkIframeContent = () => {
+                try {
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                    if (iframeDoc) {
+                        const bodyText = iframeDoc.body?.textContent || '';
+                        const title = iframeDoc.title || '';
+                        
+                        // التحقق من أن المحتوى ليس offline.html
+                        if (bodyText.includes('لا يوجد اتصال بالإنترنت') || 
+                            bodyText.includes('لا يوجد اتصال') ||
+                            title.includes('لا يوجد اتصال') ||
+                            iframeDoc.querySelector('button[onclick*="location.reload"]')) {
+                            console.warn("Detected offline page in iframe, closing modal and opening in new window");
+                            closeModal();
+                            // فتح في نافذة جديدة بدلاً من modal
+                            window.open(absoluteUrl, '_blank', 'noopener');
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    // تجاهل أخطاء CORS
+                    console.debug("Cannot check iframe content (CORS):", e);
+                }
+            };
+            
+            // إضافة event listener للتحقق بعد تحميل iframe
+            const loadHandler = () => {
+                checkIframeContent();
+                iframe.removeEventListener('load', loadHandler);
+            };
+            iframe.addEventListener('load', loadHandler);
+            
             iframe.src = absoluteUrl;
             activateModal();
         } catch (error) {

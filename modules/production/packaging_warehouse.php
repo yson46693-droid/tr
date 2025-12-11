@@ -3191,11 +3191,25 @@ document.addEventListener('DOMContentLoaded', function () {
             alert('تعذّر فتح التقرير الآن. يرجى تحديث الصفحة وإعادة المحاولة.');
             return;
         }
-        if (typeof window.openInAppModal === 'function') {
+        
+        // للتقارير: فتح مباشرة في نافذة جديدة لتجنب مشاكل service worker
+        // يمكن أيضاً استخدام modal إذا كان متاحاً
+        const useModal = typeof window.openInAppModal === 'function' && 
+                        !url.includes('.pdf') && 
+                        !url.includes('print=1');
+        
+        if (useModal) {
             const opener = document.activeElement instanceof Element ? document.activeElement : reportButton;
-            window.openInAppModal(url, { opener: opener });
-            return;
+            try {
+                window.openInAppModal(url, { opener: opener });
+                return;
+            } catch (error) {
+                console.warn('Failed to open in modal, falling back to new window:', error);
+                // Fallback إلى نافذة جديدة
+            }
         }
+        
+        // فتح في نافذة جديدة مباشرة (أكثر موثوقية للتقارير)
         window.open(url, '_blank', 'noopener');
     };
 

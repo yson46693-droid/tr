@@ -158,6 +158,20 @@ self.addEventListener('fetch', event => {
                                event.request.destination === 'document' ||
                                event.request.headers.get('accept')?.includes('text/html');
 
+  // استثناء طلبات التقارير (PDF/HTML) - يجب أن تمر مباشرة بدون تدخل
+  const isReportRequest = url.pathname.includes('/reports/') || 
+                          url.pathname.includes('/generated/') ||
+                          url.pathname.includes('generate_report.php') ||
+                          url.searchParams.has('print') ||
+                          url.searchParams.has('view') ||
+                          ((url.pathname.endsWith('.pdf') || url.pathname.endsWith('.html')) && 
+                           (url.pathname.includes('report') || url.pathname.includes('packaging') || url.pathname.includes('raw_materials')));
+
+  if (isReportRequest) {
+    // للتقارير: السماح بالمرور مباشرة بدون تدخل service worker
+    return;
+  }
+
   // للصفحات (navigation requests): استخدام Network First مع Cache Fallback
   if (isNavigationRequest) {
     event.respondWith(
