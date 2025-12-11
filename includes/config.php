@@ -128,33 +128,40 @@ if (session_status() === PHP_SESSION_ACTIVE) {
             $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
             
             // إذا مر أكثر من وقت الجلسة (7 أيام) + هامش أمان (1 ساعة)
-            // استثناء: لا نحذف الجلسة في profile.php
+            // استثناء: لا نحذف الجلسة في profile.php أو attendance.php
             $isProfilePage = defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true;
-            if (!$isProfilePage) {
+            $isAttendancePage = defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true;
+            if (!$isProfilePage && !$isAttendancePage) {
                 $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
                 if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
                     $isProfilePage = true;
+                } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
+                    $isAttendancePage = true;
                 }
             }
-            if (!$isProfilePage) {
+            if (!$isProfilePage && !$isAttendancePage) {
                 $requestUri = $_SERVER['REQUEST_URI'] ?? '';
                 if (strpos($requestUri, 'profile.php') !== false) {
                     $isProfilePage = true;
+                } elseif (strpos($requestUri, 'attendance.php') !== false) {
+                    $isAttendancePage = true;
                 }
             }
+            
+            $isProtectedPage = $isProfilePage || $isAttendancePage;
             
             if ($timeSinceActivity > (SESSION_LIFETIME + 3600)) {
                 $userId = $_SESSION['user_id'] ?? 'unknown';
                 error_log("Session expired due to inactivity for user ID: {$userId} (time since activity: {$timeSinceActivity} seconds)");
                 
-                // لا نحذف الجلسة في profile.php
-                if (!$isProfilePage) {
+                // لا نحذف الجلسة في profile.php أو attendance.php
+                if (!$isProtectedPage) {
                     session_unset();
                     session_destroy();
                     session_set_cookie_params($sessionCookieOptions);
                     session_start();
                 } else {
-                    // في profile.php، فقط نحدث آخر نشاط بدلاً من حذف الجلسة
+                    // في profile.php أو attendance.php، فقط نحدث آخر نشاط بدلاً من حذف الجلسة
                     $_SESSION['last_activity'] = time();
                 }
             }

@@ -30,28 +30,35 @@ function initSecureSession() {
         // التحقق من انتهاء صلاحية الجلسة فقط إذا كان المستخدم مسجل دخول
         // وإذا كان هناك وقت آخر نشاط سابق محفوظ
         if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-            // التحقق من أننا في profile.php - منع حذف الجلسة في profile.php
+            // التحقق من أننا في profile.php أو attendance.php - منع حذف الجلسة
             $isProfilePage = defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true;
-            if (!$isProfilePage) {
+            $isAttendancePage = defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true;
+            if (!$isProfilePage && !$isAttendancePage) {
                 $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
                 if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
                     $isProfilePage = true;
+                } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
+                    $isAttendancePage = true;
                 }
             }
-            if (!$isProfilePage) {
+            if (!$isProfilePage && !$isAttendancePage) {
                 $requestUri = $_SERVER['REQUEST_URI'] ?? '';
                 if (strpos($requestUri, 'profile.php') !== false) {
                     $isProfilePage = true;
+                } elseif (strpos($requestUri, 'attendance.php') !== false) {
+                    $isAttendancePage = true;
                 }
             }
+            
+            $isProtectedPage = $isProfilePage || $isAttendancePage;
             
             // إذا كان هناك وقت آخر نشاط سابق، نفحصه
             if (isset($_SESSION['last_activity_previous'])) {
                 $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
                 if ($timeSinceActivity > $timeout) {
-                    // الجلسة انتهت - إلغاؤها فقط إذا لم نكن في profile.php
+                    // الجلسة انتهت - إلغاؤها فقط إذا لم نكن في profile.php أو attendance.php
                     error_log("Session expired in initSecureSession: time since activity = {$timeSinceActivity} seconds");
-                    if (!$isProfilePage) {
+                    if (!$isProtectedPage) {
                         session_unset();
                         session_destroy();
                         // إعادة بدء جلسة جديدة
@@ -61,7 +68,7 @@ function initSecureSession() {
                         $_SESSION['last_activity'] = time();
                         $_SESSION['last_activity_previous'] = time();
                     } else {
-                        // في profile.php، فقط نحدث آخر نشاط بدلاً من حذف الجلسة
+                        // في profile.php أو attendance.php، فقط نحدث آخر نشاط بدلاً من حذف الجلسة
                         $_SESSION['last_activity'] = time();
                         $_SESSION['last_activity_previous'] = time();
                     }
@@ -165,16 +172,16 @@ function initSecureSession() {
         if (isset($_SESSION['last_activity_previous'])) {
             $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
             if ($timeSinceActivity > $timeout) {
-                // الجلسة انتهت - إلغاؤها فقط إذا لم نكن في profile.php
+                // الجلسة انتهت - إلغاؤها فقط إذا لم نكن في profile.php أو attendance.php
                 error_log("Session expired in initSecureSession (new session): time since activity = {$timeSinceActivity} seconds");
-                if (!$isProfilePage) {
+                if (!$isProtectedPage) {
                     session_unset();
                     session_destroy();
                     session_start();
                     $_SESSION['last_activity'] = time();
                     $_SESSION['last_activity_previous'] = time();
                 } else {
-                    // في profile.php، فقط نحدث آخر نشاط بدلاً من حذف الجلسة
+                    // في profile.php أو attendance.php، فقط نحدث آخر نشاط بدلاً من حذف الجلسة
                     $_SESSION['last_activity'] = time();
                     $_SESSION['last_activity_previous'] = time();
                 }

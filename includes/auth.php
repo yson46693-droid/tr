@@ -47,29 +47,39 @@ function getPasswordMinLength(): int
  * التحقق من تسجيل الدخول
  */
 function isLoggedIn() {
-    // التحقق من أننا في profile.php - منع حذف الجلسة في profile.php
+    // التحقق من أننا في profile.php أو attendance.php - منع حذف الجلسة
     $isProfilePage = false;
+    $isAttendancePage = false;
     
-    // الطريقة 1: التحقق من الثابت (الأكثر موثوقية)
+    // الطريقة 1: التحقق من الثوابت (الأكثر موثوقية)
     if (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) {
         $isProfilePage = true;
     }
+    if (defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true) {
+        $isAttendancePage = true;
+    }
     
     // الطريقة 2: التحقق من SCRIPT_NAME و PHP_SELF
-    if (!$isProfilePage) {
+    if (!$isProfilePage && !$isAttendancePage) {
         $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
         if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
             $isProfilePage = true;
+        } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
+            $isAttendancePage = true;
         }
     }
     
     // الطريقة 3: التحقق من REQUEST_URI
-    if (!$isProfilePage) {
+    if (!$isProfilePage && !$isAttendancePage) {
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         if (strpos($requestUri, 'profile.php') !== false) {
             $isProfilePage = true;
+        } elseif (strpos($requestUri, 'attendance.php') !== false) {
+            $isAttendancePage = true;
         }
     }
+    
+    $isProtectedPage = $isProfilePage || $isAttendancePage;
     
     // التأكد من أن الجلسة نشطة قبل أي فحص
     if (session_status() === PHP_SESSION_NONE) {
@@ -89,8 +99,8 @@ function isLoggedIn() {
     if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
         // التحقق الإضافي: التأكد من وجود user_id في الجلسة
         if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
-            // إذا لم يكن هناك user_id، إلغاء الجلسة فقط إذا لم نكن في profile.php
-            if (!$isProfilePage) {
+            // إذا لم يكن هناك user_id، إلغاء الجلسة فقط إذا لم نكن في profile.php أو attendance.php
+            if (!$isProtectedPage) {
                 session_unset();
                 session_destroy();
             }
@@ -352,25 +362,31 @@ function getCurrentUser() {
  * @return array|null بيانات المستخدم أو null
  */
 function getCurrentUserFromDatabase($userId) {
-    // التحقق من الملف الذي يستدعي هذه الدالة - منع حذف الجلسة في profile.php
+    // التحقق من الملف الذي يستدعي هذه الدالة - منع حذف الجلسة في profile.php و attendance.php
     // استخدام طرق متعددة للتحقق لضمان العمل على جميع الأجهزة (Windows, Android, iOS)
     $isProfilePage = false;
+    $isAttendancePage = false;
     
-    // الطريقة 1: التحقق من الثابت (الأكثر موثوقية)
+    // الطريقة 1: التحقق من الثوابت (الأكثر موثوقية)
     if (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) {
         $isProfilePage = true;
     }
+    if (defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true) {
+        $isAttendancePage = true;
+    }
     
     // الطريقة 2: التحقق من SCRIPT_NAME و PHP_SELF
-    if (!$isProfilePage) {
+    if (!$isProfilePage && !$isAttendancePage) {
         $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
         if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
             $isProfilePage = true;
+        } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
+            $isAttendancePage = true;
         }
     }
     
     // الطريقة 3: استخدام debug_backtrace كبديل
-    if (!$isProfilePage) {
+    if (!$isProfilePage && !$isAttendancePage) {
         $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
         foreach ($backtrace as $trace) {
             if (isset($trace['file'])) {
@@ -378,18 +394,26 @@ function getCurrentUserFromDatabase($userId) {
                 if ($fileName === 'profile.php' || strpos($trace['file'], 'profile.php') !== false) {
                     $isProfilePage = true;
                     break;
+                } elseif ($fileName === 'attendance.php' || strpos($trace['file'], 'attendance.php') !== false) {
+                    $isAttendancePage = true;
+                    break;
                 }
             }
         }
     }
     
     // الطريقة 4: التحقق من REQUEST_URI
-    if (!$isProfilePage) {
+    if (!$isProfilePage && !$isAttendancePage) {
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         if (strpos($requestUri, 'profile.php') !== false) {
             $isProfilePage = true;
+        } elseif (strpos($requestUri, 'attendance.php') !== false) {
+            $isAttendancePage = true;
         }
     }
+    
+    // تحديد إذا كان الصفحة محمية (profile أو attendance)
+    $isProtectedPage = $isProfilePage || $isAttendancePage;
     
     // جلب جميع بيانات المستخدم من قاعدة البيانات
     try {
@@ -406,9 +430,10 @@ function getCurrentUserFromDatabase($userId) {
     
     // إذا كان المستخدم غير موجود أو محذوف من قاعدة البيانات
     if (!$user) {
-        // منع حذف الجلسة إذا كان الطلب من profile.php
-        if ($isProfilePage) {
-            error_log("Security: User ID {$userId} not found in database - Skipping session destruction in profile.php");
+        // منع حذف الجلسة إذا كان الطلب من profile.php أو attendance.php
+        if ($isProtectedPage) {
+            $pageName = $isProfilePage ? 'profile.php' : 'attendance.php';
+            error_log("Security: User ID {$userId} not found in database - Skipping session destruction in {$pageName}");
             return null;
         }
         
@@ -443,9 +468,10 @@ function getCurrentUserFromDatabase($userId) {
     
     // التحقق من حالة المستخدم - إذا كان غير مفعّل
     if (isset($user['status']) && $user['status'] !== 'active') {
-        // منع حذف الجلسة إذا كان الطلب من profile.php
-        if ($isProfilePage) {
-            error_log("Security: User ID {$userId} status is '{$user['status']}' - Skipping session destruction in profile.php");
+        // منع حذف الجلسة إذا كان الطلب من profile.php أو attendance.php
+        if ($isProtectedPage) {
+            $pageName = $isProfilePage ? 'profile.php' : 'attendance.php';
+            error_log("Security: User ID {$userId} status is '{$user['status']}' - Skipping session destruction in {$pageName}");
             return $user; // إرجاع بيانات المستخدم حتى لو كان غير مفعّل
         }
         
@@ -867,29 +893,39 @@ function hasAllRoles($roles) {
  * التحقق من الوصول - إعادة توجيه إذا لم يكن مسجلاً
  */
 function requireLogin() {
-    // التحقق من أننا في profile.php - منع إعادة التوجيه في profile.php
+    // التحقق من أننا في profile.php أو attendance.php - منع إعادة التوجيه
     $isProfilePage = false;
+    $isAttendancePage = false;
     
-    // الطريقة 1: التحقق من الثابت (الأكثر موثوقية)
+    // الطريقة 1: التحقق من الثوابت (الأكثر موثوقية)
     if (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) {
         $isProfilePage = true;
     }
+    if (defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true) {
+        $isAttendancePage = true;
+    }
     
     // الطريقة 2: التحقق من SCRIPT_NAME و PHP_SELF
-    if (!$isProfilePage) {
+    if (!$isProfilePage && !$isAttendancePage) {
         $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
         if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
             $isProfilePage = true;
+        } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
+            $isAttendancePage = true;
         }
     }
     
     // الطريقة 3: التحقق من REQUEST_URI
-    if (!$isProfilePage) {
+    if (!$isProfilePage && !$isAttendancePage) {
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         if (strpos($requestUri, 'profile.php') !== false) {
             $isProfilePage = true;
+        } elseif (strpos($requestUri, 'attendance.php') !== false) {
+            $isAttendancePage = true;
         }
     }
+    
+    $isProtectedPage = $isProfilePage || $isAttendancePage;
     
     // التأكد من أن الجلسة نشطة قبل أي فحص
     if (session_status() === PHP_SESSION_NONE) {
@@ -912,8 +948,8 @@ function requireLogin() {
         return;
     }
 
-    // إذا لم يكن مسجل دخول، إعادة التوجيه فقط إذا لم نكن في profile.php
-    if (!$isProfilePage && !isLoggedIn()) {
+    // إذا لم يكن مسجل دخول، إعادة التوجيه فقط إذا لم نكن في profile.php أو attendance.php
+    if (!$isProtectedPage && !isLoggedIn()) {
         // محاولة تحميل path_helper إذا لم يكن محملاً
         if (!function_exists('getRelativeUrl') && file_exists(__DIR__ . '/path_helper.php')) {
             require_once __DIR__ . '/path_helper.php';

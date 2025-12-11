@@ -4,6 +4,9 @@
  */
 
 define('ACCESS_ALLOWED', true);
+// تعريف ثابت لمنع حذف الجلسة في attendance.php
+define('ATTENDANCE_PAGE_ACTIVE', true);
+
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
@@ -14,7 +17,86 @@ require_once __DIR__ . '/includes/table_styles.php';
 
 requireLogin();
 
-$currentUser = getCurrentUser();
+// محاولة متعددة لتحميل المستخدم - حل نهائي للأجهزة الغريبة
+$currentUser = null;
+$maxAttempts = 3;
+
+for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+    // الطريقة 1: استخدام getCurrentUser()
+    $currentUser = getCurrentUser();
+    
+    if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
+        break; // نجح التحميل
+    }
+    
+    // الطريقة 2: إذا فشلت، جرب مباشرة من قاعدة البيانات
+    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+        try {
+            $db = db();
+            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$_SESSION['user_id']]);
+            if ($userFromDb && isset($userFromDb['id'])) {
+                $currentUser = $userFromDb;
+                // تحديث الجلسة ببيانات المستخدم
+                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
+                    $_SESSION['username'] = $userFromDb['username'];
+                }
+                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
+                    $_SESSION['role'] = $userFromDb['role'];
+                }
+                if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
+                    $_SESSION['logged_in'] = true;
+                }
+                break; // نجح التحميل
+            }
+        } catch (Exception $e) {
+            error_log("Attendance page - Error loading user from database (attempt $attempt): " . $e->getMessage());
+        }
+    }
+    
+    // الطريقة 3: إذا فشلت، جرب بدون التحقق من status
+    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+        try {
+            if (!isset($db)) {
+                $db = db();
+            }
+            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
+            if ($userFromDb && isset($userFromDb['id'])) {
+                $currentUser = $userFromDb;
+                // تحديث الجلسة ببيانات المستخدم
+                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
+                    $_SESSION['username'] = $userFromDb['username'];
+                }
+                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
+                    $_SESSION['role'] = $userFromDb['role'];
+                }
+                if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
+                    $_SESSION['logged_in'] = true;
+                }
+                break; // نجح التحميل
+            }
+        } catch (Exception $e) {
+            error_log("Attendance page - Error loading user without status check (attempt $attempt): " . $e->getMessage());
+        }
+    }
+    
+    // إذا كانت المحاولة الأخيرة، انتظر قليلاً قبل المحاولة التالية
+    if ($attempt < $maxAttempts) {
+        usleep(100000); // انتظر 0.1 ثانية
+    }
+}
+
+// إذا فشلت جميع المحاولات
+if (!$currentUser || !isset($currentUser['id']) || empty($currentUser['id'])) {
+    // لا نعيد التوجيه - نعرض رسالة خطأ في الصفحة
+    $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى أو تحديث الصفحة.';
+    error_log("Attendance page - Failed to load user after $maxAttempts attempts. Session user_id: " . ($_SESSION['user_id'] ?? 'not set'));
+    // إعادة التوجيه إلى dashboard بدلاً من login
+    $dashboardUrl = getDashboardUrl($_SESSION['role'] ?? 'accountant');
+    if (!headers_sent()) {
+        header('Location: ' . $dashboardUrl);
+        exit;
+    }
+}
 $db = db();
 $today = date('Y-m-d');
 
