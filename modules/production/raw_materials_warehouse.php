@@ -510,9 +510,68 @@ $success = '';
 // قراءة الرسائل من session (Post-Redirect-Get pattern)
 applyPRGPattern($error, $success);
 
+// جلب القائمة الثابتة لأنواع العسل
 $honeyVarietiesCatalog = getHoneyVarietiesCatalog();
+
+// جلب أنواع العسل المخصصة من قاعدة البيانات
+$customHoneyTypes = [];
+try {
+    $customHoneyTypesRows = $db->query(
+        "SELECT honey_type_id, name, is_custom FROM honey_types WHERE is_custom = 1 ORDER BY name ASC"
+    );
+    
+    foreach ($customHoneyTypesRows as $row) {
+        $honeyTypeName = trim($row['name']);
+        $honeyTypeId = trim($row['honey_type_id']);
+        
+        if (!empty($honeyTypeName) && !empty($honeyTypeId)) {
+            // إضافة نوع العسل المخصص إلى القائمة
+            $honeyVarietiesCatalog[$honeyTypeName] = [
+                'code' => $honeyTypeId,
+                'label' => $honeyTypeName,
+            ];
+        }
+    }
+} catch (Exception $e) {
+    error_log("Error loading custom honey types: " . $e->getMessage());
+}
+
 $validHoneyVarieties = array_keys($honeyVarietiesCatalog);
 $defaultHoneyVariety = 'سدر';
+
+/**
+ * دالة محلية لتنسيق نوع العسل مع ID
+ * تستخدم القائمة المدمجة التي تحتوي على الأنواع المخصصة
+ */
+function formatHoneyVarietyWithCodeLocal(string $variety, array $catalog, $db = null): string {
+    if (empty($variety)) {
+        return 'أخرى';
+    }
+    
+    if (!isset($catalog[$variety])) {
+        // إذا لم يكن موجوداً في القائمة، حاول البحث في قاعدة البيانات
+        if ($db) {
+            try {
+                $customType = $db->queryOne(
+                    "SELECT honey_type_id, name FROM honey_types WHERE name = ? LIMIT 1",
+                    [$variety]
+                );
+                
+                if ($customType) {
+                    return sprintf('%s (%s)', $customType['name'], $customType['honey_type_id']);
+                }
+            } catch (Exception $e) {
+                error_log("Error fetching custom honey type: " . $e->getMessage());
+            }
+        }
+        
+        // إذا لم يتم العثور عليه، أرجع الاسم كما هو
+        return $variety;
+    }
+    
+    $entry = $catalog[$variety];
+    return sprintf('%s (%s)', $entry['label'], $entry['code']);
+}
 
 $dashboardSlug = $rawMaterialsContext === 'manager' ? 'manager' : 'production';
 $dashboardUrl = getDashboardUrl($dashboardSlug);
@@ -4442,7 +4501,7 @@ if ($section === 'honey') {
             ];
         }
 
-        $varietyDisplay = formatHoneyVarietyWithCode($stock['honey_variety'] ?? 'أخرى');
+        $varietyDisplay = formatHoneyVarietyWithCodeLocal($stock['honey_variety'] ?? 'أخرى', $honeyVarietiesCatalog, $db);
         $createdAtTs = null;
         $updatedAtTs = null;
         if (!empty($stock['created_at'])) {

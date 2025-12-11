@@ -3147,92 +3147,92 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     .dashboard-table {
-        min-width: 1100px;
-        font-size: 0.95rem;
+        min-width: 850px;
+        font-size: 0.85rem;
         width: 100%;
         table-layout: fixed;
     }
     
     /* تحديد عرض الأعمدة بناءً على طول المحتوى */
-    /* الاسم: 15 حرف (31.25% من 48 حرف) */
+    /* الاسم: 15 حرف */
     .dashboard-table thead th:nth-child(1),
     .dashboard-table tbody td:nth-child(1) {
         width: 20%;
-        min-width: 165px;
+        min-width: 110px;
     }
     
-    /* رقم الهاتف: 11 حرف (22.92% من 48 حرف) */
+    /* رقم الهاتف: 11 حرف */
     .dashboard-table thead th:nth-child(2),
     .dashboard-table tbody td:nth-child(2) {
         width: 15%;
-        min-width: 125px;
+        min-width: 85px;
     }
     
-    /* الرصيد: 7 حرف (14.58% من 48 حرف) */
+    /* الرصيد: 7 حرف */
     .dashboard-table thead th:nth-child(3),
     .dashboard-table tbody td:nth-child(3) {
         width: 10%;
-        min-width: 90px;
+        min-width: 65px;
     }
     
-    /* العنوان: 8 حرف (16.67% من 48 حرف) */
+    /* العنوان: 8 حرف */
     .dashboard-table thead th:nth-child(4),
     .dashboard-table tbody td:nth-child(4) {
         width: 12%;
-        min-width: 105px;
+        min-width: 75px;
         word-wrap: break-word;
         white-space: normal;
     }
     
-    /* المنطقة: 7 حرف (14.58% من 48 حرف) */
+    /* المنطقة: 7 حرف */
     .dashboard-table thead th:nth-child(5),
     .dashboard-table tbody td:nth-child(5) {
         width: 10%;
-        min-width: 90px;
+        min-width: 65px;
     }
     
     /* الموقع */
     .dashboard-table thead th:nth-child(6),
     .dashboard-table tbody td:nth-child(6) {
         width: 13%;
-        min-width: 120px;
+        min-width: 90px;
     }
     
     /* الإجراءات */
     .dashboard-table thead th:nth-child(7),
     .dashboard-table tbody td:nth-child(7) {
         width: 20%;
-        min-width: 185px;
+        min-width: 140px;
     }
     
     .dashboard-table thead th {
-        font-size: 0.9rem;
-        padding: 0.75rem 0.5rem;
+        font-size: 0.8rem;
+        padding: 0.5rem 0.35rem;
         white-space: nowrap;
         font-weight: 600;
     }
     
     .dashboard-table tbody td {
-        padding: 0.75rem 0.5rem;
-        font-size: 0.9rem;
+        padding: 0.5rem 0.35rem;
+        font-size: 0.8rem;
         vertical-align: middle;
     }
     
     /* تحسين الأزرار في الجدول */
     .dashboard-table .btn {
-        font-size: 0.8rem;
-        padding: 0.35rem 0.6rem;
+        font-size: 0.7rem;
+        padding: 0.25rem 0.4rem;
         white-space: nowrap;
     }
     
     .dashboard-table .btn i {
-        font-size: 0.85rem;
+        font-size: 0.75rem;
     }
     
     /* تحسين الأزرار المتعددة في عمود الإجراءات */
     .dashboard-table tbody td:last-child .d-flex {
         flex-wrap: wrap;
-        gap: 0.4rem;
+        gap: 0.25rem;
     }
     
     .dashboard-table tbody td:last-child .btn {
@@ -3242,8 +3242,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     /* تحسين Badge الرصيد */
     .dashboard-table .badge {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
+        font-size: 0.65rem;
+        padding: 0.2rem 0.4rem;
     }
     
     /* تحسين عمود الموقع */
@@ -3261,23 +3261,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
 @media (max-width: 575.98px) {
     .dashboard-table {
-        min-width: 1000px;
-        font-size: 0.9rem;
+        min-width: 800px;
+        font-size: 0.8rem;
     }
     
     .dashboard-table thead th {
-        font-size: 0.85rem;
-        padding: 0.65rem 0.45rem;
+        font-size: 0.75rem;
+        padding: 0.45rem 0.3rem;
     }
     
     .dashboard-table tbody td {
-        font-size: 0.85rem;
-        padding: 0.65rem 0.45rem;
+        font-size: 0.75rem;
+        padding: 0.45rem 0.3rem;
     }
     
     .dashboard-table .btn {
-        font-size: 0.75rem;
-        padding: 0.3rem 0.5rem;
+        font-size: 0.65rem;
+        padding: 0.2rem 0.35rem;
+    }
+    
+    .dashboard-table .btn i {
+        font-size: 0.7rem;
     }
     
     /* عمود العنوان يبقى ظاهراً - مهم جداً */
@@ -3287,8 +3291,44 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     .dashboard-table .badge {
-        font-size: 0.7rem;
-        padding: 0.2rem 0.45rem;
+        font-size: 0.6rem;
+        padding: 0.15rem 0.35rem;
+    }
+    
+    /* تقليل min-width للأعمدة على الشاشات الصغيرة */
+    .dashboard-table thead th:nth-child(1),
+    .dashboard-table tbody td:nth-child(1) {
+        min-width: 100px;
+    }
+    
+    .dashboard-table thead th:nth-child(2),
+    .dashboard-table tbody td:nth-child(2) {
+        min-width: 80px;
+    }
+    
+    .dashboard-table thead th:nth-child(3),
+    .dashboard-table tbody td:nth-child(3) {
+        min-width: 60px;
+    }
+    
+    .dashboard-table thead th:nth-child(4),
+    .dashboard-table tbody td:nth-child(4) {
+        min-width: 70px;
+    }
+    
+    .dashboard-table thead th:nth-child(5),
+    .dashboard-table tbody td:nth-child(5) {
+        min-width: 60px;
+    }
+    
+    .dashboard-table thead th:nth-child(6),
+    .dashboard-table tbody td:nth-child(6) {
+        min-width: 85px;
+    }
+    
+    .dashboard-table thead th:nth-child(7),
+    .dashboard-table tbody td:nth-child(7) {
+        min-width: 130px;
     }
 }
 </style>
