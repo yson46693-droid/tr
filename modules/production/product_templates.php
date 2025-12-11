@@ -564,6 +564,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($customCartonTypeId <= 0) {
                         $customCartonTypeId = null;
                     }
+                    
+                    // التأكد من أن carton_type = 'custom' إذا كانت البيانات المخصصة موجودة
+                    if ($customCartonQuantity > 0 && $customCartonTypeId > 0) {
+                        $cartonType = 'custom';
+                    } else {
+                        $cartonType = null;
+                    }
                 } elseif (!in_array($cartonType, ['kilo', 'half', 'quarter', 'third'])) {
                     $cartonType = null;
                 }
@@ -884,6 +891,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     if ($customCartonTypeId <= 0) {
                         $customCartonTypeId = null;
+                    }
+                    
+                    // التأكد من أن carton_type = 'custom' إذا كانت البيانات المخصصة موجودة
+                    if ($customCartonQuantity > 0 && $customCartonTypeId > 0) {
+                        $cartonType = 'custom';
+                    } else {
+                        $cartonType = null;
                     }
                 } elseif (!in_array($cartonType, ['kilo', 'half', 'quarter', 'third'])) {
                     $cartonType = null;
