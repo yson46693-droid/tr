@@ -5181,37 +5181,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         } else {
                             error_log('Custom carton auto-deduction skipped: custom carton info not found for ID ' . $targetMaterialId);
                         }
-                    } elseif ($cartonType && in_array($cartonType, ['kilo', 'half', 'quarter', 'third'])) {
-                        // الأنواع القياسية
-                        // تعريف قواعد الخصم لكل نوع كرتونة
-                        $cartonRules = [
-                            'kilo' => ['target_code' => 'PKG002', 'threshold' => 6, 'divisor' => 6],
-                            'half' => ['target_code' => 'PKG001', 'threshold' => 12, 'divisor' => 12],
-                            'quarter' => ['target_code' => 'PKG041', 'threshold' => 24, 'divisor' => 24],
-                            'third' => ['target_code' => 'PKG041', 'threshold' => 18, 'divisor' => 18],
-                        ];
-                        
-                        $rule = $cartonRules[$cartonType];
-                        
-                        if ($quantity >= $rule['threshold']) {
-                            $targetCodeKey = $rule['target_code'];
-                            $targetDisplayCode = $formatPackagingCode($targetCodeKey) ?? ('PKG-' . substr($targetCodeKey, 3));
-                            
-                            // حساب الكمية المطلوبة للخصم
-                            $quantityForBoxes = (int)floor((float)$quantity);
-                            $additionalQty = intdiv(max($quantityForBoxes, 0), $rule['divisor']);
-                            
-                            error_log('Carton auto-deduction: type=' . $cartonType . ', target=' . $targetDisplayCode . ', quantity=' . $quantity . ', additionalQty=' . $additionalQty);
-                            
-                            if ($additionalQty > 0 && $packagingTableExists) {
-                                // البحث عن المادة المستهدفة في قاعدة البيانات
-                                $targetMaterialId = null;
-                                $targetMaterialName = 'مادة تعبئة ' . $targetDisplayCode;
-                                $targetMaterialUnit = 'قطعة';
-                                
-                                // تم إزالة منطق الخصم التلقائي القديم - النظام يعتمد الآن فقط على نوع الكرتونة المخزن في القالب
-                            }
-                        }
                     }
                 
                 // إنشاء أرقام باركود بعدد الكمية المنتجة
