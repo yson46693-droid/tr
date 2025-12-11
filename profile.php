@@ -4,6 +4,12 @@
  */
 
 define('ACCESS_ALLOWED', true);
+
+// التأكد من بدء الجلسة قبل أي شيء
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/path_helper.php';
 require_once __DIR__ . '/includes/db.php';
@@ -11,9 +17,29 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/audit_log.php';
 
 // التحقق من تسجيل الدخول فقط
+// التأكد من أن الجلسة نشطة قبل التحقق
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    if (!headers_sent()) {
+        @session_start();
+    }
+}
+
 requireLogin();
 
 $currentUser = getCurrentUser();
+
+// التحقق من أن المستخدم موجود (حماية إضافية)
+if (!$currentUser || !isset($currentUser['id'])) {
+    // إذا لم يكن المستخدم موجوداً، إعادة التوجيه إلى تسجيل الدخول
+    $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+    if (!headers_sent()) {
+        header('Location: ' . $loginUrl);
+        exit;
+    } else {
+        echo '<script>window.location.href = "' . htmlspecialchars($loginUrl) . '";</script>';
+        exit;
+    }
+}
 
 $db = db();
 $passwordMinLength = getPasswordMinLength();

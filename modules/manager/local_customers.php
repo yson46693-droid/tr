@@ -36,6 +36,61 @@ $db = db();
 
 // التأكد من وجود الجداول
 try {
+    // إنشاء جدول regions إذا لم يكن موجوداً
+    $regionsTable = $db->queryOne("SHOW TABLES LIKE 'regions'");
+    if (empty($regionsTable)) {
+        $createRegionsTableSql = "CREATE TABLE IF NOT EXISTS `regions` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `name` varchar(100) NOT NULL,
+            `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `name` (`name`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='جدول المناطق'";
+        
+        try {
+            $connection = $db->getConnection();
+            $connection->query($createRegionsTableSql);
+            error_log('Table regions created successfully');
+        } catch (Throwable $e) {
+            error_log('Error creating regions table: ' . $e->getMessage());
+        }
+    }
+    
+    // إضافة حقل region_id إلى جدول local_customers إذا لم يكن موجوداً
+    $regionIdColumn = $db->queryOne("SHOW COLUMNS FROM local_customers LIKE 'region_id'");
+    if (empty($regionIdColumn)) {
+        try {
+            $connection = $db->getConnection();
+            $connection->query("ALTER TABLE `local_customers` ADD COLUMN `region_id` int(11) DEFAULT NULL AFTER `address`, ADD KEY `region_id` (`region_id`)");
+            // إضافة foreign key constraint
+            $fkCheck = $db->queryOne("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'local_customers' AND CONSTRAINT_NAME = 'local_customers_ibfk_region'");
+            if (empty($fkCheck)) {
+                $connection->query("ALTER TABLE `local_customers` ADD CONSTRAINT `local_customers_ibfk_region` FOREIGN KEY (`region_id`) REFERENCES `regions` (`id`) ON DELETE SET NULL");
+            }
+            error_log('Column region_id added to local_customers');
+        } catch (Throwable $e) {
+            error_log('Error adding region_id column to local_customers: ' . $e->getMessage());
+        }
+    }
+    
+    // إضافة حقل region_id إلى جدول customers إذا لم يكن موجوداً
+    $customersRegionIdColumn = $db->queryOne("SHOW COLUMNS FROM customers LIKE 'region_id'");
+    if (empty($customersRegionIdColumn)) {
+        try {
+            $connection = $db->getConnection();
+            $connection->query("ALTER TABLE `customers` ADD COLUMN `region_id` int(11) DEFAULT NULL AFTER `address`, ADD KEY `region_id` (`region_id`)");
+            // إضافة foreign key constraint
+            $fkCheck = $db->queryOne("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'customers' AND CONSTRAINT_NAME = 'customers_ibfk_region'");
+            if (empty($fkCheck)) {
+                $connection->query("ALTER TABLE `customers` ADD CONSTRAINT `customers_ibfk_region` FOREIGN KEY (`region_id`) REFERENCES `regions` (`id`) ON DELETE SET NULL");
+            }
+            error_log('Column region_id added to customers');
+        } catch (Throwable $e) {
+            error_log('Error adding region_id column to customers: ' . $e->getMessage());
+        }
+    }
+    
     // إنشاء جدول local_customers إذا لم يكن موجوداً
     $localCustomersTable = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
     if (empty($localCustomersTable)) {
@@ -605,6 +660,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $hasLongitudeColumn = !empty($db->queryOne("SHOW COLUMNS FROM local_customers LIKE 'longitude'"));
                 $hasLocationCapturedAtColumn = !empty($db->queryOne("SHOW COLUMNS FROM local_customers LIKE 'location_captured_at'"));
                 
+                $regionId = isset($_POST['region_id']) && $_POST['region_id'] !== '' ? (int)$_POST['region_id'] : null;
+                
                 $customerColumns = ['name', 'phone', 'balance', 'address', 'status', 'created_by'];
                 $customerValues = [
                     $name,
@@ -615,6 +672,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $currentUser['id'],
                 ];
                 $customerPlaceholders = ['?', '?', '?', '?', '?', '?'];
+                
+                // إضافة region_id إذا كان موجوداً
+                $hasRegionIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM local_customers LIKE 'region_id'"));
+                if ($hasRegionIdColumn && $regionId !== null) {
+                    $customerColumns[] = 'region_id';
+                    $customerValues[] = $regionId;
+                    $customerPlaceholders[] = '?';
+                }
                 
                 if ($hasLatitudeColumn && $latitude !== null) {
                     $customerColumns[] = 'latitude';
@@ -675,10 +740,14 @@ if (!in_array($debtStatus, $allowedDebtStatuses, true)) {
     $debtStatus = 'all';
 }
 
+// البحث والفلترة
+$regionFilter = isset($_GET['region_id']) && $_GET['region_id'] !== '' ? (int)$_GET['region_id'] : null;
+
 // بناء استعلام SQL
-$sql = "SELECT c.*, u.full_name as created_by_name
+$sql = "SELECT c.*, u.full_name as created_by_name, r.name as region_name
         FROM local_customers c
         LEFT JOIN users u ON c.created_by = u.id
+        LEFT JOIN regions r ON c.region_id = r.id
         WHERE 1=1";
 
 $countSql = "SELECT COUNT(*) as total FROM local_customers WHERE 1=1";
@@ -703,19 +772,32 @@ if ($debtStatus === 'debtor') {
 }
 
 if ($search) {
-    $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ?)";
-    $countSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ?)";
-    $statsSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ?)";
+    $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ?)";
+    $countSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?))";
+    $statsSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?))";
     $searchParam = '%' . $search . '%';
     $params[] = $searchParam;
     $params[] = $searchParam;
     $params[] = $searchParam;
+    $params[] = $searchParam;
+    $countParams[] = $searchParam;
     $countParams[] = $searchParam;
     $countParams[] = $searchParam;
     $countParams[] = $searchParam;
     $statsParams[] = $searchParam;
     $statsParams[] = $searchParam;
     $statsParams[] = $searchParam;
+    $statsParams[] = $searchParam;
+}
+
+// فلتر المنطقة
+if ($regionFilter !== null) {
+    $sql .= " AND c.region_id = ?";
+    $countSql .= " AND region_id = ?";
+    $statsSql .= " AND region_id = ?";
+    $params[] = $regionFilter;
+    $countParams[] = $regionFilter;
+    $statsParams[] = $regionFilter;
 }
 
 // التحقق النهائي من وجود الجدول قبل تنفيذ الاستعلامات
@@ -944,12 +1026,26 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                     >
                 </div>
             </div>
-            <div class="col-6 col-md-3 col-lg-3">
+            <div class="col-6 col-md-3 col-lg-2">
                 <label for="debtStatusFilter" class="visually-hidden">تصفية حسب حالة الديون</label>
                 <select class="form-select form-select-sm shadow-sm" id="debtStatusFilter" name="debt_status">
                     <option value="all" <?php echo $debtStatus === 'all' ? 'selected' : ''; ?>>الكل</option>
                     <option value="debtor" <?php echo $debtStatus === 'debtor' ? 'selected' : ''; ?>>مدين</option>
                     <option value="clear" <?php echo $debtStatus === 'clear' ? 'selected' : ''; ?>>غير مدين / لديه رصيد</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-3 col-lg-2">
+                <label for="regionFilter" class="visually-hidden">تصفية حسب المنطقة</label>
+                <select class="form-select form-select-sm shadow-sm" id="regionFilter" name="region_id">
+                    <option value="">جميع المناطق</option>
+                    <?php
+                    $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                    foreach ($regions as $region):
+                    ?>
+                        <option value="<?php echo $region['id']; ?>" <?php echo $regionFilter === $region['id'] ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($region['name']); ?>
+                        </option>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div class="col-6 col-md-3 col-lg-2 d-grid">
@@ -976,6 +1072,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                         <th>رقم الهاتف</th>
                         <th>الرصيد</th>
                         <th>العنوان</th>
+                        <th>المنطقة</th>
                         <th>الموقع</th>
                         <th>تاريخ الإضافة</th>
                         <th>الإجراءات</th>
@@ -984,7 +1081,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                 <tbody>
                     <?php if (empty($customers)): ?>
                         <tr>
-                            <td colspan="7" class="text-center text-muted">لا توجد عملاء محليين</td>
+                            <td colspan="8" class="text-center text-muted">لا توجد عملاء محليين</td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($customers as $customer): ?>
@@ -1007,6 +1104,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                     <?php endif; ?>
                                 </td>
                                 <td><?php echo htmlspecialchars($customer['address'] ?? '-'); ?></td>
+                                <td><?php echo htmlspecialchars($customer['region_name'] ?? '-'); ?></td>
                                 <td>
                                     <?php
                                     $hasLocation = isset($customer['latitude'], $customer['longitude']) &&

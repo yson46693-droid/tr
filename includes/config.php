@@ -76,10 +76,13 @@ $sessionCookieOptions = [
     'samesite' => $isHttps ? 'None' : 'Lax',
 ];
 
-if (session_status() !== PHP_SESSION_ACTIVE) {
+// التأكد من أن الجلسة نشطة بشكل صحيح
+if (session_status() === PHP_SESSION_NONE) {
+    // الجلسة لم تبدأ بعد - بدء الجلسة مع الإعدادات الصحيحة
     session_set_cookie_params($sessionCookieOptions);
-    session_start();
-} else {
+    @session_start();
+} elseif (session_status() === PHP_SESSION_ACTIVE) {
+    // الجلسة نشطة بالفعل - تحديث الإعدادات فقط
     // تحديث إعدادات الكوكي الحالية إن كانت الجلسة قد بدأت بالفعل قبل تضمين الملف
     // تحديث تلقائي لوقت انتهاء الجلسة عند كل طلب نشط
     if (!headers_sent() && session_id()) {

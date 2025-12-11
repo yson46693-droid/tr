@@ -859,6 +859,115 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $error = 'حدث خطأ أثناء تحصيل المبلغ. يرجى المحاولة مرة أخرى.';
             }
         }
+    } elseif ($action === 'edit_customer') {
+        $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
+        $phone = trim($_POST['phone'] ?? '');
+        $address = trim($_POST['address'] ?? '');
+        $regionId = isset($_POST['region_id']) && $_POST['region_id'] !== '' ? (int)$_POST['region_id'] : null;
+        
+        if ($customerId <= 0) {
+            $error = 'معرف العميل غير صحيح';
+        } else {
+            try {
+                // التحقق من وجود العميل
+                $customer = $db->queryOne("SELECT id, name, created_by FROM customers WHERE id = ?", [$customerId]);
+                if (!$customer) {
+                    $error = 'العميل غير موجود';
+                } else {
+                    // التحقق من الصلاحيات
+                    $canEdit = false;
+                    $allowedFields = [];
+                    $userRole = strtolower($currentUser['role'] ?? '');
+                    
+                    if ($userRole === 'manager') {
+                        // المدير يعدل جميع البيانات ما عدا اسم العميل
+                        $canEdit = true;
+                        $allowedFields = ['phone', 'address', 'region_id', 'balance'];
+                    } elseif (in_array($userRole, ['accountant', 'sales'], true)) {
+                        // المحاسب والمندوب يعدلون فقط (العنوان – الهاتف – المنطقة)
+                        $canEdit = true;
+                        $allowedFields = ['phone', 'address', 'region_id'];
+                    }
+                    
+                    if (!$canEdit) {
+                        $error = 'غير مصرح لك بتعديل هذا العميل';
+                    } else {
+                        $updateFields = [];
+                        $updateValues = [];
+                        
+                        if (in_array('phone', $allowedFields)) {
+                            $updateFields[] = 'phone = ?';
+                            $updateValues[] = $phone ?: null;
+                        }
+                        
+                        if (in_array('address', $allowedFields)) {
+                            $updateFields[] = 'address = ?';
+                            $updateValues[] = $address ?: null;
+                        }
+                        
+                        if (in_array('region_id', $allowedFields)) {
+                            $updateFields[] = 'region_id = ?';
+                            $updateValues[] = $regionId;
+                        }
+                        
+                        if (in_array('balance', $allowedFields)) {
+                            $balance = isset($_POST['balance']) ? cleanFinancialValue($_POST['balance'], true) : null;
+                            if ($balance !== null) {
+                                $updateFields[] = 'balance = ?';
+                                $updateValues[] = $balance;
+                            }
+                        }
+                        
+                        if (!empty($updateFields)) {
+                            $updateValues[] = $customerId;
+                            $db->execute(
+                                "UPDATE customers SET " . implode(', ', $updateFields) . " WHERE id = ?",
+                                $updateValues
+                            );
+                            
+                            logAudit($currentUser['id'], 'edit_customer', 'customer', $customerId, null, [
+                                'name' => $customer['name'],
+                                'updated_fields' => $allowedFields
+                            ]);
+                            
+                            $_SESSION['success_message'] = 'تم تعديل بيانات العميل بنجاح';
+                            
+                            $redirectFilters = [];
+                            if (!empty($section)) {
+                                $redirectFilters['section'] = $section;
+                            }
+                            
+                            $currentSearch = trim($_GET['search'] ?? '');
+                            if ($currentSearch !== '') {
+                                $redirectFilters['search'] = $currentSearch;
+                            }
+                            
+                            $currentDebtStatus = $_GET['debt_status'] ?? 'all';
+                            if (in_array($currentDebtStatus, ['debtor', 'clear'], true)) {
+                                $redirectFilters['debt_status'] = $currentDebtStatus;
+                            }
+                            
+                            $currentPageParam = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
+                            if ($currentPageParam > 1) {
+                                $redirectFilters['p'] = $currentPageParam;
+                            }
+                            
+                            redirectAfterPost(
+                                'customers',
+                                $redirectFilters,
+                                [],
+                                strtolower((string)($currentUser['role'] ?? 'manager'))
+                            );
+                        } else {
+                            $error = 'لم يتم تحديد أي حقول للتعديل';
+                        }
+                    }
+                }
+            } catch (Throwable $editError) {
+                error_log('Edit customer error: ' . $editError->getMessage());
+                $error = 'حدث خطأ أثناء تعديل بيانات العميل';
+            }
+        }
     } elseif ($action === 'add_customer') {
         $name = trim($_POST['name'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
@@ -919,6 +1028,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $hasLongitudeColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'longitude'"));
                 $hasLocationCapturedAtColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'location_captured_at'"));
                 
+                $regionId = isset($_POST['region_id']) && $_POST['region_id'] !== '' ? (int)$_POST['region_id'] : null;
+                
                 $customerColumns = ['name', 'phone', 'balance', 'address', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
                 $customerValues = [
                     $name,
@@ -932,6 +1043,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $createdByAdminFlag,
                 ];
                 $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?', '?', '?'];
+                
+                // إضافة region_id إذا كان موجوداً
+                $hasRegionIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'region_id'"));
+                if ($hasRegionIdColumn && $regionId !== null) {
+                    $customerColumns[] = 'region_id';
+                    $customerValues[] = $regionId;
+                    $customerPlaceholders[] = '?';
+                }
                 
                 if ($hasLatitudeColumn && $latitude !== null) {
                     $customerColumns[] = 'latitude';
@@ -999,6 +1118,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
+// إنشاء جدول regions إذا لم يكن موجوداً
+try {
+    $regionsTable = $db->queryOne("SHOW TABLES LIKE 'regions'");
+    if (empty($regionsTable)) {
+        $createRegionsTableSql = "CREATE TABLE IF NOT EXISTS `regions` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `name` varchar(100) NOT NULL,
+            `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `name` (`name`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='جدول المناطق'";
+        
+        try {
+            $connection = $db->getConnection();
+            $connection->query($createRegionsTableSql);
+            error_log('Table regions created successfully');
+        } catch (Throwable $e) {
+            error_log('Error creating regions table: ' . $e->getMessage());
+        }
+    }
+    
+    // إضافة حقل region_id إلى جدول customers إذا لم يكن موجوداً
+    $regionIdColumn = $db->queryOne("SHOW COLUMNS FROM customers LIKE 'region_id'");
+    if (empty($regionIdColumn)) {
+        try {
+            $connection = $db->getConnection();
+            $connection->query("ALTER TABLE `customers` ADD COLUMN `region_id` int(11) DEFAULT NULL AFTER `address`, ADD KEY `region_id` (`region_id`)");
+            // إضافة foreign key constraint
+            $fkCheck = $db->queryOne("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'customers' AND CONSTRAINT_NAME = 'customers_ibfk_region'");
+            if (empty($fkCheck)) {
+                $connection->query("ALTER TABLE `customers` ADD CONSTRAINT `customers_ibfk_region` FOREIGN KEY (`region_id`) REFERENCES `regions` (`id`) ON DELETE SET NULL");
+            }
+            error_log('Column region_id added to customers');
+        } catch (Throwable $e) {
+            error_log('Error adding region_id column to customers: ' . $e->getMessage());
+        }
+    }
+} catch (Throwable $regionsError) {
+    error_log('Regions table migration error: ' . $regionsError->getMessage());
+}
+
 try {
     $createdByColumn = $db->query("SHOW COLUMNS FROM customers LIKE 'created_by'");
     if (empty($createdByColumn)) {
@@ -1036,15 +1197,17 @@ $offset = ($pageNum - 1) * $perPage;
 // البحث والفلترة
 $search = trim($_GET['search'] ?? '');
 $debtStatus = $_GET['debt_status'] ?? 'all';
+$regionFilter = isset($_GET['region_id']) && $_GET['region_id'] !== '' ? (int)$_GET['region_id'] : null;
 $allowedDebtStatuses = ['all', 'debtor', 'clear'];
 if (!in_array($debtStatus, $allowedDebtStatuses, true)) {
     $debtStatus = 'all';
 }
 
 // بناء استعلام SQL
-$sql = "SELECT c.*, u.full_name as created_by_name
+$sql = "SELECT c.*, u.full_name as created_by_name, r.name as region_name
         FROM customers c
         LEFT JOIN users u ON c.created_by = u.id
+        LEFT JOIN regions r ON c.region_id = r.id
         WHERE 1=1";
 
 $countSql = "SELECT COUNT(*) as total FROM customers WHERE 1=1";
@@ -1081,19 +1244,32 @@ if ($debtStatus === 'debtor') {
 }
 
 if ($search) {
-    $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ?)";
-    $countSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ?)";
-    $statsSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ?)";
+    $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ?)";
+    $countSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?))";
+    $statsSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?))";
     $searchParam = '%' . $search . '%';
     $params[] = $searchParam;
     $params[] = $searchParam;
     $params[] = $searchParam;
+    $params[] = $searchParam;
+    $countParams[] = $searchParam;
     $countParams[] = $searchParam;
     $countParams[] = $searchParam;
     $countParams[] = $searchParam;
     $statsParams[] = $searchParam;
     $statsParams[] = $searchParam;
     $statsParams[] = $searchParam;
+    $statsParams[] = $searchParam;
+}
+
+// فلتر المنطقة
+if ($regionFilter !== null) {
+    $sql .= " AND c.region_id = ?";
+    $countSql .= " AND region_id = ?";
+    $statsSql .= " AND region_id = ?";
+    $params[] = $regionFilter;
+    $countParams[] = $regionFilter;
+    $statsParams[] = $regionFilter;
 }
 
 $totalResult = $db->queryOne($countSql, $countParams);
@@ -3950,6 +4126,37 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+    
+    // معالج تعديل العميل
+    var editCustomerButtons = document.querySelectorAll('.edit-customer-btn');
+    var editCustomerModal = document.getElementById('editCustomerModal');
+    
+    if (editCustomerModal) {
+        editCustomerButtons.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var customerId = this.getAttribute('data-customer-id');
+                var customerName = this.getAttribute('data-customer-name');
+                var customerPhone = this.getAttribute('data-customer-phone');
+                var customerAddress = this.getAttribute('data-customer-address');
+                var customerRegionId = this.getAttribute('data-customer-region-id');
+                var customerBalance = this.getAttribute('data-customer-balance');
+                
+                document.getElementById('editCustomerId').value = customerId;
+                document.getElementById('editCustomerName').value = customerName;
+                document.getElementById('editCustomerPhone').value = customerPhone || '';
+                document.getElementById('editCustomerAddress').value = customerAddress || '';
+                document.getElementById('editCustomerRegionId').value = customerRegionId || '';
+                
+                var balanceInput = document.getElementById('editCustomerBalance');
+                if (balanceInput) {
+                    balanceInput.value = customerBalance || '0';
+                }
+                
+                var modal = new bootstrap.Modal(editCustomerModal);
+                modal.show();
+            });
+        });
+    }
 });
 </script>
 
@@ -3994,12 +4201,26 @@ document.addEventListener('DOMContentLoaded', function () {
                     >
                 </div>
             </div>
-            <div class="col-6 col-md-3 col-lg-3">
+            <div class="col-6 col-md-3 col-lg-2">
                 <label for="debtStatusFilter" class="visually-hidden">تصفية حسب حالة الديون</label>
                 <select class="form-select form-select-sm shadow-sm" id="debtStatusFilter" name="debt_status">
                     <option value="all" <?php echo $debtStatus === 'all' ? 'selected' : ''; ?>>الكل</option>
                     <option value="debtor" <?php echo $debtStatus === 'debtor' ? 'selected' : ''; ?>>مدين</option>
                     <option value="clear" <?php echo $debtStatus === 'clear' ? 'selected' : ''; ?>>غير مدين / لديه رصيد</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-3 col-lg-2">
+                <label for="regionFilter" class="visually-hidden">تصفية حسب المنطقة</label>
+                <select class="form-select form-select-sm shadow-sm" id="regionFilter" name="region_id">
+                    <option value="">جميع المناطق</option>
+                    <?php
+                    $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                    foreach ($regions as $region):
+                    ?>
+                        <option value="<?php echo $region['id']; ?>" <?php echo $regionFilter === $region['id'] ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($region['name']); ?>
+                        </option>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div class="col-6 col-md-3 col-lg-2 d-grid">
@@ -4029,6 +4250,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <th>رقم الهاتف</th>
                         <th>الرصيد</th>
                         <th>العنوان</th>
+                        <th>المنطقة</th>
                         <th>الموقع</th>
                         <th>تاريخ الإضافة</th>
                         <th>الإجراءات</th>
@@ -4037,7 +4259,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <tbody>
                     <?php if (empty($customers)): ?>
                         <tr>
-                            <td colspan="7" class="text-center text-muted">لا توجد عملاء</td>
+                            <td colspan="8" class="text-center text-muted">لا توجد عملاء</td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($customers as $customer): ?>
@@ -4061,6 +4283,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                     <?php endif; ?>
                                 </td>
                                 <td><?php echo htmlspecialchars($customer['address'] ?? '-'); ?></td>
+                                <td><?php echo htmlspecialchars($customer['region_name'] ?? '-'); ?></td>
                                 <td>
                                     <?php
                                     $hasLocation = isset($customer['latitude'], $customer['longitude']) &&
@@ -4117,6 +4340,20 @@ document.addEventListener('DOMContentLoaded', function () {
                                         >
                                             <i class="bi bi-cash-coin me-1"></i>تحصيل
                                         </button>
+                                        <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-warning edit-customer-btn"
+                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
+                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
+                                            data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
+                                            data-customer-address="<?php echo htmlspecialchars($customer['address'] ?? ''); ?>"
+                                            data-customer-region-id="<?php echo (int)($customer['region_id'] ?? 0); ?>"
+                                            data-customer-balance="<?php echo $rawBalance; ?>"
+                                        >
+                                            <i class="bi bi-pencil me-1"></i>تعديل
+                                        </button>
+                                        <?php endif; ?>
                                         <?php if (in_array($currentRole, ['manager', 'sales'], true)): ?>
                                         <button
                                             type="button"
@@ -4303,6 +4540,18 @@ document.addEventListener('DOMContentLoaded', function () {
                         <textarea class="form-control" name="address" rows="2"></textarea>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label">المنطقة</label>
+                        <select class="form-select" name="region_id">
+                            <option value="">اختر المنطقة</option>
+                            <?php
+                            $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                            foreach ($regions as $region):
+                            ?>
+                                <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">الموقع الجغرافي</label>
                         <div class="d-flex gap-2 mb-2">
                             <button type="button" class="btn btn-sm btn-outline-primary" id="getLocationBtn">
@@ -4328,6 +4577,124 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
     </div>
 </div>
+
+<!-- Modal تعديل عميل -->
+<?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
+<div class="modal fade" id="editCustomerModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تعديل بيانات العميل</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+                <input type="hidden" name="action" value="edit_customer">
+                <input type="hidden" name="customer_id" id="editCustomerId">
+                <input type="hidden" name="section" value="<?php echo htmlspecialchars($section); ?>">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم العميل</label>
+                        <input type="text" class="form-control" id="editCustomerName" disabled>
+                        <small class="text-muted">لا يمكن تعديل اسم العميل</small>
+                    </div>
+                    <?php if ($currentRole === 'manager'): ?>
+                    <div class="mb-3">
+                        <label class="form-label">ديون العميل / رصيد العميل</label>
+                        <input type="number" class="form-control" name="balance" id="editCustomerBalance" step="0.01" placeholder="مثال: 0 أو -500">
+                        <small class="text-muted">
+                            <strong>إدخال قيمة سالبة:</strong> يتم اعتبارها رصيد دائن للعميل (مبلغ متاح للعميل).
+                        </small>
+                    </div>
+                    <?php endif; ?>
+                    <div class="mb-3">
+                        <label class="form-label">رقم الهاتف</label>
+                        <input type="text" class="form-control" name="phone" id="editCustomerPhone" placeholder="مثال: 01234567890">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">العنوان</label>
+                        <textarea class="form-control" name="address" id="editCustomerAddress" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">المنطقة</label>
+                        <select class="form-select" name="region_id" id="editCustomerRegionId">
+                            <option value="">اختر المنطقة</option>
+                            <?php
+                            $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                            foreach ($regions as $region):
+                            ?>
+                                <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- Modal تعديل عميل -->
+<?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
+<div class="modal fade" id="editCustomerModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تعديل بيانات العميل</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+                <input type="hidden" name="action" value="edit_customer">
+                <input type="hidden" name="customer_id" id="editCustomerId">
+                <input type="hidden" name="section" value="<?php echo htmlspecialchars($section); ?>">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم العميل</label>
+                        <input type="text" class="form-control" id="editCustomerName" disabled>
+                        <small class="text-muted">لا يمكن تعديل اسم العميل</small>
+                    </div>
+                    <?php if ($currentRole === 'manager'): ?>
+                    <div class="mb-3">
+                        <label class="form-label">ديون العميل / رصيد العميل</label>
+                        <input type="number" class="form-control" name="balance" id="editCustomerBalance" step="0.01" placeholder="مثال: 0 أو -500">
+                        <small class="text-muted">
+                            <strong>إدخال قيمة سالبة:</strong> يتم اعتبارها رصيد دائن للعميل (مبلغ متاح للعميل).
+                        </small>
+                    </div>
+                    <?php endif; ?>
+                    <div class="mb-3">
+                        <label class="form-label">رقم الهاتف</label>
+                        <input type="text" class="form-control" name="phone" id="editCustomerPhone" placeholder="مثال: 01234567890">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">العنوان</label>
+                        <textarea class="form-control" name="address" id="editCustomerAddress" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">المنطقة</label>
+                        <select class="form-select" name="region_id" id="editCustomerRegionId">
+                            <option value="">اختر المنطقة</option>
+                            <?php
+                            $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                            foreach ($regions as $region):
+                            ?>
+                                <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php endif; // end if ($section === 'company') ?>
 

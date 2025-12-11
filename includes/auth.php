@@ -47,6 +47,20 @@ function getPasswordMinLength(): int
  * التحقق من تسجيل الدخول
  */
 function isLoggedIn() {
+    // التأكد من أن الجلسة نشطة قبل أي فحص
+    if (session_status() === PHP_SESSION_NONE) {
+        if (!headers_sent()) {
+            @session_start();
+        } else {
+            return false;
+        }
+    }
+    
+    // التأكد من وجود $_SESSION
+    if (!isset($_SESSION) || !is_array($_SESSION)) {
+        return false;
+    }
+    
     // التحقق من الجلسة أولاً (قبل أي فحوصات أخرى)
     if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
         // التحقق الإضافي: التأكد من وجود user_id في الجلسة
@@ -252,6 +266,20 @@ function checkRememberToken($cookieValue) {
  * مع استخدام Cache لتحسين الأداء
  */
 function getCurrentUser() {
+    // التأكد من أن الجلسة نشطة
+    if (session_status() === PHP_SESSION_NONE) {
+        if (!headers_sent()) {
+            @session_start();
+        } else {
+            return null;
+        }
+    }
+    
+    // التأكد من وجود $_SESSION
+    if (!isset($_SESSION) || !is_array($_SESSION)) {
+        return null;
+    }
+    
     if (!isLoggedIn()) {
         return null;
     }
@@ -686,6 +714,14 @@ function hasAllRoles($roles) {
  * التحقق من الوصول - إعادة توجيه إذا لم يكن مسجلاً
  */
 function requireLogin() {
+    // التأكد من أن الجلسة نشطة قبل أي فحص
+    if (session_status() === PHP_SESSION_NONE) {
+        if (!headers_sent()) {
+            @session_start();
+        }
+    }
+    
+    // التحقق من تسجيل الدخول
     if (isLoggedIn()) {
         if (!function_exists('logRequestUsage')) {
             $monitorPath = __DIR__ . '/request_monitor.php';
@@ -699,6 +735,7 @@ function requireLogin() {
         return;
     }
 
+    // إذا لم يكن مسجل دخول، إعادة التوجيه
     if (!isLoggedIn()) {
         // محاولة تحميل path_helper إذا لم يكن محملاً
         if (!function_exists('getRelativeUrl') && file_exists(__DIR__ . '/path_helper.php')) {
