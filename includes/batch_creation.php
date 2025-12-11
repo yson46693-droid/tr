@@ -1471,8 +1471,10 @@ function batchCreationCreate(int $templateId, int $units, array $rawUsage = [], 
                 $honeyVarietyValue = null;
                 if (!empty($materialRow['honey_variety'])) {
                     $honeyVarietyValue = trim((string)$materialRow['honey_variety']);
+                    error_log("Honey variety from DB: material_id={$materialRow['id']}, honey_variety={$honeyVarietyValue}");
                 } elseif (!empty($detailEntry['honey_variety'])) {
                     $honeyVarietyValue = trim((string)$detailEntry['honey_variety']);
+                    error_log("Honey variety from detailEntry: material_id={$materialRow['id']}, honey_variety={$honeyVarietyValue}");
                 }
                 
                 $materialsForStockDeduction[] = [
@@ -1595,8 +1597,15 @@ function batchCreationCreate(int $templateId, int $units, array $rawUsage = [], 
                     }
 
                     // تحديث honey_variety من usageEntry إذا كان موجوداً، وإلا الحفاظ على القيمة الحالية
+                    $originalHoneyVariety = $stockMaterial['honey_variety'] ?? null;
                     if (!empty($usageEntry['honey_variety'])) {
                         $stockMaterial['honey_variety'] = trim((string)$usageEntry['honey_variety']);
+                        error_log("Honey variety updated from usageEntry: template_item_id={$templateItemId}, old={$originalHoneyVariety}, new={$stockMaterial['honey_variety']}");
+                    } else {
+                        // الحفاظ على القيمة الحالية إذا كانت موجودة
+                        if ($originalHoneyVariety !== null) {
+                            error_log("Honey variety preserved from stockMaterial: template_item_id={$templateItemId}, honey_variety={$originalHoneyVariety}");
+                        }
                     }
                     // إذا كان honey_variety موجوداً في stockMaterial ولكن غير موجود في usageEntry، نبقيه كما هو
 
@@ -1904,6 +1913,10 @@ function batchCreationCreate(int $templateId, int $units, array $rawUsage = [], 
 
         if (!$canUpdateRawStock && !empty($materialsForStockDeduction)) {
             foreach ($materialsForStockDeduction as $stockMaterial) {
+                // تسجيل معلومات المادة قبل الخصم
+                if (in_array($stockMaterial['material_type'] ?? '', ['honey_raw', 'honey_filtered', 'honey', 'honey_main', 'honey_general'], true)) {
+                    error_log("Deducting honey stock: material_type={$stockMaterial['material_type']}, honey_variety=" . ($stockMaterial['honey_variety'] ?? 'NULL') . ", supplier_id=" . ($stockMaterial['supplier_id'] ?? 'NULL') . ", quantity_per_unit={$stockMaterial['quantity_per_unit']}, units={$units}");
+                }
                 batchCreationDeductTypedStock($pdo, $stockMaterial, (float)$units);
 
                 if ($batchRawMaterialsExists && $batchRawInsertStatement instanceof PDOStatement) {

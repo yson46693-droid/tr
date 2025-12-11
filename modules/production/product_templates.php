@@ -669,14 +669,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $materialName = $material['name'] ?? '';
                     $materialQuantity = $material['quantity'] ?? 0;
                     $materialUnit = $material['unit'] ?? 'كيلوجرام';
+                    $materialHoneyVariety = isset($material['honey_variety']) ? trim((string)$material['honey_variety']) : null;
+                    if ($materialHoneyVariety === '') {
+                        $materialHoneyVariety = null;
+                    }
                     
-                    error_log("Inserting raw material: name=$materialName, type=$materialType, qty=$materialQuantity, unit=$materialUnit");
+                    error_log("Inserting raw material: name=$materialName, type=$materialType, qty=$materialQuantity, unit=$materialUnit, honey_variety=" . ($materialHoneyVariety ?? 'NULL'));
                     
-                    $db->execute(
-                        "INSERT INTO product_template_raw_materials (template_id, material_name, material_type, quantity_per_unit, unit) 
-                         VALUES (?, ?, ?, ?, ?)",
-                        [$templateId, $materialName, $materialType, $materialQuantity, $materialUnit]
-                    );
+                    // التحقق من وجود عمود honey_variety في الجدول
+                    $honeyVarietyColumnExists = $db->queryOne("SHOW COLUMNS FROM product_template_raw_materials LIKE 'honey_variety'");
+                    
+                    if (!empty($honeyVarietyColumnExists)) {
+                        $db->execute(
+                            "INSERT INTO product_template_raw_materials (template_id, material_name, material_type, honey_variety, quantity_per_unit, unit) 
+                             VALUES (?, ?, ?, ?, ?, ?)",
+                            [$templateId, $materialName, $materialType, $materialHoneyVariety, $materialQuantity, $materialUnit]
+                        );
+                    } else {
+                        $db->execute(
+                            "INSERT INTO product_template_raw_materials (template_id, material_name, material_type, quantity_per_unit, unit) 
+                             VALUES (?, ?, ?, ?, ?)",
+                            [$templateId, $materialName, $materialType, $materialQuantity, $materialUnit]
+                        );
+                    }
                 }
                 
                 $db->commit();
@@ -1005,11 +1020,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // إضافة المواد الخام الجديدة
                 foreach ($rawMaterials as $material) {
                     $materialType = $material['material_type'] ?? null;
-                    $db->execute(
-                        "INSERT INTO product_template_raw_materials (template_id, material_name, material_type, quantity_per_unit, unit) 
-                         VALUES (?, ?, ?, ?, ?)",
-                        [$templateId, $material['name'], $materialType, $material['quantity'], $material['unit']]
-                    );
+                    $materialHoneyVariety = isset($material['honey_variety']) ? trim((string)$material['honey_variety']) : null;
+                    if ($materialHoneyVariety === '') {
+                        $materialHoneyVariety = null;
+                    }
+                    
+                    // التحقق من وجود عمود honey_variety في الجدول
+                    $honeyVarietyColumnExists = $db->queryOne("SHOW COLUMNS FROM product_template_raw_materials LIKE 'honey_variety'");
+                    
+                    if (!empty($honeyVarietyColumnExists)) {
+                        $db->execute(
+                            "INSERT INTO product_template_raw_materials (template_id, material_name, material_type, honey_variety, quantity_per_unit, unit) 
+                             VALUES (?, ?, ?, ?, ?, ?)",
+                            [$templateId, $material['name'], $materialType, $materialHoneyVariety, $material['quantity'], $material['unit']]
+                        );
+                    } else {
+                        $db->execute(
+                            "INSERT INTO product_template_raw_materials (template_id, material_name, material_type, quantity_per_unit, unit) 
+                             VALUES (?, ?, ?, ?, ?)",
+                            [$templateId, $material['name'], $materialType, $material['quantity'], $material['unit']]
+                        );
+                    }
                 }
                 
                 $db->commit();
