@@ -3680,6 +3680,30 @@ document.getElementById('createTemplateForm')?.addEventListener('submit', functi
         alert('يرجى اختيار أداة تعبئة واحدة على الأقل');
         return false;
     }
+    
+    // التأكد من إرسال حقول النوع المخصص حتى لو كانت مخفية
+    const cartonType = document.getElementById('createCartonType');
+    const customQuantity = document.getElementById('createCustomCartonQuantity');
+    const customTypeId = document.getElementById('createCustomCartonTypeId');
+    
+    if (cartonType && cartonType.value === 'custom') {
+        // إذا كان النوع مخصص، تأكد من وجود القيم
+        if (!customQuantity || !customQuantity.value || customQuantity.value <= 0) {
+            e.preventDefault();
+            alert('يرجى إدخال عدد المنتجات لكل كرتونة');
+            return false;
+        }
+        if (!customTypeId || !customTypeId.value || customTypeId.value <= 0) {
+            e.preventDefault();
+            alert('يرجى اختيار نوع الكرتونة');
+            return false;
+        }
+        // إظهار الحقول مؤقتاً للتأكد من إرسالها
+        const customFields = document.getElementById('customCartonFields');
+        if (customFields) {
+            customFields.style.display = 'block';
+        }
+    }
 });
 
 // منع إرسال النموذج إذا لم يتم اختيار أدوات تعبئة (للتعديل)
@@ -3690,6 +3714,30 @@ document.getElementById('editTemplateForm')?.addEventListener('submit', function
         e.preventDefault();
         alert('يرجى اختيار أداة تعبئة واحدة على الأقل');
         return false;
+    }
+    
+    // التأكد من إرسال حقول النوع المخصص حتى لو كانت مخفية
+    const cartonType = document.getElementById('editCartonType');
+    const customQuantity = document.getElementById('editCustomCartonQuantity');
+    const customTypeId = document.getElementById('editCustomCartonTypeId');
+    
+    if (cartonType && cartonType.value === 'custom') {
+        // إذا كان النوع مخصص، تأكد من وجود القيم
+        if (!customQuantity || !customQuantity.value || customQuantity.value <= 0) {
+            e.preventDefault();
+            alert('يرجى إدخال عدد المنتجات لكل كرتونة');
+            return false;
+        }
+        if (!customTypeId || !customTypeId.value || customTypeId.value <= 0) {
+            e.preventDefault();
+            alert('يرجى اختيار نوع الكرتونة');
+            return false;
+        }
+        // إظهار الحقول مؤقتاً للتأكد من إرسالها
+        const customFields = document.getElementById('editCustomCartonFields');
+        if (customFields) {
+            customFields.style.display = 'block';
+        }
     }
 });
 
