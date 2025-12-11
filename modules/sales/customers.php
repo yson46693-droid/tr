@@ -3779,6 +3779,20 @@ document.addEventListener('DOMContentLoaded', function () {
         background: rgba(37, 99, 235, 0.55);
     }
 
+    /* الأزرار في عمود الإجراءات: 2×2 على جميع الشاشات */
+    .customers-table-container .dashboard-table tbody td:last-child .d-flex {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.25rem !important;
+        width: 100% !important;
+    }
+
+    .customers-table-container .dashboard-table tbody td:last-child .btn {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
     @media (max-width: 992px) {
         .customers-search-card .col-md-8,
         .customers-search-card .col-md-2 {
@@ -3791,26 +3805,175 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    @media (max-width: 768px) {
+    @media (max-width: 767.98px) {
         .customers-list-card .card-body {
             padding: 1.1rem 0.75rem 1rem;
         }
 
-        .customers-table-container .table {
-            min-width: 720px;
-            font-size: 0.92rem;
+        .customers-table-container.dashboard-table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 0 -0.75rem;
+            padding: 0 0.75rem;
+        }
+
+        .customers-table-container .dashboard-table {
+            min-width: 850px;
+            font-size: 0.85rem;
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        /* تحديد عرض الأعمدة بناءً على طول المحتوى */
+        /* الاسم: 15 حرف */
+        .customers-table-container .dashboard-table thead th:nth-child(1),
+        .customers-table-container .dashboard-table tbody td:nth-child(1) {
+            width: 20%;
+            min-width: 110px;
+        }
+
+        /* رقم الهاتف: 11 حرف */
+        .customers-table-container .dashboard-table thead th:nth-child(2),
+        .customers-table-container .dashboard-table tbody td:nth-child(2) {
+            width: 15%;
+            min-width: 85px;
+        }
+
+        /* الرصيد: 7 حرف */
+        .customers-table-container .dashboard-table thead th:nth-child(3),
+        .customers-table-container .dashboard-table tbody td:nth-child(3) {
+            width: 10%;
+            min-width: 65px;
+        }
+
+        /* العنوان: 8 حرف */
+        .customers-table-container .dashboard-table thead th:nth-child(4),
+        .customers-table-container .dashboard-table tbody td:nth-child(4) {
+            width: 12%;
+            min-width: 75px;
+            word-wrap: break-word;
+            white-space: normal;
+        }
+
+        /* المنطقة: 7 حرف */
+        .customers-table-container .dashboard-table thead th:nth-child(5),
+        .customers-table-container .dashboard-table tbody td:nth-child(5) {
+            width: 10%;
+            min-width: 65px;
+        }
+
+        /* الموقع */
+        .customers-table-container .dashboard-table thead th:nth-child(6),
+        .customers-table-container .dashboard-table tbody td:nth-child(6) {
+            width: 13%;
+            min-width: 90px;
+        }
+
+        /* الإجراءات */
+        .customers-table-container .dashboard-table thead th:nth-child(7),
+        .customers-table-container .dashboard-table tbody td:nth-child(7) {
+            width: 20%;
+            min-width: 140px;
+        }
+
+        .customers-table-container .dashboard-table thead th {
+            font-size: 0.8rem;
+            padding: 0.5rem 0.35rem;
+            white-space: nowrap;
+            font-weight: 600;
+        }
+
+        .customers-table-container .dashboard-table tbody td {
+            padding: 0.5rem 0.35rem;
+            font-size: 0.8rem;
+            vertical-align: middle;
+        }
+
+        .customers-table-container .dashboard-table .btn {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.4rem;
+            white-space: nowrap;
+        }
+
+        .customers-table-container .dashboard-table .btn i {
+            font-size: 0.75rem;
+        }
+
+        .customers-table-container .dashboard-table .badge {
+            font-size: 0.65rem;
+            padding: 0.2rem 0.4rem;
         }
     }
 
-    @media (max-width: 576px) {
+    @media (max-width: 575.98px) {
         .customers-search-card .card-body {
             padding: 1rem 0.75rem 1.25rem;
             border-radius: 16px;
         }
 
-        .customers-table-container .table {
-            min-width: 660px;
-            font-size: 0.86rem;
+        .customers-table-container .dashboard-table {
+            min-width: 800px;
+            font-size: 0.8rem;
+        }
+
+        .customers-table-container .dashboard-table thead th {
+            font-size: 0.75rem;
+            padding: 0.45rem 0.3rem;
+        }
+
+        .customers-table-container .dashboard-table tbody td {
+            font-size: 0.75rem;
+            padding: 0.45rem 0.3rem;
+        }
+
+        .customers-table-container .dashboard-table .btn {
+            font-size: 0.65rem;
+            padding: 0.2rem 0.35rem;
+        }
+
+        .customers-table-container .dashboard-table .btn i {
+            font-size: 0.7rem;
+        }
+
+        .customers-table-container .dashboard-table .badge {
+            font-size: 0.6rem;
+            padding: 0.15rem 0.35rem;
+        }
+
+        /* تقليل min-width للأعمدة على الشاشات الصغيرة */
+        .customers-table-container .dashboard-table thead th:nth-child(1),
+        .customers-table-container .dashboard-table tbody td:nth-child(1) {
+            min-width: 100px;
+        }
+
+        .customers-table-container .dashboard-table thead th:nth-child(2),
+        .customers-table-container .dashboard-table tbody td:nth-child(2) {
+            min-width: 80px;
+        }
+
+        .customers-table-container .dashboard-table thead th:nth-child(3),
+        .customers-table-container .dashboard-table tbody td:nth-child(3) {
+            min-width: 60px;
+        }
+
+        .customers-table-container .dashboard-table thead th:nth-child(4),
+        .customers-table-container .dashboard-table tbody td:nth-child(4) {
+            min-width: 70px;
+        }
+
+        .customers-table-container .dashboard-table thead th:nth-child(5),
+        .customers-table-container .dashboard-table tbody td:nth-child(5) {
+            min-width: 60px;
+        }
+
+        .customers-table-container .dashboard-table thead th:nth-child(6),
+        .customers-table-container .dashboard-table tbody td:nth-child(6) {
+            min-width: 85px;
+        }
+
+        .customers-table-container .dashboard-table thead th:nth-child(7),
+        .customers-table-container .dashboard-table tbody td:nth-child(7) {
+            min-width: 130px;
         }
 
         .customers-list-card .card-header {
