@@ -1059,6 +1059,15 @@ if (!empty($productTemplatesCheck)) {
     $templates = array_merge($templates, $productTemplates);
 }
 
+// جلب قوالب المنتجات من product_templates فقط (للـ dropdown)
+$productTemplatesForDropdown = [];
+if (!empty($productTemplatesCheck)) {
+    $productTemplatesForDropdown = $db->query("
+        SELECT * FROM product_templates 
+        ORDER BY product_templates.product_name ASC
+    ");
+}
+
 // استخدام القوالب بدلاً من المنتجات
 $products = $templates;
 $salesReps = $db->query("SELECT id, username, full_name FROM users WHERE role = 'sales' AND status = 'active' ORDER BY username");
@@ -2016,8 +2025,15 @@ if (isset($_GET['id'])) {
                         <div id="orderItems">
                             <div class="order-item row mb-2">
                                 <div class="col-md-9">
-                                    <input type="text" class="form-control template-input" 
-                                           name="items[0][template_name]" placeholder="اسم المنتج" required>
+                                    <select class="form-select template-input" 
+                                           name="items[0][template_name]" required>
+                                        <option value="">اختر قالب المنتج</option>
+                                        <?php foreach ($productTemplatesForDropdown as $template): ?>
+                                            <option value="<?php echo htmlspecialchars($template['product_name'] ?? ''); ?>">
+                                                <?php echo htmlspecialchars($template['product_name'] ?? 'قالب #' . $template['id']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
                                 <div class="col-md-2">
                                     <input type="text" class="form-control quantity" 
@@ -2124,8 +2140,15 @@ if (isset($_GET['id'])) {
                         <div id="companyOrderItems">
                             <div class="order-item row mb-2">
                                 <div class="col-md-9">
-                                    <input type="text" class="form-control template-input" 
-                                           name="items[0][template_name]" placeholder="اسم المنتج" required>
+                                    <select class="form-select template-input" 
+                                           name="items[0][template_name]" required>
+                                        <option value="">اختر قالب المنتج</option>
+                                        <?php foreach ($productTemplatesForDropdown as $template): ?>
+                                            <option value="<?php echo htmlspecialchars($template['product_name'] ?? ''); ?>">
+                                                <?php echo htmlspecialchars($template['product_name'] ?? 'قالب #' . $template['id']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
                                 <div class="col-md-2">
                                     <input type="text" class="form-control quantity" 
@@ -2203,10 +2226,24 @@ document.getElementById('addItemBtn')?.addEventListener('click', function() {
     const itemsDiv = document.getElementById('orderItems');
     const newItem = document.createElement('div');
     newItem.className = 'order-item row mb-2';
+    const templateOptions = <?php echo json_encode(array_map(function($t) { 
+        return ['value' => htmlspecialchars($t['product_name'] ?? '', ENT_QUOTES, 'UTF-8'), 'text' => htmlspecialchars($t['product_name'] ?? 'قالب #' . $t['id'], ENT_QUOTES, 'UTF-8')]; 
+    }, $productTemplatesForDropdown), JSON_UNESCAPED_UNICODE | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;
+    let optionsHtml = '<option value="">اختر قالب المنتج</option>';
+    if (templateOptions && Array.isArray(templateOptions)) {
+        templateOptions.forEach(function(template) {
+            const value = template.value || '';
+            const text = template.text || '';
+            optionsHtml += '<option value="' + value.replace(/"/g, '&quot;').replace(/'/g, '&#39;') + '">' + text.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</option>';
+        });
+    }
+    
     newItem.innerHTML = `
         <div class="col-md-9">
-            <input type="text" class="form-control template-input" 
-                   name="items[${itemIndex}][template_name]" placeholder="اسم القالب" required>
+            <select class="form-select template-input" 
+                   name="items[${itemIndex}][template_name]" required>
+                ${optionsHtml}
+            </select>
         </div>
         <div class="col-md-2">
             <input type="text" class="form-control quantity" 
@@ -2603,10 +2640,24 @@ document.getElementById('addCompanyItemBtn')?.addEventListener('click', function
     const itemsDiv = document.getElementById('companyOrderItems');
     const newItem = document.createElement('div');
     newItem.className = 'order-item row mb-2';
+    const templateOptions = <?php echo json_encode(array_map(function($t) { 
+        return ['value' => htmlspecialchars($t['product_name'] ?? '', ENT_QUOTES, 'UTF-8'), 'text' => htmlspecialchars($t['product_name'] ?? 'قالب #' . $t['id'], ENT_QUOTES, 'UTF-8')]; 
+    }, $productTemplatesForDropdown), JSON_UNESCAPED_UNICODE | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;
+    let optionsHtml = '<option value="">اختر قالب المنتج</option>';
+    if (templateOptions && Array.isArray(templateOptions)) {
+        templateOptions.forEach(function(template) {
+            const value = template.value || '';
+            const text = template.text || '';
+            optionsHtml += '<option value="' + value.replace(/"/g, '&quot;').replace(/'/g, '&#39;') + '">' + text.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</option>';
+        });
+    }
+    
     newItem.innerHTML = `
         <div class="col-md-9">
-            <input type="text" class="form-control template-input" 
-                   name="items[${companyItemIndex}][template_name]" placeholder="اسم القالب" required>
+            <select class="form-select template-input" 
+                   name="items[${companyItemIndex}][template_name]" required>
+                ${optionsHtml}
+            </select>
         </div>
         <div class="col-md-2">
             <input type="text" class="form-control quantity" 
@@ -2727,11 +2778,25 @@ document.addEventListener('DOMContentLoaded', function() {
             // إعادة تعيين العناصر
             const companyOrderItems = document.getElementById('companyOrderItems');
             if (companyOrderItems) {
+                const templateOptions = <?php echo json_encode(array_map(function($t) { 
+                    return ['value' => htmlspecialchars($t['product_name'] ?? '', ENT_QUOTES, 'UTF-8'), 'text' => htmlspecialchars($t['product_name'] ?? 'قالب #' . $t['id'], ENT_QUOTES, 'UTF-8')]; 
+                }, $productTemplatesForDropdown), JSON_UNESCAPED_UNICODE | JSON_HEX_QUOT | JSON_HEX_APOS); ?>;
+                let optionsHtml = '<option value="">اختر قالب المنتج</option>';
+                if (templateOptions && Array.isArray(templateOptions)) {
+                    templateOptions.forEach(function(template) {
+                        const value = template.value || '';
+                        const text = template.text || '';
+                        optionsHtml += '<option value="' + value.replace(/"/g, '&quot;').replace(/'/g, '&#39;') + '">' + text.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</option>';
+                    });
+                }
+                
                 companyOrderItems.innerHTML = `
                     <div class="order-item row mb-2">
                         <div class="col-md-9">
-                            <input type="text" class="form-control template-input" 
-                                   name="items[0][template_name]" placeholder="اسم القالب" required>
+                            <select class="form-select template-input" 
+                                   name="items[0][template_name]" required>
+                                ${optionsHtml}
+                            </select>
                         </div>
                         <div class="col-md-2">
                             <input type="text" class="form-control quantity" 
