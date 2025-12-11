@@ -49,9 +49,23 @@ if (!isset($currentUser) || $currentUser === null) {
     $currentUser = getCurrentUser();
 }
 
+// التحقق من أننا في profile.php - منع حذف الجلسة في profile.php
+$isProfilePage = false;
+$currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+    $isProfilePage = true;
+}
+if (!$isProfilePage) {
+    $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+    if (strpos($requestUri, 'profile.php') !== false) {
+        $isProfilePage = true;
+    }
+}
+
 // فحص أمني: إذا كان المستخدم مسجل دخول لكن غير موجود في قاعدة البيانات
 // (getCurrentUser() يقوم بإلغاء تسجيل الدخول تلقائياً، لكن نتأكد من عدم وجود جلسة نشطة)
-if (isLoggedIn() && (!$currentUser || !is_array($currentUser) || empty($currentUser))) {
+// استثناء: لا نعيد التوجيه في profile.php لمنع حذف الجلسة
+if (!$isProfilePage && isLoggedIn() && (!$currentUser || !is_array($currentUser) || empty($currentUser))) {
     // المستخدم مسجل دخول لكن غير موجود أو محذوف - تم إلغاء تسجيل الدخول تلقائياً
     // إعادة التوجيه لتسجيل الدخول
     $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';

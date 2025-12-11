@@ -47,6 +47,19 @@ function getPasswordMinLength(): int
  * التحقق من تسجيل الدخول
  */
 function isLoggedIn() {
+    // التحقق من أننا في profile.php - منع حذف الجلسة في profile.php
+    $isProfilePage = false;
+    $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+    if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+        $isProfilePage = true;
+    }
+    if (!$isProfilePage) {
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+        if (strpos($requestUri, 'profile.php') !== false) {
+            $isProfilePage = true;
+        }
+    }
+    
     // التأكد من أن الجلسة نشطة قبل أي فحص
     if (session_status() === PHP_SESSION_NONE) {
         if (!headers_sent()) {
@@ -65,9 +78,11 @@ function isLoggedIn() {
     if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
         // التحقق الإضافي: التأكد من وجود user_id في الجلسة
         if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
-            // إذا لم يكن هناك user_id، إلغاء الجلسة
-            session_unset();
-            session_destroy();
+            // إذا لم يكن هناك user_id، إلغاء الجلسة فقط إذا لم نكن في profile.php
+            if (!$isProfilePage) {
+                session_unset();
+                session_destroy();
+            }
             return false;
         }
         
@@ -327,12 +342,34 @@ function getCurrentUser() {
  */
 function getCurrentUserFromDatabase($userId) {
     // التحقق من الملف الذي يستدعي هذه الدالة - منع حذف الجلسة في profile.php
+    // استخدام طرق متعددة للتحقق لضمان العمل على جميع الأجهزة (Windows, Android, iOS)
     $isProfilePage = false;
-    $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 10);
-    foreach ($backtrace as $trace) {
-        if (isset($trace['file']) && basename($trace['file']) === 'profile.php') {
+    
+    // الطريقة 1: التحقق من SCRIPT_NAME و PHP_SELF
+    $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+    if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+        $isProfilePage = true;
+    }
+    
+    // الطريقة 2: استخدام debug_backtrace كبديل
+    if (!$isProfilePage) {
+        $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
+        foreach ($backtrace as $trace) {
+            if (isset($trace['file'])) {
+                $fileName = basename($trace['file']);
+                if ($fileName === 'profile.php' || strpos($trace['file'], 'profile.php') !== false) {
+                    $isProfilePage = true;
+                    break;
+                }
+            }
+        }
+    }
+    
+    // الطريقة 3: التحقق من REQUEST_URI
+    if (!$isProfilePage) {
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+        if (strpos($requestUri, 'profile.php') !== false) {
             $isProfilePage = true;
-            break;
         }
     }
     
