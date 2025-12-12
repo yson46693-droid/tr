@@ -111,23 +111,46 @@ function isLoggedIn() {
                     [$userId, $sessionId]
                 );
                 
-                // إذا لم توجد الجلسة في قاعدة البيانات، نعتبرها غير صالحة
+                // إذا لم توجد الجلسة في قاعدة البيانات لكن الجلسة PHP صالحة، أعد إنشاءها
                 if (!$sessionRecord) {
-                    // في الصفحات المحمية، لا نحذف الجلسة لكن نرجع false
-                    if (!$isProtectedPage) {
-                        session_unset();
-                        session_destroy();
+                    // التحقق من أن المستخدم موجود ونشط
+                    $user = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$userId]);
+                    
+                    if ($user) {
+                        // إعادة إنشاء الجلسة في قاعدة البيانات
+                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                        $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                        $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                        
+                        // حذف أي جلسة سابقة بنفس session_id (إن وجدت)
+                        $db->execute("DELETE FROM sessions WHERE session_id = ?", [$sessionId]);
+                        
+                        // إضافة الجلسة الجديدة
+                        $db->execute(
+                            "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                             VALUES (?, ?, ?, ?, ?, NOW())",
+                            [$userId, $sessionId, $ipAddress, $userAgent, $expiresAt]
+                        );
+                    } else {
+                        // المستخدم غير موجود أو غير نشط - الجلسة غير صالحة
+                        // لا نحذف الجلسة PHP أثناء معالجة POST (لتجنب مشاكل CSRF)
+                        $isPostRequest = $_SERVER['REQUEST_METHOD'] === 'POST';
+                        if (!$isPostRequest && !$isProtectedPage) {
+                            session_unset();
+                            session_destroy();
+                        }
+                        return false;
                     }
-                    return false;
-                }
-                
-                // تحديث last_activity في قاعدة البيانات كل دقيقة (لتجنب كثرة التحديثات)
-                $lastActivity = strtotime($sessionRecord['last_activity']);
-                if (time() - $lastActivity > 60) { // أكثر من دقيقة
-                    $db->execute(
-                        "UPDATE sessions SET last_activity = NOW() WHERE id = ?",
-                        [$sessionRecord['id']]
-                    );
+                } else {
+                    // تحديث last_activity في قاعدة البيانات كل دقيقة (لتجنب كثرة التحديثات)
+                    $lastActivity = strtotime($sessionRecord['last_activity']);
+                    if (time() - $lastActivity > 60) { // أكثر من دقيقة
+                        $db->execute(
+                            "UPDATE sessions SET last_activity = NOW() WHERE id = ?",
+                            [$sessionRecord['id']]
+                        );
+                    }
                 }
             }
         } catch (Exception $e) {
