@@ -672,11 +672,21 @@ async function deleteAllNotifications() {
                 notificationsList.innerHTML = '<small class="text-muted">لا توجد إشعارات</small>';
             }
             
-            // تحديث العداد
-            await updateNotificationBadge(0);
+            // تحديث العداد أولاً
+            if (typeof updateNotificationBadge === 'function') {
+                await updateNotificationBadge(0);
+            }
             
-            // إعادة تحميل الإشعارات للتأكد
-            loadNotifications();
+            // مسح جميع عناصر الإشعارات من DOM
+            const notificationItems = document.querySelectorAll('.notification-item');
+            notificationItems.forEach(item => item.remove());
+            
+            // إعادة تحميل الإشعارات للتأكد (مع delay صغير)
+            if (typeof loadNotifications === 'function') {
+                setTimeout(() => {
+                    loadNotifications();
+                }, 100);
+            }
             
             return { success: true };
         } else {
@@ -851,21 +861,38 @@ document.addEventListener('DOMContentLoaded', function() {
         clearAllBtn.addEventListener('click', async function(e) {
             e.preventDefault();
             e.stopPropagation();
+            e.stopImmediatePropagation(); // منع انتشار الحدث لأي معالجات أخرى
             
             if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
                 return;
             }
             
+            // تعطيل الزر أثناء المعالجة
+            const originalHTML = clearAllBtn.innerHTML;
+            clearAllBtn.disabled = true;
+            clearAllBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
+            
             try {
                 await deleteAllNotifications();
+                
                 // إعادة تحميل الإشعارات بعد الحذف
                 if (typeof loadNotifications === 'function') {
                     await loadNotifications();
                 }
+                
+                // تحديث العداد للتأكد
+                if (typeof updateNotificationBadge === 'function') {
+                    await updateNotificationBadge(0);
+                }
             } catch (error) {
+                console.error('Error in deleteAllNotifications:', error);
                 alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
+            } finally {
+                // إعادة تمكين الزر
+                clearAllBtn.disabled = false;
+                clearAllBtn.innerHTML = originalHTML;
             }
-        });
+        }, true); // استخدام capture phase لضمان التنفيذ أولاً
     }
 });
 
