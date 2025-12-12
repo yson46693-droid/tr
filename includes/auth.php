@@ -98,6 +98,44 @@ function isLoggedIn() {
         }
     }
     
+    // التحقق من وجود الجلسة في قاعدة البيانات
+    if (isset($_SESSION['user_id']) && isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+        $userId = $_SESSION['user_id'];
+        $sessionId = session_id();
+        
+        try {
+            if (ensureSessionsTable()) {
+                $db = db();
+                $sessionRecord = $db->queryOne(
+                    "SELECT * FROM sessions WHERE user_id = ? AND session_id = ? AND expires_at > NOW()",
+                    [$userId, $sessionId]
+                );
+                
+                // إذا لم توجد الجلسة في قاعدة البيانات، نعتبرها غير صالحة
+                if (!$sessionRecord) {
+                    // في الصفحات المحمية، لا نحذف الجلسة لكن نرجع false
+                    if (!$isProtectedPage) {
+                        session_unset();
+                        session_destroy();
+                    }
+                    return false;
+                }
+                
+                // تحديث last_activity في قاعدة البيانات كل دقيقة (لتجنب كثرة التحديثات)
+                $lastActivity = strtotime($sessionRecord['last_activity']);
+                if (time() - $lastActivity > 60) { // أكثر من دقيقة
+                    $db->execute(
+                        "UPDATE sessions SET last_activity = NOW() WHERE id = ?",
+                        [$sessionRecord['id']]
+                    );
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Error checking session in database: " . $e->getMessage());
+            // في حالة الخطأ، نستمر بالجلسة PHP العادية
+        }
+    }
+    
     // التأكد من وجود $_SESSION
     if (!isset($_SESSION) || !is_array($_SESSION)) {
         return false;
@@ -212,6 +250,84 @@ function ensureRememberTokensTable() {
 }
 
 /**
+ * إنشاء جدول sessions إذا لم يكن موجوداً
+ * لتخزين جلسات تسجيل الدخول النشطة في قاعدة البيانات
+ */
+function ensureSessionsTable() {
+    $db = db();
+    $tableCheck = $db->queryOne("SHOW TABLES LIKE 'sessions'");
+    
+    if (empty($tableCheck)) {
+        try {
+            $db->execute("
+                CREATE TABLE IF NOT EXISTS `sessions` (
+                  `id` int(11) NOT NULL AUTO_INCREMENT,
+                  `user_id` int(11) NOT NULL,
+                  `session_id` varchar(128) NOT NULL,
+                  `ip_address` varchar(45) DEFAULT NULL,
+                  `user_agent` text DEFAULT NULL,
+                  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  `expires_at` datetime NOT NULL,
+                  `last_activity` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                  PRIMARY KEY (`id`),
+                  UNIQUE KEY `session_id` (`session_id`),
+                  KEY `user_id` (`user_id`),
+                  KEY `expires_at` (`expires_at`),
+                  KEY `last_activity` (`last_activity`),
+                  CONSTRAINT `sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+        } catch (Exception $e) {
+            error_log("Error creating sessions table: " . $e->getMessage());
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * تنظيف الجلسات المنتهية الصلاحية من قاعدة البيانات
+ * يمكن استدعاء هذه الدالة من cron job لتنظيف الجلسات القديمة
+ * 
+ * @param int $extraDays عدد الأيام الإضافية بعد انتهاء الصلاحية للحذف (افتراضي 0)
+ * @return array إحصائيات عملية التنظيف
+ */
+function cleanupExpiredSessions($extraDays = 0) {
+    try {
+        if (!ensureSessionsTable()) {
+            return [
+                'success' => false,
+                'deleted' => 0,
+                'message' => 'جدول sessions غير موجود'
+            ];
+        }
+        
+        $db = db();
+        
+        // حذف الجلسات المنتهية الصلاحية
+        $result = $db->execute(
+            "DELETE FROM sessions WHERE expires_at < DATE_SUB(NOW(), INTERVAL ? DAY)",
+            [$extraDays]
+        );
+        
+        $deletedCount = intval($result['affected_rows'] ?? 0);
+        
+        return [
+            'success' => true,
+            'deleted' => $deletedCount,
+            'message' => "تم حذف {$deletedCount} جلسة منتهية الصلاحية"
+        ];
+    } catch (Exception $e) {
+        error_log("Error cleaning up expired sessions: " . $e->getMessage());
+        return [
+            'success' => false,
+            'deleted' => 0,
+            'message' => 'حدث خطأ أثناء تنظيف الجلسات: ' . $e->getMessage()
+        ];
+    }
+}
+
+/**
  * التحقق من token "تذكرني"
  */
 function checkRememberToken($cookieValue) {
@@ -296,6 +412,31 @@ function checkRememberToken($cookieValue) {
         $_SESSION['logged_in'] = true;
         $_SESSION['last_activity'] = time(); // تحديث وقت آخر نشاط
         generateCSRFToken(true);
+        
+        // حفظ الجلسة في قاعدة البيانات
+        try {
+            if (ensureSessionsTable()) {
+                $db = db();
+                $sessionId = session_id();
+                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // افتراضياً 7 أيام
+                $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                
+                // حذف أي جلسة سابقة بنفس session_id (إن وجدت)
+                $db->execute("DELETE FROM sessions WHERE session_id = ?", [$sessionId]);
+                
+                // إضافة الجلسة الجديدة
+                $db->execute(
+                    "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                     VALUES (?, ?, ?, ?, ?, NOW())",
+                    [$tokenRecord['user_id'], $sessionId, $ipAddress, $userAgent, $expiresAt]
+                );
+            }
+        } catch (Exception $e) {
+            error_log("Error saving session to database in checkRememberToken: " . $e->getMessage());
+            // لا نتوقف عن تسجيل الدخول إذا فشل حفظ الجلسة في قاعدة البيانات
+        }
         
         return true;
     } catch (Exception $e) {
@@ -614,6 +755,30 @@ function login($username, $password, $rememberMe = false) {
     $_SESSION['logged_in'] = true;
     $_SESSION['last_activity'] = time(); // تحديث وقت آخر نشاط
     
+    // حفظ الجلسة في قاعدة البيانات
+    try {
+        if (ensureSessionsTable()) {
+            $db = db();
+            $sessionId = session_id();
+            $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // افتراضياً 7 أيام
+            $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+            
+            // حذف أي جلسة سابقة بنفس session_id (إن وجدت)
+            $db->execute("DELETE FROM sessions WHERE session_id = ?", [$sessionId]);
+            
+            // إضافة الجلسة الجديدة
+            $db->execute(
+                "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                 VALUES (?, ?, ?, ?, ?, NOW())",
+                [$user['id'], $sessionId, $ipAddress, $userAgent, $expiresAt]
+            );
+        }
+    } catch (Exception $e) {
+        error_log("Error saving session to database: " . $e->getMessage());
+        // لا نتوقف عن تسجيل الدخول إذا فشل حفظ الجلسة في قاعدة البيانات
+    }
+    
     // إذا تم تفعيل "تذكرني"، إنشاء cookie
     if ($rememberMe) {
         // التأكد من وجود الجدول
@@ -724,6 +889,23 @@ function logout() {
     // تنظيف Cache قبل تسجيل الخروج
     if (function_exists('clearUserCache')) {
         clearUserCache();
+    }
+    
+    // حذف الجلسة من قاعدة البيانات
+    if ($userId) {
+        try {
+            $sessionId = session_id();
+            if ($sessionId && ensureSessionsTable()) {
+                $db = db();
+                // حذف الجلسة الحالية من قاعدة البيانات
+                $db->execute(
+                    "DELETE FROM sessions WHERE user_id = ? AND session_id = ?",
+                    [$userId, $sessionId]
+                );
+            }
+        } catch (Exception $e) {
+            error_log("Logout Session Delete Error: " . $e->getMessage());
+        }
     }
     
     // حذف جميع remember tokens للمستخدم من قاعدة البيانات (ليس فقط token الحالي)

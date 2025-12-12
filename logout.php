@@ -33,20 +33,34 @@ try {
     error_log("Logout Page Error: " . $e->getMessage());
 }
 
-// حذف جميع remember tokens من قاعدة البيانات
+// حذف الجلسة و remember tokens من قاعدة البيانات
 if (isset($_SESSION['user_id'])) {
     try {
         require_once __DIR__ . '/includes/db.php';
+        require_once __DIR__ . '/includes/auth.php';
         $db = db();
         $userId = $_SESSION['user_id'];
+        $sessionId = session_id();
+        
+        // حذف الجلسة من قاعدة البيانات
+        if ($sessionId && ensureSessionsTable()) {
+            try {
+                $db->execute("DELETE FROM sessions WHERE user_id = ? AND session_id = ?", [$userId, $sessionId]);
+            } catch (Exception $e) {
+                error_log("Logout: Error deleting session from database: " . $e->getMessage());
+            }
+        }
         
         // التحقق من وجود جدول remember_tokens وحذف جميع tokens للمستخدم
-        $tableCheck = $db->queryOne("SHOW TABLES LIKE 'remember_tokens'");
-        if (!empty($tableCheck)) {
-            $db->execute("DELETE FROM remember_tokens WHERE user_id = ?", [$userId]);
+        if (ensureRememberTokensTable()) {
+            try {
+                $db->execute("DELETE FROM remember_tokens WHERE user_id = ?", [$userId]);
+            } catch (Exception $e) {
+                error_log("Logout: Error deleting remember tokens from database: " . $e->getMessage());
+            }
         }
     } catch (Exception $e) {
-        error_log("Logout: Error deleting remember tokens from database: " . $e->getMessage());
+        error_log("Logout: Error in database cleanup: " . $e->getMessage());
     }
 }
 
