@@ -131,8 +131,34 @@
         }
     }
     
-    // معالج أخطاء عام لالتقاط أخطاء classList
+    // معالج أخطاء عام لالتقاط أخطاء classList وأخطاء الشبكة (ERR_FAILED)
     window.addEventListener('error', function(event) {
+        // التحقق من أخطاء الشبكة (ERR_FAILED)
+        if (event.message && typeof event.message === 'string') {
+            const message = event.message.toLowerCase();
+            if (message.includes('failed') || message.includes('network error') || 
+                message.includes('err_failed') || message.includes('load failed')) {
+                // محاولة منع عرض صفحة الخطأ
+                event.preventDefault();
+                event.stopPropagation();
+                
+                const currentPath = window.location.pathname || '';
+                const isProfilePage = currentPath.includes('profile.php');
+                
+                if (!isProfilePage) {
+                    // محاولة التوجيه إلى صفحة تسجيل الدخول
+                    setTimeout(() => {
+                        const loginUrl = '/index.php';
+                        if (window.location.pathname !== loginUrl) {
+                            window.location.href = loginUrl;
+                        }
+                    }, 100);
+                }
+                
+                return true;
+            }
+        }
+        
         // التحقق من أن الخطأ متعلق بـ classList
         if (event.error && event.error.message) {
             const errorMessage = event.error.message.toLowerCase();
@@ -169,6 +195,44 @@
             if (errorMessage.includes('classlist') || errorMessage.includes('class list')) {
                 event.preventDefault();
                 console.warn('classList promise rejection caught and handled:', event.reason.message);
+            }
+            // معالجة أخطاء الشبكة في promises
+            if (errorMessage.includes('failed') || errorMessage.includes('network error') || 
+                errorMessage.includes('err_failed') || errorMessage.includes('load failed')) {
+                event.preventDefault();
+                const currentPath = window.location.pathname || '';
+                const isProfilePage = currentPath.includes('profile.php');
+                if (!isProfilePage) {
+                    setTimeout(() => {
+                        const loginUrl = '/index.php';
+                        if (window.location.pathname !== loginUrl) {
+                            window.location.href = loginUrl;
+                        }
+                    }, 100);
+                }
+            }
+        }
+    });
+    
+    // معالج أخطاء التنقل (page navigation errors)
+    window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && typeof event.reason === 'object') {
+            const reason = event.reason;
+            // التحقق من أخطاء fetch/network
+            if (reason.name === 'TypeError' && reason.message && 
+                (reason.message.includes('fetch') || reason.message.includes('network') || 
+                 reason.message.includes('Failed to fetch'))) {
+                event.preventDefault();
+                const currentPath = window.location.pathname || '';
+                const isProfilePage = currentPath.includes('profile.php');
+                if (!isProfilePage) {
+                    setTimeout(() => {
+                        const loginUrl = '/index.php';
+                        if (window.location.pathname !== loginUrl) {
+                            window.location.href = loginUrl;
+                        }
+                    }, 100);
+                }
             }
         }
     });
@@ -745,10 +809,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 return response;
             } catch (fetchError) {
-                // التعامل مع أخطاء الشبكة والأخطاء الأخرى
+                // التعامل مع أخطاء الشبكة والأخطاء الأخرى (ERR_FAILED)
                 console.error('Fetch error:', fetchError);
                 
-                // إرجاع استجابة خطأ بديلة
+                // إذا كان الخطأ بسبب انتهاء الجلسة أو خطأ في الاتصال
+                // محاولة التوجيه إلى صفحة تسجيل الدخول بدلاً من عرض ERR_FAILED
+                const currentPath = window.location.pathname || '';
+                const isProfilePage = currentPath.includes('profile.php') || 
+                                     currentPath.endsWith('/profile') ||
+                                     document.querySelector('body[data-page="profile"]');
+                
+                // منع إعادة التوجيه في profile.php
+                if (!isProfilePage) {
+                    // محاولة تحديد URL تسجيل الدخول
+                    const overlay = getOverlayElement();
+                    const loginUrl = getLoginUrl(overlay);
+                    
+                    // إظهار overlay بدلاً من ERR_FAILED
+                    setTimeout(() => {
+                        try {
+                            showSessionOverlay(loginUrl);
+                        } catch (e) {
+                            // إذا فشل overlay، التوجيه المباشر
+                            console.warn('Could not show overlay, redirecting:', e);
+                            redirectToLogin(loginUrl);
+                        }
+                    }, 100);
+                }
+                
+                // إرجاع استجابة خطأ بديلة لمنع عرض ERR_FAILED
                 return new Response(JSON.stringify({
                     success: false,
                     message: 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.'
@@ -769,6 +858,23 @@ document.addEventListener('DOMContentLoaded', function() {
             handleSessionStatus(this.status);
         });
         this.addEventListener('error', function() {
+            // معالجة أخطاء الشبكة (ERR_FAILED) في XMLHttpRequest
+            const currentPath = window.location.pathname || '';
+            const isProfilePage = currentPath.includes('profile.php') || 
+                                 currentPath.endsWith('/profile') ||
+                                 document.querySelector('body[data-page="profile"]');
+            
+            if (!isProfilePage) {
+                const overlay = getOverlayElement();
+                const loginUrl = getLoginUrl(overlay);
+                setTimeout(() => {
+                    try {
+                        showSessionOverlay(loginUrl);
+                    } catch (e) {
+                        redirectToLogin(loginUrl);
+                    }
+                }, 100);
+            }
             handleSessionStatus(this.status);
         });
         return originalXhrOpen.apply(this, arguments);

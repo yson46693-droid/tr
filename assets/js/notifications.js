@@ -151,12 +151,37 @@ async function loadNotifications() {
     try {
         const apiPath = getApiPath('api/notifications.php');
         const limit = typeof NOTIFICATION_LIMIT !== 'undefined' ? NOTIFICATION_LIMIT : NOTIFICATION_DEFAULT_LIMIT;
+        
+        // إضافة ETag و Last-Modified headers للمزامنة الفورية
+        const headers = {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+        };
+        
+        // إضافة If-None-Match header إذا كان موجوداً
+        const lastEtag = sessionStorage.getItem('notifications_etag');
+        if (lastEtag) {
+            headers['If-None-Match'] = lastEtag;
+        }
+        
         const response = await fetch(`${apiPath}?action=list&limit=${limit}`, {
-            credentials: 'same-origin'
+            credentials: 'same-origin',
+            headers: headers
         });
+        
+        // إذا كانت الاستجابة 304 Not Modified، لا حاجة لتحديث
+        if (response.status === 304) {
+            return;
+        }
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        // حفظ ETag للاستخدام في الطلبات القادمة
+        const etag = response.headers.get('ETag');
+        if (etag) {
+            sessionStorage.setItem('notifications_etag', etag);
         }
         
         // قراءة الاستجابة كنص أولاً للتحقق من أنها JSON صالحة
@@ -714,13 +739,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // تحميل الإشعارات فوراً
     loadNotifications();
     
-    // تحديث الإشعارات (استخدام الفترة من config أو 60 ثانية افتراضياً)
-    let pollInterval = 60000;
+    // تحديث الإشعارات (استخدام الفترة من config أو 30 ثانية افتراضياً - محسّن)
+    let pollInterval = 30000;
     if (typeof window.NOTIFICATION_POLL_INTERVAL !== 'undefined') {
         const parsed = Number(window.NOTIFICATION_POLL_INTERVAL);
         if (Number.isFinite(parsed) && parsed > 0) {
             pollInterval = parsed;
         }
+    }
+    
+    // الحد الأدنى 10 ثواني (محسّن للأداء)
+    if (pollInterval < 10000) {
+        pollInterval = 10000;
     }
     const autoRefreshEnabled = (function () {
         if (typeof window.NOTIFICATION_AUTO_REFRESH_ENABLED === 'undefined') {

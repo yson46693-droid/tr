@@ -57,6 +57,37 @@ try {
             }
             $limit = intval($_GET['limit'] ?? 50);
             
+            // إضافة ETag و Last-Modified headers للمزامنة الفورية
+            $lastModified = null;
+            if (!$unreadOnly) {
+                try {
+                    $db = db();
+                    $lastNotification = $db->queryOne(
+                        "SELECT MAX(created_at) as last_modified FROM notifications WHERE user_id = ?",
+                        [$currentUser['id']]
+                    );
+                    if ($lastNotification && isset($lastNotification['last_modified'])) {
+                        $lastModified = strtotime($lastNotification['last_modified']);
+                    }
+                } catch (Exception $e) {
+                    // تجاهل الخطأ
+                }
+            }
+            
+            // التحقق من ETag
+            $etag = md5($currentUser['id'] . '_' . ($unreadOnly ? 'unread' : 'all') . '_' . $limit . '_' . ($lastModified ?? time()));
+            $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+            
+            if ($ifNoneMatch === $etag) {
+                http_response_code(304);
+                exit;
+            }
+            
+            header("ETag: {$etag}");
+            if ($lastModified) {
+                header("Last-Modified: " . gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
+            }
+            
             $notifications = getUserNotifications($currentUser['id'], $unreadOnly, $limit);
             
             // إذا كان action هو get_unread، استخدم نفس format لـ sidebar.js
@@ -74,6 +105,17 @@ try {
             
         } elseif ($action === 'count') {
             $count = getUnreadNotificationCount($currentUser['id']);
+            
+            // إضافة ETag للعدد
+            $etag = md5('count_' . $currentUser['id'] . '_' . $count);
+            $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+            
+            if ($ifNoneMatch === $etag) {
+                http_response_code(304);
+                exit;
+            }
+            
+            header("ETag: {$etag}");
             
             echo json_encode([
                 'success' => true,

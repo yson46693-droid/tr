@@ -75,6 +75,13 @@ function createNotification($userId, $title, $message, $type = 'info', $link = n
     try {
         $db = db();
         
+        // تنظيف Cache قبل إنشاء إشعار جديد
+        if (class_exists('Cache')) {
+            Cache::forget("notifications_{$userId}_all_50");
+            Cache::forget("notifications_{$userId}_unread_50");
+            Cache::forget("notification_count_{$userId}");
+        }
+        
         $sql = "INSERT INTO notifications (user_id, title, message, type, link) 
                 VALUES (?, ?, ?, ?, ?)";
         

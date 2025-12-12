@@ -29,26 +29,100 @@ if (!defined('ACCESS_ALLOWED')) {
         </div>
     </footer>
     
-    <!-- Session Keep-Alive Script -->
+    <!-- Session Keep-Alive Script - محسّن لمنع انتهاء الجلسة -->
     <script>
     (function() {
-        // تحديث الجلسة تلقائياً كل 10 دقائق عند وجود نشاط
+        if (window.__sessionKeepAliveActive) {
+            return; // منع التكرار
+        }
+        window.__sessionKeepAliveActive = true;
+        
         let lastActivity = Date.now();
-        const SESSION_REFRESH_INTERVAL = 10 * 60 * 1000; // 10 دقائق
-        const ACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 دقائق
+        const SESSION_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 دقائق (تقليل الفترة لمنع الانتهاء)
+        const ACTIVITY_TIMEOUT = 10 * 60 * 1000; // 10 دقائق
         
         // تتبع النشاط
-        const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+        const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click', 'keydown'];
         let activityTimer;
+        let keepAliveInterval;
+        let isRefreshing = false;
+        
+        // حساب مسار API
+        function getApiPath(endpoint) {
+            const cleanEndpoint = String(endpoint || '').replace(/^\/+/, '');
+            const currentPath = window.location.pathname || '/';
+            const parts = currentPath.split('/').filter(Boolean);
+            const stopSegments = new Set(['dashboard', 'modules', 'api', 'assets', 'includes']);
+            const baseParts = [];
+            
+            for (const part of parts) {
+                if (stopSegments.has(part) || part.endsWith('.php')) {
+                    break;
+                }
+                baseParts.push(part);
+            }
+            
+            const basePath = baseParts.length ? '/' + baseParts.join('/') : '';
+            const apiPath = (basePath + '/' + cleanEndpoint).replace(/\/+/g, '/');
+            return apiPath.startsWith('/') ? apiPath : '/' + apiPath;
+        }
         
         function updateActivity() {
             lastActivity = Date.now();
             clearTimeout(activityTimer);
+        }
+        
+        // تحديث الجلسة عبر API المخصص
+        function refreshSession() {
+            if (isRefreshing) {
+                return; // منع الطلبات المتزامنة
+            }
             
-            // تحديث الجلسة عند النشاط
-            activityTimer = setTimeout(function() {
-                refreshSession();
-            }, ACTIVITY_TIMEOUT);
+            const timeSinceActivity = Date.now() - lastActivity;
+            // تحديث فقط إذا كان هناك نشاط
+            if (timeSinceActivity > ACTIVITY_TIMEOUT) {
+                return;
+            }
+            
+            isRefreshing = true;
+            const apiPath = getApiPath('api/session_keepalive.php');
+            
+            fetch(apiPath, {
+                method: 'GET',
+                cache: 'no-cache',
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(function(response) {
+                if (!response.ok) {
+                    return response.json().then(function(data) {
+                        if (data && data.expired) {
+                            // الجلسة انتهت - إعادة توجيه
+                            const loginUrl = '/index.php';
+                            if (window.location.pathname !== loginUrl) {
+                                window.location.href = loginUrl;
+                            }
+                        }
+                        throw new Error('Session refresh failed');
+                    });
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                if (data && data.success) {
+                    // تحديث ناجح
+                    lastActivity = Date.now();
+                }
+            })
+            .catch(function(error) {
+                // تجاهل الأخطاء في تحديث الجلسة (لا نريد إزعاج المستخدم)
+                console.log('Session keep-alive:', error.message || 'refresh skipped');
+            })
+            .finally(function() {
+                isRefreshing = false;
+            });
         }
         
         // إضافة مستمعي الأحداث للنشاط
@@ -56,30 +130,30 @@ if (!defined('ACCESS_ALLOWED')) {
             document.addEventListener(event, updateActivity, { passive: true });
         });
         
-        // تحديث الجلسة بشكل دوري
-        function refreshSession() {
-            // تحديث الجلسة عبر طلب AJAX بسيط
-            fetch(window.location.href, {
-                method: 'HEAD',
-                cache: 'no-cache',
-                credentials: 'same-origin'
-            }).catch(function(error) {
-                // تجاهل الأخطاء في تحديث الجلسة
-                console.log('Session refresh skipped');
-            });
-        }
-        
-        // تحديث الجلسة كل 10 دقائق
-        setInterval(function() {
-            const timeSinceActivity = Date.now() - lastActivity;
-            // تحديث فقط إذا كان هناك نشاط في آخر 5 دقائق
-            if (timeSinceActivity < ACTIVITY_TIMEOUT) {
-                refreshSession();
-            }
+        // تحديث الجلسة كل 5 دقائق
+        keepAliveInterval = setInterval(function() {
+            refreshSession();
         }, SESSION_REFRESH_INTERVAL);
         
-        // تحديث أولي بعد تحميل الصفحة
-        setTimeout(refreshSession, 30000); // بعد 30 ثانية من تحميل الصفحة
+        // تحديث أولي بعد تحميل الصفحة (بعد 30 ثانية)
+        setTimeout(refreshSession, 30000);
+        
+        // تحديث قبل مغادرة الصفحة
+        window.addEventListener('beforeunload', function() {
+            if (keepAliveInterval) {
+                clearInterval(keepAliveInterval);
+            }
+            // محاولة تحديث نهائي قبل المغادرة (غير متزامن)
+            navigator.sendBeacon && navigator.sendBeacon(getApiPath('api/session_keepalive.php'));
+        });
+        
+        // تحديث عند العودة للصفحة
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                // تحديث فوري عند العودة
+                setTimeout(refreshSession, 1000);
+            }
+        });
     })();
     </script>
     
@@ -297,10 +371,10 @@ if (!defined('ACCESS_ALLOWED')) {
                 });
             }
             
-            // إعداد معلمات الإشعارات العالمية
+            // إعداد معلمات الإشعارات العالمية (محسّن للأداء)
             window.NOTIFICATION_POLL_INTERVAL = <?php echo (int) NOTIFICATION_POLL_INTERVAL; ?>;
             window.NOTIFICATION_AUTO_REFRESH_ENABLED = <?php echo NOTIFICATION_AUTO_REFRESH_ENABLED ? 'true' : 'false'; ?>;
-            window.NOTIFICATION_POLL_INTERVAL = Number(window.NOTIFICATION_POLL_INTERVAL) || 60000;
+            window.NOTIFICATION_POLL_INTERVAL = Number(window.NOTIFICATION_POLL_INTERVAL) || 30000; // 30 ثانية افتراضياً
             if (typeof loadNotifications === 'function') {
                 if (!window.__notificationInitialLoadDone) {
                     loadNotifications();
