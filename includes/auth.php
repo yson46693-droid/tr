@@ -47,9 +47,10 @@ function getPasswordMinLength(): int
  * التحقق من تسجيل الدخول
  */
 function isLoggedIn() {
-    // التحقق من أننا في profile.php أو attendance.php - منع حذف الجلسة
+    // التحقق من أننا في profile.php أو attendance.php أو notifications API - منع حذف الجلسة
     $isProfilePage = false;
     $isAttendancePage = false;
+    $isNotificationsAPI = false;
     
     // الطريقة 1: التحقق من الثوابت (الأكثر موثوقية)
     if (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) {
@@ -58,28 +59,35 @@ function isLoggedIn() {
     if (defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true) {
         $isAttendancePage = true;
     }
+    if (defined('NOTIFICATIONS_API_ACTIVE') && NOTIFICATIONS_API_ACTIVE === true) {
+        $isNotificationsAPI = true;
+    }
     
     // الطريقة 2: التحقق من SCRIPT_NAME و PHP_SELF
-    if (!$isProfilePage && !$isAttendancePage) {
+    if (!$isProfilePage && !$isAttendancePage && !$isNotificationsAPI) {
         $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
         if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
             $isProfilePage = true;
         } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
             $isAttendancePage = true;
+        } elseif (strpos($currentScript, 'notifications.php') !== false || basename($currentScript) === 'notifications.php') {
+            $isNotificationsAPI = true;
         }
     }
     
     // الطريقة 3: التحقق من REQUEST_URI
-    if (!$isProfilePage && !$isAttendancePage) {
+    if (!$isProfilePage && !$isAttendancePage && !$isNotificationsAPI) {
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         if (strpos($requestUri, 'profile.php') !== false) {
             $isProfilePage = true;
         } elseif (strpos($requestUri, 'attendance.php') !== false) {
             $isAttendancePage = true;
+        } elseif (strpos($requestUri, 'notifications.php') !== false || strpos($requestUri, '/api/notifications') !== false) {
+            $isNotificationsAPI = true;
         }
     }
     
-    $isProtectedPage = $isProfilePage || $isAttendancePage;
+    $isProtectedPage = $isProfilePage || $isAttendancePage || $isNotificationsAPI;
     
     // التأكد من أن الجلسة نشطة قبل أي فحص
     if (session_status() === PHP_SESSION_NONE) {
@@ -362,10 +370,11 @@ function getCurrentUser() {
  * @return array|null بيانات المستخدم أو null
  */
 function getCurrentUserFromDatabase($userId) {
-    // التحقق من الملف الذي يستدعي هذه الدالة - منع حذف الجلسة في profile.php و attendance.php
+    // التحقق من الملف الذي يستدعي هذه الدالة - منع حذف الجلسة في profile.php و attendance.php و notifications API
     // استخدام طرق متعددة للتحقق لضمان العمل على جميع الأجهزة (Windows, Android, iOS)
     $isProfilePage = false;
     $isAttendancePage = false;
+    $isNotificationsAPI = false;
     
     // الطريقة 1: التحقق من الثوابت (الأكثر موثوقية)
     if (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) {
@@ -374,19 +383,24 @@ function getCurrentUserFromDatabase($userId) {
     if (defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true) {
         $isAttendancePage = true;
     }
+    if (defined('NOTIFICATIONS_API_ACTIVE') && NOTIFICATIONS_API_ACTIVE === true) {
+        $isNotificationsAPI = true;
+    }
     
     // الطريقة 2: التحقق من SCRIPT_NAME و PHP_SELF
-    if (!$isProfilePage && !$isAttendancePage) {
+    if (!$isProfilePage && !$isAttendancePage && !$isNotificationsAPI) {
         $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
         if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
             $isProfilePage = true;
         } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
             $isAttendancePage = true;
+        } elseif (strpos($currentScript, 'notifications.php') !== false || basename($currentScript) === 'notifications.php') {
+            $isNotificationsAPI = true;
         }
     }
     
     // الطريقة 3: استخدام debug_backtrace كبديل
-    if (!$isProfilePage && !$isAttendancePage) {
+    if (!$isProfilePage && !$isAttendancePage && !$isNotificationsAPI) {
         $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
         foreach ($backtrace as $trace) {
             if (isset($trace['file'])) {
@@ -397,23 +411,28 @@ function getCurrentUserFromDatabase($userId) {
                 } elseif ($fileName === 'attendance.php' || strpos($trace['file'], 'attendance.php') !== false) {
                     $isAttendancePage = true;
                     break;
+                } elseif ($fileName === 'notifications.php' || strpos($trace['file'], 'notifications.php') !== false) {
+                    $isNotificationsAPI = true;
+                    break;
                 }
             }
         }
     }
     
     // الطريقة 4: التحقق من REQUEST_URI
-    if (!$isProfilePage && !$isAttendancePage) {
+    if (!$isProfilePage && !$isAttendancePage && !$isNotificationsAPI) {
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         if (strpos($requestUri, 'profile.php') !== false) {
             $isProfilePage = true;
         } elseif (strpos($requestUri, 'attendance.php') !== false) {
             $isAttendancePage = true;
+        } elseif (strpos($requestUri, 'notifications.php') !== false || strpos($requestUri, '/api/notifications') !== false) {
+            $isNotificationsAPI = true;
         }
     }
     
-    // تحديد إذا كان الصفحة محمية (profile أو attendance)
-    $isProtectedPage = $isProfilePage || $isAttendancePage;
+    // تحديد إذا كان الصفحة محمية (profile أو attendance أو notifications API)
+    $isProtectedPage = $isProfilePage || $isAttendancePage || $isNotificationsAPI;
     
     // جلب جميع بيانات المستخدم من قاعدة البيانات
     try {

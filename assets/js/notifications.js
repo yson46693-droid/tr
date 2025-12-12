@@ -593,16 +593,33 @@ async function markNotificationAsRead(notificationId, options = {}) {
 async function deleteNotification(notificationId) {
     try {
         const apiPath = getApiPath('api/notifications.php');
-        await fetch(apiPath, {
+        const response = await fetch(apiPath, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
+            credentials: 'same-origin', // إرسال cookies مع الطلب
             body: new URLSearchParams({
                 action: 'delete',
                 id: notificationId
             })
         });
+
+        // التحقق من حالة الاستجابة
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            if (response.status === 401) {
+                // إذا كان Unauthorized، لا نحذف الجلسة - فقط نسجل الخطأ
+                console.warn('Unauthorized when deleting notification - session may have expired');
+                throw new Error('Unauthorized - يرجى تحديث الصفحة');
+            }
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'فشل حذف الإشعار');
+        }
 
         loadNotifications();
     } catch (error) {
@@ -611,6 +628,10 @@ async function deleteNotification(notificationId) {
             return;
         }
         console.error('Error deleting notification:', error);
+        // إظهار رسالة خطأ للمستخدم
+        if (error.message && !error.message.includes('CORS')) {
+            alert('حدث خطأ أثناء حذف الإشعار: ' + error.message);
+        }
     }
 }
 
@@ -625,10 +646,22 @@ async function deleteAllNotifications() {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
+            credentials: 'same-origin', // إرسال cookies مع الطلب
             body: new URLSearchParams({
                 action: 'delete_all'
             })
         });
+        
+        // التحقق من حالة الاستجابة
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            if (response.status === 401) {
+                // إذا كان Unauthorized، لا نحذف الجلسة - فقط نسجل الخطأ
+                console.warn('Unauthorized when deleting all notifications - session may have expired');
+                throw new Error('Unauthorized - يرجى تحديث الصفحة');
+            }
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
         
         const data = await response.json();
         
@@ -655,6 +688,10 @@ async function deleteAllNotifications() {
             return;
         }
         console.error('Error deleting all notifications:', error);
+        // إظهار رسالة خطأ للمستخدم
+        if (error.message && !error.message.includes('CORS')) {
+            throw new Error('حدث خطأ أثناء حذف الإشعارات: ' + error.message);
+        }
         throw error;
     }
 }
