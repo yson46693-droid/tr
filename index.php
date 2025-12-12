@@ -328,12 +328,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $dashboardUrl = '/dashboard/' . $userRole . '.php';
                     }
                     
+                    // التأكد من أن dashboardUrl يبدأ بـ / وليس مساراً مطلقاً
+                    if (strpos($dashboardUrl, 'http://') === 0 || strpos($dashboardUrl, 'https://') === 0) {
+                        $parsed = parse_url($dashboardUrl);
+                        $dashboardUrl = $parsed['path'] ?? '/dashboard/' . $userRole . '.php';
+                    }
+                    
+                    // التأكد من أن dashboardUrl يبدأ بـ /
+                    if (strpos($dashboardUrl, '/') !== 0) {
+                        $dashboardUrl = '/' . $dashboardUrl;
+                    }
+                    
+                    // تنظيف المسار (إزالة // المكررة)
+                    $dashboardUrl = preg_replace('/\/+/', '/', $dashboardUrl);
+                    
+                    // التأكد من أن المسار يحتوي على dashboard
+                    if (strpos($dashboardUrl, '/dashboard') === false) {
+                        $dashboardUrl = '/dashboard/' . $userRole . '.php';
+                    }
+                    
+                    // تنظيف output buffer قبل التوجيه
+                    if (ob_get_level() > 0) {
+                        ob_clean();
+                    }
+                    
                     if (!headers_sent()) {
-                        header('Location: ' . $dashboardUrl);
+                        header('Location: ' . $dashboardUrl, true, 303);
                         exit;
                     } else {
-                        echo '<script>window.location.href = "' . htmlspecialchars($dashboardUrl) . '";</script>';
-                        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($dashboardUrl) . '"></noscript>';
+                        echo '<script>window.location.replace("' . htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+                        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
                         exit;
                     }
                 } else {

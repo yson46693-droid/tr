@@ -441,23 +441,34 @@ function checkRememberToken($cookieValue) {
             if (ensureSessionsTable()) {
                 $db = db();
                 $sessionId = session_id();
-                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // افتراضياً 7 أيام
-                $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-                $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-                
-                // حذف أي جلسة سابقة بنفس session_id (إن وجدت)
-                $db->execute("DELETE FROM sessions WHERE session_id = ?", [$sessionId]);
-                
-                // إضافة الجلسة الجديدة
-                $db->execute(
-                    "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                     VALUES (?, ?, ?, ?, ?, NOW())",
-                    [$tokenRecord['user_id'], $sessionId, $ipAddress, $userAgent, $expiresAt]
-                );
+                if (!empty($sessionId)) {
+                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // افتراضياً 7 أيام
+                    $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255); // الحد الأقصى 255 حرف
+                    
+                    // حذف أي جلسة سابقة بنفس session_id (إن وجدت)
+                    try {
+                        $db->execute("DELETE FROM sessions WHERE session_id = ?", [$sessionId]);
+                    } catch (Exception $deleteError) {
+                        error_log("Error deleting old session in checkRememberToken: " . $deleteError->getMessage());
+                    }
+                    
+                    // إضافة الجلسة الجديدة
+                    try {
+                        $db->execute(
+                            "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                             VALUES (?, ?, ?, ?, ?, NOW())",
+                            [$tokenRecord['user_id'], $sessionId, $ipAddress, $userAgent, $expiresAt]
+                        );
+                    } catch (Exception $insertError) {
+                        error_log("Error inserting session in checkRememberToken: " . $insertError->getMessage());
+                        // لا نتوقف عن تسجيل الدخول إذا فشل حفظ الجلسة في قاعدة البيانات
+                    }
+                }
             }
         } catch (Exception $e) {
-            error_log("Error saving session to database in checkRememberToken: " . $e->getMessage());
+            error_log("Error in session database operations in checkRememberToken: " . $e->getMessage());
             // لا نتوقف عن تسجيل الدخول إذا فشل حفظ الجلسة في قاعدة البيانات
         }
         
@@ -783,22 +794,33 @@ function login($username, $password, $rememberMe = false) {
         if (ensureSessionsTable()) {
             $db = db();
             $sessionId = session_id();
-            $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // افتراضياً 7 أيام
-            $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-            
-            // حذف أي جلسة سابقة بنفس session_id (إن وجدت)
-            $db->execute("DELETE FROM sessions WHERE session_id = ?", [$sessionId]);
-            
-            // إضافة الجلسة الجديدة
-            $db->execute(
-                "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                 VALUES (?, ?, ?, ?, ?, NOW())",
-                [$user['id'], $sessionId, $ipAddress, $userAgent, $expiresAt]
-            );
+            if (!empty($sessionId)) {
+                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // افتراضياً 7 أيام
+                $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255); // الحد الأقصى 255 حرف
+                
+                // حذف أي جلسة سابقة بنفس session_id (إن وجدت)
+                try {
+                    $db->execute("DELETE FROM sessions WHERE session_id = ?", [$sessionId]);
+                } catch (Exception $deleteError) {
+                    error_log("Error deleting old session: " . $deleteError->getMessage());
+                }
+                
+                // إضافة الجلسة الجديدة
+                try {
+                    $db->execute(
+                        "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                         VALUES (?, ?, ?, ?, ?, NOW())",
+                        [$user['id'], $sessionId, $ipAddress, $userAgent, $expiresAt]
+                    );
+                } catch (Exception $insertError) {
+                    error_log("Error inserting session to database: " . $insertError->getMessage());
+                    // لا نتوقف عن تسجيل الدخول إذا فشل حفظ الجلسة في قاعدة البيانات
+                }
+            }
         }
     } catch (Exception $e) {
-        error_log("Error saving session to database: " . $e->getMessage());
+        error_log("Error in session database operations: " . $e->getMessage());
         // لا نتوقف عن تسجيل الدخول إذا فشل حفظ الجلسة في قاعدة البيانات
     }
     
