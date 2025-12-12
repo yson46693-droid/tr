@@ -575,6 +575,11 @@ function preventDuplicateSubmission($successMessage = null, $redirectParams = []
         }
     }
     
+    // إضافة cache-busting parameter لضمان تحديث الصفحة بعد إنشاء/تحديث البيانات
+    // هذا يمنع المتصفح من عرض نسخة قديمة من الصفحة
+    $separator = (strpos($redirectUrl, '?') !== false) ? '&' : '?';
+    $redirectUrl .= $separator . '_t=' . time();
+    
     // إذا لم يكن الرابط مطلقاً، تأكد من أنه يبدأ بشرطة مائلة
     if (!preg_match('/^https?:\/\//i', $redirectUrl)) {
         // استخدام substr بدلاً من str_starts_with للتوافق مع PHP < 8.0
@@ -583,16 +588,23 @@ function preventDuplicateSubmission($successMessage = null, $redirectParams = []
         }
     }
     
+    // إضافة headers لمنع caching عند إعادة التوجيه
+    header('Cache-Control: no-cache, no-store, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    
     // التحقق من أن headers لم يتم إرسالها بعد
     if (headers_sent($file, $line)) {
-        // إذا تم إرسال headers بالفعل، استخدم JavaScript redirect
-        echo '<script>window.location.href = ' . json_encode($redirectUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';</script>';
+        // إذا تم إرسال headers بالفعل، استخدم JavaScript redirect مع force reload
+        echo '<script>';
+        echo 'window.location.replace(' . json_encode($redirectUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ');';
+        echo '</script>';
         echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
         exit;
     }
     
-    // إعادة التوجيه
-    header('Location: ' . $redirectUrl);
+    // إعادة التوجيه مع force reload
+    header('Location: ' . $redirectUrl, true, 303); // 303 See Other يمنع caching
     exit;
 }
 
