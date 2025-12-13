@@ -149,10 +149,32 @@ function isLoggedIn() {
                 
                 // البحث عن الجلسة في قاعدة البيانات - يجب أن تطابق session_id تماماً
                 // لا نحاول "إصلاح" الجلسة لأن ذلك سيسمح للجهاز القديم بإعادة إنشاء الجلسة بعد حذفها
+                
+                // البحث أولاً بدون شرط expires_at للتحقق من وجود الجلسة
                 $sessionRecord = $db->queryOne(
-                    "SELECT * FROM sessions WHERE user_id = ? AND session_id = ? AND expires_at > NOW()",
+                    "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
                     [$userId, $sessionId]
                 );
+                
+                // إذا وُجدت الجلسة لكنها منتهية الصلاحية، نمددها
+                if ($sessionRecord && strtotime($sessionRecord['expires_at']) < time()) {
+                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                    $db->execute(
+                        "UPDATE sessions SET expires_at = ?, last_activity = NOW() WHERE id = ?",
+                        [$newExpiresAt, $sessionRecord['id']]
+                    );
+                    $sessionRecord['expires_at'] = $newExpiresAt;
+                    error_log("isLoggedIn() EXTENDED: Session expired but extended for user_id: {$userId}");
+                }
+                
+                // البحث مرة أخرى مع شرط expires_at
+                if ($sessionRecord) {
+                    $sessionRecord = $db->queryOne(
+                        "SELECT * FROM sessions WHERE user_id = ? AND session_id = ? AND expires_at > NOW()",
+                        [$userId, $sessionId]
+                    );
+                }
                 
                 // === تحقق أمني: إذا لم توجد الجلسة بنفس session_id، الجلسة غير صالحة ===
                 // لا نحاول البحث عن جلسات أخرى أو إصلاح الجلسة لأن ذلك سيسمح للجهاز القديم

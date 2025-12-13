@@ -474,6 +474,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         require_once __DIR__ . '/includes/path_helper.php';
                     }
                     
+                    // التأكد من أن الجلسة محفوظة في قاعدة البيانات قبل إعادة التوجيه
+                    $sessionId = session_id();
+                    $userId = $_SESSION['user_id'] ?? 0;
+                    if ($sessionId && $userId > 0) {
+                        try {
+                            $db = db();
+                            // التحقق من وجود الجلسة في قاعدة البيانات
+                            $sessionCheck = $db->queryOne(
+                                "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
+                                [$userId, $sessionId]
+                            );
+                            if (!$sessionCheck) {
+                                error_log("Login WARNING: Session not found in DB before redirect, waiting...");
+                                // انتظار قصير وإعادة المحاولة
+                                usleep(100000); // 0.1 ثانية
+                                $sessionCheck = $db->queryOne(
+                                    "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
+                                    [$userId, $sessionId]
+                                );
+                            }
+                            if ($sessionCheck) {
+                                error_log("Login: Session verified in database before redirect");
+                            } else {
+                                error_log("Login ERROR: Session not found in database before redirect - this may cause ERR_FAILED");
+                            }
+                        } catch (Exception $e) {
+                            error_log("Login: Error checking session before redirect: " . $e->getMessage());
+                        }
+                    }
+                    
                     $dashboardUrl = getDashboardUrl($userRole);
                     
                     // التأكد من أن المسار نسبي فقط (بدون بروتوكول أو hostname)
@@ -494,25 +524,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     
                     // تسجيل المسار للتشخيص
-                    error_log("Login redirect - Dashboard URL: {$dashboardUrl} | Role: {$userRole}");
+                    error_log("Login redirect - Dashboard URL: {$dashboardUrl} | Role: {$userRole} | Session ID: " . substr($sessionId ?? '', 0, 20));
                     
-                    // استخدام JavaScript redirect دائماً لضمان نجاح التوجيه
-                    // هذا يحل مشكلة ERR_FAILED التي قد تحدث مع header redirect
-                    $escapedUrl = htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8');
-                    
-                    // محاولة استخدام header redirect أولاً إذا كان ممكناً
+                    // استخدام header redirect مباشرة (بدون JavaScript) لضمان التوجيه الصحيح
                     if (!headers_sent()) {
-                        // إرسال header redirect مع JavaScript fallback
-                        header('Content-Type: text/html; charset=utf-8');
+                        header('Location: ' . $dashboardUrl, true, 303);
+                        exit;
+                    } else {
+                        // إذا كانت headers قد أُرسلت، استخدم JavaScript redirect
+                        $escapedUrl = htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8');
                         echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Redirecting...</title>';
                         echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
                         echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
                         echo '</head><body><p>جاري التحويل... <a href="' . $escapedUrl . '">اضغط هنا إذا لم يتم التحويل تلقائياً</a></p></body></html>';
-                        exit;
-                    } else {
-                        // إذا كانت headers قد أُرسلت، استخدم JavaScript فقط
-                        echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
-                        echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
                         exit;
                     }
                 } else {
