@@ -868,7 +868,7 @@ function tasksHtml(string $value): string
                                     && !empty($task['due_date'])
                                     && strtotime((string) $task['due_date']) < time();
                                 ?>
-                                <tr class="<?php echo $overdue ? 'table-danger' : ''; ?>">
+                                <tr class="<?php echo $overdue ? 'table-danger' : ''; ?>" data-task-id="<?php echo (int) $task['id']; ?>">
                                     <td><?php echo $rowNumber; ?></td>
                                     <td>
                                         <strong><?php echo tasksHtml($task['title'] ?? ''); ?></strong>
@@ -1422,5 +1422,160 @@ function tasksHtml(string $value): string
         metaExpires.content = '0';
         document.head.appendChild(metaExpires);
     }
+})();
+</script>
+
+<!-- آلية التحديث التلقائي للمهام (Auto-refresh/Polling) -->
+<script>
+(function() {
+    'use strict';
+    
+    // التحقق من أننا في صفحة المهام
+    if (!window.location.search.includes('page=tasks')) {
+        return;
+    }
+    
+    let autoRefreshInterval = null;
+    let lastUpdateTimestamp = null;
+    let isRefreshing = false;
+    
+    // دالة جلب المهام من API
+    async function fetchTasks() {
+        if (isRefreshing) {
+            return; // منع طلبات متعددة في نفس الوقت
+        }
+        
+        try {
+            isRefreshing = true;
+            
+            // بناء URL مع جميع المعاملات الحالية
+            const currentUrl = new URL(window.location.href);
+            const apiUrl = '/api/tasks.php?' + currentUrl.searchParams.toString();
+            
+            const response = await fetch(apiUrl, {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch tasks');
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.data) {
+                const newTasks = data.data.tasks || [];
+                const newStats = data.data.stats || {};
+                const newTimestamp = data.data.timestamp || Date.now();
+                
+                // مقارنة مع المهام الحالية
+                if (lastUpdateTimestamp && newTimestamp > lastUpdateTimestamp) {
+                    // هناك تحديثات جديدة
+                    const currentTasksIds = new Set(
+                        Array.from(document.querySelectorAll('[data-task-id]')).map(el => el.getAttribute('data-task-id'))
+                    );
+                    
+                    const newTasksIds = new Set(newTasks.map(t => String(t.id)));
+                    
+                    // التحقق من وجود مهام جديدة أو تغييرات
+                    let hasNewTasks = false;
+                    let hasChanges = false;
+                    
+                    // التحقق من المهام الجديدة
+                    for (const task of newTasks) {
+                        const taskId = String(task.id);
+                        if (!currentTasksIds.has(taskId)) {
+                            hasNewTasks = true;
+                            break;
+                        }
+                    }
+                    
+                    // التحقق من التغييرات في الإحصائيات
+                    const totalTasksElement = document.querySelector('.card.border-primary h5');
+                    const pendingTasksElement = document.querySelector('.card.border-warning h5');
+                    
+                    if (totalTasksElement && totalTasksElement.textContent !== String(newStats.total || 0)) {
+                        hasChanges = true;
+                    } else if (pendingTasksElement && pendingTasksElement.textContent !== String(newStats.pending || 0)) {
+                        hasChanges = true;
+                    }
+                    
+                    // إذا كانت هناك مهام جديدة أو تغييرات، أعد تحميل الصفحة
+                    if (hasNewTasks || hasChanges) {
+                        // إعادة تحميل الصفحة بلطف (بدون معاملات success/error)
+                        const url = new URL(window.location.href);
+                        url.searchParams.delete('success');
+                        url.searchParams.delete('error');
+                        url.searchParams.delete('_r');
+                        url.searchParams.delete('_refresh');
+                        url.searchParams.delete('_nocache');
+                        url.searchParams.delete('_auto_refresh');
+                        url.searchParams.set('_auto_refresh', Date.now().toString());
+                        
+                        // إعادة تحميل بدون scroll to top
+                        window.location.href = url.toString();
+                    }
+                }
+                
+                lastUpdateTimestamp = newTimestamp;
+            }
+        } catch (error) {
+            console.error('Error fetching tasks:', error);
+        } finally {
+            isRefreshing = false;
+        }
+    }
+    
+    // بدء التحديث التلقائي كل 5 ثوانٍ
+    function startAutoRefresh() {
+        // تنظيف interval السابق إن وجد
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+        }
+        
+        // جلب المهام لأول مرة بعد 2 ثانية من تحميل الصفحة
+        setTimeout(function() {
+            fetchTasks();
+        }, 2000);
+        
+        // ثم كل 5 ثوانٍ
+        autoRefreshInterval = setInterval(function() {
+            fetchTasks();
+        }, 5000); // 5 ثوانٍ
+    }
+    
+    // إيقاف التحديث التلقائي عند مغادرة الصفحة
+    function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+    }
+    
+    // بدء التحديث التلقائي عند تحميل الصفحة
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startAutoRefresh);
+    } else {
+        startAutoRefresh();
+    }
+    
+    // إيقاف التحديث عند مغادرة الصفحة
+    window.addEventListener('beforeunload', stopAutoRefresh);
+    
+    // إيقاف التحديث عندما تكون الصفحة غير مرئية (tab inactive)
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            stopAutoRefresh();
+        } else {
+            startAutoRefresh();
+        }
+    });
+    
+    // تنظيف عند إغلاق الصفحة
+    window.addEventListener('unload', stopAutoRefresh);
 })();
 </script>
