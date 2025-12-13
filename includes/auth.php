@@ -610,26 +610,34 @@ function checkRememberToken($cookieValue) {
  * مع استخدام Cache لتحسين الأداء
  */
 function getCurrentUser() {
+    $startTime = microtime(true);
+    $scriptName = $_SERVER['SCRIPT_NAME'] ?? 'unknown';
+    $requestUri = $_SERVER['REQUEST_URI'] ?? 'unknown';
+    
     // التأكد من أن الجلسة نشطة
     if (session_status() === PHP_SESSION_NONE) {
         if (!headers_sent()) {
             @session_start();
         } else {
+            error_log("getCurrentUser() NULL: Session not started and headers sent | Script: {$scriptName}");
             return null;
         }
     }
     
     // التأكد من وجود $_SESSION
     if (!isset($_SESSION) || !is_array($_SESSION)) {
+        error_log("getCurrentUser() NULL: \$_SESSION not set or not array | Script: {$scriptName}");
         return null;
     }
     
     if (!isLoggedIn()) {
+        error_log("getCurrentUser() NULL: isLoggedIn() returned false | Script: {$scriptName}");
         return null;
     }
     
     $userId = $_SESSION['user_id'] ?? null;
     if (!$userId) {
+        error_log("getCurrentUser() NULL: user_id not set in session | Script: {$scriptName}");
         return null;
     }
     
@@ -646,21 +654,36 @@ function getCurrentUser() {
     
     // إذا كان Cache متاحاً، استخدمه
     if (class_exists('Cache')) {
-        $user = Cache::remember($cacheKey, function() use ($userId) {
+        $user = Cache::remember($cacheKey, function() use ($userId, $scriptName) {
+            error_log("getCurrentUser() - Loading from database (cache miss) for user ID {$userId} | Script: {$scriptName}");
             return getCurrentUserFromDatabase($userId);
         }, 300); // 5 دقائق
         
         // إذا كان المستخدم null (محذوف)، احذف من Cache
         if ($user === null) {
             Cache::forget($cacheKey);
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+            error_log("getCurrentUser() NULL: User not found in database (from cache) for user ID {$userId} | Duration: {$duration}ms | Script: {$scriptName}");
             return null;
         }
         
+        $duration = round((microtime(true) - $startTime) * 1000, 2);
+        error_log("getCurrentUser() SUCCESS (from cache): User ID {$userId}, Role: " . ($user['role'] ?? 'NOT_SET') . " | Duration: {$duration}ms | Script: {$scriptName}");
         return $user;
     }
     
     // إذا لم يكن Cache متاحاً، استخدم الطريقة القديمة
-    return getCurrentUserFromDatabase($userId);
+    error_log("getCurrentUser() - Loading from database (no cache) for user ID {$userId} | Script: {$scriptName}");
+    $user = getCurrentUserFromDatabase($userId);
+    
+    $duration = round((microtime(true) - $startTime) * 1000, 2);
+    if ($user) {
+        error_log("getCurrentUser() SUCCESS: User ID {$userId}, Role: " . ($user['role'] ?? 'NOT_SET') . ", Status: " . ($user['status'] ?? 'NOT_SET') . " | Duration: {$duration}ms | Script: {$scriptName}");
+    } else {
+        error_log("getCurrentUser() NULL: getCurrentUserFromDatabase() returned null for user ID {$userId} | Duration: {$duration}ms | Script: {$scriptName}");
+    }
+    
+    return $user;
 }
 
 /**

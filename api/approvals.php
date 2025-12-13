@@ -174,8 +174,39 @@ if (!$isLoggedInResult) {
 }
 
 // التحقق من أن المستخدم مدير فقط
+error_log("=== API approvals.php - بعد isLoggedIn() SUCCESS ===");
+error_log("Calling getCurrentUser()...");
+
 $currentUser = getCurrentUser();
-if (($currentUser['role'] ?? '') !== 'manager') {
+
+error_log("getCurrentUser() result: " . ($currentUser ? 'EXISTS' : 'NULL'));
+if ($currentUser) {
+    error_log("User ID: " . ($currentUser['id'] ?? 'NOT_SET'));
+    error_log("User Role: " . ($currentUser['role'] ?? 'NOT_SET'));
+    error_log("User Status: " . ($currentUser['status'] ?? 'NOT_SET'));
+} else {
+    error_log("getCurrentUser() returned NULL - هذا قد يكون السبب!");
+    if (function_exists('logSessionInfo')) {
+        logSessionInfo('getCurrentUser() رجع NULL رغم أن isLoggedIn() نجح', [
+            'user_id_in_session' => $_SESSION['user_id'] ?? null,
+            'logged_in' => $_SESSION['logged_in'] ?? null,
+        ]);
+    }
+}
+
+if (!$currentUser || ($currentUser['role'] ?? '') !== 'manager') {
+    $reason = !$currentUser ? 'getCurrentUser() returned NULL' : 'User role is not manager: ' . ($currentUser['role'] ?? 'NOT_SET');
+    error_log("=== API approvals.php - إرجاع 403 ===");
+    error_log("Reason: {$reason}");
+    
+    if (function_exists('logApi401')) {
+        logApi401('api/approvals.php', $reason, [
+            'getCurrentUser_result' => $currentUser ? 'EXISTS' : 'NULL',
+            'user_role' => $currentUser['role'] ?? 'NOT_SET',
+            'user_id_in_session' => $_SESSION['user_id'] ?? null,
+        ]);
+    }
+    
     http_response_code(403);
     echo json_encode([
         'success' => false,
@@ -183,6 +214,8 @@ if (($currentUser['role'] ?? '') !== 'manager') {
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
+
+error_log("API approvals.php - SUCCESS: User is manager, returning count");
 
 try {
     $count = getPendingApprovalsCount();
