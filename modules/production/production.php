@@ -2068,8 +2068,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if (empty($materialSuppliers)) {
+                    error_log("ERROR: materialSuppliers is empty after processing!");
+                    error_log("Full POST data: " . json_encode($_POST, JSON_UNESCAPED_UNICODE));
+                    error_log("All POST keys related to suppliers:");
+                    foreach ($_POST as $key => $value) {
+                        if (stripos($key, 'supplier') !== false || stripos($key, 'material') !== false) {
+                            error_log("  - {$key}: " . (is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : $value));
+                        }
+                    }
                     throw new Exception('يرجى اختيار المورد المحاسب لهذه المادة قبل إنشاء التشغيلة.');
                 }
+                
+                error_log("Material suppliers validation passed. Count: " . count($materialSuppliers));
 
                 $templateMode = $_POST['template_mode'] ?? 'advanced';
                 if ($templateMode !== 'advanced') {
@@ -5401,6 +5411,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['created_batch_product_name'] = $template['product_name'];
                 $_SESSION['created_batch_quantity'] = $quantity;
                 
+                // تسجيل نجاح العملية
+                error_log("=== CREATE FROM TEMPLATE SUCCESS ===");
+                error_log("Batch number: {$batchNumber}");
+                error_log("Production ID: " . ($productionId ?? 'N/A'));
+                error_log("Template ID: {$templateId}");
+                error_log("Quantity: {$quantity}");
+                error_log("Material suppliers used: " . json_encode($materialSuppliers, JSON_UNESCAPED_UNICODE));
+                error_log("=== END SUCCESS LOG ===");
+                
                 // منع التكرار باستخدام إعادة التوجيه
                 $successMessage = 'تم إنشاء تشغيلة إنتاج بنجاح! رقم التشغيلة: ' . $batchNumber . ' (الكمية: ' . $quantity . ' قطعة)';
                 $redirectParams = ['page' => 'production', 'show_barcode_modal' => '1'];
@@ -5408,8 +5427,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
             } catch (Exception $e) {
                 $db->rollBack();
-                $error = 'حدث خطأ في إنشاء الإنتاج: ' . $e->getMessage();
-                error_log("Create from template error: " . $e->getMessage());
+                $errorMessage = $e->getMessage();
+                $error = 'حدث خطأ في إنشاء الإنتاج: ' . $errorMessage;
+                
+                // تسجيل تفصيلي للخطأ
+                error_log("=== CREATE FROM TEMPLATE ERROR ===");
+                error_log("Error message: " . $errorMessage);
+                error_log("Error file: " . $e->getFile() . ":" . $e->getLine());
+                error_log("Template ID: " . ($templateId ?? 'N/A'));
+                error_log("Quantity: " . ($quantity ?? 'N/A'));
+                error_log("User ID: " . ($currentUser['id'] ?? 'N/A'));
+                error_log("Material suppliers input: " . json_encode($_POST['material_suppliers'] ?? [], JSON_UNESCAPED_UNICODE));
+                error_log("Material suppliers processed: " . json_encode($materialSuppliers ?? [], JSON_UNESCAPED_UNICODE));
+                error_log("Full POST data: " . json_encode($_POST, JSON_UNESCAPED_UNICODE));
+                error_log("Error trace: " . $e->getTraceAsString());
+                error_log("=== END ERROR LOG ===");
+                
+                // حفظ رسالة الخطأ في الجلسة
+                $_SESSION['error_message'] = $error;
             }
         }
     }
@@ -9480,24 +9515,46 @@ function openCreateFromTemplateModal(element) {
 
 // إضافة معالجة للنماذج للتحقق من الحقول المطلوبة
 document.getElementById('createFromTemplateForm')?.addEventListener('submit', function(e) {
+    console.log('=== FORM SUBMIT START ===');
     const quantity = document.querySelector('input[name="quantity"]').value;
+    const templateId = document.getElementById('template_id')?.value;
+    
+    console.log('Template ID:', templateId);
+    console.log('Quantity:', quantity);
 
     const supplierSelects = document.querySelectorAll('#templateSuppliersContainer select[data-role="component-supplier"]');
+    console.log('Supplier selects found:', supplierSelects.length);
+    
+    // تسجيل جميع الموردين المحددين
+    const suppliersData = [];
+    supplierSelects.forEach((select, index) => {
+        suppliersData.push({
+            index: index,
+            name: select.name,
+            value: select.value,
+            selectedText: select.options[select.selectedIndex]?.text || 'N/A'
+        });
+    });
+    console.log('Suppliers data:', suppliersData);
 
     if (supplierSelects.length === 0) {
-            e.preventDefault();
+        console.error('ERROR: No supplier selects found!');
+        e.preventDefault();
         alert('لا توجد مواد مرتبطة بالقالب، يرجى مراجعة القالب قبل إنشاء التشغيلة.');
+        return false;
+    }
+
+    for (let select of supplierSelects) {
+        if (!select.value || select.value.trim() === '') {
+            console.error('ERROR: Empty supplier value found:', select.name);
+            e.preventDefault();
+            alert('يرجى اختيار المورد المناسب لهذه المادة للمتابعة');
+            select.focus();
             return false;
         }
-
-        for (let select of supplierSelects) {
-            if (!select.value) {
-                e.preventDefault();
-                alert('يرجى اختيار المورد المناسب لهذه المادة للمتابعة');
-                select.focus();
-                return false;
-            }
     }
+    
+    console.log('All suppliers validated successfully');
 
     const honeyVarietyFields = document.querySelectorAll('#templateSuppliersContainer [data-role="honey-variety"]');
     for (let field of honeyVarietyFields) {
@@ -9537,11 +9594,31 @@ document.getElementById('createFromTemplateForm')?.addEventListener('submit', fu
 
     // التحقق من الكمية
     if (!quantity || parseInt(quantity) <= 0) {
+        console.error('ERROR: Invalid quantity:', quantity);
         e.preventDefault();
         alert('يرجى إدخال كمية صحيحة أكبر من الصفر');
         document.querySelector('input[name="quantity"]').focus();
         return false;
     }
+    
+    // تسجيل جميع البيانات قبل الإرسال
+    const formData = new FormData(this);
+    const formDataObj = {};
+    for (let [key, value] of formData.entries()) {
+        if (formDataObj[key]) {
+            // إذا كان المفتاح موجوداً بالفعل، حوّله إلى مصفوفة
+            if (Array.isArray(formDataObj[key])) {
+                formDataObj[key].push(value);
+            } else {
+                formDataObj[key] = [formDataObj[key], value];
+            }
+        } else {
+            formDataObj[key] = value;
+        }
+    }
+    console.log('Form data to be submitted:', formDataObj);
+    console.log('Material suppliers in form data:', formDataObj['material_suppliers']);
+    console.log('=== FORM SUBMIT END - PROCEEDING ===');
 });
 
 document.getElementById('createFromTemplateModal')?.addEventListener('shown.bs.modal', function() {
@@ -10157,6 +10234,15 @@ window.addEventListener('beforeunload', function(e) {
 
 // التحقق من رسالة الخطأ الخاصة بالطلب المكرر وتحديث الصفحة تلقائياً
 function checkForDuplicateRequestError() {
+    // استثناء صفحة tasks من إعادة التوجيه التلقائية
+    const currentUrl = window.location.href || '';
+    const isTasksPage = currentUrl.includes('page=tasks') || 
+                       currentUrl.includes('tasks.php');
+    
+    if (isTasksPage) {
+        return; // لا نتحقق من رسائل الخطأ في صفحة tasks - منع إعادة التوجيه
+    }
+    
     const errorAlerts = document.querySelectorAll('.alert-danger');
     errorAlerts.forEach(function(alert) {
         const alertText = alert.textContent || alert.innerText;

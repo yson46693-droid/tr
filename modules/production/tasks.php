@@ -17,6 +17,16 @@ require_once __DIR__ . '/../../includes/table_styles.php';
 
 requireRole(['production', 'accountant', 'manager']);
 
+// إضافة cache headers لمنع تخزين الصفحة والتأكد من جلب البيانات المحدثة
+// هذه headers ضرورية لمنع المتصفح من استخدام cached version
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
+    header('Pragma: no-cache');
+    header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+    header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
+    header('ETag: "' . md5(time() . rand()) . '"');
+}
+
 $currentUser = getCurrentUser();
 $db = db();
 
@@ -447,12 +457,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
 
         $result = tasksHandleAction($action, $_POST, $context);
-        if ($result['error']) {
-            tasksAddMessage($errorMessages, $result['error']);
-        } elseif ($result['success']) {
-            tasksAddMessage($successMessages, $result['success']);
+        
+        // POST-Redirect-GET pattern لمنع مشاكل الـ cache والتحديث
+        // بناء URL بشكل صحيح مع الحفاظ على page parameter
+        $queryParams = [];
+        
+        // الحفاظ على جميع معاملات GET الحالية (pagination, search, filters)
+        $queryParams['page'] = 'tasks'; // التأكد من وجود page=tasks
+        
+        // الحفاظ على معاملات GET الأخرى
+        if (isset($_GET['p']) && (int)$_GET['p'] > 0) {
+            $queryParams['p'] = (int)$_GET['p'];
         }
+        if (isset($_GET['search']) && $_GET['search'] !== '') {
+            $queryParams['search'] = $_GET['search'];
+        }
+        if (isset($_GET['status']) && $_GET['status'] !== '') {
+            $queryParams['status'] = $_GET['status'];
+        }
+        if (isset($_GET['priority']) && $_GET['priority'] !== '') {
+            $queryParams['priority'] = $_GET['priority'];
+        }
+        if (isset($_GET['assigned']) && (int)$_GET['assigned'] > 0) {
+            $queryParams['assigned'] = (int)$_GET['assigned'];
+        }
+        
+        // إضافة رسالة النجاح أو الخطأ كمعاملات GET
+        if ($result['error']) {
+            $queryParams['error'] = $result['error'];
+        } elseif ($result['success']) {
+            $queryParams['success'] = $result['success'];
+        }
+        
+        // بناء URL نهائي مع timestamp لفرض reload من السيرفر
+        $queryParams['_r'] = time(); // إضافة timestamp لفرض reload من السيرفر
+        $finalUrl = getRelativeUrl('production.php?' . http_build_query($queryParams));
+        
+        // Redirect بعد POST مع cache-busting headers قوية
+        if (!headers_sent()) {
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
+            header('Pragma: no-cache');
+            header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+            header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
+            header('ETag: "' . md5(time() . rand()) . '"');
+            header('Location: ' . $finalUrl, true, 303);
+        }
+        exit;
     }
+}
+
+// قراءة رسائل النجاح/الخطأ من معاملات GET بعد redirect
+$successMessage = isset($_GET['success']) ? urldecode($_GET['success']) : '';
+$errorMessage = isset($_GET['error']) ? urldecode($_GET['error']) : '';
+
+if ($successMessage !== '') {
+    tasksAddMessage($successMessages, $successMessage);
+}
+
+if ($errorMessage !== '') {
+    tasksAddMessage($errorMessages, $errorMessage);
+}
+
+// إزالة معامل _r من URL بعد التحميل
+if (isset($_GET['_r'])) {
+    // سيتم إزالته عبر JavaScript لضمان تحديث الصفحة أولاً
 }
 
 $pageNum = isset($_GET['p']) ? max(1, (int) $_GET['p']) : 1;
@@ -609,14 +677,14 @@ function tasksHtml(string $value): string
 
 <div class="container-fluid">
     <?php foreach ($errorMessages as $message): ?>
-        <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" data-auto-refresh="true" role="alert">
+        <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" role="alert">
             <i class="bi bi-exclamation-triangle me-2"></i><?php echo tasksHtml($message); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
         </div>
     <?php endforeach; ?>
 
     <?php foreach ($successMessages as $message): ?>
-        <div class="alert alert-success alert-dismissible fade show" id="successAlert" data-auto-refresh="true" role="alert">
+        <div class="alert alert-success alert-dismissible fade show" id="successAlert" role="alert">
             <i class="bi bi-check-circle me-2"></i><?php echo tasksHtml($message); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
         </div>
@@ -800,7 +868,7 @@ function tasksHtml(string $value): string
                                     && !empty($task['due_date'])
                                     && strtotime((string) $task['due_date']) < time();
                                 ?>
-                                <tr class="<?php echo $overdue ? 'table-danger' : ''; ?>">
+                                <tr class="<?php echo $overdue ? 'table-danger' : ''; ?>" data-task-id="<?php echo (int) $task['id']; ?>">
                                     <td><?php echo $rowNumber; ?></td>
                                     <td>
                                         <strong><?php echo tasksHtml($task['title'] ?? ''); ?></strong>
@@ -1234,27 +1302,248 @@ function tasksHtml(string $value): string
 })();
 </script>
 
-<!-- إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات -->
+<!-- آلية منع Cache وضمان تحديث البيانات -->
 <script>
-// إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات
 (function() {
+    'use strict';
+    
+    // إزالة معاملات timestamp من URL بعد التحميل
+    const url = new URL(window.location.href);
+    let urlChanged = false;
+    
+    ['_t', '_r', '_refresh'].forEach(function(param) {
+        if (url.searchParams.has(param)) {
+            url.searchParams.delete(param);
+            urlChanged = true;
+        }
+    });
+    
+    if (urlChanged) {
+        window.history.replaceState({}, '', url.toString());
+    }
+    
+    // التحقق من وجود رسالة نجاح أو خطأ
+    // تم إزالة إعادة التوجيه التلقائية بعد 1.5 ثانية لمنع إعادة التوجيه غير المرغوب
+    // يمكن للمستخدم إغلاق الرسالة يدوياً أو الانتظار حتى تختفي تلقائياً
     const successAlert = document.getElementById('successAlert');
     const errorAlert = document.getElementById('errorAlert');
     
-    // التحقق من وجود رسالة نجاح أو خطأ
-    const alertElement = successAlert || errorAlert;
-    
-    if (alertElement && alertElement.dataset.autoRefresh === 'true') {
-        // انتظار 3 ثوانٍ لإعطاء المستخدم وقتاً لرؤية الرسالة
-        setTimeout(function() {
-            // إعادة تحميل الصفحة بدون معاملات GET لمنع تكرار الطلبات
-            const currentUrl = new URL(window.location.href);
-            // إزالة معاملات success و error من URL
-            currentUrl.searchParams.delete('success');
-            currentUrl.searchParams.delete('error');
-            // إعادة تحميل الصفحة
-            window.location.href = currentUrl.toString();
-        }, 3000);
+    // إزالة معاملات success/error من URL بدون إعادة تحميل
+    if (successAlert || errorAlert) {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('success') || url.searchParams.has('error')) {
+            url.searchParams.delete('success');
+            url.searchParams.delete('error');
+            window.history.replaceState({}, '', url.toString());
+        }
     }
+    
+    // === حل جذري: منع استخدام cache عند CTRL+R أو F5 ===
+    
+    const PAGE_LOAD_KEY = 'tasks_page_load_timestamp';
+    const FORCE_RELOAD_KEY = 'tasks_force_reload';
+    
+    // حفظ timestamp عند تحميل الصفحة
+    try {
+        const currentTimestamp = Date.now().toString();
+        const previousTimestamp = sessionStorage.getItem(PAGE_LOAD_KEY);
+        
+        // إذا كان هناك timestamp سابق، فهذا يعني refresh
+        if (previousTimestamp && previousTimestamp !== currentTimestamp) {
+            sessionStorage.setItem(FORCE_RELOAD_KEY, 'true');
+        }
+        
+        sessionStorage.setItem(PAGE_LOAD_KEY, currentTimestamp);
+    } catch (e) {
+        // تجاهل إذا كان sessionStorage غير متاح
+    }
+    
+    // تم تعطيل معالجة pageshow event لمنع إعادة التوجيه غير المرغوب
+    // يمكن للمستخدم استخدام F5 أو CTRL+R يدوياً عند الحاجة
+    // window.addEventListener('pageshow', function(event) {
+    //     // كود معطل لمنع إعادة التوجيه التلقائية
+    // });
+    
+    // عند الضغط على F5 أو CTRL+R، احفظ flag قبل reload
+    window.addEventListener('beforeunload', function() {
+        try {
+            sessionStorage.setItem(FORCE_RELOAD_KEY, 'true');
+        } catch (e) {
+            // تجاهل
+        }
+    });
+    
+    // إضافة meta tags لمنع cache
+    if (!document.querySelector('meta[http-equiv="Cache-Control"]')) {
+        const metaCache = document.createElement('meta');
+        metaCache.httpEquiv = 'Cache-Control';
+        metaCache.content = 'no-cache, no-store, must-revalidate';
+        document.head.appendChild(metaCache);
+    }
+    
+    if (!document.querySelector('meta[http-equiv="Pragma"]')) {
+        const metaPragma = document.createElement('meta');
+        metaPragma.httpEquiv = 'Pragma';
+        metaPragma.content = 'no-cache';
+        document.head.appendChild(metaPragma);
+    }
+    
+    if (!document.querySelector('meta[http-equiv="Expires"]')) {
+        const metaExpires = document.createElement('meta');
+        metaExpires.httpEquiv = 'Expires';
+        metaExpires.content = '0';
+        document.head.appendChild(metaExpires);
+    }
+})();
+</script>
+
+<!-- آلية التحديث التلقائي للمهام (Auto-refresh/Polling) -->
+<script>
+(function() {
+    'use strict';
+    
+    // التحقق من أننا في صفحة المهام
+    if (!window.location.search.includes('page=tasks')) {
+        return;
+    }
+    
+    let autoRefreshInterval = null;
+    let lastUpdateTimestamp = null;
+    let isRefreshing = false;
+    
+    // دالة جلب المهام من API
+    async function fetchTasks() {
+        if (isRefreshing) {
+            return; // منع طلبات متعددة في نفس الوقت
+        }
+        
+        try {
+            isRefreshing = true;
+            
+            // بناء URL مع جميع المعاملات الحالية
+            const currentUrl = new URL(window.location.href);
+            const apiUrl = '/api/tasks.php?' + currentUrl.searchParams.toString();
+            
+            const response = await fetch(apiUrl, {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch tasks');
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.data) {
+                const newTasks = data.data.tasks || [];
+                const newStats = data.data.stats || {};
+                const newTimestamp = data.data.timestamp || Date.now();
+                
+                // مقارنة مع المهام الحالية
+                if (lastUpdateTimestamp && newTimestamp > lastUpdateTimestamp) {
+                    // هناك تحديثات جديدة
+                    const currentTasksIds = new Set(
+                        Array.from(document.querySelectorAll('[data-task-id]')).map(el => el.getAttribute('data-task-id'))
+                    );
+                    
+                    const newTasksIds = new Set(newTasks.map(t => String(t.id)));
+                    
+                    // التحقق من وجود مهام جديدة أو تغييرات
+                    let hasNewTasks = false;
+                    let hasChanges = false;
+                    
+                    // التحقق من المهام الجديدة
+                    for (const task of newTasks) {
+                        const taskId = String(task.id);
+                        if (!currentTasksIds.has(taskId)) {
+                            hasNewTasks = true;
+                            break;
+                        }
+                    }
+                    
+                    // التحقق من التغييرات في الإحصائيات
+                    const totalTasksElement = document.querySelector('.card.border-primary h5');
+                    const pendingTasksElement = document.querySelector('.card.border-warning h5');
+                    
+                    if (totalTasksElement && totalTasksElement.textContent !== String(newStats.total || 0)) {
+                        hasChanges = true;
+                    } else if (pendingTasksElement && pendingTasksElement.textContent !== String(newStats.pending || 0)) {
+                        hasChanges = true;
+                    }
+                    
+                    // إذا كانت هناك مهام جديدة أو تغييرات، تحديث الصفحة بدون إعادة تحميل كاملة
+                    // تم تعطيل إعادة التوجيه التلقائية لمنع إعادة التوجيه غير المرغوب
+                    // يمكن للمستخدم تحديث الصفحة يدوياً عند الحاجة
+                    if (hasNewTasks || hasChanges) {
+                        // إظهار إشعار للمستخدم بدلاً من إعادة التوجيه التلقائية
+                        console.log('New tasks or changes detected. Please refresh the page manually if needed.');
+                        // يمكن إضافة إشعار بصري هنا بدلاً من إعادة التوجيه
+                    }
+                }
+                
+                lastUpdateTimestamp = newTimestamp;
+            }
+        } catch (error) {
+            console.error('Error fetching tasks:', error);
+        } finally {
+            isRefreshing = false;
+        }
+    }
+    
+    // بدء التحديث التلقائي - تم زيادة الفترة لتقليل الاستهلاك بشكل كبير
+    function startAutoRefresh() {
+        // تنظيف interval السابق إن وجد
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+        }
+        
+        // جلب المهام لأول مرة بعد 10 ثوان من تحميل الصفحة (زيادة من 2 ثانية)
+        setTimeout(function() {
+            fetchTasks();
+        }, 10000);
+        
+        // ثم كل 2 دقيقة (120 ثانية) لتقليل الاستهلاك بشكل كبير
+        autoRefreshInterval = setInterval(function() {
+            // التحقق من أن الصفحة مرئية ونشطة قبل الطلب
+            if (!document.hidden) {
+                fetchTasks();
+            }
+        }, 120000); // 2 دقيقة لتقليل الاستهلاك بشكل كبير
+    }
+    
+    // إيقاف التحديث التلقائي عند مغادرة الصفحة
+    function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+    }
+    
+    // بدء التحديث التلقائي عند تحميل الصفحة
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startAutoRefresh);
+    } else {
+        startAutoRefresh();
+    }
+    
+    // إيقاف التحديث عند مغادرة الصفحة
+    window.addEventListener('beforeunload', stopAutoRefresh);
+    
+    // إيقاف التحديث عندما تكون الصفحة غير مرئية (tab inactive)
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            stopAutoRefresh();
+        } else {
+            startAutoRefresh();
+        }
+    });
+    
+    // تنظيف عند إغلاق الصفحة
+    window.addEventListener('unload', stopAutoRefresh);
 })();
 </script>

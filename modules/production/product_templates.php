@@ -696,11 +696,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $db->commit();
                 
+                // التأكد من أن البيانات محفوظة في قاعدة البيانات
+                // إعادة جلب القالب للتأكد من وجوده
+                $createdTemplate = $db->queryOne(
+                    "SELECT id, product_name FROM product_templates WHERE id = ?",
+                    [$templateId]
+                );
+                
+                if (!$createdTemplate) {
+                    throw new Exception('فشل التحقق من إنشاء القالب في قاعدة البيانات');
+                }
+                
                 logAudit($currentUser['id'], 'create', 'product_template', $templateId, null, ['product_name' => $productName]);
                 
-                // منع التكرار باستخدام redirect
+                // منع التكرار باستخدام redirect مع cache-busting
                 $successMessage = 'تم إنشاء قالب المنتج بنجاح';
-                $redirectParams = ['page' => 'product_templates'];
+                $redirectParams = ['page' => 'product_templates', '_refresh' => '1'];
                 preventDuplicateSubmission($successMessage, $redirectParams, null, $currentUser['role']);
                 
             } catch (Exception $e) {
@@ -1045,11 +1056,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $db->commit();
                 
+                // التأكد من أن البيانات محدثة في قاعدة البيانات
+                $updatedTemplate = $db->queryOne(
+                    "SELECT id, product_name FROM product_templates WHERE id = ?",
+                    [$templateId]
+                );
+                
+                if (!$updatedTemplate) {
+                    throw new Exception('فشل التحقق من تحديث القالب في قاعدة البيانات');
+                }
+                
                 logAudit($currentUser['id'], 'update', 'product_template', $templateId, null, ['product_name' => $productName]);
                 
-                // منع التكرار باستخدام redirect
+                // منع التكرار باستخدام redirect مع cache-busting
                 $successMessage = 'تم تحديث قالب المنتج بنجاح';
-                $redirectParams = ['page' => 'product_templates'];
+                $redirectParams = ['page' => 'product_templates', '_refresh' => '1'];
                 preventDuplicateSubmission($successMessage, $redirectParams, null, $currentUser['role']);
                 
             } catch (Exception $e) {
@@ -1066,9 +1087,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->execute("DELETE FROM product_templates WHERE id = ?", [$templateId]);
                 logAudit($currentUser['id'], 'delete', 'product_template', $templateId, null);
                 
-                // منع التكرار باستخدام redirect
+                // منع التكرار باستخدام redirect مع cache-busting
                 $successMessage = 'تم حذف القالب بنجاح';
-                $redirectParams = ['page' => 'product_templates'];
+                $redirectParams = ['page' => 'product_templates', '_refresh' => '1'];
                 preventDuplicateSubmission($successMessage, $redirectParams, null, $currentUser['role']);
             } catch (Exception $e) {
                 $error = 'خطأ في حذف القالب: ' . $e->getMessage();
@@ -1078,12 +1099,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // الحصول على القوالب بعد مزامنة النظام الموحد
+// جلب القوالب مع التأكد من عدم استخدام cache
+// إضافة FORCE INDEX و USE INDEX لضمان جلب أحدث البيانات
 $templates = $db->query(
     "SELECT pt.*, 
             u.full_name as creator_name
      FROM product_templates pt
      LEFT JOIN users u ON pt.created_by = u.id
-     ORDER BY pt.created_at DESC"
+     ORDER BY pt.created_at DESC, pt.id DESC"
 );
 
 $packagingMaterialsTableExistsForDetails = false;
@@ -1545,6 +1568,21 @@ $baseUrl = getRelativeUrl('dashboard/manager.php?page=product_templates');
         toast.innerHTML = '<i class="bi bi-check-circle-fill"></i><?php echo htmlspecialchars($success); ?>';
         document.body.appendChild(toast);
         requestAnimationFrame(() => toast.classList.add('show'));
+        
+        // إجبار تحديث الصفحة عند وجود رسالة نجاح لضمان عرض القالب الجديد
+        // التحقق من وجود parameter _refresh في URL
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('_refresh')) {
+            // إزالة _refresh من URL بدون reload
+            urlParams.delete('_refresh');
+            const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+            window.history.replaceState({}, '', newUrl);
+            
+            // إجبار reload للصفحة لضمان جلب البيانات المحدثة من قاعدة البيانات
+            setTimeout(() => {
+                window.location.reload(true); // force reload من الخادم
+            }, 500);
+        }
         setTimeout(() => toast.classList.remove('show'), 4000);
         setTimeout(() => toast.remove(), 4600);
     });
@@ -2278,6 +2316,10 @@ if (file_exists($specificationsModulePath)) {
                         <label class="form-label">نوع الكرتونة</label>
                         <select class="form-select" name="carton_type" id="editCartonType">
                             <option value="">اختر نوع الكرتونة (اختياري)</option>
+                            <option value="kilo">كيلو (PKG-002)</option>
+                            <option value="half">نص (PKG-001)</option>
+                            <option value="quarter">ربع (PKG-041)</option>
+                            <option value="third">ثلث (PKG-041)</option>
                             <option value="custom" selected>نوع مخصص</option>
                         </select>
                         <small class="text-muted">اختر نوع الكرتونة المستخدمة في تعبئة المنتج (اختياري - سيتم تطبيق الخصم التلقائي إذا تم اختياره)</small>

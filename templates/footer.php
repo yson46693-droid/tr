@@ -29,26 +29,244 @@ if (!defined('ACCESS_ALLOWED')) {
         </div>
     </footer>
     
-    <!-- Session Keep-Alive Script -->
+    <!-- حل شامل لحذف Cache بعد أي طلب في أي نموذج -->
     <script>
     (function() {
-        // تحديث الجلسة تلقائياً كل 10 دقائق عند وجود نشاط
+        'use strict';
+        
+        // منع تخزين الصفحة في cache عند عمل refresh
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) {
+                // إذا كانت الصفحة من cache، أعد تحميلها من السيرفر
+                window.location.reload(true);
+            }
+        });
+        
+        // معالجة جميع النماذج لحذف cache بعد الإرسال
+        function setupFormCacheBusting() {
+            document.querySelectorAll('form[method="POST"]').forEach(function(form) {
+                // التحقق من عدم إضافة listener مرتين
+                if (form.dataset.cacheBustingSetup === 'true') {
+                    return;
+                }
+                form.dataset.cacheBustingSetup = 'true';
+                
+                form.addEventListener('submit', function(e) {
+                    // حفظ flag في sessionStorage أن هناك طلب جديد
+                    try {
+                        sessionStorage.setItem('form_submitted_' + Date.now(), 'true');
+                        sessionStorage.setItem('last_form_submit_time', Date.now().toString());
+                    } catch (err) {
+                        // تجاهل إذا كان sessionStorage غير متاح
+                    }
+                    
+                    // إضافة timestamp كمعامل خفي لفرض reload من السيرفر
+                    const timestamp = Date.now();
+                    let hasTimestampInput = false;
+                    
+                    // التحقق من وجود input timestamp
+                    const existingInputs = form.querySelectorAll('input[type="hidden"]');
+                    for (let input of existingInputs) {
+                        if (input.name === '_cache_bust' || input.name === '_t' || input.name === '_nocache') {
+                            input.value = timestamp;
+                            hasTimestampInput = true;
+                            break;
+                        }
+                    }
+                    
+                    // إضافة input timestamp إذا لم يكن موجوداً
+                    if (!hasTimestampInput) {
+                        const timestampInput = document.createElement('input');
+                        timestampInput.type = 'hidden';
+                        timestampInput.name = '_cache_bust';
+                        timestampInput.value = timestamp;
+                        form.appendChild(timestampInput);
+                    }
+                });
+            });
+        }
+        
+        // تهيئة عند تحميل الصفحة
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupFormCacheBusting);
+        } else {
+            setupFormCacheBusting();
+        }
+        
+        // إعادة تهيئة عند إضافة نماذج ديناميكية
+        if (typeof MutationObserver !== 'undefined') {
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.addedNodes.length > 0) {
+                        mutation.addedNodes.forEach(function(node) {
+                            if (node.nodeType === 1) {
+                                // التحقق من إضافة نماذج جديدة
+                                if (node.tagName === 'FORM' && node.method === 'POST') {
+                                    setupFormCacheBusting();
+                                } else if (node.querySelectorAll) {
+                                    const forms = node.querySelectorAll('form[method="POST"]');
+                                    if (forms.length > 0) {
+                                        setupFormCacheBusting();
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        }
+        
+        // عند تحميل الصفحة، التحقق من وجود طلبات حديثة
+        window.addEventListener('load', function() {
+            try {
+                const lastSubmitTime = sessionStorage.getItem('last_form_submit_time');
+                if (lastSubmitTime) {
+                    const timeDiff = Date.now() - parseInt(lastSubmitTime);
+                    // إذا كان الطلب منذ أقل من 30 ثانية، أزل cache parameters من URL
+                    if (timeDiff < 30000) {
+                        const url = new URL(window.location.href);
+                        let urlChanged = false;
+                        
+                        ['_cache_bust', '_t', '_nocache', '_r', '_refresh', '_auto_refresh'].forEach(function(param) {
+                            if (url.searchParams.has(param)) {
+                                url.searchParams.delete(param);
+                                urlChanged = true;
+                            }
+                        });
+                        
+                        if (urlChanged) {
+                            window.history.replaceState({}, '', url.toString());
+                        }
+                    }
+                }
+            } catch (e) {
+                // تجاهل
+            }
+        });
+        
+        // إضافة meta tags لمنع cache في جميع الصفحات
+        if (!document.querySelector('meta[http-equiv="Cache-Control"][content*="no-cache"]')) {
+            const metaCache = document.createElement('meta');
+            metaCache.httpEquiv = 'Cache-Control';
+            metaCache.content = 'no-cache, no-store, must-revalidate, max-age=0';
+            document.head.insertBefore(metaCache, document.head.firstChild);
+        }
+        
+        if (!document.querySelector('meta[http-equiv="Pragma"]')) {
+            const metaPragma = document.createElement('meta');
+            metaPragma.httpEquiv = 'Pragma';
+            metaPragma.content = 'no-cache';
+            document.head.appendChild(metaPragma);
+        }
+        
+        if (!document.querySelector('meta[http-equiv="Expires"]')) {
+            const metaExpires = document.createElement('meta');
+            metaExpires.httpEquiv = 'Expires';
+            metaExpires.content = '0';
+            document.head.appendChild(metaExpires);
+        }
+    })();
+    </script>
+    
+    <!-- Session Keep-Alive Script - محسّن لمنع انتهاء الجلسة -->
+    <script>
+    (function() {
+        if (window.__sessionKeepAliveActive) {
+            return; // منع التكرار
+        }
+        window.__sessionKeepAliveActive = true;
+        
         let lastActivity = Date.now();
-        const SESSION_REFRESH_INTERVAL = 10 * 60 * 1000; // 10 دقائق
-        const ACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 دقائق
+        const SESSION_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 دقائق (تقليل الفترة لمنع الانتهاء)
+        const ACTIVITY_TIMEOUT = 10 * 60 * 1000; // 10 دقائق
         
         // تتبع النشاط
-        const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+        const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click', 'keydown'];
         let activityTimer;
+        let keepAliveInterval;
+        let isRefreshing = false;
+        
+        // حساب مسار API
+        function getApiPath(endpoint) {
+            const cleanEndpoint = String(endpoint || '').replace(/^\/+/, '');
+            const currentPath = window.location.pathname || '/';
+            const parts = currentPath.split('/').filter(Boolean);
+            const stopSegments = new Set(['dashboard', 'modules', 'api', 'assets', 'includes']);
+            const baseParts = [];
+            
+            for (const part of parts) {
+                if (stopSegments.has(part) || part.endsWith('.php')) {
+                    break;
+                }
+                baseParts.push(part);
+            }
+            
+            const basePath = baseParts.length ? '/' + baseParts.join('/') : '';
+            const apiPath = (basePath + '/' + cleanEndpoint).replace(/\/+/g, '/');
+            return apiPath.startsWith('/') ? apiPath : '/' + apiPath;
+        }
         
         function updateActivity() {
             lastActivity = Date.now();
             clearTimeout(activityTimer);
+        }
+        
+        // تحديث الجلسة عبر API المخصص
+        function refreshSession() {
+            if (isRefreshing) {
+                return; // منع الطلبات المتزامنة
+            }
             
-            // تحديث الجلسة عند النشاط
-            activityTimer = setTimeout(function() {
-                refreshSession();
-            }, ACTIVITY_TIMEOUT);
+            const timeSinceActivity = Date.now() - lastActivity;
+            // تحديث فقط إذا كان هناك نشاط
+            if (timeSinceActivity > ACTIVITY_TIMEOUT) {
+                return;
+            }
+            
+            isRefreshing = true;
+            const apiPath = getApiPath('api/session_keepalive.php');
+            
+            fetch(apiPath, {
+                method: 'GET',
+                cache: 'no-cache',
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(function(response) {
+                if (!response.ok) {
+                    return response.json().then(function(data) {
+                        if (data && data.expired) {
+                            // الجلسة انتهت - إعادة توجيه
+                            const loginUrl = '/index.php';
+                            if (window.location.pathname !== loginUrl) {
+                                window.location.href = loginUrl;
+                            }
+                        }
+                        throw new Error('Session refresh failed');
+                    });
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                if (data && data.success) {
+                    // تحديث ناجح
+                    lastActivity = Date.now();
+                }
+            })
+            .catch(function(error) {
+                // تجاهل الأخطاء في تحديث الجلسة (لا نريد إزعاج المستخدم)
+                console.log('Session keep-alive:', error.message || 'refresh skipped');
+            })
+            .finally(function() {
+                isRefreshing = false;
+            });
         }
         
         // إضافة مستمعي الأحداث للنشاط
@@ -56,30 +274,30 @@ if (!defined('ACCESS_ALLOWED')) {
             document.addEventListener(event, updateActivity, { passive: true });
         });
         
-        // تحديث الجلسة بشكل دوري
-        function refreshSession() {
-            // تحديث الجلسة عبر طلب AJAX بسيط
-            fetch(window.location.href, {
-                method: 'HEAD',
-                cache: 'no-cache',
-                credentials: 'same-origin'
-            }).catch(function(error) {
-                // تجاهل الأخطاء في تحديث الجلسة
-                console.log('Session refresh skipped');
-            });
-        }
-        
-        // تحديث الجلسة كل 10 دقائق
-        setInterval(function() {
-            const timeSinceActivity = Date.now() - lastActivity;
-            // تحديث فقط إذا كان هناك نشاط في آخر 5 دقائق
-            if (timeSinceActivity < ACTIVITY_TIMEOUT) {
-                refreshSession();
-            }
+        // تحديث الجلسة كل 5 دقائق
+        keepAliveInterval = setInterval(function() {
+            refreshSession();
         }, SESSION_REFRESH_INTERVAL);
         
-        // تحديث أولي بعد تحميل الصفحة
-        setTimeout(refreshSession, 30000); // بعد 30 ثانية من تحميل الصفحة
+        // تحديث أولي بعد تحميل الصفحة (بعد 30 ثانية)
+        setTimeout(refreshSession, 30000);
+        
+        // تحديث قبل مغادرة الصفحة
+        window.addEventListener('beforeunload', function() {
+            if (keepAliveInterval) {
+                clearInterval(keepAliveInterval);
+            }
+            // محاولة تحديث نهائي قبل المغادرة (غير متزامن)
+            navigator.sendBeacon && navigator.sendBeacon(getApiPath('api/session_keepalive.php'));
+        });
+        
+        // تحديث عند العودة للصفحة
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                // تحديث فوري عند العودة
+                setTimeout(refreshSession, 1000);
+            }
+        });
     })();
     </script>
     
@@ -297,10 +515,10 @@ if (!defined('ACCESS_ALLOWED')) {
                 });
             }
             
-            // إعداد معلمات الإشعارات العالمية
+            // إعداد معلمات الإشعارات العالمية (محسّن للأداء)
             window.NOTIFICATION_POLL_INTERVAL = <?php echo (int) NOTIFICATION_POLL_INTERVAL; ?>;
             window.NOTIFICATION_AUTO_REFRESH_ENABLED = <?php echo NOTIFICATION_AUTO_REFRESH_ENABLED ? 'true' : 'false'; ?>;
-            window.NOTIFICATION_POLL_INTERVAL = Number(window.NOTIFICATION_POLL_INTERVAL) || 60000;
+            window.NOTIFICATION_POLL_INTERVAL = Number(window.NOTIFICATION_POLL_INTERVAL) || 30000; // 30 ثانية افتراضياً
             if (typeof loadNotifications === 'function') {
                 if (!window.__notificationInitialLoadDone) {
                     loadNotifications();
@@ -697,6 +915,13 @@ if (!defined('ACCESS_ALLOWED')) {
      * تحديث عداد الموافقات المعلقة للمديرين
      */
     (function() {
+        // التحقق من أن المستخدم مدير قبل تشغيل الكود
+        const currentUserRole = '<?php echo $currentUser['role'] ?? ''; ?>';
+        if (currentUserRole !== 'manager') {
+            // المستخدم ليس مدير - لا نحتاج لتحديث العداد
+            return;
+        }
+        
         async function updateApprovalBadge() {
             try {
                 const badge = document.getElementById('approvalBadge');
@@ -715,7 +940,17 @@ if (!defined('ACCESS_ALLOWED')) {
                     }
                 });
                 
+                // التعامل مع 403 (Forbidden) بشكل صحيح - هذا ليس خطأ في الجلسة
+                if (response.status === 403) {
+                    // المستخدم ليس مدير - إخفاء العداد
+                    if (badge) {
+                        badge.style.display = 'none';
+                    }
+                    return;
+                }
+                
                 if (!response.ok) {
+                    // تجاهل الأخطاء الأخرى (401, 500, etc.) - لا نريد إزعاج المستخدم
                     return;
                 }
                 
@@ -766,13 +1001,21 @@ if (!defined('ACCESS_ALLOWED')) {
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', function() {
                 updateApprovalBadge();
-                // تحديث العداد كل 30 ثانية
-                setInterval(updateApprovalBadge, 30000);
+                // تحديث العداد كل 2 دقيقة (120 ثانية) لتقليل الاستهلاك
+                setInterval(function() {
+                    if (!document.hidden) {
+                        updateApprovalBadge();
+                    }
+                }, 120000);
             });
         } else {
             updateApprovalBadge();
-            // تحديث العداد كل 30 ثانية
-            setInterval(updateApprovalBadge, 30000);
+            // تحديث العداد كل 2 دقيقة (120 ثانية) لتقليل الاستهلاك
+            setInterval(function() {
+                if (!document.hidden) {
+                    updateApprovalBadge();
+                }
+            }, 120000);
         }
         
         // تحديث العداد عند استلام حدث
@@ -782,6 +1025,246 @@ if (!defined('ACCESS_ALLOWED')) {
     })();
     </script>
     <?php endif; ?>
+    
+    <!-- Error Handler: منع عرض ERR_FAILED وإعادة التوجيه تلقائياً -->
+    <script>
+    (function() {
+        'use strict';
+        
+        // منع التكرار
+        if (window.__errorHandlerActive) {
+            return;
+        }
+        window.__errorHandlerActive = true;
+        
+        // حساب مسار صفحة تسجيل الدخول
+        function getLoginUrl() {
+            const currentPath = window.location.pathname || '/';
+            const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+            const basePath = pathParts.length ? '/' + pathParts[0] : '';
+            return basePath ? basePath + '/index.php' : '/index.php';
+        }
+        
+        // إعادة التوجيه إلى صفحة تسجيل الدخول
+        function redirectToLogin() {
+            const loginUrl = getLoginUrl();
+            // استخدام replace بدلاً من href لمنع إضافة صفحة إلى history
+            window.location.replace(loginUrl);
+        }
+        
+        // التحقق من حالة الصفحة
+        function checkPageStatus() {
+            // التحقق من أن الصفحة تم تحميلها بشكل صحيح
+            if (document.readyState === 'complete') {
+                // استثناء صفحات معينة من التحقق (مثل tasks.php التي قد تستغرق وقتاً في التحميل)
+                const currentUrl = window.location.href || '';
+                const currentPath = window.location.pathname || '';
+                
+                // قائمة الصفحات المستثناة من التحقق التلقائي
+                const excludedPages = [
+                    'tasks.php',
+                    'page=tasks',
+                    'production.php?page=tasks',
+                    'manager.php?page=tasks'
+                ];
+                
+                // إذا كانت الصفحة الحالية في قائمة الاستثناءات، لا نتحقق منها
+                const isExcluded = excludedPages.some(page => 
+                    currentUrl.includes(page) || currentPath.includes(page)
+                );
+                
+                if (isExcluded) {
+                    return; // لا نتحقق من هذه الصفحة
+                }
+                
+                // التحقق من وجود محتوى أساسي في الصفحة
+                const mainContent = document.getElementById('main-content') || document.querySelector('main') || document.body;
+                
+                // تحسين المنطق: التحقق من وجود محتوى فعلي وليس فقط عدد العناصر
+                const hasContent = mainContent && (
+                    mainContent.children.length > 0 || 
+                    mainContent.innerHTML.trim().length > 500 || // زيادة الحد الأدنى من 100 إلى 500
+                    document.querySelector('.container-fluid') ||
+                    document.querySelector('.card') ||
+                    document.querySelector('table') ||
+                    document.querySelector('form')
+                );
+                
+                if (!hasContent && document.body.innerHTML.trim().length < 500) {
+                    // الصفحة فارغة أو لم يتم تحميلها - إعادة التوجيه
+                    console.warn('Page appears empty or failed to load - redirecting to login');
+                    redirectToLogin();
+                    return;
+                }
+            }
+        }
+        
+        // معالجة أخطاء التحميل
+        window.addEventListener('error', function(event) {
+            // التحقق من أخطاء الشبكة أو التحميل
+            if (event.target && (event.target.tagName === 'SCRIPT' || event.target.tagName === 'LINK')) {
+                const src = event.target.src || event.target.href || '';
+                // إذا كان الخطأ في تحميل ملف مهم (مثل main.js أو header)
+                if (src.includes('.js') || src.includes('.css')) {
+                    console.warn('Failed to load resource:', src);
+                    // لا نعيد التوجيه فوراً - قد يكون خطأ مؤقت
+                }
+            }
+        }, true);
+        
+        // معالجة أخطاء Promise غير المعالجة
+        window.addEventListener('unhandledrejection', function(event) {
+            const error = event.reason;
+            if (error && typeof error === 'object') {
+                const errorMessage = error.message || error.toString() || '';
+                // التحقق من أخطاء الشبكة أو ERR_FAILED
+                if (errorMessage.includes('ERR_FAILED') || 
+                    errorMessage.includes('Failed to fetch') || 
+                    errorMessage.includes('NetworkError') ||
+                    errorMessage.includes('Load failed')) {
+                    console.warn('Network error detected:', errorMessage);
+                    
+                    // استثناء صفحات tasks من إعادة التوجيه التلقائية
+                    const currentUrl = window.location.href || '';
+                    const isTasksPage = currentUrl.includes('tasks.php') || 
+                                       currentUrl.includes('page=tasks') ||
+                                       currentUrl.includes('production.php?page=tasks') ||
+                                       currentUrl.includes('manager.php?page=tasks');
+                    
+                    if (!isTasksPage) {
+                        // إعادة التوجيه بعد تأخير قصير (فقط للصفحات غير tasks)
+                        setTimeout(redirectToLogin, 1000);
+                    } else {
+                        console.warn('Tasks page detected - skipping auto-redirect');
+                    }
+                }
+            }
+        });
+        
+        // التحقق من حالة الاتصال
+        window.addEventListener('online', function() {
+            // عند الاتصال بالإنترنت، تحقق من حالة الصفحة بعد تأخير أطول
+            setTimeout(checkPageStatus, 5000);
+        });
+        
+        window.addEventListener('offline', function() {
+            // عند انقطاع الاتصال، لا نعيد التوجيه فوراً
+            // سننتظر حتى يعود الاتصال
+        });
+        
+        // التحقق من حالة الصفحة بعد التحميل
+        // زيادة التأخير لمنح الصفحات وقتاً أطول للتحميل (خاصة tasks.php)
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                // تأخير أطول (5 ثوانٍ بدلاً من 1 ثانية) لمنح الصفحات وقتاً للتحميل
+                setTimeout(checkPageStatus, 5000);
+            });
+        } else {
+            setTimeout(checkPageStatus, 5000);
+        }
+        
+        // التحقق من حالة الصفحة بعد تحميلها بالكامل
+        window.addEventListener('load', function() {
+            // تأخير أطول (3 ثوانٍ بدلاً من 500ms) لمنح الصفحات وقتاً للتحميل
+            setTimeout(checkPageStatus, 3000);
+        });
+        
+        // معالجة أخطاء fetch (للطلبات AJAX)
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+            return originalFetch.apply(this, args)
+                .catch(function(error) {
+                    // التحقق من أخطاء ERR_FAILED
+                    if (error && (error.message && (
+                        error.message.includes('ERR_FAILED') ||
+                        error.message.includes('Failed to fetch') ||
+                        error.message.includes('NetworkError')
+                    ))) {
+                        console.warn('Fetch error detected:', error.message);
+                        // إذا كان الخطأ في طلب مهم (مثل session check)، أعد التوجيه
+                        const url = args[0] || '';
+                        if (typeof url === 'string' && (
+                            url.includes('check_session') ||
+                            url.includes('session_keepalive') ||
+                            url.includes('isLoggedIn')
+                        )) {
+                            // استثناء صفحات tasks من إعادة التوجيه التلقائية
+                            const currentUrl = window.location.href || '';
+                            const isTasksPage = currentUrl.includes('tasks.php') || 
+                                               currentUrl.includes('page=tasks') ||
+                                               currentUrl.includes('production.php?page=tasks') ||
+                                               currentUrl.includes('manager.php?page=tasks');
+                            
+                            if (!isTasksPage) {
+                                setTimeout(redirectToLogin, 1000);
+                            } else {
+                                console.warn('Tasks page detected - skipping auto-redirect for fetch error');
+                            }
+                        }
+                    }
+                    throw error;
+                });
+        };
+        
+        // مراقبة تغييرات الصفحة (للتحقق من أخطاء التوجيه) - تقليل التكرار
+        let lastUrl = window.location.href;
+        setInterval(function() {
+            const currentUrl = window.location.href;
+            // إذا تغيرت الصفحة إلى صفحة خطأ أو ERR_FAILED
+            if (currentUrl !== lastUrl) {
+                lastUrl = currentUrl;
+                // التحقق من أن الصفحة الحالية ليست صفحة تسجيل الدخول
+                if (!currentUrl.includes('index.php') && !currentUrl.includes('login')) {
+                    // استثناء صفحات tasks من التحقق التلقائي
+                    const isTasksPage = currentUrl.includes('tasks.php') || 
+                                       currentUrl.includes('page=tasks') ||
+                                       currentUrl.includes('production.php?page=tasks') ||
+                                       currentUrl.includes('manager.php?page=tasks');
+                    
+                    if (!isTasksPage) {
+                        // التحقق من أن الصفحة تم تحميلها بشكل صحيح (بعد تأخير أطول)
+                        setTimeout(checkPageStatus, 5000);
+                    }
+                }
+            }
+        }, 10000); // 10 ثوانٍ بدلاً من 3 ثوانٍ لتقليل الاستخدام
+        
+        // معالجة أخطاء XMLHttpRequest (للتوافق مع الكود القديم)
+        if (window.XMLHttpRequest) {
+            const originalOpen = XMLHttpRequest.prototype.open;
+            const originalSend = XMLHttpRequest.prototype.send;
+            
+            XMLHttpRequest.prototype.open = function(method, url, ...args) {
+                this._url = url;
+                return originalOpen.apply(this, [method, url, ...args]);
+            };
+            
+            XMLHttpRequest.prototype.send = function(...args) {
+                this.addEventListener('error', function() {
+                    const url = this._url || '';
+                    if (url.includes('check_session') || url.includes('session_keepalive')) {
+                        // استثناء صفحات tasks من إعادة التوجيه التلقائية
+                        const currentUrl = window.location.href || '';
+                        const isTasksPage = currentUrl.includes('tasks.php') || 
+                                           currentUrl.includes('page=tasks') ||
+                                           currentUrl.includes('production.php?page=tasks') ||
+                                           currentUrl.includes('manager.php?page=tasks');
+                        
+                        if (!isTasksPage) {
+                            console.warn('XHR error for session check - redirecting to login');
+                            setTimeout(redirectToLogin, 1000);
+                        } else {
+                            console.warn('Tasks page detected - skipping auto-redirect for XHR error');
+                        }
+                    }
+                });
+                
+                return originalSend.apply(this, args);
+            };
+        }
+    })();
+    </script>
+    
         </main>
     </div>
 </body>

@@ -109,9 +109,9 @@ function getDashboardUrl($role = null) {
         $url = ($base ? $base : '') . '/dashboard/';
     }
     
-    // تنظيف شامل للمسار
-    // 1. إزالة أي بروتوكول (http://, https://, //)
-    $url = preg_replace('/^https?:\/\//', '', $url);
+    // تنظيف شامل للمسار - إزالة أي بروتوكول أو hostname
+    // 1. إزالة أي بروتوكول كامل (http://hostname أو https://hostname)
+    $url = preg_replace('/^https?:\/\/[^\/]+/', '', $url);
     $url = preg_replace('/^\/\//', '/', $url);
     
     // 2. التأكد من أن المسار يبدأ بـ /
@@ -122,30 +122,31 @@ function getDashboardUrl($role = null) {
     // 3. تنظيف المسار (إزالة // المكررة)
     $url = preg_replace('/\/+/', '/', $url);
     
-    // 4. إزالة أي hostname إذا كان موجوداً (مثل dashboard.com أو www.dashboard)
+    // 4. إزالة أي hostname إذا كان موجوداً (مثل albarakah.free.nf)
     // إذا كان المسار يحتوي على نقطة بعد / مباشرة، قد يكون hostname
     if (preg_match('/^\/[^\/]+\.[a-z]/i', $url)) {
         // إذا كان يبدو كـ hostname، استخراج المسار فقط
         $parts = explode('/', $url);
         // البحث عن 'dashboard' في المسار
         $dashboardIndex = array_search('dashboard', $parts);
-        if ($dashboardIndex !== false) {
+        if ($dashboardIndex !== false && $dashboardIndex > 0) {
+            // استخراج المسار من dashboard فصاعداً
             $url = '/' . implode('/', array_slice($parts, $dashboardIndex));
         } else {
             // إذا لم يكن هناك dashboard، استخدم المسار الافتراضي
-            $url = '/dashboard/' . ($role ? $role . '.php' : '');
+            $url = ($base ? $base : '') . '/dashboard/' . ($role ? $role . '.php' : '');
         }
     }
     
     // 5. التحقق النهائي: إذا كان المسار لا يحتوي على 'dashboard'، أضفه
     if (strpos($url, '/dashboard') === false) {
-        $url = '/dashboard/' . ($role ? $role . '.php' : '');
+        $url = ($base ? $base : '') . '/dashboard/' . ($role ? $role . '.php' : '');
     }
     
     // 6. التأكد من أن المسار لا يحتوي على http:// أو https:// مرة أخرى
     if (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0) {
         $parsed = parse_url($url);
-        $url = $parsed['path'] ?? '/dashboard/' . ($role ? $role . '.php' : '');
+        $url = $parsed['path'] ?? (($base ? $base : '') . '/dashboard/' . ($role ? $role . '.php' : ''));
     }
     
     // 7. التحقق النهائي: التأكد من أن المسار يبدأ بـ / ولا يحتوي على بروتوكول
@@ -153,13 +154,24 @@ function getDashboardUrl($role = null) {
         $url = '/' . $url;
     }
     
-    // 8. تنظيف نهائي: إزالة أي مسافات أو أحرف خاصة
+    // 8. تنظيف نهائي: إزالة أي مسافات
     $url = trim($url);
-    $url = preg_replace('/[^\/a-zA-Z0-9._-]/', '', $url);
     
-    // 9. التأكد من أن المسار صحيح نهائياً
+    // 9. التأكد من أن المسار لا يحتوي على :// (بروتوكول)
+    if (strpos($url, '://') !== false) {
+        $parsed = parse_url($url);
+        $url = $parsed['path'] ?? (($base ? $base : '') . '/dashboard/' . ($role ? $role . '.php' : ''));
+    }
+    
+    // 10. تنظيف نهائي للمسار
+    $url = preg_replace('/\/+/', '/', $url);
+    
+    // 11. التأكد من أن المسار صحيح نهائياً
     if (empty($url) || $url === '/') {
-        $url = '/dashboard/' . ($role ? $role . '.php' : '');
+        $url = ($base ? $base : '') . '/dashboard/' . ($role ? $role . '.php' : '');
+        if (strpos($url, '/') !== 0) {
+            $url = '/' . $url;
+        }
     }
     
     return $url;

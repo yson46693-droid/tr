@@ -21,16 +21,25 @@
         const alertElement = successAlert || errorAlert;
         
         if (alertElement && alertElement.dataset.autoRefresh === 'true') {
-            // انتظار 3 ثوانٍ لإعطاء المستخدم وقتاً لرؤية الرسالة
+            // انتظار 2 ثانية لإعطاء المستخدم وقتاً لرؤية الرسالة
             setTimeout(function() {
                 // إعادة تحميل الصفحة بدون معاملات GET لمنع تكرار الطلبات
                 const currentUrl = new URL(window.location.href);
                 // إزالة معاملات success و error من URL
                 currentUrl.searchParams.delete('success');
                 currentUrl.searchParams.delete('error');
+                // إضافة timestamp لفرض إعادة تحميل من السيرفر (منع cache)
+                currentUrl.searchParams.set('_t', Date.now().toString());
                 // إعادة تحميل الصفحة
                 window.location.href = currentUrl.toString();
-            }, 3000);
+            }, 2000);
+        }
+        
+        // إزالة معامل timestamp من URL بعد التحميل لمنع تراكمه
+        if (window.location.search.includes('_t=')) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('_t');
+            window.history.replaceState({}, '', url.toString());
         }
     }
 })();
