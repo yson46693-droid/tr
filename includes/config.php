@@ -11,9 +11,9 @@ if (!defined('ACCESS_ALLOWED')) {
 
 define('DB_HOST', 'sql110.infinityfree.com');
 define('DB_PORT', '3306');
-define('DB_USER', 'if0_40278066');
+define('DB_USER', 'if0_40673233');
 define('DB_PASS', 'Osama744');
-define('DB_NAME', 'if0_40278066_co_db');
+define('DB_NAME', 'if0_40673233_co_db');
 
 // إعدادات المنطقة الزمنية - مصر/القاهرة
 date_default_timezone_set('Africa/Cairo');
