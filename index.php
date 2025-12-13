@@ -236,6 +236,29 @@ if (isLoggedIn()) {
         return;
     }
     
+    // === معالجة طلبات AJAX Login عند وجود جلسة نشطة ===
+    if (isset($_POST['ajax_login']) && $_POST['ajax_login'] == '1') {
+        // تنظيف output buffer
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        
+        // إرجاع JSON response للتعامل معها في JavaScript
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => true,
+            'already_logged_in' => true,
+            'message' => 'يوجد جلسة نشطة بالفعل جاري التحويل إلى النظام',
+            'redirect_url' => $dashboardUrl,
+            'user' => [
+                'id' => $_SESSION['user_id'] ?? 0,
+                'username' => $_SESSION['username'] ?? '',
+                'role' => $userRole
+            ]
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
     // تنظيف output buffer قبل التوجيه
     while (ob_get_level() > 0) {
         ob_end_clean();
@@ -1088,7 +1111,54 @@ $lang = $translations;
                         body: formData
                     });
                     
-                    const loginResult = await loginResponse.json();
+                    // التحقق من نوع الاستجابة
+                    const contentType = loginResponse.headers.get('content-type') || '';
+                    let loginResult;
+                    
+                    if (contentType.includes('application/json')) {
+                        loginResult = await loginResponse.json();
+                    } else {
+                        // إذا كانت الاستجابة HTML، قد يكون المستخدم مسجل دخول بالفعل
+                        // حاول تحليل HTML للحصول على معلومات أو أعد المحاولة
+                        const responseText = await loginResponse.text();
+                        
+                        // التحقق من وجود redirect في HTML
+                        if (responseText.includes('window.location') || responseText.includes('Location:')) {
+                            // المستخدم مسجل دخول بالفعل - تم التوجيه
+                            loginResult = {
+                                success: true,
+                                already_logged_in: true,
+                                message: 'يوجد جلسة نشطة بالفعل جاري التحويل إلى النظام',
+                                redirect_url: null
+                            };
+                        } else {
+                            throw new Error('فشل تسجيل الدخول: استجابة غير متوقعة من السيرفر');
+                        }
+                    }
+                    
+                    // معالجة حالة الجلسة النشطة
+                    if (loginResult.already_logged_in) {
+                        loadingMessage.textContent = loginResult.message || 'يوجد جلسة نشطة بالفعل جاري التحويل إلى النظام';
+                        
+                        // الحصول على URL الداشبورد
+                        const userRole = loginResult.user?.role || 'accountant';
+                        const redirectUrl = loginResult.redirect_url;
+                        
+                        let dashboardUrl;
+                        if (redirectUrl) {
+                            dashboardUrl = redirectUrl;
+                        } else {
+                            const currentPath = window.location.pathname || '/';
+                            const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                            const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                            dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                        }
+                        
+                        setTimeout(() => {
+                            window.location.href = dashboardUrl;
+                        }, 1500);
+                        return;
+                    }
                     
                     if (!loginResult.success) {
                         throw new Error(loginResult.message || 'فشل تسجيل الدخول');
@@ -1182,6 +1252,31 @@ $lang = $translations;
                         }
                     }
                 } catch (error) {
+                    // التحقق من نوع الخطأ
+                    let errorMessage = 'حدث خطأ أثناء تسجيل الدخول';
+                    
+                    if (error.message) {
+                        // إذا كان الخطأ يتضمن "Unexpected token" فهذا يعني JSON parsing error
+                        if (error.message.includes('Unexpected token') || error.message.includes('JSON')) {
+                            // قد يكون المستخدم مسجل دخول بالفعل - حاول إعادة تحميل الصفحة
+                            errorMessage = 'يبدو أنك مسجل دخول بالفعل. جاري التحويل...';
+                            
+                            // محاولة التوجيه إلى الداشبورد
+                            const currentPath = window.location.pathname || '/';
+                            const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                            const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                            const dashboardUrl = basePath ? `${basePath}/dashboard/accountant.php` : `/dashboard/accountant.php`;
+                            
+                            loadingMessage.textContent = 'يوجد جلسة نشطة بالفعل جاري التحويل إلى النظام';
+                            setTimeout(() => {
+                                window.location.href = dashboardUrl;
+                            }, 1500);
+                            return;
+                        } else {
+                            errorMessage = error.message;
+                        }
+                    }
+                    
                     // إعادة تمكين الزر وإخفاء loading
                     loginSubmitBtn.disabled = false;
                     loginButtonText.textContent = '<?php echo $lang['login_button']; ?>';
@@ -1189,7 +1284,6 @@ $lang = $translations;
                     loginLoadingIndicator.classList.add('d-none');
                     
                     // إظهار رسالة الخطأ
-                    const errorMessage = error.message || 'حدث خطأ أثناء تسجيل الدخول';
                     const errorAlert = document.createElement('div');
                     errorAlert.className = 'alert alert-danger alert-dismissible fade show';
                     errorAlert.innerHTML = `
