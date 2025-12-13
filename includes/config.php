@@ -169,44 +169,19 @@ if (session_status() === PHP_SESSION_ACTIVE) {
             $_SESSION['last_activity_previous'] = time();
         }
         
-        // التحقق من انتهاء الجلسة بناءً على وقت آخر نشاط (فقط إذا كان موجوداً)
-        // ملاحظة: بعد تحديث last_activity_previous أعلاه، هذا التحقق لن يحذف الجلسة إلا إذا كان المستخدم غير نشط فعلاً
-        if (isset($_SESSION['last_activity_previous'])) {
-            $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
-            
-            // إذا مر أكثر من وقت الجلسة (7 أيام) + هامش أمان (1 ساعة)
-            // فقط إذا لم يكن keep-alive request وليس في صفحة محمية
-            if ($timeSinceActivity > (SESSION_LIFETIME + 3600) && !$isKeepAliveRequest && !$isProtectedPage) {
-                $userId = $_SESSION['user_id'] ?? 'unknown';
-                
-                // تسجيل سبب حذف الجلسة
-                if (file_exists(__DIR__ . '/session_logger.php')) {
-                    require_once __DIR__ . '/session_logger.php';
-                    if (function_exists('logSessionInfo')) {
-                        logSessionInfo('حذف الجلسة بسبب انتهاء وقت النشاط', [
-                            'user_id' => $userId,
-                            'time_since_activity' => $timeSinceActivity,
-                            'session_lifetime' => SESSION_LIFETIME,
-                            'threshold' => SESSION_LIFETIME + 3600,
-                        ]);
-                    }
-                }
-                
-                error_log("Session expired due to inactivity for user ID: {$userId} (time since activity: {$timeSinceActivity} seconds)");
-                
-                // حذف الجلسة فقط إذا كان المستخدم غير نشط فعلاً
-                session_unset();
-                session_destroy();
-                session_set_cookie_params($sessionCookieOptions);
-                session_start();
-            }
-        } else {
-            // إذا لم يكن هناك last_activity_previous، نضبطه لأول مرة
+        // === تعطيل حذف الجلسة بناءً على last_activity_previous ===
+        // هذا المنطق يعتمد على $_SESSION وليس على قاعدة البيانات
+        // التحقق من صحة الجلسة يتم في isLoggedIn() بناءً على expires_at في قاعدة البيانات فقط
+        // لذلك لا نحتاج لحذف الجلسة هنا لأن isLoggedIn() سيتحقق من expires_at في قاعدة البيانات
+        
+        // تحديث last_activity_previous لأغراض أخرى فقط (مثل الإحصائيات)
+        // لكن لا نستخدمه لحذف الجلسة - التحقق من الجلسة يتم في isLoggedIn() فقط
+        if (!isset($_SESSION['last_activity_previous'])) {
+            $_SESSION['last_activity_previous'] = time();
+        } elseif (!$isKeepAliveRequest) {
+            // تحديث last_activity_previous عند كل طلب نشط (باستثناء keep-alive)
             $_SESSION['last_activity_previous'] = time();
         }
-        
-        // حفظ وقت آخر نشاط الحالي للفحص في الطلب التالي
-        $_SESSION['last_activity_previous'] = time();
     }
 }
 

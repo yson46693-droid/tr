@@ -138,8 +138,8 @@ function isLoggedIn() {
         $userId = $_SESSION['user_id'];
         $sessionId = session_id();
         
-        // تسجيل معلومات الجلسة للمساعدة في التشخيص
-        error_log("isLoggedIn() CHECK: user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
+        // تسجيل معلومات الجلسة للمساعدة في التشخيص (معطل لتقليل سجلات الأخطاء)
+        // error_log("isLoggedIn() CHECK: user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
         
         // التحقق الإجباري من قاعدة البيانات - إذا لم توجد جلسة، الجلسة غير صالحة
         $sessionValidInDB = false;
@@ -212,16 +212,22 @@ function isLoggedIn() {
                 // الجلسة موجودة في قاعدة البيانات - صالحة
                 $sessionValidInDB = true;
                 
-                // تسجيل نجاح التحقق
-                error_log("isLoggedIn() SUCCESS: Session found in database for user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
+                // تسجيل نجاح التحقق (معطل لتقليل سجلات الأخطاء)
+                // error_log("isLoggedIn() SUCCESS: Session found in database for user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
                 
-                // تحديث last_activity في قاعدة البيانات كل دقيقة (لتجنب كثرة التحديثات)
+                // تحديث last_activity و expires_at في قاعدة البيانات كل دقيقة (لتجنب كثرة التحديثات)
+                // هذا يضمن بقاء الجلسة صالحة طالما أن المستخدم نشط
                 $lastActivity = strtotime($sessionRecord['last_activity']);
                 if (time() - $lastActivity > 60) { // أكثر من دقيقة
+                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                    
                     $db->execute(
-                        "UPDATE sessions SET last_activity = NOW() WHERE id = ?",
-                        [$sessionRecord['id']]
+                        "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE id = ?",
+                        [$newExpiresAt, $sessionRecord['id']]
                     );
+                    
+                    error_log("isLoggedIn() UPDATED: Session extended for user_id: {$userId}, new expires_at: {$newExpiresAt}");
                 }
             } else {
                 // فشل في إنشاء جدول الجلسات - خطأ في قاعدة البيانات
@@ -346,7 +352,8 @@ function isLoggedIn() {
                 'uri' => $requestUri,
             ]);
         }
-        error_log("isLoggedIn() TRUE: User ID " . ($_SESSION['user_id'] ?? 'unknown') . " | Duration: {$duration}ms | Script: {$scriptName}");
+        // تسجيل نجاح التحقق (معطل لتقليل سجلات الأخطاء)
+        // error_log("isLoggedIn() TRUE: User ID " . ($_SESSION['user_id'] ?? 'unknown') . " | Duration: {$duration}ms | Script: {$scriptName}");
         return true;
     }
     
@@ -363,7 +370,8 @@ function isLoggedIn() {
             }
             error_log("isLoggedIn() FALSE: Remember token check failed | Duration: {$duration}ms | Script: {$scriptName}");
         } else {
-            error_log("isLoggedIn() TRUE: Remember token valid | Duration: {$duration}ms | Script: {$scriptName}");
+            // تسجيل نجاح التحقق (معطل لتقليل سجلات الأخطاء)
+            // error_log("isLoggedIn() TRUE: Remember token valid | Duration: {$duration}ms | Script: {$scriptName}");
         }
         return $rememberResult;
     }
