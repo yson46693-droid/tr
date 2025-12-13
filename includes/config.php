@@ -9,7 +9,7 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
-define('DB_HOST', 'sql110.infinityfree.com');
+define('DB_HOST', 'sql107.infinityfree.com');
 define('DB_PORT', '3306');
 define('DB_USER', 'if0_40673233');
 define('DB_PASS', 'Osama744');
