@@ -250,7 +250,8 @@ function isLoggedIn() {
             $sessionValidInDB = false;
         }
         
-        // إذا لم تكن الجلسة صالحة في قاعدة البيانات، حذفها وإرجاع false
+        // === إذا لم تكن الجلسة صالحة في قاعدة البيانات، حذفها وإرجاع false ===
+        // هذا هو التحقق الأمني الرئيسي - يجب أن تكون الجلسة موجودة في قاعدة البيانات
         if (!$sessionValidInDB) {
             // في حالة الخطأ في قاعدة البيانات أو عدم وجود الجلسة، نعتبر الجلسة غير صالحة للأمان
             $_SESSION = [];
@@ -264,18 +265,20 @@ function isLoggedIn() {
             
             $duration = round((microtime(true) - $startTime) * 1000, 2);
             if (function_exists('logSessionFailure')) {
-                logSessionFailure('فشل التحقق من الجلسة في قاعدة البيانات', [
+                logSessionFailure('فشل التحقق من الجلسة في قاعدة البيانات - الجلسة غير موجودة', [
                     'user_id' => $userId ?? null,
-                    'error' => $e->getMessage() ?? 'Unknown error',
+                    'session_id' => substr($sessionId ?? '', 0, 20),
                     'duration_ms' => $duration,
                     'script' => $scriptName,
                     'uri' => $requestUri,
                 ]);
             }
             
+            error_log("isLoggedIn() SECURITY FAIL: Session not found in database - Access denied | User ID: {$userId} | Session ID: " . substr($sessionId ?? '', 0, 20));
             return false;
         }
         
+        // === الجلسة موجودة في قاعدة البيانات - المتابعة ===
         // التحقق من user_id (يجب أن يكون موجوداً لأننا وصلنا هنا)
         if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
         // تسجيل سبب الفشل
