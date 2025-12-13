@@ -808,8 +808,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // تحميل الإشعارات فوراً
     loadNotifications();
     
-    // تحديث الإشعارات (استخدام الفترة من config أو 30 ثانية افتراضياً - محسّن)
-    let pollInterval = 30000;
+    // تحديث الإشعارات (زيادة الفترة لتقليل الاستهلاك بشكل كبير)
+    let pollInterval = 60000; // 60 ثانية كافتراضي بدلاً من 30 ثانية
     if (typeof window.NOTIFICATION_POLL_INTERVAL !== 'undefined') {
         const parsed = Number(window.NOTIFICATION_POLL_INTERVAL);
         if (Number.isFinite(parsed) && parsed > 0) {
@@ -817,9 +817,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // الحد الأدنى 10 ثواني (محسّن للأداء)
-    if (pollInterval < 10000) {
-        pollInterval = 10000;
+    // الحد الأدنى 30 ثانية (زيادة من 10 ثوان لتقليل الاستهلاك)
+    if (pollInterval < 30000) {
+        pollInterval = 30000;
     }
     const autoRefreshEnabled = (function () {
         if (typeof window.NOTIFICATION_AUTO_REFRESH_ENABLED === 'undefined') {
@@ -834,7 +834,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (autoRefreshEnabled) {
         if (window.currentUser && window.currentUser.role === 'production') {
-            pollInterval = Math.min(pollInterval, 15000);
+            // زيادة الفترة لعمال الإنتاج إلى 45 ثانية بدلاً من 15 ثانية
+            pollInterval = Math.min(pollInterval, 45000);
             if (checkNotificationPermission() === 'default') {
                 const requestOnInteraction = () => {
                     requestNotificationPermission().catch(err => console.error('Error requesting notification permission:', err));
@@ -848,7 +849,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (!window.__notificationAutoRefreshActive) {
             window.__notificationAutoRefreshActive = true;
-            notificationCheckInterval = setInterval(loadNotifications, pollInterval);
+            // التحقق من أن الصفحة مرئية قبل الطلب
+            notificationCheckInterval = setInterval(function() {
+                if (!document.hidden) {
+                    loadNotifications();
+                }
+            }, pollInterval);
         }
     }
     
