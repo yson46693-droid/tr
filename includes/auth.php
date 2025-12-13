@@ -151,10 +151,10 @@ function isLoggedIn() {
                         $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
                         $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
                         
-                        // حذف أي جلسة سابقة بنفس session_id (إن وجدت)
-                        $db->execute("DELETE FROM sessions WHERE session_id = ?", [$sessionId]);
+                        // حذف جميع الجلسات القديمة للمستخدم أولاً (لتجنب الجلسات المتعددة)
+                        $db->execute("DELETE FROM sessions WHERE user_id = ?", [$userId]);
                         
-                        // إضافة الجلسة الجديدة
+                        // إضافة الجلسة الجديدة (واحدة فقط)
                         $db->execute(
                             "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
                              VALUES (?, ?, ?, ?, ?, NOW())",
@@ -572,14 +572,14 @@ function checkRememberToken($cookieValue) {
                     $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
                     $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255); // الحد الأقصى 255 حرف
                     
-                    // حذف أي جلسة سابقة بنفس session_id (إن وجدت)
+                    // حذف جميع الجلسات القديمة للمستخدم أولاً (لتجنب الجلسات المتعددة)
                     try {
-                        $db->execute("DELETE FROM sessions WHERE session_id = ?", [$sessionId]);
+                        $db->execute("DELETE FROM sessions WHERE user_id = ?", [$tokenRecord['user_id']]);
                     } catch (Exception $deleteError) {
-                        error_log("Error deleting old session in checkRememberToken: " . $deleteError->getMessage());
+                        error_log("Error deleting old sessions in checkRememberToken: " . $deleteError->getMessage());
                     }
                     
-                    // إضافة الجلسة الجديدة
+                    // إضافة الجلسة الجديدة (واحدة فقط)
                     try {
                         $db->execute(
                             "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
@@ -947,14 +947,14 @@ function login($username, $password, $rememberMe = false) {
                 $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
                 $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255); // الحد الأقصى 255 حرف
                 
-                // حذف أي جلسة سابقة بنفس session_id (إن وجدت)
+                // حذف جميع الجلسات القديمة للمستخدم أولاً (لتجنب الجلسات المتعددة)
                 try {
-                    $db->execute("DELETE FROM sessions WHERE session_id = ?", [$sessionId]);
+                    $db->execute("DELETE FROM sessions WHERE user_id = ?", [$user['id']]);
                 } catch (Exception $deleteError) {
-                    error_log("Error deleting old session: " . $deleteError->getMessage());
+                    error_log("Error deleting old sessions: " . $deleteError->getMessage());
                 }
                 
-                // إضافة الجلسة الجديدة
+                // إضافة الجلسة الجديدة (واحدة فقط)
                 try {
                     $db->execute(
                         "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
