@@ -322,6 +322,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $rememberMe = isset($_POST['remember_me']) && $_POST['remember_me'] == '1';
                 $result = login($username, $password, $rememberMe);
                 
+                // إرجاع نتيجة JSON للتعامل معها في JavaScript
+                if (isset($_POST['ajax_login']) && $_POST['ajax_login'] == '1') {
+                    // تنظيف output buffer
+                    while (ob_get_level() > 0) {
+                        ob_end_clean();
+                    }
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode($result, JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
+                
                 if ($result['success']) {
                     // إعادة تعيين محاولات Rate Limiting بعد تسجيل دخول ناجح
                     if (class_exists('RateLimiter')) {
@@ -771,10 +782,22 @@ $lang = $translations;
                             <?php echo csrf_token_field(); ?>
                             
                             <div class="d-grid gap-2 mb-3">
-                                <button type="submit" class="btn btn-primary btn-lg">
+                                <button type="submit" class="btn btn-primary btn-lg" id="loginSubmitBtn">
                                     <i class="bi bi-box-arrow-in-right me-2"></i>
-                                    <?php echo $lang['login_button']; ?>
+                                    <span id="loginButtonText"><?php echo $lang['login_button']; ?></span>
+                                    <span id="loginLoadingSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status"></span>
                                 </button>
+                            </div>
+                            
+                            <!-- Loading indicator -->
+                            <div id="loginLoadingIndicator" class="d-none">
+                                <div class="alert alert-info text-center">
+                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                    <span id="loadingMessage">جاري تسجيل الدخول... يرجى الانتظار 5 ثواني</span>
+                                    <div class="mt-2">
+                                        <small class="text-muted">يتم إنشاء الجلسة في قاعدة البيانات...</small>
+                                    </div>
+                                </div>
                             </div>
                             
                             <?php if (true): // WebAuthn support check ?>
@@ -995,6 +1018,189 @@ $lang = $translations;
                 eyeIcon.classList.add('bi-eye');
             }
         });
+        
+        // دالة مساعدة للحصول على مسار API
+        function getApiPath(endpoint) {
+            const cleanEndpoint = String(endpoint || '').replace(/^\/+/, '');
+            const currentPath = window.location.pathname || '/';
+            const parts = currentPath.split('/').filter(Boolean);
+            const stopSegments = new Set(['dashboard', 'modules', 'api', 'assets', 'includes']);
+            const baseParts = [];
+            
+            for (const part of parts) {
+                if (stopSegments.has(part) || part.endsWith('.php')) {
+                    break;
+                }
+                baseParts.push(part);
+            }
+            
+            const basePath = baseParts.length ? '/' + baseParts.join('/') : '';
+            const apiPath = (basePath + '/' + cleanEndpoint).replace(/\/+/g, '/');
+            
+            return apiPath.startsWith('/') ? apiPath : '/' + apiPath;
+        }
+        
+        // معالجة نموذج تسجيل الدخول مع موقت 5 ثواني وإعادة المحاولة
+        const loginForm = document.getElementById('loginForm');
+        const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+        const loginButtonText = document.getElementById('loginButtonText');
+        const loginLoadingSpinner = document.getElementById('loginLoadingSpinner');
+        const loginLoadingIndicator = document.getElementById('loginLoadingIndicator');
+        const loadingMessage = document.getElementById('loadingMessage');
+        
+        if (loginForm) {
+            loginForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                const rememberMe = document.getElementById('remember_me').checked;
+                
+                if (!username || !password) {
+                    alert('يرجى إدخال اسم المستخدم وكلمة المرور');
+                    return;
+                }
+                
+                // تعطيل الزر وإظهار loading
+                loginSubmitBtn.disabled = true;
+                loginButtonText.textContent = 'جاري تسجيل الدخول...';
+                loginLoadingSpinner.classList.remove('d-none');
+                loginLoadingIndicator.classList.remove('d-none');
+                
+                // إخفاء أي رسائل خطأ سابقة
+                const errorAlert = document.querySelector('.alert-danger');
+                if (errorAlert) {
+                    errorAlert.remove();
+                }
+                
+                try {
+                    // إرسال طلب تسجيل الدخول
+                    const formData = new FormData();
+                    formData.append('username', username);
+                    formData.append('password', password);
+                    formData.append('remember_me', rememberMe ? '1' : '0');
+                    formData.append('login_method', 'password');
+                    formData.append('ajax_login', '1');
+                    formData.append('csrf_token', document.querySelector('input[name="csrf_token"]')?.value || '');
+                    
+                    const loginResponse = await fetch(window.location.href, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const loginResult = await loginResponse.json();
+                    
+                    if (!loginResult.success) {
+                        throw new Error(loginResult.message || 'فشل تسجيل الدخول');
+                    }
+                    
+                    // انتظار 5 ثواني للسماح بإنشاء الجلسة
+                    let countdown = 5;
+                    loadingMessage.textContent = `جاري تسجيل الدخول... يرجى الانتظار ${countdown} ثواني`;
+                    
+                    const countdownInterval = setInterval(() => {
+                        countdown--;
+                        if (countdown > 0) {
+                            loadingMessage.textContent = `جاري تسجيل الدخول... يرجى الانتظار ${countdown} ثواني`;
+                        } else {
+                            clearInterval(countdownInterval);
+                            loadingMessage.textContent = 'جاري التحقق من الجلسة...';
+                        }
+                    }, 1000);
+                    
+                    // انتظار 5 ثواني
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    clearInterval(countdownInterval);
+                    
+                    // التحقق من وجود الجلسة في قاعدة البيانات
+                    const apiPath = getApiPath('api/check_session.php');
+                    const checkSessionResponse = await fetch(apiPath, {
+                        method: 'GET',
+                        credentials: 'same-origin'
+                    });
+                    
+                    const checkResult = await checkSessionResponse.json();
+                    
+                    if (checkResult.success && checkResult.session_exists) {
+                        // الجلسة موجودة - إعادة التوجيه
+                        loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                        
+                        // الحصول على URL الداشبورد
+                        const userRole = loginResult.user?.role || 'accountant';
+                        const currentPath = window.location.pathname || '/';
+                        const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                        const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                        const dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                        
+                        setTimeout(() => {
+                            window.location.href = dashboardUrl;
+                        }, 500);
+                    } else {
+                        // الجلسة غير موجودة - إعادة المحاولة
+                        loadingMessage.textContent = 'الجلسة غير موجودة. جاري إعادة المحاولة...';
+                        
+                        // إعادة المحاولة مرة واحدة
+                        const retryResponse = await fetch(window.location.href, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const retryResult = await retryResponse.json();
+                        
+                        if (!retryResult.success) {
+                            throw new Error(retryResult.message || 'فشل تسجيل الدخول');
+                        }
+                        
+                        // انتظار 3 ثواني إضافية
+                        loadingMessage.textContent = 'جاري إعادة المحاولة... يرجى الانتظار 3 ثواني';
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        
+                        // التحقق مرة أخرى
+                        const checkRetryResponse = await fetch(apiPath, {
+                            method: 'GET',
+                            credentials: 'same-origin'
+                        });
+                        
+                        const checkRetryResult = await checkRetryResponse.json();
+                        
+                        if (checkRetryResult.success && checkRetryResult.session_exists) {
+                            // نجحت المحاولة الثانية
+                            loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                            
+                            const userRole = retryResult.user?.role || 'accountant';
+                            const currentPath = window.location.pathname || '/';
+                            const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                            const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                            const dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                            
+                            setTimeout(() => {
+                                window.location.href = dashboardUrl;
+                            }, 500);
+                        } else {
+                            // فشلت المحاولة الثانية
+                            throw new Error('حدث خطأ غير متوقع عند محاولة تسجيل الدخول قد يكون السبب بطئ في الانترنت او بطئ في قاعدة البيانات , اعد المحاوله مره اخري');
+                        }
+                    }
+                } catch (error) {
+                    // إعادة تمكين الزر وإخفاء loading
+                    loginSubmitBtn.disabled = false;
+                    loginButtonText.textContent = '<?php echo $lang['login_button']; ?>';
+                    loginLoadingSpinner.classList.add('d-none');
+                    loginLoadingIndicator.classList.add('d-none');
+                    
+                    // إظهار رسالة الخطأ
+                    const errorMessage = error.message || 'حدث خطأ أثناء تسجيل الدخول';
+                    const errorAlert = document.createElement('div');
+                    errorAlert.className = 'alert alert-danger alert-dismissible fade show';
+                    errorAlert.innerHTML = `
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        ${errorMessage}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    loginForm.insertBefore(errorAlert, loginForm.firstChild);
+                }
+            });
+        }
         
         // تسجيل الدخول عبر WebAuthn بدون اسم مستخدم
         document.getElementById('webauthnLoginBtn')?.addEventListener('click', async function() {
