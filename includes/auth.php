@@ -115,15 +115,34 @@ function isLoggedIn() {
         }
     }
     
-    // التحقق من وجود الجلسة في قاعدة البيانات أولاً (المصدر الوحيد للتحقق)
-    if (isset($_SESSION['user_id']) && isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+    // التأكد من وجود $_SESSION
+    if (!isset($_SESSION) || !is_array($_SESSION)) {
+        // تسجيل سبب الفشل
+        $duration = round((microtime(true) - $startTime) * 1000, 2);
+        if (function_exists('logSessionFailure')) {
+            logSessionFailure('$_SESSION غير موجود أو ليس array', [
+                'has_session' => isset($_SESSION),
+                'is_array' => isset($_SESSION) && is_array($_SESSION),
+                'duration_ms' => $duration,
+                'script' => $scriptName,
+                'uri' => $requestUri,
+            ]);
+        }
+        error_log("isLoggedIn() FALSE: \$_SESSION not set or not array | Duration: {$duration}ms | Script: {$scriptName} | URI: {$requestUri}");
+        return false;
+    }
+    
+    // === التحقق الإجباري من الجلسة في قاعدة البيانات (المصدر الوحيد الموثوق) ===
+    // لا يمكن الاعتماد على $_SESSION['logged_in'] فقط - يجب التحقق من قاعدة البيانات دائماً
+    if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
         $userId = $_SESSION['user_id'];
         $sessionId = session_id();
         
         // تسجيل معلومات الجلسة للمساعدة في التشخيص
         error_log("isLoggedIn() CHECK: user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
         
-        // التحقق من قاعدة البيانات - إذا لم توجد جلسة، الجلسة غير صالحة
+        // التحقق الإجباري من قاعدة البيانات - إذا لم توجد جلسة، الجلسة غير صالحة
+        $sessionValidInDB = false;
         try {
             if (ensureSessionsTable()) {
                 $db = db();
@@ -192,8 +211,23 @@ function isLoggedIn() {
                         setcookie(session_name(), '', time() - 3600, '/');
                     }
                     
+                    // تسجيل فشل الجلسة للأمان
+                    $duration = round((microtime(true) - $startTime) * 1000, 2);
+                    if (function_exists('logSessionFailure')) {
+                        logSessionFailure('الجلسة غير موجودة في قاعدة البيانات', [
+                            'user_id' => $userId,
+                            'session_id' => substr($sessionId, 0, 20),
+                            'duration_ms' => $duration,
+                            'script' => $scriptName,
+                            'uri' => $requestUri,
+                        ]);
+                    }
+                    
                     return false;
                 }
+                
+                // الجلسة موجودة في قاعدة البيانات - صالحة
+                $sessionValidInDB = true;
                 
                 // تسجيل نجاح التحقق
                 error_log("isLoggedIn() SUCCESS: Session found in database for user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
@@ -206,39 +240,43 @@ function isLoggedIn() {
                         [$sessionRecord['id']]
                     );
                 }
+            } else {
+                // فشل في إنشاء جدول الجلسات - خطأ في قاعدة البيانات
+                error_log("isLoggedIn() ERROR: Failed to ensure sessions table exists");
+                $sessionValidInDB = false;
             }
         } catch (Exception $e) {
             error_log("Error checking session in database: " . $e->getMessage());
-            
-            // في حالة الخطأ في قاعدة البيانات، نعتبر الجلسة غير صالحة للأمان
+            $sessionValidInDB = false;
+        }
+        
+        // إذا لم تكن الجلسة صالحة في قاعدة البيانات، حذفها وإرجاع false
+        if (!$sessionValidInDB) {
+            // في حالة الخطأ في قاعدة البيانات أو عدم وجود الجلسة، نعتبر الجلسة غير صالحة للأمان
             $_SESSION = [];
             @session_unset();
             @session_destroy();
             
+            // حذف cookies
+            if (isset($_COOKIE[session_name()])) {
+                setcookie(session_name(), '', time() - 3600, '/');
+            }
+            
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+            if (function_exists('logSessionFailure')) {
+                logSessionFailure('فشل التحقق من الجلسة في قاعدة البيانات', [
+                    'user_id' => $userId ?? null,
+                    'error' => $e->getMessage() ?? 'Unknown error',
+                    'duration_ms' => $duration,
+                    'script' => $scriptName,
+                    'uri' => $requestUri,
+                ]);
+            }
+            
             return false;
         }
-    }
-    
-    // التأكد من وجود $_SESSION
-    if (!isset($_SESSION) || !is_array($_SESSION)) {
-        // تسجيل سبب الفشل
-        $duration = round((microtime(true) - $startTime) * 1000, 2);
-        if (function_exists('logSessionFailure')) {
-            logSessionFailure('$_SESSION غير موجود أو ليس array', [
-                'has_session' => isset($_SESSION),
-                'is_array' => isset($_SESSION) && is_array($_SESSION),
-                'duration_ms' => $duration,
-                'script' => $scriptName,
-                'uri' => $requestUri,
-            ]);
-        }
-        error_log("isLoggedIn() FALSE: \$_SESSION not set or not array | Duration: {$duration}ms | Script: {$scriptName} | URI: {$requestUri}");
-        return false;
-    }
-    
-    // التحقق من الجلسة أولاً (قبل أي فحوصات أخرى)
-    if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-        // التحقق الإضافي: التأكد من وجود user_id في الجلسة
+        
+        // التحقق من user_id (يجب أن يكون موجوداً لأننا وصلنا هنا)
         if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
         // تسجيل سبب الفشل
         $duration = round((microtime(true) - $startTime) * 1000, 2);
