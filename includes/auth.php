@@ -234,22 +234,41 @@ function isLoggedIn() {
                 // الجلسة موجودة في قاعدة البيانات - صالحة
                 $sessionValidInDB = true;
                 
-                // تسجيل نجاح التحقق (معطل لتقليل سجلات الأخطاء)
-                // error_log("isLoggedIn() SUCCESS: Session found in database for user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
-                
-                // تحديث last_activity و expires_at في قاعدة البيانات كل دقيقة (لتجنب كثرة التحديثات)
-                // هذا يضمن بقاء الجلسة صالحة طالما أن المستخدم نشط
+                // === تحديث last_activity و expires_at في قاعدة البيانات ===
+                // نحدث expires_at دائماً لضمان بقاء الجلسة صالحة طالما أن المستخدم نشط
+                // لكن لتقليل التحديثات في قاعدة البيانات، نحدث فقط إذا:
+                // 1. مر أكثر من 60 ثانية منذ آخر تحديث لـ last_activity، أو
+                // 2. expires_at قريب من الانتهاء (أقل من يومين)
+                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
                 $lastActivity = strtotime($sessionRecord['last_activity']);
-                if (time() - $lastActivity > 60) { // أكثر من دقيقة
-                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                    
+                $expiresAt = strtotime($sessionRecord['expires_at']);
+                $currentTime = time();
+                $timeSinceLastActivity = $currentTime - $lastActivity;
+                $timeUntilExpiry = $expiresAt - $currentTime;
+                
+                // التحقق من الحاجة للتحديث
+                $shouldUpdate = false;
+                $updateReason = '';
+                
+                // تحديث إذا مر أكثر من دقيقة منذ آخر تحديث
+                if ($timeSinceLastActivity > 60) {
+                    $shouldUpdate = true;
+                    $updateReason = 'last_activity > 60 seconds';
+                }
+                // أو إذا كان expires_at قريب من الانتهاء (أقل من يومين)
+                elseif ($timeUntilExpiry < (3600 * 24 * 2)) {
+                    $shouldUpdate = true;
+                    $updateReason = 'expires_at < 2 days remaining';
+                }
+                
+                if ($shouldUpdate) {
+                    // تحديث expires_at إلى 7 أيام من الآن
+                    $newExpiresAt = date('Y-m-d H:i:s', $currentTime + $sessionLifetime);
                     $db->execute(
                         "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE id = ?",
                         [$newExpiresAt, $sessionRecord['id']]
                     );
-                    
-                    error_log("isLoggedIn() UPDATED: Session extended for user_id: {$userId}, new expires_at: {$newExpiresAt}");
+                    error_log("isLoggedIn() UPDATED: Session extended for user_id: {$userId}, reason: {$updateReason}, time_until_expiry: " . round($timeUntilExpiry / 3600, 2) . " hours, new expires_at: {$newExpiresAt}");
                 }
             } else {
                 // فشل في إنشاء جدول الجلسات - خطأ في قاعدة البيانات
