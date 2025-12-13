@@ -160,7 +160,13 @@ if (!defined('ASSETS_URL')) {
     }
 }
 
-if (isLoggedIn()) {
+// === التحقق من وجود جلسة نشطة ===
+// إذا كان هناك محاولة تسجيل دخول (POST) بنفس الحساب، نسمح بها وحذف الجلسة القديمة
+// إذا لم يكن هناك POST، نعيد التوجيه إلى الداشبورد
+$isLoginAttempt = ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['username']) || isset($_POST['login_method'])));
+
+if (isLoggedIn() && !$isLoginAttempt) {
+    // يوجد جلسة نشطة ولا توجد محاولة تسجيل دخول - إعادة التوجيه إلى الداشبورد
     $userRole = $_SESSION['role'] ?? 'accountant';
     
     // الحصول على المسار الأساسي
@@ -272,6 +278,74 @@ if (isLoggedIn()) {
         echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
         echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
         exit;
+    }
+} elseif (isLoggedIn() && $isLoginAttempt) {
+    // === يوجد جلسة نشطة وهناك محاولة تسجيل دخول ===
+    // نتحقق من أن محاولة تسجيل الدخول لنفس الحساب
+    // إذا كانت لنفس الحساب، نحذف الجلسة القديمة ونسمح بتسجيل الدخول الجديد
+    $currentUsername = $_SESSION['username'] ?? '';
+    $loginUsername = $_POST['username'] ?? '';
+    
+    if (!empty($loginUsername) && strtolower(trim($loginUsername)) === strtolower(trim($currentUsername))) {
+        // محاولة تسجيل دخول لنفس الحساب - حذف الجلسة القديمة والسماح بتسجيل الدخول الجديد
+        error_log("Login from new device: Deleting old session for user: {$currentUsername}");
+        
+        // حذف الجلسة القديمة من قاعدة البيانات
+        try {
+            require_once __DIR__ . '/includes/db.php';
+            require_once __DIR__ . '/includes/auth.php';
+            $db = db();
+            $userId = $_SESSION['user_id'] ?? 0;
+            if ($userId > 0 && ensureSessionsTable()) {
+                $db->execute("DELETE FROM sessions WHERE user_id = ?", [$userId]);
+                error_log("Login from new device: Old session deleted for user_id: {$userId}");
+            }
+        } catch (Exception $e) {
+            error_log("Login from new device: Error deleting old session: " . $e->getMessage());
+        }
+        
+        // حذف الجلسة PHP الحالية
+        $_SESSION = [];
+        @session_unset();
+        @session_destroy();
+        
+        // حذف cookies
+        if (isset($_COOKIE[session_name()])) {
+            setcookie(session_name(), '', time() - 3600, '/');
+        }
+        
+        // السماح بمتابعة تسجيل الدخول (سيتم إنشاء جلسة جديدة في دالة login())
+        error_log("Login from new device: Old session cleared, allowing new login for: {$loginUsername}");
+    } else {
+        // محاولة تسجيل دخول بحساب مختلف - منع ذلك وإعادة التوجيه
+        $userRole = $_SESSION['role'] ?? 'accountant';
+        $basePath = getBasePath();
+        $basePath = rtrim($basePath, '/');
+        $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
+        $dashboardUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $dashboardUrl);
+        if (strpos($dashboardUrl, '/') !== 0) {
+            $dashboardUrl = '/' . $dashboardUrl;
+        }
+        
+        // إرجاع رسالة خطأ
+        if (isset($_POST['ajax_login']) && $_POST['ajax_login'] == '1') {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'message' => 'يوجد جلسة نشطة لحساب آخر. يرجى تسجيل الخروج أولاً.',
+                'redirect_url' => $dashboardUrl
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        
+        // إعادة التوجيه إلى الداشبورد
+        if (!headers_sent()) {
+            header('Location: ' . $dashboardUrl, true, 303);
+            exit;
+        }
     }
 }
 
