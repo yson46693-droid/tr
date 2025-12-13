@@ -1344,65 +1344,47 @@ function tasksHtml(string $value): string
         }, 1500);
     }
     
-    // حل جذري: منع استخدام cache عند عمل refresh عادي (CTRL+R أو F5)
-    // نحفظ timestamp في sessionStorage عند تحميل الصفحة
+    // === حل جذري: منع استخدام cache عند CTRL+R أو F5 ===
+    
+    const PAGE_LOAD_KEY = 'tasks_page_load_timestamp';
+    const FORCE_RELOAD_KEY = 'tasks_force_reload';
+    
+    // حفظ timestamp عند تحميل الصفحة
     try {
-        const pageLoadTime = Date.now().toString();
-        sessionStorage.setItem('tasks_page_load_time', pageLoadTime);
+        const currentTimestamp = Date.now().toString();
+        const previousTimestamp = sessionStorage.getItem(PAGE_LOAD_KEY);
+        
+        // إذا كان هناك timestamp سابق، فهذا يعني refresh
+        if (previousTimestamp && previousTimestamp !== currentTimestamp) {
+            sessionStorage.setItem(FORCE_RELOAD_KEY, 'true');
+        }
+        
+        sessionStorage.setItem(PAGE_LOAD_KEY, currentTimestamp);
     } catch (e) {
         // تجاهل إذا كان sessionStorage غير متاح
     }
     
-    // عند عمل refresh (F5 أو CTRL+R)، نفحص إذا كانت الصفحة من cache
+    // معالجة pageshow event (يحدث عند load و refresh)
     window.addEventListener('pageshow', function(event) {
-        // إذا كانت الصفحة من cache (back/forward أو refresh عادي)
+        // إذا كانت الصفحة من cache (bfcache)، أعد تحميلها
         if (event.persisted) {
-            // إعادة تحميل من السيرفر مع bypass cache
             const url = new URL(window.location.href);
             url.searchParams.set('_nocache', Date.now().toString());
             window.location.href = url.toString();
             return;
         }
         
-        // للـ refresh العادي، نضيف timestamp لفرض reload من السيرفر
+        // للـ refresh العادي (CTRL+R أو F5)، تحقق من force reload flag
         try {
-            const savedLoadTime = sessionStorage.getItem('tasks_page_load_time');
-            if (savedLoadTime) {
-                const currentUrl = new URL(window.location.href);
-                // إذا لم يكن هناك _nocache أو _refresh، أضفه
-                if (!currentUrl.searchParams.has('_nocache') && !currentUrl.searchParams.has('_refresh')) {
-                    currentUrl.searchParams.set('_nocache', Date.now().toString());
-                    window.history.replaceState({}, '', currentUrl.toString());
-                }
-            }
-        } catch (e) {
-            // تجاهل إذا كان sessionStorage غير متاح
-        }
-    });
-    
-    // معالجة refresh يدوي (F5, CTRL+R) - إضافة timestamp قبل refresh
-    let isRefreshing = false;
-    window.addEventListener('beforeunload', function() {
-        if (!isRefreshing) {
-            isRefreshing = true;
-            try {
-                sessionStorage.setItem('tasks_force_refresh', 'true');
-            } catch (e) {
-                // تجاهل
-            }
-        }
-    });
-    
-    // عند تحميل الصفحة، إذا كان هناك flag refresh، أزل timestamp من URL
-    window.addEventListener('load', function() {
-        try {
-            const forceRefresh = sessionStorage.getItem('tasks_force_refresh');
-            if (forceRefresh === 'true') {
-                sessionStorage.removeItem('tasks_force_refresh');
+            const forceReload = sessionStorage.getItem(FORCE_RELOAD_KEY);
+            if (forceReload === 'true') {
+                sessionStorage.removeItem(FORCE_RELOAD_KEY);
+                // أضف timestamp لفرض reload من السيرفر
                 const url = new URL(window.location.href);
-                if (url.searchParams.has('_nocache')) {
-                    url.searchParams.delete('_nocache');
-                    window.history.replaceState({}, '', url.toString());
+                if (!url.searchParams.has('_nocache') && !url.searchParams.has('_refresh')) {
+                    url.searchParams.set('_nocache', Date.now().toString());
+                    window.location.href = url.toString();
+                    return;
                 }
             }
         } catch (e) {
@@ -1410,10 +1392,35 @@ function tasksHtml(string $value): string
         }
     });
     
-    // إضافة meta refresh tag لمنع cache في حالات معينة
-    const metaRefresh = document.createElement('meta');
-    metaRefresh.httpEquiv = 'Cache-Control';
-    metaRefresh.content = 'no-cache, no-store, must-revalidate';
-    document.head.appendChild(metaRefresh);
+    // عند الضغط على F5 أو CTRL+R، احفظ flag قبل reload
+    window.addEventListener('beforeunload', function() {
+        try {
+            sessionStorage.setItem(FORCE_RELOAD_KEY, 'true');
+        } catch (e) {
+            // تجاهل
+        }
+    });
+    
+    // إضافة meta tags لمنع cache
+    if (!document.querySelector('meta[http-equiv="Cache-Control"]')) {
+        const metaCache = document.createElement('meta');
+        metaCache.httpEquiv = 'Cache-Control';
+        metaCache.content = 'no-cache, no-store, must-revalidate';
+        document.head.appendChild(metaCache);
+    }
+    
+    if (!document.querySelector('meta[http-equiv="Pragma"]')) {
+        const metaPragma = document.createElement('meta');
+        metaPragma.httpEquiv = 'Pragma';
+        metaPragma.content = 'no-cache';
+        document.head.appendChild(metaPragma);
+    }
+    
+    if (!document.querySelector('meta[http-equiv="Expires"]')) {
+        const metaExpires = document.createElement('meta');
+        metaExpires.httpEquiv = 'Expires';
+        metaExpires.content = '0';
+        document.head.appendChild(metaExpires);
+    }
 })();
 </script>
