@@ -20,11 +20,11 @@ jobs:
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
           server: ftpupload.net
-          username: if0_40278066
+          username: if0_40673233
           password: ${{ secrets.FTP_PASSWORD }}
 
           local-dir: ./
-          server-dir: /almostafa.free.nf/htdocs/v1/
+          server-dir: /htdocs/v1/
 
           protocol: ftp
           port: 21
