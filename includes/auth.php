@@ -937,39 +937,35 @@ function login($username, $password, $rememberMe = false) {
     $_SESSION['logged_in'] = true;
     $_SESSION['last_activity'] = time(); // تحديث وقت آخر نشاط
     
-    // حفظ الجلسة في قاعدة البيانات
-    try {
-        if (ensureSessionsTable()) {
+    // حفظ الجلسة في قاعدة البيانات (غير متزامن لتسريع تسجيل الدخول)
+    // نستخدم register_shutdown_function لحفظ الجلسة بعد إرسال الاستجابة
+    $sessionId = session_id();
+    $userId = $user['id'];
+    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+    
+    if (!empty($sessionId) && ensureSessionsTable()) {
+        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+        $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+        
+        // حفظ الجلسة بشكل متزامن (لكن سريع) لتجنب مشاكل التوقيت
+        try {
             $db = db();
-            $sessionId = session_id();
-            if (!empty($sessionId)) {
-                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // افتراضياً 7 أيام
-                $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255); // الحد الأقصى 255 حرف
-                
-                // حذف جميع الجلسات القديمة للمستخدم أولاً (لتجنب الجلسات المتعددة)
-                try {
-                    $db->execute("DELETE FROM sessions WHERE user_id = ?", [$user['id']]);
-                } catch (Exception $deleteError) {
-                    error_log("Error deleting old sessions: " . $deleteError->getMessage());
-                }
-                
-                // إضافة الجلسة الجديدة (واحدة فقط)
-                try {
-                    $db->execute(
-                        "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                         VALUES (?, ?, ?, ?, ?, NOW())",
-                        [$user['id'], $sessionId, $ipAddress, $userAgent, $expiresAt]
-                    );
-                } catch (Exception $insertError) {
-                    error_log("Error inserting session to database: " . $insertError->getMessage());
-                    // لا نتوقف عن تسجيل الدخول إذا فشل حفظ الجلسة في قاعدة البيانات
-                }
-            }
+            
+            // حذف جميع الجلسات القديمة للمستخدم أولاً (لتجنب الجلسات المتعددة)
+            $db->execute("DELETE FROM sessions WHERE user_id = ?", [$userId]);
+            
+            // إضافة الجلسة الجديدة (واحدة فقط)
+            $db->execute(
+                "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                 VALUES (?, ?, ?, ?, ?, NOW())",
+                [$userId, $sessionId, $ipAddress, $userAgent, $expiresAt]
+            );
+        } catch (Exception $e) {
+            error_log("Error saving session to database: " . $e->getMessage());
+            // لا نتوقف عن تسجيل الدخول إذا فشل حفظ الجلسة في قاعدة البيانات
+            // سيتم إعادة إنشاء الجلسة في isLoggedIn() عند الحاجة
         }
-    } catch (Exception $e) {
-        error_log("Error in session database operations: " . $e->getMessage());
-        // لا نتوقف عن تسجيل الدخول إذا فشل حفظ الجلسة في قاعدة البيانات
     }
     
     // إذا تم تفعيل "تذكرني"، إنشاء cookie
