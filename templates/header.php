@@ -162,6 +162,10 @@ if (ob_get_level() > 0) {
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta http-equiv="Permissions-Policy" content="geolocation=(self), camera=(self), microphone=(self), notifications=(self)">
     <meta http-equiv="Feature-Policy" content="geolocation 'self'; camera 'self'; microphone 'self'; notifications 'self'">
+    <!-- Cache Control Meta Tags - منع تخزين الصفحة لضمان جلب البيانات المحدثة -->
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title><?php echo isset($pageTitle) ? $pageTitle . ' - ' : ''; ?><?php echo APP_NAME; ?></title>
     
     <?php

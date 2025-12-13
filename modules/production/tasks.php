@@ -17,6 +17,11 @@ require_once __DIR__ . '/../../includes/table_styles.php';
 
 requireRole(['production', 'accountant', 'manager']);
 
+// إضافة cache headers لمنع تخزين الصفحة والتأكد من جلب البيانات المحدثة
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+
 $currentUser = getCurrentUser();
 $db = db();
 
@@ -447,12 +452,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
 
         $result = tasksHandleAction($action, $_POST, $context);
-        if ($result['error']) {
-            tasksAddMessage($errorMessages, $result['error']);
-        } elseif ($result['success']) {
-            tasksAddMessage($successMessages, $result['success']);
+        
+        // POST-Redirect-GET pattern لمنع مشاكل الـ cache والتحديث
+        $redirectUrl = $_SERVER['REQUEST_URI'] ?? '?page=tasks';
+        
+        // إزالة معاملات POST من URL
+        $parsedUrl = parse_url($redirectUrl);
+        $redirectPath = $parsedUrl['path'] ?? '';
+        $queryParams = [];
+        
+        // الحفاظ على معاملات GET الحالية (pagination, search, filters)
+        if (isset($parsedUrl['query'])) {
+            parse_str($parsedUrl['query'], $queryParams);
         }
+        
+        // إضافة رسالة النجاح أو الخطأ كمعاملات GET
+        if ($result['error']) {
+            $queryParams['error'] = urlencode($result['error']);
+        } elseif ($result['success']) {
+            $queryParams['success'] = urlencode($result['success']);
+        }
+        
+        // بناء URL نهائي
+        $finalUrl = $redirectPath;
+        if (!empty($queryParams)) {
+            $finalUrl .= '?' . http_build_query($queryParams);
+        }
+        
+        // Redirect بعد POST
+        header('Location: ' . $finalUrl, true, 303);
+        exit;
     }
+}
+
+// قراءة رسائل النجاح/الخطأ من معاملات GET بعد redirect
+$successMessage = isset($_GET['success']) ? urldecode($_GET['success']) : '';
+$errorMessage = isset($_GET['error']) ? urldecode($_GET['error']) : '';
+
+if ($successMessage !== '') {
+    tasksAddMessage($successMessages, $successMessage);
+}
+
+if ($errorMessage !== '') {
+    tasksAddMessage($errorMessages, $errorMessage);
 }
 
 $pageNum = isset($_GET['p']) ? max(1, (int) $_GET['p']) : 1;
@@ -1216,6 +1258,13 @@ function tasksHtml(string $value): string
     document.addEventListener('DOMContentLoaded', function () {
         hideLoader();
         toggleProductionFields();
+        
+        // إزالة معامل timestamp من URL بعد التحميل لمنع تراكمه
+        if (window.location.search.includes('_t=')) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('_t');
+            window.history.replaceState({}, '', url.toString());
+        }
     });
 
     window.addEventListener('load', hideLoader);
@@ -1245,16 +1294,19 @@ function tasksHtml(string $value): string
     const alertElement = successAlert || errorAlert;
     
     if (alertElement && alertElement.dataset.autoRefresh === 'true') {
-        // انتظار 3 ثوانٍ لإعطاء المستخدم وقتاً لرؤية الرسالة
+        // انتظار 2 ثانية لإعطاء المستخدم وقتاً لرؤية الرسالة
         setTimeout(function() {
             // إعادة تحميل الصفحة بدون معاملات GET لمنع تكرار الطلبات
             const currentUrl = new URL(window.location.href);
             // إزالة معاملات success و error من URL
             currentUrl.searchParams.delete('success');
             currentUrl.searchParams.delete('error');
-            // إعادة تحميل الصفحة
+            
+            // إعادة تحميل الصفحة مع force reload من السيرفر (منع cache)
+            // استخدام timestamp كمعامل للتأكد من جلب البيانات المحدثة
+            currentUrl.searchParams.set('_t', Date.now().toString());
             window.location.href = currentUrl.toString();
-        }, 3000);
+        }, 2000);
     }
 })();
 </script>
