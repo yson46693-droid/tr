@@ -39,6 +39,14 @@ try {
 }
 
 // تسجيل معلومات الجلسة قبل التحقق
+// استخدام error_log مباشرة كـ fallback
+error_log("=== API approvals.php - قبل التحقق من isLoggedIn() ===");
+error_log("Session status: " . session_status());
+error_log("Has session: " . (isset($_SESSION) ? 'YES' : 'NO'));
+error_log("Has user_id: " . (isset($_SESSION['user_id']) ? 'YES (' . $_SESSION['user_id'] . ')' : 'NO'));
+error_log("Has logged_in: " . (isset($_SESSION['logged_in']) ? 'YES (' . ($_SESSION['logged_in'] ? 'true' : 'false') . ')' : 'NO'));
+error_log("Session ID: " . (session_id() ? substr(session_id(), 0, 20) . '...' : 'NO_SESSION'));
+
 if (function_exists('logSessionInfo')) {
     logSessionInfo('API approvals.php - قبل التحقق من isLoggedIn()', [
         'session_status' => session_status(),
@@ -47,6 +55,8 @@ if (function_exists('logSessionInfo')) {
         'has_logged_in' => isset($_SESSION['logged_in']),
         'logged_in_value' => $_SESSION['logged_in'] ?? null,
     ]);
+} else {
+    error_log("WARNING: logSessionInfo function not found!");
 }
 
 // التحقق من تسجيل الدخول مع محاولة إصلاح الجلسة إذا كانت صالحة
@@ -121,8 +131,8 @@ if (!$isLoggedInResult) {
         if (function_exists('logApi401')) {
             logApi401('api/approvals.php', 'isLoggedIn() رجع false - الجلسة غير صالحة', [
                 'has_session' => isset($_SESSION),
-                'has_user_id' => isset($_SESSION['user_id'] ?? null),
-                'has_logged_in' => isset($_SESSION['logged_in'] ?? null),
+                'has_user_id' => null !== ($_SESSION['user_id'] ?? null),
+                'has_logged_in' => null !== ($_SESSION['logged_in'] ?? null),
                 'logged_in_value' => $_SESSION['logged_in'] ?? null,
             ]);
         }
@@ -130,6 +140,30 @@ if (!$isLoggedInResult) {
     
     // إذا لم يتم إصلاح الجلسة، إرجاع 401
     if (!$isLoggedInResult) {
+        // تسجيل مفصل قبل إرجاع 401
+        error_log("=== API approvals.php - إرجاع 401 ===");
+        error_log("isLoggedIn() result: FALSE");
+        error_log("Session status: " . session_status());
+        error_log("Has session: " . (isset($_SESSION) ? 'YES' : 'NO'));
+        error_log("Has user_id: " . (isset($_SESSION['user_id']) ? 'YES (' . $_SESSION['user_id'] . ')' : 'NO'));
+        error_log("Has logged_in: " . (isset($_SESSION['logged_in']) ? 'YES (' . ($_SESSION['logged_in'] ? 'true' : 'false') . ')' : 'NO'));
+        error_log("Session ID: " . (session_id() ? substr(session_id(), 0, 20) . '...' : 'NO_SESSION'));
+        error_log("Cookie session name: " . session_name());
+        error_log("Cookie exists: " . (isset($_COOKIE[session_name()]) ? 'YES' : 'NO'));
+        if (isset($_COOKIE[session_name()])) {
+            error_log("Cookie session ID: " . substr($_COOKIE[session_name()], 0, 20) . '...');
+            error_log("Cookie matches session: " . ($_COOKIE[session_name()] === session_id() ? 'YES' : 'NO'));
+        }
+        
+        if (function_exists('logApi401')) {
+            logApi401('api/approvals.php', 'isLoggedIn() رجع false بعد محاولة الإصلاح', [
+                'has_session' => isset($_SESSION),
+                'has_user_id' => null !== ($_SESSION['user_id'] ?? null),
+                'has_logged_in' => null !== ($_SESSION['logged_in'] ?? null),
+                'logged_in_value' => $_SESSION['logged_in'] ?? null,
+            ]);
+        }
+        
         http_response_code(401);
         echo json_encode([
             'success' => false,
