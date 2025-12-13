@@ -469,74 +469,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     $userRole = $result['user']['role'] ?? 'accountant';
                     
-                    // الحصول على المسار الأساسي
-                    $basePath = getBasePath();
-                    $basePath = rtrim($basePath, '/');
-                    
-                    // بناء المسار النسبي للداشبورد
-                    if (!empty($basePath)) {
-                        $dashboardUrl = $basePath . '/dashboard/' . $userRole . '.php';
-                    } else {
-                        $dashboardUrl = '/dashboard/' . $userRole . '.php';
+                    // استخدام دالة getDashboardUrl() للحصول على المسار الصحيح
+                    if (!function_exists('getDashboardUrl')) {
+                        require_once __DIR__ . '/includes/path_helper.php';
                     }
                     
-                    // تنظيف شامل للمسار
-                    // 1. إزالة أي بروتوكول أو hostname
+                    $dashboardUrl = getDashboardUrl($userRole);
+                    
+                    // التأكد من أن المسار نسبي فقط (بدون بروتوكول أو hostname)
                     $dashboardUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $dashboardUrl);
                     $dashboardUrl = preg_replace('/^\/\//', '/', $dashboardUrl);
                     
-                    // 2. التأكد من أن المسار يبدأ بـ /
+                    // التأكد من أن المسار يبدأ بـ /
                     if (strpos($dashboardUrl, '/') !== 0) {
                         $dashboardUrl = '/' . $dashboardUrl;
                     }
                     
-                    // 3. تنظيف المسار (إزالة // المكررة)
+                    // تنظيف المسار من المسارات المكررة
                     $dashboardUrl = preg_replace('/\/+/', '/', $dashboardUrl);
-                    
-                    // 4. إزالة أي hostname إذا كان موجوداً (مثل albarakah.free.nf)
-                    if (preg_match('/^\/[^\/]+\.[a-z]/i', $dashboardUrl)) {
-                        $parts = explode('/', $dashboardUrl);
-                        $dashboardIndex = array_search('dashboard', $parts);
-                        if ($dashboardIndex !== false && $dashboardIndex > 0) {
-                            $dashboardUrl = '/' . implode('/', array_slice($parts, $dashboardIndex));
-                        } else {
-                            // إذا لم نجد dashboard، استخدم المسار الافتراضي
-                            $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
-                        }
-                    }
-                    
-                    // 5. التحقق النهائي: إذا كان المسار لا يحتوي على 'dashboard'، أضفه
-                    if (strpos($dashboardUrl, '/dashboard') === false) {
-                        $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
-                    }
-                    
-                    // 6. التأكد من أن المسار لا يحتوي على http:// أو https:// مرة أخرى
-                    if (strpos($dashboardUrl, 'http://') === 0 || strpos($dashboardUrl, 'https://') === 0) {
-                        $parsed = parse_url($dashboardUrl);
-                        $dashboardUrl = $parsed['path'] ?? ((!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php');
-                    }
-                    
-                    // 7. التحقق النهائي: التأكد من أن المسار يبدأ بـ / ولا يحتوي على بروتوكول
-                    if (strpos($dashboardUrl, '/') !== 0) {
-                        $dashboardUrl = '/' . $dashboardUrl;
-                    }
-                    
-                    // 8. تنظيف نهائي
-                    $dashboardUrl = trim($dashboardUrl);
-                    $dashboardUrl = preg_replace('/\/+/', '/', $dashboardUrl);
-                    
-                    if (empty($dashboardUrl) || $dashboardUrl === '/') {
-                        $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
-                        if (strpos($dashboardUrl, '/') !== 0) {
-                            $dashboardUrl = '/' . $dashboardUrl;
-                        }
-                    }
-                    
-                    // 9. التحقق النهائي: التأكد من أن المسار نسبي وليس URL كامل
-                    if (strpos($dashboardUrl, '://') !== false) {
-                        $parsed = parse_url($dashboardUrl);
-                        $dashboardUrl = $parsed['path'] ?? '/dashboard/' . $userRole . '.php';
-                    }
                     
                     // تنظيف output buffer قبل التوجيه
                     while (ob_get_level() > 0) {
@@ -544,13 +494,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     
                     // تسجيل المسار للتشخيص
-                    error_log("Login redirect - Dashboard URL: {$dashboardUrl} | Base Path: {$basePath} | Role: {$userRole}");
+                    error_log("Login redirect - Dashboard URL: {$dashboardUrl} | Role: {$userRole}");
                     
+                    // استخدام JavaScript redirect دائماً لضمان نجاح التوجيه
+                    // هذا يحل مشكلة ERR_FAILED التي قد تحدث مع header redirect
+                    $escapedUrl = htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8');
+                    
+                    // محاولة استخدام header redirect أولاً إذا كان ممكناً
                     if (!headers_sent()) {
-                        header('Location: ' . $dashboardUrl, true, 303);
+                        // إرسال header redirect مع JavaScript fallback
+                        header('Content-Type: text/html; charset=utf-8');
+                        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Redirecting...</title>';
+                        echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
+                        echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
+                        echo '</head><body><p>جاري التحويل... <a href="' . $escapedUrl . '">اضغط هنا إذا لم يتم التحويل تلقائياً</a></p></body></html>';
                         exit;
                     } else {
-                        $escapedUrl = htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8');
+                        // إذا كانت headers قد أُرسلت، استخدم JavaScript فقط
                         echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
                         echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
                         exit;
