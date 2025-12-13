@@ -361,30 +361,6 @@ function deleteAllNotifications($userId) {
         [$userId]
     );
     
-    // تنظيف Cache بعد حذف جميع الإشعارات
-    if (!class_exists('Cache')) {
-        $cacheFile = __DIR__ . '/cache.php';
-        if (file_exists($cacheFile)) {
-            require_once $cacheFile;
-        }
-    }
-    
-    if (class_exists('Cache')) {
-        // حذف جميع مفاتيح cache المتعلقة بالإشعارات
-        try {
-            Cache::forget("notification_count_{$userId}");
-            Cache::forget("notifications_{$userId}_all_50");
-            Cache::forget("notifications_{$userId}_unread_50");
-            // محاولة حذف cache بأعداد مختلفة
-            for ($limit = 10; $limit <= 100; $limit += 10) {
-                Cache::forget("notifications_{$userId}_all_{$limit}");
-                Cache::forget("notifications_{$userId}_unread_{$limit}");
-            }
-        } catch (Exception $e) {
-            error_log("Error clearing notification cache: " . $e->getMessage());
-        }
-    }
-    
     return true;
 }
 

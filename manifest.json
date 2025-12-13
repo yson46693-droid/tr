@@ -5,16 +5,10 @@
   "description": "نظام إدارة متكامل لمصنع شركة البركه ومنتجات المصطفي - AL MOUSTAFA",
   "start_url": "/v1/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#f4d03f",
   "theme_color": "#f1c40f",
   "orientation": "any",
   "scope": "/v1/",
-  "dir": "rtl",
-  "lang": "ar",
-  "iarc_rating_id": "",
-  "related_applications": [],
-  "prefer_related_applications": false,
   "icons": [
     {
       "src": "assets/icons/icon-72x72.png",
@@ -114,6 +108,9 @@
     }
   ],
   "categories": ["business", "productivity"],
+  "lang": "ar",
+  "dir": "rtl",
+  "prefer_related_applications": false,
   "shortcuts": [
     {
       "name": "لوحة التحكم",

@@ -158,12 +158,6 @@ function protectFormFromCSRF() {
             (isset($_POST['username']) && isset($_POST['password']))
         );
         
-        // === تعطيل التحقق من CSRF تماماً لطلبات تسجيل الدخول ===
-        // لأن session_regenerate_id() يغير session_id وبالتالي يفقد CSRF token
-        if ($isLoginRequest) {
-            return true; // السماح بطلبات تسجيل الدخول بدون التحقق من CSRF
-        }
-        
         // استثناءات (APIs و WebAuthn)
         if (strpos($uri, '/api/') !== false || 
             strpos($uri, '/webauthn/') !== false ||
@@ -227,21 +221,13 @@ function protectFormFromCSRF() {
             
             error_log($logMessage);
             
-            // لطلبات تسجيل الدخول، نسمح بتجاوز التحقق إذا كان هناك token في الطلب
-            // لأن session_regenerate_id() سيتم استدعاؤه في login() مما يغير token
-            if ($isLoginRequest && $hasTokenInPost) {
-                // لطلبات تسجيل الدخول مع token، نسمح بتجاوز التحقق
-                error_log("CSRF: Allowing login request to proceed despite validation failure (session regeneration will occur)");
-                return true; // نسمح للمتابعة
-            }
-            
             // فقط في حالة عدم كونها طلب تسجيل دخول أو في حالة عدم وجود token نهائياً
             if (!$isLoginRequest || (!$hasTokenInPost && !$hasTokenInSession)) {
                 http_response_code(403);
                 die('خطأ في التحقق الأمني. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
             }
             
-            // لطلبات تسجيل الدخول بدون token، نعيد false للسماح للمعالج الأعلى بالتعامل معها
+            // لطلبات تسجيل الدخول، نعيد false للسماح للمعالج الأعلى بالتعامل معها
             return false;
         }
         

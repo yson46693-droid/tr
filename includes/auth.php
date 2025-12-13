@@ -47,11 +47,6 @@ function getPasswordMinLength(): int
  * التحقق من تسجيل الدخول
  */
 function isLoggedIn() {
-    // تسجيل بداية التحقق من الجلسة
-    $startTime = microtime(true);
-    $requestUri = $_SERVER['REQUEST_URI'] ?? 'unknown';
-    $scriptName = $_SERVER['SCRIPT_NAME'] ?? 'unknown';
-    
     // التحقق من أننا في profile.php أو attendance.php أو notifications API - منع حذف الجلسة
     $isProfilePage = false;
     $isAttendancePage = false;
@@ -99,233 +94,19 @@ function isLoggedIn() {
         if (!headers_sent()) {
             @session_start();
         } else {
-            // تسجيل سبب الفشل
-            $duration = round((microtime(true) - $startTime) * 1000, 2);
-            if (function_exists('logSessionFailure')) {
-                logSessionFailure('الجلسة غير نشطة و headers تم إرسالها بالفعل', [
-                    'session_status' => session_status(),
-                    'headers_sent' => headers_sent(),
-                    'duration_ms' => $duration,
-                    'script' => $scriptName,
-                    'uri' => $requestUri,
-                ]);
-            }
-            error_log("isLoggedIn() FALSE: Session not started and headers already sent | Duration: {$duration}ms | Script: {$scriptName} | URI: {$requestUri}");
             return false;
         }
     }
     
     // التأكد من وجود $_SESSION
     if (!isset($_SESSION) || !is_array($_SESSION)) {
-        // تسجيل سبب الفشل
-        $duration = round((microtime(true) - $startTime) * 1000, 2);
-        if (function_exists('logSessionFailure')) {
-            logSessionFailure('$_SESSION غير موجود أو ليس array', [
-                'has_session' => isset($_SESSION),
-                'is_array' => isset($_SESSION) && is_array($_SESSION),
-                'duration_ms' => $duration,
-                'script' => $scriptName,
-                'uri' => $requestUri,
-            ]);
-        }
-        error_log("isLoggedIn() FALSE: \$_SESSION not set or not array | Duration: {$duration}ms | Script: {$scriptName} | URI: {$requestUri}");
         return false;
     }
     
-    // === التحقق الإجباري من الجلسة في قاعدة البيانات (المصدر الوحيد الموثوق) ===
-    // لا يمكن الاعتماد على $_SESSION['logged_in'] فقط - يجب التحقق من قاعدة البيانات دائماً
-    if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        $userId = $_SESSION['user_id'];
-        $sessionId = session_id();
-        
-        // تسجيل معلومات الجلسة للمساعدة في التشخيص (معطل لتقليل سجلات الأخطاء)
-        // error_log("isLoggedIn() CHECK: user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
-        
-        // التحقق الإجباري من قاعدة البيانات - إذا لم توجد جلسة، الجلسة غير صالحة
-        $sessionValidInDB = false;
-        try {
-            if (ensureSessionsTable()) {
-                $db = db();
-                
-                // البحث عن الجلسة في قاعدة البيانات - يجب أن تطابق session_id تماماً
-                // لا نحاول "إصلاح" الجلسة لأن ذلك سيسمح للجهاز القديم بإعادة إنشاء الجلسة بعد حذفها
-                
-                // البحث أولاً بدون شرط expires_at للتحقق من وجود الجلسة
-                $sessionRecord = $db->queryOne(
-                    "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
-                    [$userId, $sessionId]
-                );
-                
-                // إذا وُجدت الجلسة لكنها منتهية الصلاحية، نمددها
-                if ($sessionRecord && strtotime($sessionRecord['expires_at']) < time()) {
-                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                    $db->execute(
-                        "UPDATE sessions SET expires_at = ?, last_activity = NOW() WHERE id = ?",
-                        [$newExpiresAt, $sessionRecord['id']]
-                    );
-                    $sessionRecord['expires_at'] = $newExpiresAt;
-                    error_log("isLoggedIn() EXTENDED: Session expired but extended for user_id: {$userId}");
-                }
-                
-                // البحث مرة أخرى مع شرط expires_at
-                if ($sessionRecord) {
-                    $sessionRecord = $db->queryOne(
-                        "SELECT * FROM sessions WHERE user_id = ? AND session_id = ? AND expires_at > NOW()",
-                        [$userId, $sessionId]
-                    );
-                }
-                
-                // === تحقق أمني: إذا لم توجد الجلسة بنفس session_id، الجلسة غير صالحة ===
-                // لا نحاول البحث عن جلسات أخرى أو إصلاح الجلسة لأن ذلك سيسمح للجهاز القديم
-                // بإعادة إنشاء الجلسة بعد حذفها عند تسجيل الدخول من جهاز جديد
-                
-                // إذا لم توجد الجلسة في قاعدة البيانات، الجلسة غير صالحة - حذفها فوراً
-                if (!$sessionRecord) {
-                    // تسجيل تفصيلي للمساعدة في التشخيص
-                    $allSessions = $db->query("SELECT * FROM sessions WHERE user_id = ?", [$userId]);
-                    $sessionCount = count($allSessions);
-                    error_log("isLoggedIn() SECURITY: Session not found in database for user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
-                    error_log("isLoggedIn() DEBUG: Total sessions for user_id {$userId}: {$sessionCount}");
-                    
-                    if ($sessionCount > 0) {
-                        foreach ($allSessions as $sess) {
-                            error_log("isLoggedIn() DEBUG: Found OTHER session_id: " . substr($sess['session_id'], 0, 20) . "... (expires_at: {$sess['expires_at']}, created_at: {$sess['created_at']})");
-                            // هذا يعني أن هناك جلسة جديدة من جهاز آخر - الجهاز الحالي (القديم) يجب أن يُمنع
-                            error_log("isLoggedIn() SECURITY WARNING: Old device detected - session was deleted, access denied");
-                        }
-                    } else {
-                        error_log("isLoggedIn() DEBUG: No sessions found for user_id {$userId} - session was deleted");
-                    }
-                    
-                    // === حذف فوري للجلسة PHP والـ cookies ===
-                    // هذا يمنع الجهاز القديم من الوصول حتى لو كان لديه session cookie
-                    $_SESSION = [];
-                    @session_unset();
-                    @session_destroy();
-                    
-                    // حذف session cookie من المتصفح
-                    $sessionName = session_name();
-                    if (isset($_COOKIE[$sessionName])) {
-                        // حذف cookie من جميع المسارات
-                        setcookie($sessionName, '', time() - 3600, '/');
-                        setcookie($sessionName, '', time() - 3600, '/', '');
-                        unset($_COOKIE[$sessionName]);
-                    }
-                    
-                    // تسجيل فشل الجلسة للأمان
-                    $duration = round((microtime(true) - $startTime) * 1000, 2);
-                    if (function_exists('logSessionFailure')) {
-                        logSessionFailure('الجلسة غير موجودة في قاعدة البيانات - الجهاز القديم مُنع من الوصول', [
-                            'user_id' => $userId,
-                            'session_id' => substr($sessionId, 0, 20),
-                            'reason' => 'Session deleted - new device login',
-                            'duration_ms' => $duration,
-                            'script' => $scriptName,
-                            'uri' => $requestUri,
-                        ]);
-                    }
-                    
-                    // إرجاع false لمنع الوصول
-                    error_log("isLoggedIn() ACCESS DENIED: Old device session invalidated - user must login again");
-                    return false;
-                }
-                
-                // الجلسة موجودة في قاعدة البيانات - صالحة
-                $sessionValidInDB = true;
-                
-                // === تحديث last_activity و expires_at في قاعدة البيانات ===
-                // نحدث expires_at دائماً لضمان بقاء الجلسة صالحة طالما أن المستخدم نشط
-                // لكن لتقليل التحديثات في قاعدة البيانات، نحدث فقط إذا:
-                // 1. مر أكثر من 60 ثانية منذ آخر تحديث لـ last_activity، أو
-                // 2. expires_at قريب من الانتهاء (أقل من يومين)
-                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                $lastActivity = strtotime($sessionRecord['last_activity']);
-                $expiresAt = strtotime($sessionRecord['expires_at']);
-                $currentTime = time();
-                $timeSinceLastActivity = $currentTime - $lastActivity;
-                $timeUntilExpiry = $expiresAt - $currentTime;
-                
-                // التحقق من الحاجة للتحديث
-                $shouldUpdate = false;
-                $updateReason = '';
-                
-                // تحديث إذا مر أكثر من دقيقة منذ آخر تحديث
-                if ($timeSinceLastActivity > 60) {
-                    $shouldUpdate = true;
-                    $updateReason = 'last_activity > 60 seconds';
-                }
-                // أو إذا كان expires_at قريب من الانتهاء (أقل من يومين)
-                elseif ($timeUntilExpiry < (3600 * 24 * 2)) {
-                    $shouldUpdate = true;
-                    $updateReason = 'expires_at < 2 days remaining';
-                }
-                
-                if ($shouldUpdate) {
-                    // تحديث expires_at إلى 7 أيام من الآن
-                    $newExpiresAt = date('Y-m-d H:i:s', $currentTime + $sessionLifetime);
-                    $db->execute(
-                        "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE id = ?",
-                        [$newExpiresAt, $sessionRecord['id']]
-                    );
-                    // تم تعطيل التسجيل لتقليل استهلاك الموارد
-                    // error_log("isLoggedIn() UPDATED: Session extended for user_id: {$userId}, reason: {$updateReason}, time_until_expiry: " . round($timeUntilExpiry / 3600, 2) . " hours, new expires_at: {$newExpiresAt}");
-                }
-            } else {
-                // فشل في إنشاء جدول الجلسات - خطأ في قاعدة البيانات
-                error_log("isLoggedIn() ERROR: Failed to ensure sessions table exists");
-                $sessionValidInDB = false;
-            }
-        } catch (Exception $e) {
-            error_log("Error checking session in database: " . $e->getMessage());
-            $sessionValidInDB = false;
-        }
-        
-        // === إذا لم تكن الجلسة صالحة في قاعدة البيانات، حذفها وإرجاع false ===
-        // هذا هو التحقق الأمني الرئيسي - يجب أن تكون الجلسة موجودة في قاعدة البيانات
-        if (!$sessionValidInDB) {
-            // في حالة الخطأ في قاعدة البيانات أو عدم وجود الجلسة، نعتبر الجلسة غير صالحة للأمان
-            $_SESSION = [];
-            @session_unset();
-            @session_destroy();
-            
-            // حذف cookies
-            if (isset($_COOKIE[session_name()])) {
-                setcookie(session_name(), '', time() - 3600, '/');
-            }
-            
-            $duration = round((microtime(true) - $startTime) * 1000, 2);
-            if (function_exists('logSessionFailure')) {
-                logSessionFailure('فشل التحقق من الجلسة في قاعدة البيانات - الجلسة غير موجودة', [
-                    'user_id' => $userId ?? null,
-                    'session_id' => substr($sessionId ?? '', 0, 20),
-                    'duration_ms' => $duration,
-                    'script' => $scriptName,
-                    'uri' => $requestUri,
-                ]);
-            }
-            
-            error_log("isLoggedIn() SECURITY FAIL: Session not found in database - Access denied | User ID: {$userId} | Session ID: " . substr($sessionId ?? '', 0, 20));
-            return false;
-        }
-        
-        // === الجلسة موجودة في قاعدة البيانات - المتابعة ===
-        // التحقق من user_id (يجب أن يكون موجوداً لأننا وصلنا هنا)
+    // التحقق من الجلسة أولاً (قبل أي فحوصات أخرى)
+    if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+        // التحقق الإضافي: التأكد من وجود user_id في الجلسة
         if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
-        // تسجيل سبب الفشل
-        $duration = round((microtime(true) - $startTime) * 1000, 2);
-        if (function_exists('logSessionFailure')) {
-            logSessionFailure('user_id غير موجود أو فارغ في الجلسة', [
-                'has_user_id' => isset($_SESSION['user_id']),
-                'user_id_value' => $_SESSION['user_id'] ?? null,
-                'logged_in' => $_SESSION['logged_in'] ?? null,
-                'duration_ms' => $duration,
-                'script' => $scriptName,
-                'uri' => $requestUri,
-            ]);
-        }
-        error_log("isLoggedIn() FALSE: user_id not set or empty | logged_in: " . ($_SESSION['logged_in'] ?? 'NOT_SET') . " | Duration: {$duration}ms | Script: {$scriptName} | URI: {$requestUri}");
-            
             // إذا لم يكن هناك user_id، إلغاء الجلسة فقط إذا لم نكن في profile.php أو attendance.php
             if (!$isProtectedPage) {
                 session_unset();
@@ -384,54 +165,13 @@ function isLoggedIn() {
             }
         }
         
-        // تسجيل نجاح التحقق
-        $duration = round((microtime(true) - $startTime) * 1000, 2);
-        if (function_exists('logSessionInfo')) {
-            logSessionInfo('isLoggedIn() SUCCESS', [
-                'duration_ms' => $duration,
-                'user_id' => $_SESSION['user_id'] ?? null,
-                'script' => $scriptName,
-                'uri' => $requestUri,
-            ]);
-        }
-        // تسجيل نجاح التحقق (معطل لتقليل سجلات الأخطاء)
-        // error_log("isLoggedIn() TRUE: User ID " . ($_SESSION['user_id'] ?? 'unknown') . " | Duration: {$duration}ms | Script: {$scriptName}");
         return true;
     }
     
     // إذا لم تكن هناك جلسة، التحقق من cookie "تذكرني"
     if (isset($_COOKIE['remember_token'])) {
-        $rememberResult = checkRememberToken($_COOKIE['remember_token']);
-        $duration = round((microtime(true) - $startTime) * 1000, 2);
-        if (!$rememberResult) {
-            if (function_exists('logSessionFailure')) {
-                logSessionFailure('فشل التحقق من remember_token', [
-                    'has_remember_token' => isset($_COOKIE['remember_token']),
-                    'duration_ms' => $duration,
-                ]);
-            }
-            error_log("isLoggedIn() FALSE: Remember token check failed | Duration: {$duration}ms | Script: {$scriptName}");
-        } else {
-            // تسجيل نجاح التحقق (معطل لتقليل سجلات الأخطاء)
-            // error_log("isLoggedIn() TRUE: Remember token valid | Duration: {$duration}ms | Script: {$scriptName}");
-        }
-        return $rememberResult;
+        return checkRememberToken($_COOKIE['remember_token']);
     }
-    
-    // تسجيل سبب الفشل النهائي
-    $duration = round((microtime(true) - $startTime) * 1000, 2);
-    if (function_exists('logSessionFailure')) {
-        logSessionFailure('لا توجد جلسة مسجل دخول ولا remember_token', [
-            'has_logged_in' => isset($_SESSION['logged_in']),
-            'logged_in_value' => $_SESSION['logged_in'] ?? null,
-            'has_user_id' => isset($_SESSION['user_id']),
-            'has_remember_token' => isset($_COOKIE['remember_token']),
-            'duration_ms' => $duration,
-            'script' => $scriptName,
-            'uri' => $requestUri,
-        ]);
-    }
-    error_log("isLoggedIn() FALSE: No logged_in session and no remember_token | logged_in: " . ($_SESSION['logged_in'] ?? 'NOT_SET') . " | user_id: " . ($_SESSION['user_id'] ?? 'NOT_SET') . " | Duration: {$duration}ms | Script: {$scriptName} | URI: {$requestUri}");
     
     return false;
 }
@@ -469,84 +209,6 @@ function ensureRememberTokensTable() {
         }
     }
     return true;
-}
-
-/**
- * إنشاء جدول sessions إذا لم يكن موجوداً
- * لتخزين جلسات تسجيل الدخول النشطة في قاعدة البيانات
- */
-function ensureSessionsTable() {
-    $db = db();
-    $tableCheck = $db->queryOne("SHOW TABLES LIKE 'sessions'");
-    
-    if (empty($tableCheck)) {
-        try {
-            $db->execute("
-                CREATE TABLE IF NOT EXISTS `sessions` (
-                  `id` int(11) NOT NULL AUTO_INCREMENT,
-                  `user_id` int(11) NOT NULL,
-                  `session_id` varchar(128) NOT NULL,
-                  `ip_address` varchar(45) DEFAULT NULL,
-                  `user_agent` text DEFAULT NULL,
-                  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                  `expires_at` datetime NOT NULL,
-                  `last_activity` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                  PRIMARY KEY (`id`),
-                  UNIQUE KEY `session_id` (`session_id`),
-                  KEY `user_id` (`user_id`),
-                  KEY `expires_at` (`expires_at`),
-                  KEY `last_activity` (`last_activity`),
-                  CONSTRAINT `sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            ");
-        } catch (Exception $e) {
-            error_log("Error creating sessions table: " . $e->getMessage());
-            return false;
-        }
-    }
-    return true;
-}
-
-/**
- * تنظيف الجلسات المنتهية الصلاحية من قاعدة البيانات
- * يمكن استدعاء هذه الدالة من cron job لتنظيف الجلسات القديمة
- * 
- * @param int $extraDays عدد الأيام الإضافية بعد انتهاء الصلاحية للحذف (افتراضي 0)
- * @return array إحصائيات عملية التنظيف
- */
-function cleanupExpiredSessions($extraDays = 0) {
-    try {
-        if (!ensureSessionsTable()) {
-            return [
-                'success' => false,
-                'deleted' => 0,
-                'message' => 'جدول sessions غير موجود'
-            ];
-        }
-        
-        $db = db();
-        
-        // حذف الجلسات المنتهية الصلاحية
-        $result = $db->execute(
-            "DELETE FROM sessions WHERE expires_at < DATE_SUB(NOW(), INTERVAL ? DAY)",
-            [$extraDays]
-        );
-        
-        $deletedCount = intval($result['affected_rows'] ?? 0);
-        
-        return [
-            'success' => true,
-            'deleted' => $deletedCount,
-            'message' => "تم حذف {$deletedCount} جلسة منتهية الصلاحية"
-        ];
-    } catch (Exception $e) {
-        error_log("Error cleaning up expired sessions: " . $e->getMessage());
-        return [
-            'success' => false,
-            'deleted' => 0,
-            'message' => 'حدث خطأ أثناء تنظيف الجلسات: ' . $e->getMessage()
-        ];
-    }
 }
 
 /**
@@ -635,42 +297,6 @@ function checkRememberToken($cookieValue) {
         $_SESSION['last_activity'] = time(); // تحديث وقت آخر نشاط
         generateCSRFToken(true);
         
-        // حفظ الجلسة في قاعدة البيانات
-        try {
-            if (ensureSessionsTable()) {
-                $db = db();
-                $sessionId = session_id();
-                if (!empty($sessionId)) {
-                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // افتراضياً 7 أيام
-                    $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-                    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255); // الحد الأقصى 255 حرف
-                    
-                    // حذف جميع الجلسات القديمة للمستخدم أولاً (لتجنب الجلسات المتعددة)
-                    try {
-                        $db->execute("DELETE FROM sessions WHERE user_id = ?", [$tokenRecord['user_id']]);
-                    } catch (Exception $deleteError) {
-                        error_log("Error deleting old sessions in checkRememberToken: " . $deleteError->getMessage());
-                    }
-                    
-                    // إضافة الجلسة الجديدة (واحدة فقط)
-                    try {
-                        $db->execute(
-                            "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                             VALUES (?, ?, ?, ?, ?, NOW())",
-                            [$tokenRecord['user_id'], $sessionId, $ipAddress, $userAgent, $expiresAt]
-                        );
-                    } catch (Exception $insertError) {
-                        error_log("Error inserting session in checkRememberToken: " . $insertError->getMessage());
-                        // لا نتوقف عن تسجيل الدخول إذا فشل حفظ الجلسة في قاعدة البيانات
-                    }
-                }
-            }
-        } catch (Exception $e) {
-            error_log("Error in session database operations in checkRememberToken: " . $e->getMessage());
-            // لا نتوقف عن تسجيل الدخول إذا فشل حفظ الجلسة في قاعدة البيانات
-        }
-        
         return true;
     } catch (Exception $e) {
         error_log("Remember Token Check Error: " . $e->getMessage());
@@ -684,34 +310,26 @@ function checkRememberToken($cookieValue) {
  * مع استخدام Cache لتحسين الأداء
  */
 function getCurrentUser() {
-    $startTime = microtime(true);
-    $scriptName = $_SERVER['SCRIPT_NAME'] ?? 'unknown';
-    $requestUri = $_SERVER['REQUEST_URI'] ?? 'unknown';
-    
     // التأكد من أن الجلسة نشطة
     if (session_status() === PHP_SESSION_NONE) {
         if (!headers_sent()) {
             @session_start();
         } else {
-            error_log("getCurrentUser() NULL: Session not started and headers sent | Script: {$scriptName}");
             return null;
         }
     }
     
     // التأكد من وجود $_SESSION
     if (!isset($_SESSION) || !is_array($_SESSION)) {
-        error_log("getCurrentUser() NULL: \$_SESSION not set or not array | Script: {$scriptName}");
         return null;
     }
     
     if (!isLoggedIn()) {
-        error_log("getCurrentUser() NULL: isLoggedIn() returned false | Script: {$scriptName}");
         return null;
     }
     
     $userId = $_SESSION['user_id'] ?? null;
     if (!$userId) {
-        error_log("getCurrentUser() NULL: user_id not set in session | Script: {$scriptName}");
         return null;
     }
     
@@ -728,42 +346,21 @@ function getCurrentUser() {
     
     // إذا كان Cache متاحاً، استخدمه
     if (class_exists('Cache')) {
-        $user = Cache::remember($cacheKey, function() use ($userId, $scriptName) {
-            // تم تعطيل التسجيل لتقليل استهلاك الموارد
-            // error_log("getCurrentUser() - Loading from database (cache miss) for user ID {$userId} | Script: {$scriptName}");
+        $user = Cache::remember($cacheKey, function() use ($userId) {
             return getCurrentUserFromDatabase($userId);
         }, 300); // 5 دقائق
         
         // إذا كان المستخدم null (محذوف)، احذف من Cache
         if ($user === null) {
             Cache::forget($cacheKey);
-            $duration = round((microtime(true) - $startTime) * 1000, 2);
-            // تم تعطيل التسجيل لتقليل استهلاك الموارد
-            // error_log("getCurrentUser() NULL: User not found in database (from cache) for user ID {$userId} | Duration: {$duration}ms | Script: {$scriptName}");
             return null;
         }
         
-        $duration = round((microtime(true) - $startTime) * 1000, 2);
-        // تم تعطيل التسجيل لتقليل استهلاك الموارد
-        // error_log("getCurrentUser() SUCCESS (from cache): User ID {$userId}, Role: " . ($user['role'] ?? 'NOT_SET') . " | Duration: {$duration}ms | Script: {$scriptName}");
         return $user;
     }
     
     // إذا لم يكن Cache متاحاً، استخدم الطريقة القديمة
-    // تم تعطيل التسجيل لتقليل استهلاك الموارد
-    // error_log("getCurrentUser() - Loading from database (no cache) for user ID {$userId} | Script: {$scriptName}");
-    $user = getCurrentUserFromDatabase($userId);
-    
-    $duration = round((microtime(true) - $startTime) * 1000, 2);
-    if ($user) {
-        // تم تعطيل التسجيل لتقليل استهلاك الموارد
-        // error_log("getCurrentUser() SUCCESS: User ID {$userId}, Role: " . ($user['role'] ?? 'NOT_SET') . ", Status: " . ($user['status'] ?? 'NOT_SET') . " | Duration: {$duration}ms | Script: {$scriptName}");
-    } else {
-        // تم تعطيل التسجيل لتقليل استهلاك الموارد
-        // error_log("getCurrentUser() NULL: getCurrentUserFromDatabase() returned null for user ID {$userId} | Duration: {$duration}ms | Script: {$scriptName}");
-    }
-    
-    return $user;
+    return getCurrentUserFromDatabase($userId);
 }
 
 /**
@@ -999,172 +596,23 @@ function login($username, $password, $rememberMe = false) {
     // حفظ CSRF token الحالي قبل إعادة توليد الجلسة (للمساعدة في التحقق)
     $currentCsrfToken = $_SESSION['csrf_token'] ?? null;
     
-    // التأكد من أن الجلسة نشطة
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
+    // تسجيل الدخول
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        // حفظ token السابق قبل إعادة توليد الجلسة
+        if ($currentCsrfToken) {
+            $_SESSION['csrf_token_previous'] = $currentCsrfToken;
+            $_SESSION['csrf_token_previous_time'] = time();
+        }
+        session_regenerate_id(true);
     }
     
-    // حفظ بيانات المستخدم مباشرة في $_SESSION
+    // إنشاء token جديد بعد إعادة توليد الجلسة
+    generateCSRFToken(true);
     $_SESSION['user_id'] = $user['id'];
     $_SESSION['username'] = $user['username'];
     $_SESSION['role'] = $user['role'];
     $_SESSION['logged_in'] = true;
-    $_SESSION['last_activity'] = time();
-    
-    // حفظ CSRF token السابق إذا كان موجوداً
-    if (isset($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token_previous'] = $_SESSION['csrf_token'];
-        $_SESSION['csrf_token_previous_time'] = time();
-    }
-    
-    // === إعادة توليد session_id مع الحفاظ على البيانات ===
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        // حفظ نسخة احتياطية من البيانات قبل إعادة التوليد
-        $sessionBackup = [];
-        foreach ($_SESSION as $key => $value) {
-            $sessionBackup[$key] = $value;
-        }
-        
-        // إعادة توليد session_id (false = يحتفظ بالبيانات)
-        session_regenerate_id(false);
-        
-        // التأكد من أن البيانات لا تزال موجودة
-        if (empty($_SESSION) || !isset($_SESSION['user_id'])) {
-            error_log("Login WARNING: Session data lost after regenerate_id - restoring from backup");
-            $_SESSION = $sessionBackup;
-        }
-        
-        // التأكد مرة أخرى من البيانات الأساسية
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['username'] = $user['username'];
-        $_SESSION['role'] = $user['role'];
-        $_SESSION['logged_in'] = true;
-        $_SESSION['last_activity'] = time();
-    }
-    
-    // إنشاء token جديد بعد إعادة توليد الجلسة
-    if (function_exists('generateCSRFToken')) {
-        generateCSRFToken(true);
-    }
-    
-    // التحقق النهائي قبل حفظ الجلسة في قاعدة البيانات
-    if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || !isset($_SESSION['user_id']) || $_SESSION['user_id'] != $user['id']) {
-        error_log("Login CRITICAL: Session data verification failed before saving to DB - forcing restore");
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['username'] = $user['username'];
-        $_SESSION['role'] = $user['role'];
-        $_SESSION['logged_in'] = true;
-        $_SESSION['last_activity'] = time();
-    }
-    
-    // التأكد من أن session_id موجود
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        session_start();
-    }
-    
-    // حفظ الجلسة في قاعدة البيانات - ضروري للتحقق
-    // يجب الحصول على session_id بعد session_regenerate_id()
-    $sessionId = session_id();
-    $userId = $user['id'];
-    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
-    
-    // التأكد من أن session_id موجود وصحيح
-    if (empty($sessionId)) {
-        error_log("Login ERROR: session_id is empty after session_regenerate_id()");
-        $_SESSION = [];
-        @session_unset();
-        @session_destroy();
-        return ['success' => false, 'message' => 'حدث خطأ أثناء إنشاء الجلسة. يرجى المحاولة مرة أخرى.'];
-    }
-    
-    if (ensureSessionsTable()) {
-        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-        $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-        
-        // حفظ الجلسة بشكل متزامن - ضروري للتحقق
-        try {
-            $db = db();
-            
-            // حذف جميع الجلسات القديمة للمستخدم أولاً (لتجنب الجلسات المتعددة)
-            $db->execute("DELETE FROM sessions WHERE user_id = ?", [$userId]);
-            
-            // إضافة الجلسة الجديدة (واحدة فقط)
-            $result = $db->execute(
-                "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                 VALUES (?, ?, ?, ?, ?, NOW())",
-                [$userId, $sessionId, $ipAddress, $userAgent, $expiresAt]
-            );
-            
-            // التحقق من نجاح الحفظ
-            if ($result) {
-                error_log("Login SUCCESS: Session saved to database for user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
-                
-                // التحقق من أن الجلسة تم حفظها بالفعل
-                $verifySession = $db->queryOne(
-                    "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
-                    [$userId, $sessionId]
-                );
-                
-                if (!$verifySession) {
-                    error_log("Login WARNING: Session saved but verification failed for user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
-                    // محاولة إعادة الحفظ
-                    try {
-                        $db->execute(
-                            "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                             VALUES (?, ?, ?, ?, ?, NOW())
-                             ON DUPLICATE KEY UPDATE last_activity = NOW()",
-                            [$userId, $sessionId, $ipAddress, $userAgent, $expiresAt]
-                        );
-                        error_log("Login: Retried saving session for user_id: {$userId}");
-                        
-                        // التحقق مرة أخرى
-                        $verifySession = $db->queryOne(
-                            "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
-                            [$userId, $sessionId]
-                        );
-                        if ($verifySession) {
-                            error_log("Login VERIFIED: Session confirmed after retry for user_id: {$userId}");
-                        }
-                    } catch (Exception $retryError) {
-                        error_log("Login ERROR: Retry failed: " . $retryError->getMessage());
-                    }
-                } else {
-                    error_log("Login VERIFIED: Session confirmed in database for user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
-                }
-                
-                // التأكد النهائي من وجود البيانات في $_SESSION بعد حفظ الجلسة
-                if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || !isset($_SESSION['user_id'])) {
-                    error_log("Login CRITICAL ERROR: Session data lost after saving to DB - restoring");
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['username'] = $user['username'];
-                    $_SESSION['role'] = $user['role'];
-                    $_SESSION['logged_in'] = true;
-                    $_SESSION['last_activity'] = time();
-                }
-            } else {
-                error_log("Login ERROR: Failed to save session to database for user_id: {$userId}");
-                $_SESSION = [];
-                @session_unset();
-                @session_destroy();
-                return ['success' => false, 'message' => 'حدث خطأ أثناء حفظ الجلسة. يرجى المحاولة مرة أخرى.'];
-            }
-        } catch (Exception $e) {
-            error_log("Login ERROR: Exception saving session to database: " . $e->getMessage());
-            error_log("Login ERROR: Stack trace: " . $e->getTraceAsString());
-            // إذا فشل حفظ الجلسة، نعتبر تسجيل الدخول فاشلاً
-            $_SESSION = [];
-            @session_unset();
-            @session_destroy();
-            return ['success' => false, 'message' => 'حدث خطأ أثناء حفظ الجلسة. يرجى المحاولة مرة أخرى.'];
-        }
-    } else {
-        error_log("Login ERROR: Failed to ensure sessions table exists");
-        $_SESSION = [];
-        @session_unset();
-        @session_destroy();
-        return ['success' => false, 'message' => 'حدث خطأ أثناء تهيئة الجلسة. يرجى المحاولة مرة أخرى.'];
-    }
+    $_SESSION['last_activity'] = time(); // تحديث وقت آخر نشاط
     
     // إذا تم تفعيل "تذكرني"، إنشاء cookie
     if ($rememberMe) {
@@ -1276,23 +724,6 @@ function logout() {
     // تنظيف Cache قبل تسجيل الخروج
     if (function_exists('clearUserCache')) {
         clearUserCache();
-    }
-    
-    // حذف جميع الجلسات للمستخدم من قاعدة البيانات (ليس فقط الجلسة الحالية)
-    if ($userId) {
-        try {
-            if (ensureSessionsTable()) {
-                $db = db();
-                // حذف جميع الجلسات للمستخدم من قاعدة البيانات
-                $db->execute(
-                    "DELETE FROM sessions WHERE user_id = ?",
-                    [$userId]
-                );
-                error_log("Logout: Deleted all sessions for user_id: {$userId}");
-            }
-        } catch (Exception $e) {
-            error_log("Logout Session Delete Error: " . $e->getMessage());
-        }
     }
     
     // حذف جميع remember tokens للمستخدم من قاعدة البيانات (ليس فقط token الحالي)
@@ -1522,11 +953,8 @@ function requireLogin() {
         }
     }
     
-    // التحقق من تسجيل الدخول - المصدر الوحيد للتحقق
-    // isLoggedIn() يتحقق من قاعدة البيانات أولاً
-    $loginCheckResult = isLoggedIn();
-    if ($loginCheckResult) {
-        // المستخدم مسجل دخول - المتابعة
+    // التحقق من تسجيل الدخول
+    if (isLoggedIn()) {
         if (!function_exists('logRequestUsage')) {
             $monitorPath = __DIR__ . '/request_monitor.php';
             if (file_exists($monitorPath)) {
@@ -1539,34 +967,13 @@ function requireLogin() {
         return;
     }
 
-    // === المستخدم غير مسجل دخول - الجلسة غير موجودة في قاعدة البيانات ===
-    // تسجيل محاولة الوصول غير المصرح به
-    error_log("requireLogin() FAILED: User attempted to access protected page without valid session | Script: " . ($_SERVER['SCRIPT_NAME'] ?? 'unknown'));
-    
-    // حذف أي جلسة PHP متبقية
-    $_SESSION = [];
-    @session_unset();
-    @session_destroy();
-    
-    // حذف cookies
-    if (isset($_COOKIE[session_name()])) {
-        setcookie(session_name(), '', time() - 3600, '/');
-    }
-
-    // المستخدم غير مسجل دخول - إعادة التوجيه (إلا إذا كنا في صفحة محمية)
-    if (!$isProtectedPage) {
+    // إذا لم يكن مسجل دخول، إعادة التوجيه فقط إذا لم نكن في profile.php أو attendance.php
+    if (!$isProtectedPage && !isLoggedIn()) {
         // محاولة تحميل path_helper إذا لم يكن محملاً
         if (!function_exists('getRelativeUrl') && file_exists(__DIR__ . '/path_helper.php')) {
             require_once __DIR__ . '/path_helper.php';
         }
         $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
-        
-        // إضافة رسالة تنبيه للمستخدم عن فشل الجلسة
-        // حفظ الرسالة في session لتظهر في صفحة تسجيل الدخول
-        if (session_status() === PHP_SESSION_ACTIVE) {
-            $_SESSION['session_error'] = 'فشل إنشاء جلسة تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى.';
-            $_SESSION['session_failed'] = true;
-        }
         
         // التحقق من إرسال الـ headers أو تضمين header.php
         $headersSent = @headers_sent($file, $line);

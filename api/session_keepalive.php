@@ -28,7 +28,7 @@ try {
         exit;
     }
     
-    // تحديث وقت آخر نشاط والجلسة في قاعدة البيانات
+    // تحديث وقت آخر نشاط
     if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
         $_SESSION['last_activity'] = time();
         
@@ -38,25 +38,6 @@ try {
         } else {
             // تحديث previous activity time أيضاً لضمان عدم انتهاء الجلسة
             $_SESSION['last_activity_previous'] = time();
-        }
-        
-        // تحديث الجلسة في قاعدة البيانات (last_activity و expires_at)
-        $userId = $_SESSION['user_id'] ?? 0;
-        $sessionId = session_id();
-        if ($userId > 0 && !empty($sessionId)) {
-            try {
-                $db = db();
-                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                
-                // تحديث last_activity و expires_at في قاعدة البيانات
-                $db->execute(
-                    "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
-                    [$newExpiresAt, $userId, $sessionId]
-                );
-            } catch (Exception $e) {
-                error_log("session_keepalive: Error updating session in database: " . $e->getMessage());
-            }
         }
         
         // تحديث session cookie

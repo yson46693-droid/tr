@@ -33,44 +33,20 @@ try {
     error_log("Logout Page Error: " . $e->getMessage());
 }
 
-// حذف الجلسة و remember tokens من قاعدة البيانات
-// حفظ user_id قبل حذف الجلسة
-$userId = null;
-$sessionId = null;
-if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['user_id'])) {
-    $userId = $_SESSION['user_id'];
-    $sessionId = session_id();
-}
-
-// حذف جميع الجلسات و remember tokens من قاعدة البيانات
-if ($userId) {
+// حذف جميع remember tokens من قاعدة البيانات
+if (isset($_SESSION['user_id'])) {
     try {
         require_once __DIR__ . '/includes/db.php';
-        require_once __DIR__ . '/includes/auth.php';
         $db = db();
-        
-        // حذف جميع الجلسات للمستخدم من قاعدة البيانات (ليس فقط الجلسة الحالية)
-        if (ensureSessionsTable()) {
-            try {
-                // حذف جميع الجلسات للمستخدم
-                $db->execute("DELETE FROM sessions WHERE user_id = ?", [$userId]);
-                error_log("Logout: Deleted all sessions for user_id: {$userId}");
-            } catch (Exception $e) {
-                error_log("Logout: Error deleting sessions from database: " . $e->getMessage());
-            }
-        }
+        $userId = $_SESSION['user_id'];
         
         // التحقق من وجود جدول remember_tokens وحذف جميع tokens للمستخدم
-        if (ensureRememberTokensTable()) {
-            try {
-                $db->execute("DELETE FROM remember_tokens WHERE user_id = ?", [$userId]);
-                error_log("Logout: Deleted all remember tokens for user_id: {$userId}");
-            } catch (Exception $e) {
-                error_log("Logout: Error deleting remember tokens from database: " . $e->getMessage());
-            }
+        $tableCheck = $db->queryOne("SHOW TABLES LIKE 'remember_tokens'");
+        if (!empty($tableCheck)) {
+            $db->execute("DELETE FROM remember_tokens WHERE user_id = ?", [$userId]);
         }
     } catch (Exception $e) {
-        error_log("Logout: Error in database cleanup: " . $e->getMessage());
+        error_log("Logout: Error deleting remember tokens from database: " . $e->getMessage());
     }
 }
 
@@ -92,13 +68,20 @@ if (isset($_COOKIE['remember_token'])) {
     }
 }
 
-// إنهاء الجلسة بشكل نهائي - يجب أن يحدث بعد حذف الجلسة من قاعدة البيانات
+// إنهاء الجلسة بشكل نهائي
 if (session_status() === PHP_SESSION_ACTIVE) {
     $cookieParams = session_get_cookie_params();
     $sessionName = session_name();
     
     // حذف جميع متغيرات الجلسة
     $_SESSION = [];
+    
+    // حذف جميع متغيرات الجلسة يدوياً
+    if (isset($_SESSION)) {
+        foreach ($_SESSION as $key => $value) {
+            unset($_SESSION[$key]);
+        }
+    }
     
     // إلغاء تسجيل جميع متغيرات الجلسة
     @session_unset();
@@ -117,11 +100,6 @@ if (session_status() === PHP_SESSION_ACTIVE) {
     
     // تدمير الجلسة نهائياً
     @session_destroy();
-    
-    // التأكد من حذف جميع cookies
-    if (isset($_COOKIE[$sessionName])) {
-        unset($_COOKIE[$sessionName]);
-    }
 }
 
 // حذف جميع الكوكيز المتعلقة بالجلسة

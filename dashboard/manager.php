@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * لوحة التحكم للمدير
  */
@@ -2229,12 +2229,8 @@ function initApprovalBadgeUpdater() {
     if (typeof updateApprovalBadge === 'function') {
         updateApprovalBadge();
         
-        // تحديث العداد كل 2 دقيقة (120 ثانية) لتقليل الاستهلاك
-        setInterval(function() {
-            if (!document.hidden) {
-                updateApprovalBadge();
-            }
-        }, 120000);
+        // تحديث العداد كل 30 ثانية
+        setInterval(updateApprovalBadge, 30000);
         
         // تحديث العداد بعد الموافقة أو الرفض
         document.addEventListener('approvalUpdated', function() {

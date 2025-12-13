@@ -609,13 +609,9 @@ async function deleteNotification(notificationId) {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             if (response.status === 401) {
-                // إذا كان Unauthorized، المستخدم قد سجل خروج - لا نعرض رسالة خطأ
-                console.warn('Unauthorized when deleting notification - user may have logged out');
-                // إعادة توجيه إلى صفحة تسجيل الدخول بدلاً من إظهار خطأ
-                if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
-                    window.location.href = '/index.php';
-                }
-                return;
+                // إذا كان Unauthorized، لا نحذف الجلسة - فقط نسجل الخطأ
+                console.warn('Unauthorized when deleting notification - session may have expired');
+                throw new Error('Unauthorized - يرجى تحديث الصفحة');
             }
             throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
@@ -631,14 +627,9 @@ async function deleteNotification(notificationId) {
             console.log('CORS error ignored when deleting notification');
             return;
         }
-        // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
-        if (error.message && error.message.includes('Unauthorized')) {
-            console.warn('Unauthorized when deleting notification - user may have logged out');
-            return;
-        }
         console.error('Error deleting notification:', error);
-        // إظهار رسالة خطأ للمستخدم فقط للأخطاء الأخرى
-        if (error.message && !error.message.includes('CORS') && !error.message.includes('Unauthorized')) {
+        // إظهار رسالة خطأ للمستخدم
+        if (error.message && !error.message.includes('CORS')) {
             alert('حدث خطأ أثناء حذف الإشعار: ' + error.message);
         }
     }
@@ -665,13 +656,9 @@ async function deleteAllNotifications() {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             if (response.status === 401) {
-                // إذا كان Unauthorized، المستخدم قد سجل خروج - لا نعرض رسالة خطأ
-                console.warn('Unauthorized when deleting all notifications - user may have logged out');
-                // إعادة توجيه إلى صفحة تسجيل الدخول بدلاً من إظهار خطأ
-                if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
-                    window.location.href = '/index.php';
-                }
-                return { success: false, loggedOut: true };
+                // إذا كان Unauthorized، لا نحذف الجلسة - فقط نسجل الخطأ
+                console.warn('Unauthorized when deleting all notifications - session may have expired');
+                throw new Error('Unauthorized - يرجى تحديث الصفحة');
             }
             throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
@@ -685,21 +672,11 @@ async function deleteAllNotifications() {
                 notificationsList.innerHTML = '<small class="text-muted">لا توجد إشعارات</small>';
             }
             
-            // تحديث العداد أولاً
-            if (typeof updateNotificationBadge === 'function') {
-                await updateNotificationBadge(0);
-            }
+            // تحديث العداد
+            await updateNotificationBadge(0);
             
-            // مسح جميع عناصر الإشعارات من DOM
-            const notificationItems = document.querySelectorAll('.notification-item');
-            notificationItems.forEach(item => item.remove());
-            
-            // إعادة تحميل الإشعارات للتأكد (مع delay صغير)
-            if (typeof loadNotifications === 'function') {
-                setTimeout(() => {
-                    loadNotifications();
-                }, 100);
-            }
+            // إعادة تحميل الإشعارات للتأكد
+            loadNotifications();
             
             return { success: true };
         } else {
@@ -710,18 +687,9 @@ async function deleteAllNotifications() {
             console.log('CORS error ignored when deleting all notifications');
             return;
         }
-        // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
-        if (error.message && error.message.includes('Unauthorized')) {
-            console.warn('Unauthorized when deleting all notifications - user may have logged out');
-            // إعادة توجيه إلى صفحة تسجيل الدخول بدلاً من إظهار خطأ
-            if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
-                window.location.href = '/index.php';
-            }
-            return { success: false, loggedOut: true };
-        }
         console.error('Error deleting all notifications:', error);
-        // إظهار رسالة خطأ للمستخدم فقط للأخطاء الأخرى
-        if (error.message && !error.message.includes('CORS') && !error.message.includes('Unauthorized')) {
+        // إظهار رسالة خطأ للمستخدم
+        if (error.message && !error.message.includes('CORS')) {
             throw new Error('حدث خطأ أثناء حذف الإشعارات: ' + error.message);
         }
         throw error;
@@ -808,8 +776,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // تحميل الإشعارات فوراً
     loadNotifications();
     
-    // تحديث الإشعارات (زيادة الفترة لتقليل الاستهلاك بشكل كبير)
-    let pollInterval = 60000; // 60 ثانية كافتراضي بدلاً من 30 ثانية
+    // تحديث الإشعارات (استخدام الفترة من config أو 30 ثانية افتراضياً - محسّن)
+    let pollInterval = 30000;
     if (typeof window.NOTIFICATION_POLL_INTERVAL !== 'undefined') {
         const parsed = Number(window.NOTIFICATION_POLL_INTERVAL);
         if (Number.isFinite(parsed) && parsed > 0) {
@@ -817,9 +785,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // الحد الأدنى 30 ثانية (زيادة من 10 ثوان لتقليل الاستهلاك)
-    if (pollInterval < 30000) {
-        pollInterval = 30000;
+    // الحد الأدنى 10 ثواني (محسّن للأداء)
+    if (pollInterval < 10000) {
+        pollInterval = 10000;
     }
     const autoRefreshEnabled = (function () {
         if (typeof window.NOTIFICATION_AUTO_REFRESH_ENABLED === 'undefined') {
@@ -834,8 +802,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (autoRefreshEnabled) {
         if (window.currentUser && window.currentUser.role === 'production') {
-            // زيادة الفترة لعمال الإنتاج إلى 45 ثانية بدلاً من 15 ثانية
-            pollInterval = Math.min(pollInterval, 45000);
+            pollInterval = Math.min(pollInterval, 15000);
             if (checkNotificationPermission() === 'default') {
                 const requestOnInteraction = () => {
                     requestNotificationPermission().catch(err => console.error('Error requesting notification permission:', err));
@@ -849,12 +816,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (!window.__notificationAutoRefreshActive) {
             window.__notificationAutoRefreshActive = true;
-            // التحقق من أن الصفحة مرئية قبل الطلب
-            notificationCheckInterval = setInterval(function() {
-                if (!document.hidden) {
-                    loadNotifications();
-                }
-            }, pollInterval);
+            notificationCheckInterval = setInterval(loadNotifications, pollInterval);
         }
     }
     
@@ -889,53 +851,21 @@ document.addEventListener('DOMContentLoaded', function() {
         clearAllBtn.addEventListener('click', async function(e) {
             e.preventDefault();
             e.stopPropagation();
-            e.stopImmediatePropagation(); // منع انتشار الحدث لأي معالجات أخرى
             
             if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
                 return;
             }
             
-            // تعطيل الزر أثناء المعالجة
-            const originalHTML = clearAllBtn.innerHTML;
-            clearAllBtn.disabled = true;
-            clearAllBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
-            
             try {
-                const result = await deleteAllNotifications();
-                
-                // إذا كان المستخدم قد سجل خروج، لا نتابع
-                if (result && result.loggedOut) {
-                    return;
-                }
-                
+                await deleteAllNotifications();
                 // إعادة تحميل الإشعارات بعد الحذف
                 if (typeof loadNotifications === 'function') {
                     await loadNotifications();
                 }
-                
-                // تحديث العداد للتأكد
-                if (typeof updateNotificationBadge === 'function') {
-                    await updateNotificationBadge(0);
-                }
             } catch (error) {
-                // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
-                if (error.message && error.message.includes('Unauthorized')) {
-                    console.warn('User logged out during notification deletion');
-                    return;
-                }
-                console.error('Error in deleteAllNotifications:', error);
-                // إظهار رسالة خطأ فقط للأخطاء الأخرى
-                if (error.message && !error.message.includes('Unauthorized')) {
-                    alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
-                }
-            } finally {
-                // إعادة تمكين الزر فقط إذا لم يتم إعادة التوجيه
-                if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
-                    clearAllBtn.disabled = false;
-                    clearAllBtn.innerHTML = originalHTML;
-                }
+                alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
             }
-        }, true); // استخدام capture phase لضمان التنفيذ أولاً
+        });
     }
 });
 

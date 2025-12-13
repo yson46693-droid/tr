@@ -274,43 +274,6 @@
     
 })();
 
-// حماية الروابط في الشريط العلوي من إنهاء الجلسة
-(function() {
-    'use strict';
-    
-    // إضافة event listener عام على جميع الروابط لمنع إنهاء الجلسة عند التنقل
-    document.addEventListener('click', function(e) {
-        const link = e.target.closest('a');
-        if (!link || !link.href) {
-            return;
-        }
-        
-        // التحقق من أن الرابط ليس logout
-        if (link.href.includes('logout.php')) {
-            return; // السماح لـ logout بالعمل بشكل طبيعي
-        }
-        
-        // التحقق من أن الرابط داخلي (نفس النطاق)
-        try {
-            const linkUrl = new URL(link.href, window.location.origin);
-            const currentUrl = new URL(window.location.href);
-            
-            // إذا كان الرابط من نفس النطاق وليس API call
-            if (linkUrl.origin === currentUrl.origin && !linkUrl.pathname.includes('/api/')) {
-                // إضافة flag لمنع handleSessionStatus من إعادة التوجيه
-                link.setAttribute('data-navigation-link', 'true');
-                
-                // إزالة flag بعد التنقل (باستخدام timeout)
-                setTimeout(function() {
-                    link.removeAttribute('data-navigation-link');
-                }, 1000);
-            }
-        } catch (urlError) {
-            // تجاهل أخطاء URL parsing
-        }
-    }, true); // استخدام capture phase
-})();
-
 // تهيئة النظام
 document.addEventListener('DOMContentLoaded', function() {
     // تهيئة Tooltips
@@ -740,14 +703,20 @@ document.addEventListener('DOMContentLoaded', function() {
     window.__sessionOverlayInstalled = true;
 
     const SESSION_END_STATUS = new Set([401, 419, 440]);
-    // 403 (Forbidden) ليس خطأ في الجلسة - هو خطأ في الصلاحيات
-    const FORBIDDEN_STATUS = 403;
+    let overlayActivated = false;
 
     function getOverlayElement() {
-        return null; // الـ overlay تم إزالته
+        return document.getElementById('sessionEndOverlay');
     }
 
     function getLoginUrl(overlay) {
+        if (!overlay) {
+            return '/index.php';
+        }
+        const loginUrlAttr = overlay.getAttribute('data-login-url') || overlay.dataset.loginUrl;
+        if (loginUrlAttr && loginUrlAttr.trim() !== '') {
+            return loginUrlAttr;
+        }
         return '/index.php';
     }
 
@@ -756,36 +725,48 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showSessionOverlay(loginUrl) {
-        // إعادة التوجيه مباشرة إلى صفحة تسجيل الدخول
-        redirectToLogin(loginUrl);
-    }
-
-    function handleSessionStatus(status, responseUrl = null, requestUrl = null) {
-        // قائمة الصفحات المحمية - لا نعيد التوجيه فيها
-        const currentPath = window.location.pathname || '';
-        const protectedPages = [
-            'profile.php',
-            'attendance.php',
-            'index.php' // صفحة تسجيل الدخول
-        ];
-        
-        // التحقق من أننا في صفحة محمية
-        const isProtectedPage = protectedPages.some(page => 
-            currentPath.includes(page) || 
-            currentPath.endsWith('/' + page.replace('.php', ''))
-        ) || document.querySelector('body[data-page="profile"]') ||
-           document.querySelector('body[data-page="attendance"]');
-        
-        if (isProtectedPage) {
-            // في الصفحات المحمية، لا نعيد التوجيه حتى لو كان status 401/419/440
-            // لأن الجلسة قد تكون صالحة لكن هناك مشكلة في الاتصال
+        if (overlayActivated) {
             return;
         }
+        const overlay = getOverlayElement();
+        overlayActivated = true;
+
+        if (!overlay) {
+            redirectToLogin(loginUrl);
+            return;
+        }
+
+        overlay.removeAttribute('hidden');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('session-ended');
+
+        const actionButton = overlay.querySelector('[data-action="return-login"]');
+        if (actionButton) {
+            setTimeout(function() {
+                try {
+                    actionButton.focus();
+                } catch (focusError) {
+                    // ignore focus errors
+                }
+            }, 50);
+        }
+
+        overlay.dispatchEvent(new CustomEvent('sessionEndOverlayShown', {
+            bubbles: true,
+            detail: { redirected: false }
+        }));
+    }
+
+    function handleSessionStatus(status) {
+        // منع إعادة التوجيه في profile.php
+        const currentPath = window.location.pathname || '';
+        const isProfilePage = currentPath.includes('profile.php') || 
+                             currentPath.endsWith('/profile') ||
+                             document.querySelector('body[data-page="profile"]');
         
-        // التحقق من وجود رابط تنقل نشط - منع إعادة التوجيه أثناء التنقل
-        const activeNavigationLink = document.querySelector('a[data-navigation-link="true"]');
-        if (activeNavigationLink) {
-            // هناك عملية تنقل نشطة - لا نعيد التوجيه
+        if (isProfilePage) {
+            // في profile.php، لا نعيد التوجيه حتى لو كان status 401/419/440
+            // لأن الجلسة قد تكون صالحة لكن هناك مشكلة في الاتصال
             return;
         }
         
@@ -793,93 +774,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!Number.isFinite(numericStatus)) {
             return;
         }
-        
-        // تجاهل 403 (Forbidden) - هذا ليس خطأ في الجلسة
-        if (numericStatus === FORBIDDEN_STATUS) {
-            return;
-        }
-        
-        // فقط نعيد التوجيه إذا كان status هو 401/419/440 وكان من API call
         if (SESSION_END_STATUS.has(numericStatus)) {
-            // استخدام requestUrl إذا كان متوفراً، وإلا استخدم responseUrl
-            const urlToCheck = requestUrl || responseUrl || '';
-            
-            // التحقق بدقة من أن الطلب هو API call
-            // يجب أن يحتوي URL على /api/ أو يكون من ملفات API المحددة
-            const isApiCall = urlToCheck && typeof urlToCheck === 'string' && (
-                urlToCheck.includes('/api/') || 
-                urlToCheck.includes('notifications.php') ||
-                urlToCheck.includes('attendance.php?action=')
-            );
-            
-            // إذا كان responseUrl يحتوي على .php وليس /api/، فهو navigation عادي - تجاهله
-            if (responseUrl && !responseUrl.includes('/api/') && (responseUrl.includes('.php') || responseUrl.endsWith('/'))) {
-                // هذا طلب navigation عادي - لا نعيد التوجيه
-                return;
-            }
-            
-            // التحقق من أن الطلب ليس من form submission عادي
-            // إذا كان URL هو نفس الصفحة الحالية أو لا يحتوي على /api/، تجاهله
-            if (responseUrl && !isApiCall) {
-                const responsePath = new URL(responseUrl, window.location.origin).pathname;
-                const currentPathNormalized = currentPath.replace(/\/$/, '');
-                const responsePathNormalized = responsePath.replace(/\/$/, '');
-                
-                // إذا كان responseUrl يشير إلى نفس الصفحة الحالية، فهو form submission عادي - تجاهله
-                if (responsePathNormalized === currentPathNormalized || responsePathNormalized === currentPath) {
-                    return;
-                }
-            }
-            
-            // فقط نعرض رسالة انتهاء الجلسة إذا كان الطلب فعلاً API call
-            if (isApiCall) {
-                // تسجيل سبب ظهور رسالة انتهاء الجلسة
-                const logData = {
-                    timestamp: new Date().toISOString(),
-                    status: numericStatus,
-                    requestUrl: requestUrl,
-                    responseUrl: responseUrl,
-                    currentPath: currentPath,
-                    userAgent: navigator.userAgent,
-                    sessionStorage: {
-                        hasSession: typeof sessionStorage !== 'undefined',
-                        keys: typeof sessionStorage !== 'undefined' ? Object.keys(sessionStorage) : []
-                    }
-                };
-                
-                console.error('=== SESSION END OVERLAY TRIGGERED ===');
-                console.error('Status Code:', numericStatus);
-                console.error('Request URL:', requestUrl);
-                console.error('Response URL:', responseUrl);
-                console.error('Current Path:', currentPath);
-                console.error('Is API Call:', isApiCall);
-                console.error('Full Log Data:', logData);
-                
-                // محاولة إرسال log إلى الخادم (اختياري)
-                try {
-                    const basePath = window.location.pathname.split('/').slice(0, -1).join('/') || '';
-                    fetch((basePath || '') + '/api/session_debug_log.php', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            type: 'session_end_overlay',
-                            data: logData
-                        }),
-                        credentials: 'same-origin'
-                    }).catch(() => {
-                        // تجاهل أخطاء إرسال log
-                    });
-                } catch (e) {
-                    console.error('Error sending session debug log:', e);
-                }
-                
-                const overlay = getOverlayElement();
-                const loginUrl = getLoginUrl(overlay);
-                showSessionOverlay(loginUrl);
-            }
-            // إذا لم يكن API call وليس لدينا responseUrl، نتجاهل (قد يكون redirect عادي أو form submission)
+            const overlay = getOverlayElement();
+            const loginUrl = getLoginUrl(overlay);
+            showSessionOverlay(loginUrl);
         }
     }
 
@@ -905,22 +803,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 try {
-                    // تمرير response.url و requestUrl للتحقق من نوع الطلب
-                    const requestUrl = arguments[0] && typeof arguments[0] === 'string' ? arguments[0] : 
-                                      (arguments[0] && arguments[0].url ? arguments[0].url : null);
-                    
-                    // تسجيل جميع الطلبات التي ترجع 401/419/440
-                    if (response && SESSION_END_STATUS.has(response.status)) {
-                        console.error('=== FETCH REQUEST RETURNED SESSION END STATUS ===');
-                        console.error('Status:', response.status);
-                        console.error('Request URL:', requestUrl);
-                        console.error('Response URL:', response.url);
-                        console.error('Method:', arguments[0] && arguments[0].method ? arguments[0].method : 'GET');
-                    }
-                    
-                    handleSessionStatus(response && response.status, response && response.url, requestUrl);
+                    handleSessionStatus(response && response.status);
                 } catch (statusError) {
-                    console.error('Session overlay handler (fetch) error:', statusError);
+                    console.warn('Session overlay handler (fetch) error:', statusError);
                 }
                 return response;
             } catch (fetchError) {
@@ -929,22 +814,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // إذا كان الخطأ بسبب انتهاء الجلسة أو خطأ في الاتصال
                 // محاولة التوجيه إلى صفحة تسجيل الدخول بدلاً من عرض ERR_FAILED
-                // فقط إذا كان من API call وليس navigation عادي
-                const fetchUrl = arguments[0] || ''; // URL الأول من fetch arguments
-                const isApiCall = typeof fetchUrl === 'string' && (
-                    fetchUrl.includes('/api/') || 
-                    fetchUrl.includes('notifications.php') ||
-                    fetchUrl.includes('attendance.php?action=')
-                );
-                
                 const currentPath = window.location.pathname || '';
-                const protectedPages = ['profile.php', 'attendance.php', 'index.php'];
-                const isProtectedPage = protectedPages.some(page => currentPath.includes(page)) ||
-                                       document.querySelector('body[data-page="profile"]') ||
-                                       document.querySelector('body[data-page="attendance"]');
+                const isProfilePage = currentPath.includes('profile.php') || 
+                                     currentPath.endsWith('/profile') ||
+                                     document.querySelector('body[data-page="profile"]');
                 
-                // منع إعادة التوجيه في الصفحات المحمية أو إذا لم يكن API call
-                if (!isProtectedPage && isApiCall) {
+                // منع إعادة التوجيه في profile.php
+                if (!isProfilePage) {
                     // محاولة تحديد URL تسجيل الدخول
                     const overlay = getOverlayElement();
                     const loginUrl = getLoginUrl(overlay);
@@ -977,61 +853,59 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const originalXhrOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url) {
-        const xhrUrl = url || '';
-        const isApiCall = typeof xhrUrl === 'string' && (
-            xhrUrl.includes('/api/') || 
-            xhrUrl.includes('notifications.php') ||
-            xhrUrl.includes('attendance.php?action=')
-        );
-        
-        // حفظ URL الأصلي للطلب والـ method
-        this._requestUrl = xhrUrl;
-        this._method = method;
-        
+    XMLHttpRequest.prototype.open = function() {
         this.addEventListener('load', function() {
-            // تسجيل جميع الطلبات التي ترجع 401/419/440
-            if (SESSION_END_STATUS.has(this.status)) {
-                console.error('=== XHR REQUEST RETURNED SESSION END STATUS ===');
-                console.error('Status:', this.status);
-                console.error('Request URL:', this._requestUrl);
-                console.error('Response URL:', this.responseURL);
-                console.error('Method:', this._method || 'GET');
-            }
-            
-            // تمرير URL للتحقق من نوع الطلب (استخدم requestUrl المحفوظ)
-            handleSessionStatus(this.status, this.responseURL || this._requestUrl, this._requestUrl);
+            handleSessionStatus(this.status);
         });
         this.addEventListener('error', function() {
             // معالجة أخطاء الشبكة (ERR_FAILED) في XMLHttpRequest
-            // فقط إذا كان من API call
-            if (isApiCall) {
-                const currentPath = window.location.pathname || '';
-                const protectedPages = ['profile.php', 'attendance.php', 'index.php'];
-                const isProtectedPage = protectedPages.some(page => currentPath.includes(page)) ||
-                                       document.querySelector('body[data-page="profile"]') ||
-                                       document.querySelector('body[data-page="attendance"]');
-                
-                if (!isProtectedPage) {
-                    const overlay = getOverlayElement();
-                    const loginUrl = getLoginUrl(overlay);
-                    setTimeout(() => {
-                        try {
-                            showSessionOverlay(loginUrl);
-                        } catch (e) {
-                            redirectToLogin(loginUrl);
-                        }
-                    }, 100);
-                }
+            const currentPath = window.location.pathname || '';
+            const isProfilePage = currentPath.includes('profile.php') || 
+                                 currentPath.endsWith('/profile') ||
+                                 document.querySelector('body[data-page="profile"]');
+            
+            if (!isProfilePage) {
+                const overlay = getOverlayElement();
+                const loginUrl = getLoginUrl(overlay);
+                setTimeout(() => {
+                    try {
+                        showSessionOverlay(loginUrl);
+                    } catch (e) {
+                        redirectToLogin(loginUrl);
+                    }
+                }, 100);
             }
-            // تمرير URL للتحقق من نوع الطلب (استخدم requestUrl المحفوظ)
-            handleSessionStatus(this.status, this.responseURL || this._requestUrl, this._requestUrl);
+            handleSessionStatus(this.status);
         });
         return originalXhrOpen.apply(this, arguments);
     };
 
+    document.addEventListener('DOMContentLoaded', function() {
+        const overlay = getOverlayElement();
+        if (!overlay) {
+            return;
+        }
+
+        const loginUrl = getLoginUrl(overlay);
+        const actionButton = overlay.querySelector('[data-action="return-login"]');
+
+        if (actionButton) {
+            actionButton.addEventListener('click', function(event) {
+                event.preventDefault();
+                redirectToLogin(loginUrl);
+            });
+        }
+
+        overlay.addEventListener('click', function(event) {
+            if (event.target === overlay) {
+                redirectToLogin(loginUrl);
+            }
+        });
+    });
+
     window.addEventListener('forceSessionEndNotice', function() {
-        const loginUrl = '/index.php';
+        const overlay = getOverlayElement();
+        const loginUrl = getLoginUrl(overlay);
         showSessionOverlay(loginUrl);
     });
 })();

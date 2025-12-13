@@ -9,11 +9,11 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
-define('DB_HOST', 'sql107.infinityfree.com');
+define('DB_HOST', 'sql110.infinityfree.com');
 define('DB_PORT', '3306');
-define('DB_USER', 'if0_40673233');
+define('DB_USER', 'if0_40278066');
 define('DB_PASS', 'Osama744');
-define('DB_NAME', 'if0_40673233_co_db');
+define('DB_NAME', 'if0_40278066_co_db');
 
 // إعدادات المنطقة الزمنية - مصر/القاهرة
 date_default_timezone_set('Africa/Cairo');
@@ -114,74 +114,61 @@ if (session_status() === PHP_SESSION_NONE) {
     }
 }
 
-// تحميل session logger إذا كان متوفراً
-if (file_exists(__DIR__ . '/session_logger.php')) {
-    require_once __DIR__ . '/session_logger.php';
-}
-
 // التحقق الأمني المبسط: فقط تحديث الجلسة دون إلغاء الجلسة بشكل مفرط
 // الفحوصات الأمنية الصارمة تتم في auth.php عند الحاجة
 // ملاحظة: تحديث الـ cookie يتم في الكود أعلاه (lines 85-111)، لا حاجة لتحديثه هنا مرة أخرى
 if (session_status() === PHP_SESSION_ACTIVE) {
     // إذا كان المستخدم مسجل دخول، تحديث وقت آخر نشاط
     if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        // التحقق من أننا في profile.php أو attendance.php - منع حذف الجلسة
-        $isProfilePage = defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true;
-        $isAttendancePage = defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true;
-        if (!$isProfilePage && !$isAttendancePage) {
-            $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
-            if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
-                $isProfilePage = true;
-            } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
-                $isAttendancePage = true;
-            }
-        }
-        if (!$isProfilePage && !$isAttendancePage) {
-            $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-            if (strpos($requestUri, 'profile.php') !== false) {
-                $isProfilePage = true;
-            } elseif (strpos($requestUri, 'attendance.php') !== false) {
-                $isAttendancePage = true;
-            }
-        }
-        
-        $isProtectedPage = $isProfilePage || $isAttendancePage;
-        
-        // التحقق من طلب keep-alive API - عدم حذف الجلسة أبداً في هذا الحالة
-        $isKeepAliveRequest = false;
-        $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
-        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-        if (strpos($currentScript, 'session_keepalive.php') !== false || 
-            strpos($requestUri, 'session_keepalive.php') !== false ||
-            (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest' && strpos($requestUri, 'keepalive') !== false)) {
-            $isKeepAliveRequest = true;
-        }
-        
         // تحديث وقت آخر نشاط
         $_SESSION['last_activity'] = time();
         
-        // تحديث last_activity_previous أيضاً عند كل طلب نشط (إلا إذا كان keep-alive request)
-        // هذا يمنع حذف الجلسة بشكل خاطئ عندما يكون المستخدم نشطاً
-        if (!$isKeepAliveRequest) {
-            $_SESSION['last_activity_previous'] = time();
-        } elseif (!isset($_SESSION['last_activity_previous'])) {
-            // إذا كان keep-alive request ولم يكن هناك previous، نضبطه لأول مرة
-            $_SESSION['last_activity_previous'] = time();
+        // التحقق من انتهاء الجلسة بناءً على وقت آخر نشاط (فقط إذا كان موجوداً)
+        if (isset($_SESSION['last_activity_previous'])) {
+            $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
+            
+            // إذا مر أكثر من وقت الجلسة (7 أيام) + هامش أمان (1 ساعة)
+            // استثناء: لا نحذف الجلسة في profile.php أو attendance.php
+            $isProfilePage = defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true;
+            $isAttendancePage = defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true;
+            if (!$isProfilePage && !$isAttendancePage) {
+                $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+                if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+                    $isProfilePage = true;
+                } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
+                    $isAttendancePage = true;
+                }
+            }
+            if (!$isProfilePage && !$isAttendancePage) {
+                $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+                if (strpos($requestUri, 'profile.php') !== false) {
+                    $isProfilePage = true;
+                } elseif (strpos($requestUri, 'attendance.php') !== false) {
+                    $isAttendancePage = true;
+                }
+            }
+            
+            $isProtectedPage = $isProfilePage || $isAttendancePage;
+            
+            if ($timeSinceActivity > (SESSION_LIFETIME + 3600)) {
+                $userId = $_SESSION['user_id'] ?? 'unknown';
+                error_log("Session expired due to inactivity for user ID: {$userId} (time since activity: {$timeSinceActivity} seconds)");
+                
+                // لا نحذف الجلسة في profile.php أو attendance.php
+                if (!$isProtectedPage) {
+                    session_unset();
+                    session_destroy();
+                    session_set_cookie_params($sessionCookieOptions);
+                    session_start();
+                } else {
+                    // في profile.php أو attendance.php، فقط نحدث آخر نشاط بدلاً من حذف الجلسة
+                    $_SESSION['last_activity'] = time();
+                }
+            }
         }
         
-        // === تعطيل حذف الجلسة بناءً على last_activity_previous ===
-        // هذا المنطق يعتمد على $_SESSION وليس على قاعدة البيانات
-        // التحقق من صحة الجلسة يتم في isLoggedIn() بناءً على expires_at في قاعدة البيانات فقط
-        // لذلك لا نحتاج لحذف الجلسة هنا لأن isLoggedIn() سيتحقق من expires_at في قاعدة البيانات
-        
-        // تحديث last_activity_previous لأغراض أخرى فقط (مثل الإحصائيات)
-        // لكن لا نستخدمه لحذف الجلسة - التحقق من الجلسة يتم في isLoggedIn() فقط
-        if (!isset($_SESSION['last_activity_previous'])) {
-            $_SESSION['last_activity_previous'] = time();
-        } elseif (!$isKeepAliveRequest) {
-            // تحديث last_activity_previous عند كل طلب نشط (باستثناء keep-alive)
-            $_SESSION['last_activity_previous'] = time();
-        }
+        // حفظ وقت آخر نشاط الحالي للفحص في الطلب التالي
+        $_SESSION['last_activity_previous'] = time();
     }
 }
 
@@ -588,11 +575,6 @@ function preventDuplicateSubmission($successMessage = null, $redirectParams = []
         }
     }
     
-    // إضافة cache-busting parameter لضمان تحديث الصفحة بعد إنشاء/تحديث البيانات
-    // هذا يمنع المتصفح من عرض نسخة قديمة من الصفحة
-    $separator = (strpos($redirectUrl, '?') !== false) ? '&' : '?';
-    $redirectUrl .= $separator . '_t=' . time();
-    
     // إذا لم يكن الرابط مطلقاً، تأكد من أنه يبدأ بشرطة مائلة
     if (!preg_match('/^https?:\/\//i', $redirectUrl)) {
         // استخدام substr بدلاً من str_starts_with للتوافق مع PHP < 8.0
@@ -601,23 +583,16 @@ function preventDuplicateSubmission($successMessage = null, $redirectParams = []
         }
     }
     
-    // إضافة headers لمنع caching عند إعادة التوجيه
-    header('Cache-Control: no-cache, no-store, must-revalidate, max-age=0');
-    header('Pragma: no-cache');
-    header('Expires: 0');
-    
     // التحقق من أن headers لم يتم إرسالها بعد
     if (headers_sent($file, $line)) {
-        // إذا تم إرسال headers بالفعل، استخدم JavaScript redirect مع force reload
-        echo '<script>';
-        echo 'window.location.replace(' . json_encode($redirectUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ');';
-        echo '</script>';
+        // إذا تم إرسال headers بالفعل، استخدم JavaScript redirect
+        echo '<script>window.location.href = ' . json_encode($redirectUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';</script>';
         echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
         exit;
     }
     
-    // إعادة التوجيه مع force reload
-    header('Location: ' . $redirectUrl, true, 303); // 303 See Other يمنع caching
+    // إعادة التوجيه
+    header('Location: ' . $redirectUrl);
     exit;
 }
 
