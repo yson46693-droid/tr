@@ -120,51 +120,70 @@ if (session_status() === PHP_SESSION_NONE) {
 if (session_status() === PHP_SESSION_ACTIVE) {
     // إذا كان المستخدم مسجل دخول، تحديث وقت آخر نشاط
     if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+        // التحقق من أننا في profile.php أو attendance.php - منع حذف الجلسة
+        $isProfilePage = defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true;
+        $isAttendancePage = defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true;
+        if (!$isProfilePage && !$isAttendancePage) {
+            $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+            if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+                $isProfilePage = true;
+            } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
+                $isAttendancePage = true;
+            }
+        }
+        if (!$isProfilePage && !$isAttendancePage) {
+            $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+            if (strpos($requestUri, 'profile.php') !== false) {
+                $isProfilePage = true;
+            } elseif (strpos($requestUri, 'attendance.php') !== false) {
+                $isAttendancePage = true;
+            }
+        }
+        
+        $isProtectedPage = $isProfilePage || $isAttendancePage;
+        
+        // التحقق من طلب keep-alive API - عدم حذف الجلسة أبداً في هذا الحالة
+        $isKeepAliveRequest = false;
+        $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+        if (strpos($currentScript, 'session_keepalive.php') !== false || 
+            strpos($requestUri, 'session_keepalive.php') !== false ||
+            (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest' && strpos($requestUri, 'keepalive') !== false)) {
+            $isKeepAliveRequest = true;
+        }
+        
         // تحديث وقت آخر نشاط
         $_SESSION['last_activity'] = time();
         
+        // تحديث last_activity_previous أيضاً عند كل طلب نشط (إلا إذا كان keep-alive request)
+        // هذا يمنع حذف الجلسة بشكل خاطئ عندما يكون المستخدم نشطاً
+        if (!$isKeepAliveRequest) {
+            $_SESSION['last_activity_previous'] = time();
+        } elseif (!isset($_SESSION['last_activity_previous'])) {
+            // إذا كان keep-alive request ولم يكن هناك previous، نضبطه لأول مرة
+            $_SESSION['last_activity_previous'] = time();
+        }
+        
         // التحقق من انتهاء الجلسة بناءً على وقت آخر نشاط (فقط إذا كان موجوداً)
+        // ملاحظة: بعد تحديث last_activity_previous أعلاه، هذا التحقق لن يحذف الجلسة إلا إذا كان المستخدم غير نشط فعلاً
         if (isset($_SESSION['last_activity_previous'])) {
             $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
             
             // إذا مر أكثر من وقت الجلسة (7 أيام) + هامش أمان (1 ساعة)
-            // استثناء: لا نحذف الجلسة في profile.php أو attendance.php
-            $isProfilePage = defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true;
-            $isAttendancePage = defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true;
-            if (!$isProfilePage && !$isAttendancePage) {
-                $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
-                if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
-                    $isProfilePage = true;
-                } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
-                    $isAttendancePage = true;
-                }
-            }
-            if (!$isProfilePage && !$isAttendancePage) {
-                $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-                if (strpos($requestUri, 'profile.php') !== false) {
-                    $isProfilePage = true;
-                } elseif (strpos($requestUri, 'attendance.php') !== false) {
-                    $isAttendancePage = true;
-                }
-            }
-            
-            $isProtectedPage = $isProfilePage || $isAttendancePage;
-            
-            if ($timeSinceActivity > (SESSION_LIFETIME + 3600)) {
+            // فقط إذا لم يكن keep-alive request وليس في صفحة محمية
+            if ($timeSinceActivity > (SESSION_LIFETIME + 3600) && !$isKeepAliveRequest && !$isProtectedPage) {
                 $userId = $_SESSION['user_id'] ?? 'unknown';
                 error_log("Session expired due to inactivity for user ID: {$userId} (time since activity: {$timeSinceActivity} seconds)");
                 
-                // لا نحذف الجلسة في profile.php أو attendance.php
-                if (!$isProtectedPage) {
-                    session_unset();
-                    session_destroy();
-                    session_set_cookie_params($sessionCookieOptions);
-                    session_start();
-                } else {
-                    // في profile.php أو attendance.php، فقط نحدث آخر نشاط بدلاً من حذف الجلسة
-                    $_SESSION['last_activity'] = time();
-                }
+                // حذف الجلسة فقط إذا كان المستخدم غير نشط فعلاً
+                session_unset();
+                session_destroy();
+                session_set_cookie_params($sessionCookieOptions);
+                session_start();
             }
+        } else {
+            // إذا لم يكن هناك last_activity_previous، نضبطه لأول مرة
+            $_SESSION['last_activity_previous'] = time();
         }
         
         // حفظ وقت آخر نشاط الحالي للفحص في الطلب التالي

@@ -135,8 +135,13 @@ function isLoggedIn() {
                     } else {
                         // المستخدم غير موجود أو غير نشط - الجلسة غير صالحة
                         // لا نحذف الجلسة PHP أثناء معالجة POST (لتجنب مشاكل CSRF)
+                        // ولا نحذفها في API calls (لتجنب مشاكل AJAX)
                         $isPostRequest = $_SERVER['REQUEST_METHOD'] === 'POST';
-                        if (!$isPostRequest && !$isProtectedPage) {
+                        $isApiRequest = strpos($currentScript, '/api/') !== false || 
+                                       (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+                        
+                        // فقط نحذف الجلسة إذا لم يكن POST request وليس API request وليس في صفحة محمية
+                        if (!$isPostRequest && !$isApiRequest && !$isProtectedPage) {
                             session_unset();
                             session_destroy();
                         }
