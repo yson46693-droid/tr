@@ -794,7 +794,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }));
     }
 
-    function handleSessionStatus(status, responseUrl = null) {
+    function handleSessionStatus(status, responseUrl = null, requestUrl = null) {
         // قائمة الصفحات المحمية - لا نعيد التوجيه فيها
         const currentPath = window.location.pathname || '';
         const protectedPages = [
@@ -823,13 +823,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // التحقق من أن الاستجابة هي من API call وليس من navigation
-        // إذا كان responseUrl يحتوي على .php وليس /api/، فهو navigation عادي - تجاهله
-        if (responseUrl && !responseUrl.includes('/api/') && (responseUrl.includes('.php') || responseUrl.endsWith('/'))) {
-            // هذا طلب navigation عادي - لا نعيد التوجيه
-            return;
-        }
-        
         const numericStatus = Number(status);
         if (!Number.isFinite(numericStatus)) {
             return;
@@ -837,24 +830,43 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // فقط نعيد التوجيه إذا كان status هو 401/419/440 وكان من API call
         if (SESSION_END_STATUS.has(numericStatus)) {
-            // تأكد مرة أخرى أنه من API call وليس navigation
-            const isApiCall = responseUrl && (
-                responseUrl.includes('/api/') || 
-                responseUrl.includes('notifications.php') ||
-                responseUrl.includes('attendance.php?action=')
+            // استخدام requestUrl إذا كان متوفراً، وإلا استخدم responseUrl
+            const urlToCheck = requestUrl || responseUrl || '';
+            
+            // التحقق بدقة من أن الطلب هو API call
+            // يجب أن يحتوي URL على /api/ أو يكون من ملفات API المحددة
+            const isApiCall = urlToCheck && typeof urlToCheck === 'string' && (
+                urlToCheck.includes('/api/') || 
+                urlToCheck.includes('notifications.php') ||
+                urlToCheck.includes('attendance.php?action=')
             );
             
-            // إذا لم يكن من API call، تجاهل (قد يكون redirect عادي)
-            if (!isApiCall && !responseUrl) {
-                // بدون responseUrl، نفترض أنه API call
-                const overlay = getOverlayElement();
-                const loginUrl = getLoginUrl(overlay);
-                showSessionOverlay(loginUrl);
-            } else if (isApiCall) {
+            // إذا كان responseUrl يحتوي على .php وليس /api/، فهو navigation عادي - تجاهله
+            if (responseUrl && !responseUrl.includes('/api/') && (responseUrl.includes('.php') || responseUrl.endsWith('/'))) {
+                // هذا طلب navigation عادي - لا نعيد التوجيه
+                return;
+            }
+            
+            // التحقق من أن الطلب ليس من form submission عادي
+            // إذا كان URL هو نفس الصفحة الحالية أو لا يحتوي على /api/، تجاهله
+            if (responseUrl && !isApiCall) {
+                const responsePath = new URL(responseUrl, window.location.origin).pathname;
+                const currentPathNormalized = currentPath.replace(/\/$/, '');
+                const responsePathNormalized = responsePath.replace(/\/$/, '');
+                
+                // إذا كان responseUrl يشير إلى نفس الصفحة الحالية، فهو form submission عادي - تجاهله
+                if (responsePathNormalized === currentPathNormalized || responsePathNormalized === currentPath) {
+                    return;
+                }
+            }
+            
+            // فقط نعرض رسالة انتهاء الجلسة إذا كان الطلب فعلاً API call
+            if (isApiCall) {
                 const overlay = getOverlayElement();
                 const loginUrl = getLoginUrl(overlay);
                 showSessionOverlay(loginUrl);
             }
+            // إذا لم يكن API call وليس لدينا responseUrl، نتجاهل (قد يكون redirect عادي أو form submission)
         }
     }
 
@@ -880,8 +892,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 try {
-                    // تمرير response.url للتحقق من نوع الطلب
-                    handleSessionStatus(response && response.status, response && response.url);
+                    // تمرير response.url و requestUrl للتحقق من نوع الطلب
+                    const requestUrl = arguments[0] && typeof arguments[0] === 'string' ? arguments[0] : 
+                                      (arguments[0] && arguments[0].url ? arguments[0].url : null);
+                    handleSessionStatus(response && response.status, response && response.url, requestUrl);
                 } catch (statusError) {
                     console.warn('Session overlay handler (fetch) error:', statusError);
                 }
@@ -948,9 +962,12 @@ document.addEventListener('DOMContentLoaded', function() {
             xhrUrl.includes('attendance.php?action=')
         );
         
+        // حفظ URL الأصلي للطلب
+        this._requestUrl = xhrUrl;
+        
         this.addEventListener('load', function() {
-            // تمرير URL للتحقق من نوع الطلب
-            handleSessionStatus(this.status, xhrUrl);
+            // تمرير URL للتحقق من نوع الطلب (استخدم requestUrl المحفوظ)
+            handleSessionStatus(this.status, this.responseURL || this._requestUrl, this._requestUrl);
         });
         this.addEventListener('error', function() {
             // معالجة أخطاء الشبكة (ERR_FAILED) في XMLHttpRequest
@@ -974,8 +991,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     }, 100);
                 }
             }
-            // تمرير URL للتحقق من نوع الطلب
-            handleSessionStatus(this.status, xhrUrl);
+            // تمرير URL للتحقق من نوع الطلب (استخدم requestUrl المحفوظ)
+            handleSessionStatus(this.status, this.responseURL || this._requestUrl, this._requestUrl);
         });
         return originalXhrOpen.apply(this, arguments);
     };
