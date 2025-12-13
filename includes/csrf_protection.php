@@ -158,6 +158,12 @@ function protectFormFromCSRF() {
             (isset($_POST['username']) && isset($_POST['password']))
         );
         
+        // === تعطيل التحقق من CSRF تماماً لطلبات تسجيل الدخول ===
+        // لأن session_regenerate_id() يغير session_id وبالتالي يفقد CSRF token
+        if ($isLoginRequest) {
+            return true; // السماح بطلبات تسجيل الدخول بدون التحقق من CSRF
+        }
+        
         // استثناءات (APIs و WebAuthn)
         if (strpos($uri, '/api/') !== false || 
             strpos($uri, '/webauthn/') !== false ||
