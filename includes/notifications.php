@@ -75,13 +75,6 @@ function createNotification($userId, $title, $message, $type = 'info', $link = n
     try {
         $db = db();
         
-        // تنظيف Cache قبل إنشاء إشعار جديد
-        if (class_exists('Cache')) {
-            Cache::forget("notifications_{$userId}_all_50");
-            Cache::forget("notifications_{$userId}_unread_50");
-            Cache::forget("notification_count_{$userId}");
-        }
-        
         $sql = "INSERT INTO notifications (user_id, title, message, type, link) 
                 VALUES (?, ?, ?, ?, ?)";
         
@@ -179,28 +172,9 @@ function pruneNotificationsIfNeeded($db, $threshold = NOTIFICATIONS_MAX_ROWS) {
 }
 
 /**
- * الحصول على إشعارات المستخدم (مع Cache محسّن)
+ * الحصول على إشعارات المستخدم
  */
 function getUserNotifications($userId, $unreadOnly = false, $limit = 50) {
-    // استخدام Cache لتسريع الاستعلامات
-    if (!class_exists('Cache')) {
-        $cacheFile = __DIR__ . '/cache.php';
-        if (file_exists($cacheFile)) {
-            require_once $cacheFile;
-        }
-    }
-    
-    // إنشاء مفتاح Cache فريد
-    $cacheKey = "notifications_{$userId}_" . ($unreadOnly ? 'unread' : 'all') . "_{$limit}";
-    
-    // محاولة الحصول من Cache أولاً (TTL = 15 ثانية)
-    if (class_exists('Cache')) {
-        $cached = Cache::get($cacheKey);
-        if ($cached !== null) {
-            return $cached;
-        }
-    }
-    
     $db = db();
     
     $sql = "SELECT * FROM notifications 
@@ -212,39 +186,13 @@ function getUserNotifications($userId, $unreadOnly = false, $limit = 50) {
     
     $sql .= " ORDER BY created_at DESC LIMIT ?";
     
-    $notifications = $db->query($sql, [$userId, $limit]);
-    
-    // حفظ في Cache لمدة 15 ثانية
-    if (class_exists('Cache') && $notifications !== null) {
-        Cache::put($cacheKey, $notifications, 15);
-    }
-    
-    return $notifications;
+    return $db->query($sql, [$userId, $limit]);
 }
 
 /**
- * الحصول على عدد الإشعارات غير المقروءة (مع Cache محسّن)
+ * الحصول على عدد الإشعارات غير المقروءة
  */
 function getUnreadNotificationCount($userId) {
-    // استخدام Cache لتسريع الاستعلامات
-    if (!class_exists('Cache')) {
-        $cacheFile = __DIR__ . '/cache.php';
-        if (file_exists($cacheFile)) {
-            require_once $cacheFile;
-        }
-    }
-    
-    // إنشاء مفتاح Cache فريد
-    $cacheKey = "notification_count_{$userId}";
-    
-    // محاولة الحصول من Cache أولاً (TTL = 10 ثانية)
-    if (class_exists('Cache')) {
-        $cached = Cache::get($cacheKey);
-        if ($cached !== null) {
-            return $cached;
-        }
-    }
-    
     $db = db();
     
     $result = $db->queryOne(
@@ -253,14 +201,7 @@ function getUnreadNotificationCount($userId) {
         [$userId]
     );
     
-    $count = $result['count'] ?? 0;
-    
-    // حفظ في Cache لمدة 10 ثواني
-    if (class_exists('Cache')) {
-        Cache::put($cacheKey, $count, 10);
-    }
-    
-    return $count;
+    return $result['count'] ?? 0;
 }
 
 /**
@@ -286,7 +227,7 @@ function getNewOrdersCount($salesRepId) {
 }
 
 /**
- * تحديد إشعار كمقروء (مع تنظيف Cache)
+ * تحديد إشعار كمقروء
  */
 function markNotificationAsRead($notificationId, $userId) {
     $db = db();
@@ -297,18 +238,11 @@ function markNotificationAsRead($notificationId, $userId) {
         [$notificationId, $userId]
     );
     
-    // تنظيف Cache بعد التحديث
-    if (class_exists('Cache')) {
-        Cache::forget("notifications_{$userId}_all_50");
-        Cache::forget("notifications_{$userId}_unread_50");
-        Cache::forget("notification_count_{$userId}");
-    }
-    
     return true;
 }
 
 /**
- * تحديد جميع الإشعارات كمقروءة (مع تنظيف Cache)
+ * تحديد جميع الإشعارات كمقروءة
  */
 function markAllNotificationsAsRead($userId) {
     $db = db();
@@ -319,18 +253,11 @@ function markAllNotificationsAsRead($userId) {
         [$userId]
     );
     
-    // تنظيف Cache بعد التحديث
-    if (class_exists('Cache')) {
-        Cache::forget("notifications_{$userId}_all_50");
-        Cache::forget("notifications_{$userId}_unread_50");
-        Cache::forget("notification_count_{$userId}");
-    }
-    
     return true;
 }
 
 /**
- * حذف إشعار (مع تنظيف Cache)
+ * حذف إشعار
  */
 function deleteNotification($notificationId, $userId) {
     $db = db();
@@ -339,13 +266,6 @@ function deleteNotification($notificationId, $userId) {
         "DELETE FROM notifications WHERE id = ? AND user_id = ?",
         [$notificationId, $userId]
     );
-    
-    // تنظيف Cache بعد الحذف
-    if (class_exists('Cache')) {
-        Cache::forget("notifications_{$userId}_all_50");
-        Cache::forget("notifications_{$userId}_unread_50");
-        Cache::forget("notification_count_{$userId}");
-    }
     
     return true;
 }

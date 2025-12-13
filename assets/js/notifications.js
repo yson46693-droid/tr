@@ -151,37 +151,12 @@ async function loadNotifications() {
     try {
         const apiPath = getApiPath('api/notifications.php');
         const limit = typeof NOTIFICATION_LIMIT !== 'undefined' ? NOTIFICATION_LIMIT : NOTIFICATION_DEFAULT_LIMIT;
-        
-        // إضافة ETag و Last-Modified headers للمزامنة الفورية
-        const headers = {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-        };
-        
-        // إضافة If-None-Match header إذا كان موجوداً
-        const lastEtag = sessionStorage.getItem('notifications_etag');
-        if (lastEtag) {
-            headers['If-None-Match'] = lastEtag;
-        }
-        
         const response = await fetch(`${apiPath}?action=list&limit=${limit}`, {
-            credentials: 'same-origin',
-            headers: headers
+            credentials: 'same-origin'
         });
-        
-        // إذا كانت الاستجابة 304 Not Modified، لا حاجة لتحديث
-        if (response.status === 304) {
-            return;
-        }
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        // حفظ ETag للاستخدام في الطلبات القادمة
-        const etag = response.headers.get('ETag');
-        if (etag) {
-            sessionStorage.setItem('notifications_etag', etag);
         }
         
         // قراءة الاستجابة كنص أولاً للتحقق من أنها JSON صالحة
@@ -593,33 +568,16 @@ async function markNotificationAsRead(notificationId, options = {}) {
 async function deleteNotification(notificationId) {
     try {
         const apiPath = getApiPath('api/notifications.php');
-        const response = await fetch(apiPath, {
+        await fetch(apiPath, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
-            credentials: 'same-origin', // إرسال cookies مع الطلب
             body: new URLSearchParams({
                 action: 'delete',
                 id: notificationId
             })
         });
-
-        // التحقق من حالة الاستجابة
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            if (response.status === 401) {
-                // إذا كان Unauthorized، لا نحذف الجلسة - فقط نسجل الخطأ
-                console.warn('Unauthorized when deleting notification - session may have expired');
-                throw new Error('Unauthorized - يرجى تحديث الصفحة');
-            }
-            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (!data.success) {
-            throw new Error(data.error || 'فشل حذف الإشعار');
-        }
 
         loadNotifications();
     } catch (error) {
@@ -628,10 +586,6 @@ async function deleteNotification(notificationId) {
             return;
         }
         console.error('Error deleting notification:', error);
-        // إظهار رسالة خطأ للمستخدم
-        if (error.message && !error.message.includes('CORS')) {
-            alert('حدث خطأ أثناء حذف الإشعار: ' + error.message);
-        }
     }
 }
 
@@ -646,22 +600,10 @@ async function deleteAllNotifications() {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
-            credentials: 'same-origin', // إرسال cookies مع الطلب
             body: new URLSearchParams({
                 action: 'delete_all'
             })
         });
-        
-        // التحقق من حالة الاستجابة
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            if (response.status === 401) {
-                // إذا كان Unauthorized، لا نحذف الجلسة - فقط نسجل الخطأ
-                console.warn('Unauthorized when deleting all notifications - session may have expired');
-                throw new Error('Unauthorized - يرجى تحديث الصفحة');
-            }
-            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-        }
         
         const data = await response.json();
         
@@ -688,10 +630,6 @@ async function deleteAllNotifications() {
             return;
         }
         console.error('Error deleting all notifications:', error);
-        // إظهار رسالة خطأ للمستخدم
-        if (error.message && !error.message.includes('CORS')) {
-            throw new Error('حدث خطأ أثناء حذف الإشعارات: ' + error.message);
-        }
         throw error;
     }
 }
@@ -776,18 +714,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // تحميل الإشعارات فوراً
     loadNotifications();
     
-    // تحديث الإشعارات (استخدام الفترة من config أو 30 ثانية افتراضياً - محسّن)
-    let pollInterval = 30000;
+    // تحديث الإشعارات (استخدام الفترة من config أو 60 ثانية افتراضياً)
+    let pollInterval = 60000;
     if (typeof window.NOTIFICATION_POLL_INTERVAL !== 'undefined') {
         const parsed = Number(window.NOTIFICATION_POLL_INTERVAL);
         if (Number.isFinite(parsed) && parsed > 0) {
             pollInterval = parsed;
         }
-    }
-    
-    // الحد الأدنى 10 ثواني (محسّن للأداء)
-    if (pollInterval < 10000) {
-        pollInterval = 10000;
     }
     const autoRefreshEnabled = (function () {
         if (typeof window.NOTIFICATION_AUTO_REFRESH_ENABLED === 'undefined') {

@@ -23,9 +23,9 @@ function initSecureSession() {
         }
         
         // استخدام SESSION_LIFETIME بدلاً من SESSION_TIMEOUT (7 أيام بدلاً من 30 دقيقة)
-        // مع هامش أمان إضافي (24 ساعة) لمنع انتهاء الجلسة نهائياً
+        // مع هامش أمان إضافي (1 ساعة) لتجنب إلغاء الجلسة بسبب تأخير بسيط
         $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // 7 أيام افتراضياً
-        $timeout = $sessionLifetime + (3600 * 24); // هامش أمان: 24 ساعة إضافية
+        $timeout = $sessionLifetime + 3600; // هامش أمان: ساعة إضافية
         
         // التحقق من انتهاء صلاحية الجلسة فقط إذا كان المستخدم مسجل دخول
         // وإذا كان هناك وقت آخر نشاط سابق محفوظ
@@ -52,47 +52,29 @@ function initSecureSession() {
             
             $isProtectedPage = $isProfilePage || $isAttendancePage;
             
-            // التحقق من طلب keep-alive API - عدم حذف الجلسة أبداً في هذا الحالة
-            $isKeepAliveRequest = false;
-            $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
-            $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-            if (strpos($currentScript, 'session_keepalive.php') !== false || 
-                strpos($requestUri, 'session_keepalive.php') !== false ||
-                (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest' && strpos($requestUri, 'keepalive') !== false)) {
-                $isKeepAliveRequest = true;
-            }
-            
             // إذا كان هناك وقت آخر نشاط سابق، نفحصه
             if (isset($_SESSION['last_activity_previous'])) {
                 $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
-                // منع حذف الجلسة نهائياً - تحديثها بدلاً من حذفها
-                if ($timeSinceActivity > $timeout && !$isKeepAliveRequest && !$isProtectedPage) {
-                    // بدلاً من حذف الجلسة، نحدثها فقط لمنع انتهاء الجلسة
-                    error_log("Session timeout detected but extending instead of destroying: time since activity = {$timeSinceActivity} seconds");
-                    $_SESSION['last_activity'] = time();
-                    $_SESSION['last_activity_previous'] = time();
-                    // تحديث session cookie أيضاً
-                    if (!headers_sent() && session_id()) {
-                        $isHttps = (
-                            (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-                            (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
-                        );
-                        setcookie(session_name(), session_id(), [
-                            'expires' => time() + $sessionLifetime,
-                            'path' => '/',
-                            'domain' => '',
-                            'secure' => $isHttps,
-                            'httponly' => true,
-                            'samesite' => $isHttps ? 'None' : 'Lax',
-                        ]);
+                if ($timeSinceActivity > $timeout) {
+                    // الجلسة انتهت - إلغاؤها فقط إذا لم نكن في profile.php أو attendance.php
+                    error_log("Session expired in initSecureSession: time since activity = {$timeSinceActivity} seconds");
+                    if (!$isProtectedPage) {
+                        session_unset();
+                        session_destroy();
+                        // إعادة بدء جلسة جديدة
+                        if (session_status() !== PHP_SESSION_ACTIVE) {
+                            session_start();
+                        }
+                        $_SESSION['last_activity'] = time();
+                        $_SESSION['last_activity_previous'] = time();
+                    } else {
+                        // في profile.php أو attendance.php، فقط نحدث آخر نشاط بدلاً من حذف الجلسة
+                        $_SESSION['last_activity'] = time();
+                        $_SESSION['last_activity_previous'] = time();
                     }
                 } else {
                     // تحديث آخر نشاط
                     $_SESSION['last_activity'] = time();
-                    // تحديث previous فقط إذا لم يكن keep-alive request
-                    if (!$isKeepAliveRequest) {
-                        $_SESSION['last_activity_previous'] = time();
-                    }
                 }
             } else {
                 // لا يوجد وقت سابق - نعتبر الجلسة جديدة ونحفظ الوقت الحالي
@@ -165,81 +147,57 @@ function initSecureSession() {
         $_SESSION['last_activity'] = time();
     }
     
-        // التحقق من انتهاء صلاحية الجلسة (فقط للمستخدمين المسجلين)
-        // استخدام SESSION_LIFETIME بدلاً من SESSION_TIMEOUT
-        if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-            $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // 7 أيام
-            // زيادة هامش الأمان إلى 24 ساعة لمنع انتهاء الجلسة بشكل مفاجئ
-            $timeout = $sessionLifetime + (3600 * 24); // هامش أمان: 24 ساعة إضافية
-            
-            // التحقق من أننا في profile.php - منع حذف الجلسة في profile.php
-            $isProfilePage = defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true;
-            if (!$isProfilePage) {
-                $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
-                if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
-                    $isProfilePage = true;
-                }
-            }
-            if (!$isProfilePage) {
-                $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-                if (strpos($requestUri, 'profile.php') !== false) {
-                    $isProfilePage = true;
-                }
-            }
-            
-            // التحقق من طلب keep-alive API - عدم حذف الجلسة أبداً في هذا الحالة
-            $isKeepAliveRequest = false;
+    // التحقق من انتهاء صلاحية الجلسة (فقط للمستخدمين المسجلين)
+    // استخدام SESSION_LIFETIME بدلاً من SESSION_TIMEOUT
+    if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7); // 7 أيام
+        $timeout = $sessionLifetime + 3600; // هامش أمان: ساعة إضافية
+        
+        // التحقق من أننا في profile.php - منع حذف الجلسة في profile.php
+        $isProfilePage = defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true;
+        if (!$isProfilePage) {
             $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
-            $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-            if (strpos($currentScript, 'session_keepalive.php') !== false || 
-                strpos($requestUri, 'session_keepalive.php') !== false ||
-                (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest' && strpos($requestUri, 'keepalive') !== false)) {
-                $isKeepAliveRequest = true;
+            if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+                $isProfilePage = true;
             }
-            
-            // التحقق فقط إذا كان هناك وقت آخر نشاط سابق
-            if (isset($_SESSION['last_activity_previous'])) {
-                $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
-                
-                // فقط في حالة عدم وجود keep-alive request ومرور وقت كبير جداً
-                // نمنع حذف الجلسة نهائياً ونحدثها بدلاً من ذلك
-                if ($timeSinceActivity > $timeout && !$isKeepAliveRequest && !$isProtectedPage) {
-                    // بدلاً من حذف الجلسة، نحدثها فقط
-                    error_log("Session timeout detected but extending instead of destroying: time since activity = {$timeSinceActivity} seconds");
+        }
+        if (!$isProfilePage) {
+            $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+            if (strpos($requestUri, 'profile.php') !== false) {
+                $isProfilePage = true;
+            }
+        }
+        
+        // التحقق فقط إذا كان هناك وقت آخر نشاط سابق
+        if (isset($_SESSION['last_activity_previous'])) {
+            $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
+            if ($timeSinceActivity > $timeout) {
+                // الجلسة انتهت - إلغاؤها فقط إذا لم نكن في profile.php أو attendance.php
+                error_log("Session expired in initSecureSession (new session): time since activity = {$timeSinceActivity} seconds");
+                if (!$isProtectedPage) {
+                    session_unset();
+                    session_destroy();
+                    session_start();
                     $_SESSION['last_activity'] = time();
                     $_SESSION['last_activity_previous'] = time();
-                    // تحديث session cookie أيضاً
-                    if (!headers_sent() && session_id()) {
-                        $isHttps = (
-                            (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-                            (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
-                        );
-                        setcookie(session_name(), session_id(), [
-                            'expires' => time() + $sessionLifetime,
-                            'path' => '/',
-                            'domain' => '',
-                            'secure' => $isHttps,
-                            'httponly' => true,
-                            'samesite' => $isHttps ? 'None' : 'Lax',
-                        ]);
-                    }
                 } else {
-                    // تحديث آخر نشاط
+                    // في profile.php أو attendance.php، فقط نحدث آخر نشاط بدلاً من حذف الجلسة
                     $_SESSION['last_activity'] = time();
-                    // تحديث previous فقط إذا لم يكن keep-alive request (لتجنب التحديث المستمر)
-                    if (!$isKeepAliveRequest) {
-                        $_SESSION['last_activity_previous'] = time();
-                    }
+                    $_SESSION['last_activity_previous'] = time();
                 }
             } else {
-                // لا يوجد وقت سابق - نعتبر الجلسة جديدة ونحفظ الوقت الحالي
+                // تحديث آخر نشاط
                 $_SESSION['last_activity'] = time();
-                $_SESSION['last_activity_previous'] = time();
             }
         } else {
-            // المستخدم غير مسجل دخول - فقط تحديث آخر نشاط
+            // لا يوجد وقت سابق - نعتبر الجلسة جديدة ونحفظ الوقت الحالي
             $_SESSION['last_activity'] = time();
+            $_SESSION['last_activity_previous'] = time();
         }
+    } else {
+        // المستخدم غير مسجل دخول - فقط تحديث آخر نشاط
+        $_SESSION['last_activity'] = time();
+    }
 }
 
 /**

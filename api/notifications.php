@@ -4,8 +4,6 @@
  */
 
 define('ACCESS_ALLOWED', true);
-// تعريف ثابت لمنع حذف الجلسة في notifications API
-define('NOTIFICATIONS_API_ACTIVE', true);
 
 // تعطيل عرض الأخطاء لمنع إخراج HTML
 error_reporting(0);
@@ -40,63 +38,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // التحقق من تسجيل الدخول قبل إرسال أي headers
-// استخدام تحقق محسّن لمنع حذف الجلسة
 if (!isLoggedIn()) {
-    // محاولة إعادة تحميل المستخدم من session مباشرة
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            $db = db();
-            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$_SESSION['user_id']]);
-            if ($userFromDb && isset($userFromDb['id'])) {
-                // تحديث الجلسة
-                $_SESSION['logged_in'] = true;
-                $_SESSION['username'] = $userFromDb['username'];
-                $_SESSION['role'] = $userFromDb['role'];
-            } else {
-                http_response_code(401);
-                echo json_encode(['success' => false, 'error' => 'Unauthorized']);
-                exit;
-            }
-        } catch (Exception $e) {
-            error_log("Notifications API - Error loading user from session: " . $e->getMessage());
-            http_response_code(401);
-            echo json_encode(['success' => false, 'error' => 'Unauthorized']);
-            exit;
-        }
-    } else {
-        http_response_code(401);
-        echo json_encode(['success' => false, 'error' => 'Unauthorized']);
-        exit;
-    }
+    http_response_code(401);
+    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+    exit;
 }
 
 try {
-    // محاولة تحميل المستخدم بعدة طرق
     $currentUser = getCurrentUser();
-    
-    // إذا فشل getCurrentUser، جرب مباشرة من session
-    if (!$currentUser || !isset($currentUser['id'])) {
-        if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-            try {
-                $db = db();
-                $currentUser = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
-                if (!$currentUser || !isset($currentUser['id'])) {
-                    http_response_code(401);
-                    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
-                    exit;
-                }
-            } catch (Exception $e) {
-                error_log("Notifications API - Error loading user: " . $e->getMessage());
-                http_response_code(401);
-                echo json_encode(['success' => false, 'error' => 'Unauthorized']);
-                exit;
-            }
-        } else {
-            http_response_code(401);
-            echo json_encode(['success' => false, 'error' => 'Unauthorized']);
-            exit;
-        }
-    }
     
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $action = $_GET['action'] ?? 'list';
@@ -107,37 +56,6 @@ try {
                 $unreadOnly = true;
             }
             $limit = intval($_GET['limit'] ?? 50);
-            
-            // إضافة ETag و Last-Modified headers للمزامنة الفورية
-            $lastModified = null;
-            if (!$unreadOnly) {
-                try {
-                    $db = db();
-                    $lastNotification = $db->queryOne(
-                        "SELECT MAX(created_at) as last_modified FROM notifications WHERE user_id = ?",
-                        [$currentUser['id']]
-                    );
-                    if ($lastNotification && isset($lastNotification['last_modified'])) {
-                        $lastModified = strtotime($lastNotification['last_modified']);
-                    }
-                } catch (Exception $e) {
-                    // تجاهل الخطأ
-                }
-            }
-            
-            // التحقق من ETag
-            $etag = md5($currentUser['id'] . '_' . ($unreadOnly ? 'unread' : 'all') . '_' . $limit . '_' . ($lastModified ?? time()));
-            $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
-            
-            if ($ifNoneMatch === $etag) {
-                http_response_code(304);
-                exit;
-            }
-            
-            header("ETag: {$etag}");
-            if ($lastModified) {
-                header("Last-Modified: " . gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
-            }
             
             $notifications = getUserNotifications($currentUser['id'], $unreadOnly, $limit);
             
@@ -156,17 +74,6 @@ try {
             
         } elseif ($action === 'count') {
             $count = getUnreadNotificationCount($currentUser['id']);
-            
-            // إضافة ETag للعدد
-            $etag = md5('count_' . $currentUser['id'] . '_' . $count);
-            $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
-            
-            if ($ifNoneMatch === $etag) {
-                http_response_code(304);
-                exit;
-            }
-            
-            header("ETag: {$etag}");
             
             echo json_encode([
                 'success' => true,
