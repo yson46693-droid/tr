@@ -609,9 +609,13 @@ async function deleteNotification(notificationId) {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             if (response.status === 401) {
-                // إذا كان Unauthorized، لا نحذف الجلسة - فقط نسجل الخطأ
-                console.warn('Unauthorized when deleting notification - session may have expired');
-                throw new Error('Unauthorized - يرجى تحديث الصفحة');
+                // إذا كان Unauthorized، المستخدم قد سجل خروج - لا نعرض رسالة خطأ
+                console.warn('Unauthorized when deleting notification - user may have logged out');
+                // إعادة توجيه إلى صفحة تسجيل الدخول بدلاً من إظهار خطأ
+                if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
+                    window.location.href = '/index.php';
+                }
+                return;
             }
             throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
@@ -627,9 +631,14 @@ async function deleteNotification(notificationId) {
             console.log('CORS error ignored when deleting notification');
             return;
         }
+        // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
+        if (error.message && error.message.includes('Unauthorized')) {
+            console.warn('Unauthorized when deleting notification - user may have logged out');
+            return;
+        }
         console.error('Error deleting notification:', error);
-        // إظهار رسالة خطأ للمستخدم
-        if (error.message && !error.message.includes('CORS')) {
+        // إظهار رسالة خطأ للمستخدم فقط للأخطاء الأخرى
+        if (error.message && !error.message.includes('CORS') && !error.message.includes('Unauthorized')) {
             alert('حدث خطأ أثناء حذف الإشعار: ' + error.message);
         }
     }
@@ -656,9 +665,13 @@ async function deleteAllNotifications() {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             if (response.status === 401) {
-                // إذا كان Unauthorized، لا نحذف الجلسة - فقط نسجل الخطأ
-                console.warn('Unauthorized when deleting all notifications - session may have expired');
-                throw new Error('Unauthorized - يرجى تحديث الصفحة');
+                // إذا كان Unauthorized، المستخدم قد سجل خروج - لا نعرض رسالة خطأ
+                console.warn('Unauthorized when deleting all notifications - user may have logged out');
+                // إعادة توجيه إلى صفحة تسجيل الدخول بدلاً من إظهار خطأ
+                if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
+                    window.location.href = '/index.php';
+                }
+                return { success: false, loggedOut: true };
             }
             throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
@@ -697,9 +710,18 @@ async function deleteAllNotifications() {
             console.log('CORS error ignored when deleting all notifications');
             return;
         }
+        // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
+        if (error.message && error.message.includes('Unauthorized')) {
+            console.warn('Unauthorized when deleting all notifications - user may have logged out');
+            // إعادة توجيه إلى صفحة تسجيل الدخول بدلاً من إظهار خطأ
+            if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
+                window.location.href = '/index.php';
+            }
+            return { success: false, loggedOut: true };
+        }
         console.error('Error deleting all notifications:', error);
-        // إظهار رسالة خطأ للمستخدم
-        if (error.message && !error.message.includes('CORS')) {
+        // إظهار رسالة خطأ للمستخدم فقط للأخطاء الأخرى
+        if (error.message && !error.message.includes('CORS') && !error.message.includes('Unauthorized')) {
             throw new Error('حدث خطأ أثناء حذف الإشعارات: ' + error.message);
         }
         throw error;
@@ -873,7 +895,12 @@ document.addEventListener('DOMContentLoaded', function() {
             clearAllBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
             
             try {
-                await deleteAllNotifications();
+                const result = await deleteAllNotifications();
+                
+                // إذا كان المستخدم قد سجل خروج، لا نتابع
+                if (result && result.loggedOut) {
+                    return;
+                }
                 
                 // إعادة تحميل الإشعارات بعد الحذف
                 if (typeof loadNotifications === 'function') {
@@ -885,12 +912,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     await updateNotificationBadge(0);
                 }
             } catch (error) {
+                // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
+                if (error.message && error.message.includes('Unauthorized')) {
+                    console.warn('User logged out during notification deletion');
+                    return;
+                }
                 console.error('Error in deleteAllNotifications:', error);
-                alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
+                // إظهار رسالة خطأ فقط للأخطاء الأخرى
+                if (error.message && !error.message.includes('Unauthorized')) {
+                    alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
+                }
             } finally {
-                // إعادة تمكين الزر
-                clearAllBtn.disabled = false;
-                clearAllBtn.innerHTML = originalHTML;
+                // إعادة تمكين الزر فقط إذا لم يتم إعادة التوجيه
+                if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
+                    clearAllBtn.disabled = false;
+                    clearAllBtn.innerHTML = originalHTML;
+                }
             }
         }, true); // استخدام capture phase لضمان التنفيذ أولاً
     }

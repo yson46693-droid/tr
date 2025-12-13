@@ -41,33 +41,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // التحقق من تسجيل الدخول قبل إرسال أي headers
 // استخدام تحقق محسّن لمنع حذف الجلسة
-if (!isLoggedIn()) {
-    // محاولة إعادة تحميل المستخدم من session مباشرة
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            $db = db();
-            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$_SESSION['user_id']]);
-            if ($userFromDb && isset($userFromDb['id'])) {
-                // تحديث الجلسة
-                $_SESSION['logged_in'] = true;
-                $_SESSION['username'] = $userFromDb['username'];
-                $_SESSION['role'] = $userFromDb['role'];
-            } else {
-                http_response_code(401);
-                echo json_encode(['success' => false, 'error' => 'Unauthorized']);
-                exit;
-            }
-        } catch (Exception $e) {
-            error_log("Notifications API - Error loading user from session: " . $e->getMessage());
-            http_response_code(401);
-            echo json_encode(['success' => false, 'error' => 'Unauthorized']);
-            exit;
+$isAuthenticated = false;
+
+// التحقق الأول: فحص الجلسة مباشرة
+if (session_status() === PHP_SESSION_ACTIVE && 
+    isset($_SESSION['logged_in']) && 
+    $_SESSION['logged_in'] === true && 
+    isset($_SESSION['user_id']) && 
+    !empty($_SESSION['user_id'])) {
+    
+    // التحقق من صحة المستخدم في قاعدة البيانات
+    try {
+        $db = db();
+        $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$_SESSION['user_id']]);
+        if ($userFromDb && isset($userFromDb['id'])) {
+            $isAuthenticated = true;
         }
-    } else {
-        http_response_code(401);
-        echo json_encode(['success' => false, 'error' => 'Unauthorized']);
-        exit;
+    } catch (Exception $e) {
+        error_log("Notifications API - Error loading user from session: " . $e->getMessage());
     }
+}
+
+// التحقق الثاني: استخدام isLoggedIn() إذا فشل التحقق الأول
+if (!$isAuthenticated) {
+    $isAuthenticated = isLoggedIn();
+}
+
+// إذا لم يكن المستخدم مسجل دخول، إرجاع Unauthorized
+if (!$isAuthenticated) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+    exit;
 }
 
 try {

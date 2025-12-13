@@ -34,20 +34,29 @@ try {
 }
 
 // حذف الجلسة و remember tokens من قاعدة البيانات
-if (isset($_SESSION['user_id'])) {
+// حفظ user_id قبل حذف الجلسة
+$userId = null;
+$sessionId = null;
+if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['user_id'])) {
+    $userId = $_SESSION['user_id'];
+    $sessionId = session_id();
+}
+
+// حذف جميع الجلسات و remember tokens من قاعدة البيانات
+if ($userId) {
     try {
         require_once __DIR__ . '/includes/db.php';
         require_once __DIR__ . '/includes/auth.php';
         $db = db();
-        $userId = $_SESSION['user_id'];
-        $sessionId = session_id();
         
-        // حذف الجلسة من قاعدة البيانات
-        if ($sessionId && ensureSessionsTable()) {
+        // حذف جميع الجلسات للمستخدم من قاعدة البيانات (ليس فقط الجلسة الحالية)
+        if (ensureSessionsTable()) {
             try {
-                $db->execute("DELETE FROM sessions WHERE user_id = ? AND session_id = ?", [$userId, $sessionId]);
+                // حذف جميع الجلسات للمستخدم
+                $db->execute("DELETE FROM sessions WHERE user_id = ?", [$userId]);
+                error_log("Logout: Deleted all sessions for user_id: {$userId}");
             } catch (Exception $e) {
-                error_log("Logout: Error deleting session from database: " . $e->getMessage());
+                error_log("Logout: Error deleting sessions from database: " . $e->getMessage());
             }
         }
         
@@ -55,6 +64,7 @@ if (isset($_SESSION['user_id'])) {
         if (ensureRememberTokensTable()) {
             try {
                 $db->execute("DELETE FROM remember_tokens WHERE user_id = ?", [$userId]);
+                error_log("Logout: Deleted all remember tokens for user_id: {$userId}");
             } catch (Exception $e) {
                 error_log("Logout: Error deleting remember tokens from database: " . $e->getMessage());
             }

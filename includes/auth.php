@@ -1084,17 +1084,17 @@ function logout() {
         clearUserCache();
     }
     
-    // حذف الجلسة من قاعدة البيانات
+    // حذف جميع الجلسات للمستخدم من قاعدة البيانات (ليس فقط الجلسة الحالية)
     if ($userId) {
         try {
-            $sessionId = session_id();
-            if ($sessionId && ensureSessionsTable()) {
+            if (ensureSessionsTable()) {
                 $db = db();
-                // حذف الجلسة الحالية من قاعدة البيانات
+                // حذف جميع الجلسات للمستخدم من قاعدة البيانات
                 $db->execute(
-                    "DELETE FROM sessions WHERE user_id = ? AND session_id = ?",
-                    [$userId, $sessionId]
+                    "DELETE FROM sessions WHERE user_id = ?",
+                    [$userId]
                 );
+                error_log("Logout: Deleted all sessions for user_id: {$userId}");
             }
         } catch (Exception $e) {
             error_log("Logout Session Delete Error: " . $e->getMessage());
