@@ -120,14 +120,53 @@ function isLoggedIn() {
         $userId = $_SESSION['user_id'];
         $sessionId = session_id();
         
+        // تسجيل معلومات الجلسة للمساعدة في التشخيص
+        error_log("isLoggedIn() CHECK: user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
+        
         // التحقق من قاعدة البيانات - إذا لم توجد جلسة، الجلسة غير صالحة
         try {
             if (ensureSessionsTable()) {
                 $db = db();
+                
+                // البحث عن الجلسة في قاعدة البيانات
                 $sessionRecord = $db->queryOne(
                     "SELECT * FROM sessions WHERE user_id = ? AND session_id = ? AND expires_at > NOW()",
                     [$userId, $sessionId]
                 );
+                
+                // إذا لم توجد جلسة بنفس session_id، جرب البحث عن أي جلسة نشطة للمستخدم
+                if (!$sessionRecord) {
+                    $anySession = $db->queryOne(
+                        "SELECT * FROM sessions WHERE user_id = ? AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1",
+                        [$userId]
+                    );
+                    
+                    if ($anySession) {
+                        error_log("isLoggedIn() INFO: Found different session for user_id: {$userId}, stored session_id: " . substr($anySession['session_id'], 0, 20) . "... current session_id: " . substr($sessionId, 0, 20) . "...");
+                        // تحديث الجلسة في قاعدة البيانات لتستخدم session_id الحالي
+                        try {
+                            $db->execute("DELETE FROM sessions WHERE user_id = ?", [$userId]);
+                            $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                            $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                            $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                            
+                            $db->execute(
+                                "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                                 VALUES (?, ?, ?, ?, ?, NOW())",
+                                [$userId, $sessionId, $ipAddress, $userAgent, $expiresAt]
+                            );
+                            
+                            error_log("isLoggedIn() FIXED: Updated session in database for user_id: {$userId}");
+                            $sessionRecord = $db->queryOne(
+                                "SELECT * FROM sessions WHERE user_id = ? AND session_id = ? AND expires_at > NOW()",
+                                [$userId, $sessionId]
+                            );
+                        } catch (Exception $fixError) {
+                            error_log("isLoggedIn() ERROR: Failed to fix session: " . $fixError->getMessage());
+                        }
+                    }
+                }
                 
                 // إذا لم توجد الجلسة في قاعدة البيانات، الجلسة غير صالحة - حذفها
                 if (!$sessionRecord) {
@@ -944,8 +983,20 @@ function login($username, $password, $rememberMe = false) {
                 
                 if (!$verifySession) {
                     error_log("Login WARNING: Session saved but verification failed for user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
+                    // محاولة إعادة الحفظ
+                    try {
+                        $db->execute(
+                            "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                             VALUES (?, ?, ?, ?, ?, NOW())
+                             ON DUPLICATE KEY UPDATE last_activity = NOW()",
+                            [$userId, $sessionId, $ipAddress, $userAgent, $expiresAt]
+                        );
+                        error_log("Login: Retried saving session for user_id: {$userId}");
+                    } catch (Exception $retryError) {
+                        error_log("Login ERROR: Retry failed: " . $retryError->getMessage());
+                    }
                 } else {
-                    error_log("Login VERIFIED: Session confirmed in database for user_id: {$userId}");
+                    error_log("Login VERIFIED: Session confirmed in database for user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
                 }
             } else {
                 error_log("Login ERROR: Failed to save session to database for user_id: {$userId}");
