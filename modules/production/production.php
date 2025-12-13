@@ -6353,6 +6353,22 @@ $lang = isset($translations) ? $translations : [];
 <script>
 // إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات
 (function() {
+    // استثناء صفحة tasks من إعادة التوجيه التلقائية
+    const currentUrl = window.location.href || '';
+    const isTasksPage = currentUrl.includes('page=tasks') || 
+                       currentUrl.includes('tasks.php');
+    
+    if (isTasksPage) {
+        // لصفحة tasks، فقط إزالة معاملات success/error من URL بدون إعادة تحميل
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('success') || url.searchParams.has('error')) {
+            url.searchParams.delete('success');
+            url.searchParams.delete('error');
+            window.history.replaceState({}, '', url.toString());
+        }
+        return; // لا نتابع مع باقي الكود
+    }
+    
     const successAlert = document.getElementById('successAlert');
     const errorAlert = document.getElementById('errorAlert');
     
@@ -10157,6 +10173,15 @@ window.addEventListener('beforeunload', function(e) {
 
 // التحقق من رسالة الخطأ الخاصة بالطلب المكرر وتحديث الصفحة تلقائياً
 function checkForDuplicateRequestError() {
+    // استثناء صفحة tasks من إعادة التوجيه التلقائية
+    const currentUrl = window.location.href || '';
+    const isTasksPage = currentUrl.includes('page=tasks') || 
+                       currentUrl.includes('tasks.php');
+    
+    if (isTasksPage) {
+        return; // لا نتحقق من رسائل الخطأ في صفحة tasks
+    }
+    
     const errorAlerts = document.querySelectorAll('.alert-danger');
     errorAlerts.forEach(function(alert) {
         const alertText = alert.textContent || alert.innerText;
