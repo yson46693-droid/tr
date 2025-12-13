@@ -740,6 +740,8 @@ document.addEventListener('DOMContentLoaded', function() {
     window.__sessionOverlayInstalled = true;
 
     const SESSION_END_STATUS = new Set([401, 419, 440]);
+    // 403 (Forbidden) ليس خطأ في الجلسة - هو خطأ في الصلاحيات
+    const FORBIDDEN_STATUS = 403;
     let overlayActivated = false;
 
     function getOverlayElement() {
@@ -828,6 +830,11 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // تجاهل 403 (Forbidden) - هذا ليس خطأ في الجلسة
+        if (numericStatus === FORBIDDEN_STATUS) {
+            return;
+        }
+        
         // فقط نعيد التوجيه إذا كان status هو 401/419/440 وكان من API call
         if (SESSION_END_STATUS.has(numericStatus)) {
             // استخدام requestUrl إذا كان متوفراً، وإلا استخدم responseUrl
@@ -876,11 +883,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 };
                 
-                console.warn('Session End Overlay Triggered:', logData);
+                console.error('=== SESSION END OVERLAY TRIGGERED ===');
+                console.error('Status Code:', numericStatus);
+                console.error('Request URL:', requestUrl);
+                console.error('Response URL:', responseUrl);
+                console.error('Current Path:', currentPath);
+                console.error('Is API Call:', isApiCall);
+                console.error('Full Log Data:', logData);
                 
                 // محاولة إرسال log إلى الخادم (اختياري)
                 try {
-                    fetch('/api/session_debug_log.php', {
+                    const basePath = window.location.pathname.split('/').slice(0, -1).join('/') || '';
+                    fetch((basePath || '') + '/api/session_debug_log.php', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -894,7 +908,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         // تجاهل أخطاء إرسال log
                     });
                 } catch (e) {
-                    // تجاهل الأخطاء
+                    console.error('Error sending session debug log:', e);
                 }
                 
                 const overlay = getOverlayElement();
@@ -930,9 +944,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     // تمرير response.url و requestUrl للتحقق من نوع الطلب
                     const requestUrl = arguments[0] && typeof arguments[0] === 'string' ? arguments[0] : 
                                       (arguments[0] && arguments[0].url ? arguments[0].url : null);
+                    
+                    // تسجيل جميع الطلبات التي ترجع 401/419/440
+                    if (response && SESSION_END_STATUS.has(response.status)) {
+                        console.error('=== FETCH REQUEST RETURNED SESSION END STATUS ===');
+                        console.error('Status:', response.status);
+                        console.error('Request URL:', requestUrl);
+                        console.error('Response URL:', response.url);
+                        console.error('Method:', arguments[0] && arguments[0].method ? arguments[0].method : 'GET');
+                    }
+                    
                     handleSessionStatus(response && response.status, response && response.url, requestUrl);
                 } catch (statusError) {
-                    console.warn('Session overlay handler (fetch) error:', statusError);
+                    console.error('Session overlay handler (fetch) error:', statusError);
                 }
                 return response;
             } catch (fetchError) {
@@ -997,10 +1021,20 @@ document.addEventListener('DOMContentLoaded', function() {
             xhrUrl.includes('attendance.php?action=')
         );
         
-        // حفظ URL الأصلي للطلب
+        // حفظ URL الأصلي للطلب والـ method
         this._requestUrl = xhrUrl;
+        this._method = method;
         
         this.addEventListener('load', function() {
+            // تسجيل جميع الطلبات التي ترجع 401/419/440
+            if (SESSION_END_STATUS.has(this.status)) {
+                console.error('=== XHR REQUEST RETURNED SESSION END STATUS ===');
+                console.error('Status:', this.status);
+                console.error('Request URL:', this._requestUrl);
+                console.error('Response URL:', this.responseURL);
+                console.error('Method:', this._method || 'GET');
+            }
+            
             // تمرير URL للتحقق من نوع الطلب (استخدم requestUrl المحفوظ)
             handleSessionStatus(this.status, this.responseURL || this._requestUrl, this._requestUrl);
         });

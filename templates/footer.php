@@ -771,6 +771,13 @@ if (!defined('ACCESS_ALLOWED')) {
      * تحديث عداد الموافقات المعلقة للمديرين
      */
     (function() {
+        // التحقق من أن المستخدم مدير قبل تشغيل الكود
+        const currentUserRole = '<?php echo $currentUser['role'] ?? ''; ?>';
+        if (currentUserRole !== 'manager') {
+            // المستخدم ليس مدير - لا نحتاج لتحديث العداد
+            return;
+        }
+        
         async function updateApprovalBadge() {
             try {
                 const badge = document.getElementById('approvalBadge');
@@ -789,7 +796,17 @@ if (!defined('ACCESS_ALLOWED')) {
                     }
                 });
                 
+                // التعامل مع 403 (Forbidden) بشكل صحيح - هذا ليس خطأ في الجلسة
+                if (response.status === 403) {
+                    // المستخدم ليس مدير - إخفاء العداد
+                    if (badge) {
+                        badge.style.display = 'none';
+                    }
+                    return;
+                }
+                
                 if (!response.ok) {
+                    // تجاهل الأخطاء الأخرى (401, 500, etc.) - لا نريد إزعاج المستخدم
                     return;
                 }
                 
