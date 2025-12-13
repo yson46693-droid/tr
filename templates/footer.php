@@ -1056,9 +1056,41 @@ if (!defined('ACCESS_ALLOWED')) {
         function checkPageStatus() {
             // التحقق من أن الصفحة تم تحميلها بشكل صحيح
             if (document.readyState === 'complete') {
+                // استثناء صفحات معينة من التحقق (مثل tasks.php التي قد تستغرق وقتاً في التحميل)
+                const currentUrl = window.location.href || '';
+                const currentPath = window.location.pathname || '';
+                
+                // قائمة الصفحات المستثناة من التحقق التلقائي
+                const excludedPages = [
+                    'tasks.php',
+                    'page=tasks',
+                    'production.php?page=tasks',
+                    'manager.php?page=tasks'
+                ];
+                
+                // إذا كانت الصفحة الحالية في قائمة الاستثناءات، لا نتحقق منها
+                const isExcluded = excludedPages.some(page => 
+                    currentUrl.includes(page) || currentPath.includes(page)
+                );
+                
+                if (isExcluded) {
+                    return; // لا نتحقق من هذه الصفحة
+                }
+                
                 // التحقق من وجود محتوى أساسي في الصفحة
                 const mainContent = document.getElementById('main-content') || document.querySelector('main') || document.body;
-                if (mainContent && mainContent.children.length === 0 && document.body.innerHTML.trim().length < 100) {
+                
+                // تحسين المنطق: التحقق من وجود محتوى فعلي وليس فقط عدد العناصر
+                const hasContent = mainContent && (
+                    mainContent.children.length > 0 || 
+                    mainContent.innerHTML.trim().length > 500 || // زيادة الحد الأدنى من 100 إلى 500
+                    document.querySelector('.container-fluid') ||
+                    document.querySelector('.card') ||
+                    document.querySelector('table') ||
+                    document.querySelector('form')
+                );
+                
+                if (!hasContent && document.body.innerHTML.trim().length < 500) {
                     // الصفحة فارغة أو لم يتم تحميلها - إعادة التوجيه
                     console.warn('Page appears empty or failed to load - redirecting to login');
                     redirectToLogin();
@@ -1091,16 +1123,28 @@ if (!defined('ACCESS_ALLOWED')) {
                     errorMessage.includes('NetworkError') ||
                     errorMessage.includes('Load failed')) {
                     console.warn('Network error detected:', errorMessage);
-                    // إعادة التوجيه بعد تأخير قصير
-                    setTimeout(redirectToLogin, 1000);
+                    
+                    // استثناء صفحات tasks من إعادة التوجيه التلقائية
+                    const currentUrl = window.location.href || '';
+                    const isTasksPage = currentUrl.includes('tasks.php') || 
+                                       currentUrl.includes('page=tasks') ||
+                                       currentUrl.includes('production.php?page=tasks') ||
+                                       currentUrl.includes('manager.php?page=tasks');
+                    
+                    if (!isTasksPage) {
+                        // إعادة التوجيه بعد تأخير قصير (فقط للصفحات غير tasks)
+                        setTimeout(redirectToLogin, 1000);
+                    } else {
+                        console.warn('Tasks page detected - skipping auto-redirect');
+                    }
                 }
             }
         });
         
         // التحقق من حالة الاتصال
         window.addEventListener('online', function() {
-            // عند الاتصال بالإنترنت، تحقق من حالة الصفحة
-            setTimeout(checkPageStatus, 2000);
+            // عند الاتصال بالإنترنت، تحقق من حالة الصفحة بعد تأخير أطول
+            setTimeout(checkPageStatus, 5000);
         });
         
         window.addEventListener('offline', function() {
@@ -1109,17 +1153,20 @@ if (!defined('ACCESS_ALLOWED')) {
         });
         
         // التحقق من حالة الصفحة بعد التحميل
+        // زيادة التأخير لمنح الصفحات وقتاً أطول للتحميل (خاصة tasks.php)
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', function() {
-                setTimeout(checkPageStatus, 1000);
+                // تأخير أطول (5 ثوانٍ بدلاً من 1 ثانية) لمنح الصفحات وقتاً للتحميل
+                setTimeout(checkPageStatus, 5000);
             });
         } else {
-            setTimeout(checkPageStatus, 1000);
+            setTimeout(checkPageStatus, 5000);
         }
         
         // التحقق من حالة الصفحة بعد تحميلها بالكامل
         window.addEventListener('load', function() {
-            setTimeout(checkPageStatus, 500);
+            // تأخير أطول (3 ثوانٍ بدلاً من 500ms) لمنح الصفحات وقتاً للتحميل
+            setTimeout(checkPageStatus, 3000);
         });
         
         // معالجة أخطاء fetch (للطلبات AJAX)
@@ -1141,7 +1188,18 @@ if (!defined('ACCESS_ALLOWED')) {
                             url.includes('session_keepalive') ||
                             url.includes('isLoggedIn')
                         )) {
-                            setTimeout(redirectToLogin, 1000);
+                            // استثناء صفحات tasks من إعادة التوجيه التلقائية
+                            const currentUrl = window.location.href || '';
+                            const isTasksPage = currentUrl.includes('tasks.php') || 
+                                               currentUrl.includes('page=tasks') ||
+                                               currentUrl.includes('production.php?page=tasks') ||
+                                               currentUrl.includes('manager.php?page=tasks');
+                            
+                            if (!isTasksPage) {
+                                setTimeout(redirectToLogin, 1000);
+                            } else {
+                                console.warn('Tasks page detected - skipping auto-redirect for fetch error');
+                            }
                         }
                     }
                     throw error;
@@ -1157,8 +1215,16 @@ if (!defined('ACCESS_ALLOWED')) {
                 lastUrl = currentUrl;
                 // التحقق من أن الصفحة الحالية ليست صفحة تسجيل الدخول
                 if (!currentUrl.includes('index.php') && !currentUrl.includes('login')) {
-                    // التحقق من أن الصفحة تم تحميلها بشكل صحيح
-                    setTimeout(checkPageStatus, 2000);
+                    // استثناء صفحات tasks من التحقق التلقائي
+                    const isTasksPage = currentUrl.includes('tasks.php') || 
+                                       currentUrl.includes('page=tasks') ||
+                                       currentUrl.includes('production.php?page=tasks') ||
+                                       currentUrl.includes('manager.php?page=tasks');
+                    
+                    if (!isTasksPage) {
+                        // التحقق من أن الصفحة تم تحميلها بشكل صحيح (بعد تأخير أطول)
+                        setTimeout(checkPageStatus, 5000);
+                    }
                 }
             }
         }, 10000); // 10 ثوانٍ بدلاً من 3 ثوانٍ لتقليل الاستخدام
@@ -1177,8 +1243,19 @@ if (!defined('ACCESS_ALLOWED')) {
                 this.addEventListener('error', function() {
                     const url = this._url || '';
                     if (url.includes('check_session') || url.includes('session_keepalive')) {
-                        console.warn('XHR error for session check - redirecting to login');
-                        setTimeout(redirectToLogin, 1000);
+                        // استثناء صفحات tasks من إعادة التوجيه التلقائية
+                        const currentUrl = window.location.href || '';
+                        const isTasksPage = currentUrl.includes('tasks.php') || 
+                                           currentUrl.includes('page=tasks') ||
+                                           currentUrl.includes('production.php?page=tasks') ||
+                                           currentUrl.includes('manager.php?page=tasks');
+                        
+                        if (!isTasksPage) {
+                            console.warn('XHR error for session check - redirecting to login');
+                            setTimeout(redirectToLogin, 1000);
+                        } else {
+                            console.warn('Tasks page detected - skipping auto-redirect for XHR error');
+                        }
                     }
                 });
                 
