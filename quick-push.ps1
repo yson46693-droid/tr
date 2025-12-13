@@ -1,4 +1,4 @@
-ت الي المستودد# Script for Git Push
+# Script for Git Push
 # UTF-8 encoding
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
