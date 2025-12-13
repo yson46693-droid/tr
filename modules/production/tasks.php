@@ -454,32 +454,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $result = tasksHandleAction($action, $_POST, $context);
         
         // POST-Redirect-GET pattern لمنع مشاكل الـ cache والتحديث
-        $redirectUrl = $_SERVER['REQUEST_URI'] ?? '?page=tasks';
-        
-        // إزالة معاملات POST من URL
-        $parsedUrl = parse_url($redirectUrl);
-        $redirectPath = $parsedUrl['path'] ?? '';
+        // بناء URL بشكل صحيح مع الحفاظ على page parameter
         $queryParams = [];
         
-        // الحفاظ على معاملات GET الحالية (pagination, search, filters)
-        if (isset($parsedUrl['query'])) {
-            parse_str($parsedUrl['query'], $queryParams);
+        // الحفاظ على جميع معاملات GET الحالية (pagination, search, filters)
+        $queryParams['page'] = 'tasks'; // التأكد من وجود page=tasks
+        
+        // الحفاظ على معاملات GET الأخرى
+        if (isset($_GET['p']) && (int)$_GET['p'] > 0) {
+            $queryParams['p'] = (int)$_GET['p'];
+        }
+        if (isset($_GET['search']) && $_GET['search'] !== '') {
+            $queryParams['search'] = $_GET['search'];
+        }
+        if (isset($_GET['status']) && $_GET['status'] !== '') {
+            $queryParams['status'] = $_GET['status'];
+        }
+        if (isset($_GET['priority']) && $_GET['priority'] !== '') {
+            $queryParams['priority'] = $_GET['priority'];
+        }
+        if (isset($_GET['assigned']) && (int)$_GET['assigned'] > 0) {
+            $queryParams['assigned'] = (int)$_GET['assigned'];
         }
         
         // إضافة رسالة النجاح أو الخطأ كمعاملات GET
         if ($result['error']) {
-            $queryParams['error'] = urlencode($result['error']);
+            $queryParams['error'] = $result['error'];
         } elseif ($result['success']) {
-            $queryParams['success'] = urlencode($result['success']);
+            $queryParams['success'] = $result['success'];
         }
         
-        // بناء URL نهائي
-        $finalUrl = $redirectPath;
-        if (!empty($queryParams)) {
-            $finalUrl .= '?' . http_build_query($queryParams);
-        }
+        // بناء URL نهائي مع timestamp لفرض reload
+        $queryParams['_r'] = time(); // إضافة timestamp لفرض reload من السيرفر
+        $finalUrl = getRelativeUrl('production.php?' . http_build_query($queryParams));
         
-        // Redirect بعد POST
+        // Redirect بعد POST مع cache-busting
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
         header('Location: ' . $finalUrl, true, 303);
         exit;
     }
@@ -495,6 +507,11 @@ if ($successMessage !== '') {
 
 if ($errorMessage !== '') {
     tasksAddMessage($errorMessages, $errorMessage);
+}
+
+// إزالة معامل _r من URL بعد التحميل
+if (isset($_GET['_r'])) {
+    // سيتم إزالته عبر JavaScript لضمان تحديث الصفحة أولاً
 }
 
 $pageNum = isset($_GET['p']) ? max(1, (int) $_GET['p']) : 1;
@@ -1258,13 +1275,6 @@ function tasksHtml(string $value): string
     document.addEventListener('DOMContentLoaded', function () {
         hideLoader();
         toggleProductionFields();
-        
-        // إزالة معامل timestamp من URL بعد التحميل لمنع تراكمه
-        if (window.location.search.includes('_t=')) {
-            const url = new URL(window.location.href);
-            url.searchParams.delete('_t');
-            window.history.replaceState({}, '', url.toString());
-        }
     });
 
     window.addEventListener('load', hideLoader);
@@ -1283,30 +1293,80 @@ function tasksHtml(string $value): string
 })();
 </script>
 
-<!-- إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات -->
+<!-- إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لضمان تحديث البيانات -->
 <script>
-// إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات
 (function() {
-    const successAlert = document.getElementById('successAlert');
-    const errorAlert = document.getElementById('errorAlert');
+    'use strict';
     
     // التحقق من وجود رسالة نجاح أو خطأ
+    const successAlert = document.getElementById('successAlert');
+    const errorAlert = document.getElementById('errorAlert');
     const alertElement = successAlert || errorAlert;
     
+    // إزالة معاملات timestamp/_r/_refresh من URL إذا كانت موجودة
+    const url = new URL(window.location.href);
+    let urlChanged = false;
+    
+    ['_t', '_r', '_refresh'].forEach(function(param) {
+        if (url.searchParams.has(param)) {
+            url.searchParams.delete(param);
+            urlChanged = true;
+        }
+    });
+    
+    if (urlChanged) {
+        window.history.replaceState({}, '', url.toString());
+    }
+    
+    // إذا كان هناك رسالة نجاح/خطأ، إعادة تحميل الصفحة بعد عرض الرسالة
     if (alertElement && alertElement.dataset.autoRefresh === 'true') {
-        // انتظار 2 ثانية لإعطاء المستخدم وقتاً لرؤية الرسالة
+        // انتظار 1.5 ثانية لإعطاء المستخدم وقتاً لرؤية الرسالة
         setTimeout(function() {
-            // إعادة تحميل الصفحة بدون معاملات GET لمنع تكرار الطلبات
+            // بناء URL جديد بدون معاملات success/error وبتاريخ جديد لفرض reload
             const currentUrl = new URL(window.location.href);
-            // إزالة معاملات success و error من URL
             currentUrl.searchParams.delete('success');
             currentUrl.searchParams.delete('error');
             
-            // إعادة تحميل الصفحة مع force reload من السيرفر (منع cache)
-            // استخدام timestamp كمعامل للتأكد من جلب البيانات المحدثة
-            currentUrl.searchParams.set('_t', Date.now().toString());
+            // إضافة timestamp لفرض إعادة تحميل من السيرفر (bypass cache)
+            currentUrl.searchParams.set('_refresh', Date.now().toString());
+            
+            // إعادة تحميل الصفحة من السيرفر (force reload)
             window.location.href = currentUrl.toString();
-        }, 2000);
+        }, 1500);
+    }
+    
+    // التأكد من أن الصفحة لا تُخزن في cache
+    window.addEventListener('pageshow', function(event) {
+        // إذا كانت الصفحة من cache (back/forward), إعادة تحميل من السيرفر
+        if (event.persisted) {
+            window.location.reload(true);
+        }
+    });
+    
+    // عند عمل refresh يدوي (F5), إضافة timestamp لفرض reload من السيرفر
+    window.addEventListener('beforeunload', function() {
+        // إضافة flag في sessionStorage للإشارة إلى أن المستخدم قام بعمل refresh
+        try {
+            sessionStorage.setItem('tasks_page_refresh', Date.now().toString());
+        } catch (e) {
+            // تجاهل إذا كان sessionStorage غير متاح
+        }
+    });
+    
+    // التحقق من flag refresh وإعادة تحميل إذا لزم الأمر
+    try {
+        const refreshFlag = sessionStorage.getItem('tasks_page_refresh');
+        if (refreshFlag) {
+            sessionStorage.removeItem('tasks_page_refresh');
+            // إذا كان URL يحتوي على success/error، أزل معامل _r إذا كان موجوداً
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('_r')) {
+                url.searchParams.delete('_r');
+                window.history.replaceState({}, '', url.toString());
+            }
+        }
+    } catch (e) {
+        // تجاهل إذا كان sessionStorage غير متاح
     }
 })();
 </script>
