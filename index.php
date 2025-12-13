@@ -162,40 +162,73 @@ if (!defined('ASSETS_URL')) {
 
 if (isLoggedIn()) {
     $userRole = $_SESSION['role'] ?? 'accountant';
-    $dashboardUrl = getDashboardUrl($userRole);
     
-    // 1. إزالة أي بروتوكول
-    $dashboardUrl = preg_replace('/^https?:\/\//', '', $dashboardUrl);
+    // الحصول على المسار الأساسي
+    $basePath = getBasePath();
+    $basePath = rtrim($basePath, '/');
+    
+    // بناء المسار النسبي للداشبورد
+    if (!empty($basePath)) {
+        $dashboardUrl = $basePath . '/dashboard/' . $userRole . '.php';
+    } else {
+        $dashboardUrl = '/dashboard/' . $userRole . '.php';
+    }
+    
+    // تنظيف شامل للمسار
+    // 1. إزالة أي بروتوكول أو hostname
+    $dashboardUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $dashboardUrl);
     $dashboardUrl = preg_replace('/^\/\//', '/', $dashboardUrl);
     
+    // 2. التأكد من أن المسار يبدأ بـ /
     if (strpos($dashboardUrl, '/') !== 0) {
         $dashboardUrl = '/' . $dashboardUrl;
     }
     
+    // 3. تنظيف المسار (إزالة // المكررة)
     $dashboardUrl = preg_replace('/\/+/', '/', $dashboardUrl);
     
+    // 4. إزالة أي hostname إذا كان موجوداً
     if (preg_match('/^\/[^\/]+\.[a-z]/i', $dashboardUrl)) {
         $parts = explode('/', $dashboardUrl);
         $dashboardIndex = array_search('dashboard', $parts);
-        if ($dashboardIndex !== false) {
+        if ($dashboardIndex !== false && $dashboardIndex > 0) {
             $dashboardUrl = '/' . implode('/', array_slice($parts, $dashboardIndex));
         } else {
-            $dashboardUrl = '/dashboard/' . $userRole . '.php';
+            $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
         }
     }
     
+    // 5. التحقق النهائي: إذا كان المسار لا يحتوي على 'dashboard'، أضفه
     if (strpos($dashboardUrl, '/dashboard') === false) {
-        $dashboardUrl = '/dashboard/' . $userRole . '.php';
+        $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
     }
     
+    // 6. التأكد من أن المسار لا يحتوي على http:// أو https://
     if (strpos($dashboardUrl, 'http://') === 0 || strpos($dashboardUrl, 'https://') === 0) {
         $parsed = parse_url($dashboardUrl);
-        $dashboardUrl = $parsed['path'] ?? '/dashboard/' . $userRole . '.php';
+        $dashboardUrl = $parsed['path'] ?? ((!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php');
     }
     
+    // 7. التحقق النهائي: التأكد من أن المسار يبدأ بـ /
+    if (strpos($dashboardUrl, '/') !== 0) {
+        $dashboardUrl = '/' . $dashboardUrl;
+    }
+    
+    // 8. تنظيف نهائي
     $dashboardUrl = trim($dashboardUrl);
+    $dashboardUrl = preg_replace('/\/+/', '/', $dashboardUrl);
+    
     if (empty($dashboardUrl) || $dashboardUrl === '/') {
-        $dashboardUrl = '/dashboard/' . $userRole . '.php';
+        $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
+        if (strpos($dashboardUrl, '/') !== 0) {
+            $dashboardUrl = '/' . $dashboardUrl;
+        }
+    }
+    
+    // 9. التحقق النهائي: التأكد من أن المسار نسبي وليس URL كامل
+    if (strpos($dashboardUrl, '://') !== false) {
+        $parsed = parse_url($dashboardUrl);
+        $dashboardUrl = $parsed['path'] ?? '/dashboard/' . $userRole . '.php';
     }
     
     $currentScript = basename($_SERVER['PHP_SELF']);
@@ -203,12 +236,18 @@ if (isLoggedIn()) {
         return;
     }
     
+    // تنظيف output buffer قبل التوجيه
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
     if (!headers_sent()) {
-        header('Location: ' . $dashboardUrl);
+        header('Location: ' . $dashboardUrl, true, 303);
         exit;
     } else {
-        echo '<script>window.location.href = "' . htmlspecialchars($dashboardUrl) . '";</script>';
-        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($dashboardUrl) . '"></noscript>';
+        $escapedUrl = htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8');
+        echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
         exit;
     }
 }
@@ -293,71 +332,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     
                     $userRole = $result['user']['role'] ?? 'accountant';
-                    $dashboardUrl = getDashboardUrl($userRole);
                     
-                    $dashboardUrl = preg_replace('/^https?:\/\//', '', $dashboardUrl);
+                    // الحصول على المسار الأساسي
+                    $basePath = getBasePath();
+                    $basePath = rtrim($basePath, '/');
+                    
+                    // بناء المسار النسبي للداشبورد
+                    if (!empty($basePath)) {
+                        $dashboardUrl = $basePath . '/dashboard/' . $userRole . '.php';
+                    } else {
+                        $dashboardUrl = '/dashboard/' . $userRole . '.php';
+                    }
+                    
+                    // تنظيف شامل للمسار
+                    // 1. إزالة أي بروتوكول أو hostname
+                    $dashboardUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $dashboardUrl);
                     $dashboardUrl = preg_replace('/^\/\//', '/', $dashboardUrl);
                     
+                    // 2. التأكد من أن المسار يبدأ بـ /
                     if (strpos($dashboardUrl, '/') !== 0) {
                         $dashboardUrl = '/' . $dashboardUrl;
                     }
                     
+                    // 3. تنظيف المسار (إزالة // المكررة)
                     $dashboardUrl = preg_replace('/\/+/', '/', $dashboardUrl);
                     
+                    // 4. إزالة أي hostname إذا كان موجوداً (مثل albarakah.free.nf)
                     if (preg_match('/^\/[^\/]+\.[a-z]/i', $dashboardUrl)) {
                         $parts = explode('/', $dashboardUrl);
                         $dashboardIndex = array_search('dashboard', $parts);
-                        if ($dashboardIndex !== false) {
+                        if ($dashboardIndex !== false && $dashboardIndex > 0) {
                             $dashboardUrl = '/' . implode('/', array_slice($parts, $dashboardIndex));
                         } else {
-                            $dashboardUrl = '/dashboard/' . $userRole . '.php';
+                            // إذا لم نجد dashboard، استخدم المسار الافتراضي
+                            $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
                         }
                     }
                     
+                    // 5. التحقق النهائي: إذا كان المسار لا يحتوي على 'dashboard'، أضفه
                     if (strpos($dashboardUrl, '/dashboard') === false) {
-                        $dashboardUrl = '/dashboard/' . $userRole . '.php';
+                        $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
                     }
                     
+                    // 6. التأكد من أن المسار لا يحتوي على http:// أو https:// مرة أخرى
                     if (strpos($dashboardUrl, 'http://') === 0 || strpos($dashboardUrl, 'https://') === 0) {
                         $parsed = parse_url($dashboardUrl);
-                        $dashboardUrl = $parsed['path'] ?? '/dashboard/' . $userRole . '.php';
+                        $dashboardUrl = $parsed['path'] ?? ((!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php');
                     }
                     
-                    $dashboardUrl = trim($dashboardUrl);
-                    if (empty($dashboardUrl) || $dashboardUrl === '/') {
-                        $dashboardUrl = '/dashboard/' . $userRole . '.php';
-                    }
-                    
-                    // التأكد من أن dashboardUrl يبدأ بـ / وليس مساراً مطلقاً
-                    if (strpos($dashboardUrl, 'http://') === 0 || strpos($dashboardUrl, 'https://') === 0) {
-                        $parsed = parse_url($dashboardUrl);
-                        $dashboardUrl = $parsed['path'] ?? '/dashboard/' . $userRole . '.php';
-                    }
-                    
-                    // التأكد من أن dashboardUrl يبدأ بـ /
+                    // 7. التحقق النهائي: التأكد من أن المسار يبدأ بـ / ولا يحتوي على بروتوكول
                     if (strpos($dashboardUrl, '/') !== 0) {
                         $dashboardUrl = '/' . $dashboardUrl;
                     }
                     
-                    // تنظيف المسار (إزالة // المكررة)
+                    // 8. تنظيف نهائي
+                    $dashboardUrl = trim($dashboardUrl);
                     $dashboardUrl = preg_replace('/\/+/', '/', $dashboardUrl);
                     
-                    // التأكد من أن المسار يحتوي على dashboard
-                    if (strpos($dashboardUrl, '/dashboard') === false) {
-                        $dashboardUrl = '/dashboard/' . $userRole . '.php';
+                    if (empty($dashboardUrl) || $dashboardUrl === '/') {
+                        $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
+                        if (strpos($dashboardUrl, '/') !== 0) {
+                            $dashboardUrl = '/' . $dashboardUrl;
+                        }
+                    }
+                    
+                    // 9. التحقق النهائي: التأكد من أن المسار نسبي وليس URL كامل
+                    if (strpos($dashboardUrl, '://') !== false) {
+                        $parsed = parse_url($dashboardUrl);
+                        $dashboardUrl = $parsed['path'] ?? '/dashboard/' . $userRole . '.php';
                     }
                     
                     // تنظيف output buffer قبل التوجيه
-                    if (ob_get_level() > 0) {
-                        ob_clean();
+                    while (ob_get_level() > 0) {
+                        ob_end_clean();
                     }
+                    
+                    // تسجيل المسار للتشخيص
+                    error_log("Login redirect - Dashboard URL: {$dashboardUrl} | Base Path: {$basePath} | Role: {$userRole}");
                     
                     if (!headers_sent()) {
                         header('Location: ' . $dashboardUrl, true, 303);
                         exit;
                     } else {
-                        echo '<script>window.location.replace("' . htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
-                        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+                        $escapedUrl = htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8');
+                        echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
+                        echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
                         exit;
                     }
                 } else {
