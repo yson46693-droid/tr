@@ -1418,7 +1418,8 @@ function requireLogin() {
     
     // التحقق من تسجيل الدخول - المصدر الوحيد للتحقق
     // isLoggedIn() يتحقق من قاعدة البيانات أولاً
-    if (isLoggedIn()) {
+    $loginCheckResult = isLoggedIn();
+    if ($loginCheckResult) {
         // المستخدم مسجل دخول - المتابعة
         if (!function_exists('logRequestUsage')) {
             $monitorPath = __DIR__ . '/request_monitor.php';
@@ -1432,6 +1433,20 @@ function requireLogin() {
         return;
     }
 
+    // === المستخدم غير مسجل دخول - الجلسة غير موجودة في قاعدة البيانات ===
+    // تسجيل محاولة الوصول غير المصرح به
+    error_log("requireLogin() FAILED: User attempted to access protected page without valid session | Script: " . ($_SERVER['SCRIPT_NAME'] ?? 'unknown'));
+    
+    // حذف أي جلسة PHP متبقية
+    $_SESSION = [];
+    @session_unset();
+    @session_destroy();
+    
+    // حذف cookies
+    if (isset($_COOKIE[session_name()])) {
+        setcookie(session_name(), '', time() - 3600, '/');
+    }
+
     // المستخدم غير مسجل دخول - إعادة التوجيه (إلا إذا كنا في صفحة محمية)
     if (!$isProtectedPage) {
         // محاولة تحميل path_helper إذا لم يكن محملاً
@@ -1439,6 +1454,13 @@ function requireLogin() {
             require_once __DIR__ . '/path_helper.php';
         }
         $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+        
+        // إضافة رسالة تنبيه للمستخدم عن فشل الجلسة
+        // حفظ الرسالة في session لتظهر في صفحة تسجيل الدخول
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION['session_error'] = 'فشل إنشاء جلسة تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى.';
+            $_SESSION['session_failed'] = true;
+        }
         
         // التحقق من إرسال الـ headers أو تضمين header.php
         $headersSent = @headers_sent($file, $line);

@@ -278,6 +278,13 @@ if (isLoggedIn()) {
 $error = '';
 $success = '';
 
+// التحقق من وجود رسالة خطأ الجلسة من requireLogin()
+if (isset($_SESSION['session_error']) && !empty($_SESSION['session_error'])) {
+    $error = $_SESSION['session_error'];
+    unset($_SESSION['session_error']);
+    unset($_SESSION['session_failed']);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = $_POST['username'] ?? '';
     $password = $_POST['password'] ?? '';
