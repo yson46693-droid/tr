@@ -1323,25 +1323,19 @@ function tasksHtml(string $value): string
     }
     
     // التحقق من وجود رسالة نجاح أو خطأ
+    // تم إزالة إعادة التوجيه التلقائية بعد 1.5 ثانية لمنع إعادة التوجيه غير المرغوب
+    // يمكن للمستخدم إغلاق الرسالة يدوياً أو الانتظار حتى تختفي تلقائياً
     const successAlert = document.getElementById('successAlert');
     const errorAlert = document.getElementById('errorAlert');
-    const alertElement = successAlert || errorAlert;
     
-    // إذا كان هناك رسالة نجاح/خطأ، إعادة تحميل الصفحة بعد عرض الرسالة
-    if (alertElement && alertElement.dataset.autoRefresh === 'true') {
-        // انتظار 1.5 ثانية لإعطاء المستخدم وقتاً لرؤية الرسالة
-        setTimeout(function() {
-            // بناء URL جديد بدون معاملات success/error
-            const currentUrl = new URL(window.location.href);
-            currentUrl.searchParams.delete('success');
-            currentUrl.searchParams.delete('error');
-            
-            // إضافة timestamp لفرض إعادة تحميل من السيرفر (bypass cache)
-            currentUrl.searchParams.set('_refresh', Date.now().toString());
-            
-            // إعادة تحميل الصفحة من السيرفر (force reload)
-            window.location.href = currentUrl.toString();
-        }, 1500);
+    // إزالة معاملات success/error من URL بدون إعادة تحميل
+    if (successAlert || errorAlert) {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('success') || url.searchParams.has('error')) {
+            url.searchParams.delete('success');
+            url.searchParams.delete('error');
+            window.history.replaceState({}, '', url.toString());
+        }
     }
     
     // === حل جذري: منع استخدام cache عند CTRL+R أو F5 ===
@@ -1364,33 +1358,11 @@ function tasksHtml(string $value): string
         // تجاهل إذا كان sessionStorage غير متاح
     }
     
-    // معالجة pageshow event (يحدث عند load و refresh)
-    window.addEventListener('pageshow', function(event) {
-        // إذا كانت الصفحة من cache (bfcache)، أعد تحميلها
-        if (event.persisted) {
-            const url = new URL(window.location.href);
-            url.searchParams.set('_nocache', Date.now().toString());
-            window.location.href = url.toString();
-            return;
-        }
-        
-        // للـ refresh العادي (CTRL+R أو F5)، تحقق من force reload flag
-        try {
-            const forceReload = sessionStorage.getItem(FORCE_RELOAD_KEY);
-            if (forceReload === 'true') {
-                sessionStorage.removeItem(FORCE_RELOAD_KEY);
-                // أضف timestamp لفرض reload من السيرفر
-                const url = new URL(window.location.href);
-                if (!url.searchParams.has('_nocache') && !url.searchParams.has('_refresh')) {
-                    url.searchParams.set('_nocache', Date.now().toString());
-                    window.location.href = url.toString();
-                    return;
-                }
-            }
-        } catch (e) {
-            // تجاهل
-        }
-    });
+    // تم تعطيل معالجة pageshow event لمنع إعادة التوجيه غير المرغوب
+    // يمكن للمستخدم استخدام F5 أو CTRL+R يدوياً عند الحاجة
+    // window.addEventListener('pageshow', function(event) {
+    //     // كود معطل لمنع إعادة التوجيه التلقائية
+    // });
     
     // عند الضغط على F5 أو CTRL+R، احفظ flag قبل reload
     window.addEventListener('beforeunload', function() {
@@ -1504,20 +1476,13 @@ function tasksHtml(string $value): string
                         hasChanges = true;
                     }
                     
-                    // إذا كانت هناك مهام جديدة أو تغييرات، أعد تحميل الصفحة
+                    // إذا كانت هناك مهام جديدة أو تغييرات، تحديث الصفحة بدون إعادة تحميل كاملة
+                    // تم تعطيل إعادة التوجيه التلقائية لمنع إعادة التوجيه غير المرغوب
+                    // يمكن للمستخدم تحديث الصفحة يدوياً عند الحاجة
                     if (hasNewTasks || hasChanges) {
-                        // إعادة تحميل الصفحة بلطف (بدون معاملات success/error)
-                        const url = new URL(window.location.href);
-                        url.searchParams.delete('success');
-                        url.searchParams.delete('error');
-                        url.searchParams.delete('_r');
-                        url.searchParams.delete('_refresh');
-                        url.searchParams.delete('_nocache');
-                        url.searchParams.delete('_auto_refresh');
-                        url.searchParams.set('_auto_refresh', Date.now().toString());
-                        
-                        // إعادة تحميل بدون scroll to top
-                        window.location.href = url.toString();
+                        // إظهار إشعار للمستخدم بدلاً من إعادة التوجيه التلقائية
+                        console.log('New tasks or changes detected. Please refresh the page manually if needed.');
+                        // يمكن إضافة إشعار بصري هنا بدلاً من إعادة التوجيه
                     }
                 }
                 
