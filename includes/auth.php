@@ -94,6 +94,14 @@ function isLoggedIn() {
         if (!headers_sent()) {
             @session_start();
         } else {
+            // تسجيل سبب الفشل
+            if (function_exists('logSessionFailure')) {
+                logSessionFailure('الجلسة غير نشطة و headers تم إرسالها بالفعل', [
+                    'session_status' => session_status(),
+                    'headers_sent' => headers_sent(),
+                ]);
+            }
+            error_log("isLoggedIn() FALSE: Session not started and headers already sent");
             return false;
         }
     }
@@ -204,6 +212,14 @@ function isLoggedIn() {
     
     // التأكد من وجود $_SESSION
     if (!isset($_SESSION) || !is_array($_SESSION)) {
+        // تسجيل سبب الفشل
+        if (function_exists('logSessionFailure')) {
+            logSessionFailure('$_SESSION غير موجود أو ليس array', [
+                'has_session' => isset($_SESSION),
+                'is_array' => isset($_SESSION) && is_array($_SESSION),
+            ]);
+        }
+        error_log("isLoggedIn() FALSE: \$_SESSION not set or not array");
         return false;
     }
     
@@ -211,6 +227,16 @@ function isLoggedIn() {
     if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
         // التحقق الإضافي: التأكد من وجود user_id في الجلسة
         if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
+            // تسجيل سبب الفشل
+            if (function_exists('logSessionFailure')) {
+                logSessionFailure('user_id غير موجود أو فارغ في الجلسة', [
+                    'has_user_id' => isset($_SESSION['user_id']),
+                    'user_id_value' => $_SESSION['user_id'] ?? null,
+                    'logged_in' => $_SESSION['logged_in'] ?? null,
+                ]);
+            }
+            error_log("isLoggedIn() FALSE: user_id not set or empty | logged_in: " . ($_SESSION['logged_in'] ?? 'NOT_SET'));
+            
             // إذا لم يكن هناك user_id، إلغاء الجلسة فقط إذا لم نكن في profile.php أو attendance.php
             if (!$isProtectedPage) {
                 session_unset();
@@ -274,8 +300,25 @@ function isLoggedIn() {
     
     // إذا لم تكن هناك جلسة، التحقق من cookie "تذكرني"
     if (isset($_COOKIE['remember_token'])) {
-        return checkRememberToken($_COOKIE['remember_token']);
+        $rememberResult = checkRememberToken($_COOKIE['remember_token']);
+        if (!$rememberResult && function_exists('logSessionFailure')) {
+            logSessionFailure('فشل التحقق من remember_token', [
+                'has_remember_token' => isset($_COOKIE['remember_token']),
+            ]);
+        }
+        return $rememberResult;
     }
+    
+    // تسجيل سبب الفشل النهائي
+    if (function_exists('logSessionFailure')) {
+        logSessionFailure('لا توجد جلسة مسجل دخول ولا remember_token', [
+            'has_logged_in' => isset($_SESSION['logged_in']),
+            'logged_in_value' => $_SESSION['logged_in'] ?? null,
+            'has_user_id' => isset($_SESSION['user_id']),
+            'has_remember_token' => isset($_COOKIE['remember_token']),
+        ]);
+    }
+    error_log("isLoggedIn() FALSE: No logged_in session and no remember_token | logged_in: " . ($_SESSION['logged_in'] ?? 'NOT_SET') . " | user_id: " . ($_SESSION['user_id'] ?? 'NOT_SET'));
     
     return false;
 }
