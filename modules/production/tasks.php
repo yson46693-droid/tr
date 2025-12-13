@@ -18,9 +18,14 @@ require_once __DIR__ . '/../../includes/table_styles.php';
 requireRole(['production', 'accountant', 'manager']);
 
 // إضافة cache headers لمنع تخزين الصفحة والتأكد من جلب البيانات المحدثة
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+// هذه headers ضرورية لمنع المتصفح من استخدام cached version
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
+    header('Pragma: no-cache');
+    header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+    header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
+    header('ETag: "' . md5(time() . rand()) . '"');
+}
 
 $currentUser = getCurrentUser();
 $db = db();
@@ -484,15 +489,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $queryParams['success'] = $result['success'];
         }
         
-        // بناء URL نهائي مع timestamp لفرض reload
+        // بناء URL نهائي مع timestamp لفرض reload من السيرفر
         $queryParams['_r'] = time(); // إضافة timestamp لفرض reload من السيرفر
         $finalUrl = getRelativeUrl('production.php?' . http_build_query($queryParams));
         
-        // Redirect بعد POST مع cache-busting
-        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-        header('Pragma: no-cache');
-        header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
-        header('Location: ' . $finalUrl, true, 303);
+        // Redirect بعد POST مع cache-busting headers قوية
+        if (!headers_sent()) {
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
+            header('Pragma: no-cache');
+            header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+            header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
+            header('ETag: "' . md5(time() . rand()) . '"');
+            header('Location: ' . $finalUrl, true, 303);
+        }
         exit;
     }
 }
@@ -1293,17 +1302,12 @@ function tasksHtml(string $value): string
 })();
 </script>
 
-<!-- إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لضمان تحديث البيانات -->
+<!-- آلية منع Cache وضمان تحديث البيانات -->
 <script>
 (function() {
     'use strict';
     
-    // التحقق من وجود رسالة نجاح أو خطأ
-    const successAlert = document.getElementById('successAlert');
-    const errorAlert = document.getElementById('errorAlert');
-    const alertElement = successAlert || errorAlert;
-    
-    // إزالة معاملات timestamp/_r/_refresh من URL إذا كانت موجودة
+    // إزالة معاملات timestamp من URL بعد التحميل
     const url = new URL(window.location.href);
     let urlChanged = false;
     
@@ -1318,11 +1322,16 @@ function tasksHtml(string $value): string
         window.history.replaceState({}, '', url.toString());
     }
     
+    // التحقق من وجود رسالة نجاح أو خطأ
+    const successAlert = document.getElementById('successAlert');
+    const errorAlert = document.getElementById('errorAlert');
+    const alertElement = successAlert || errorAlert;
+    
     // إذا كان هناك رسالة نجاح/خطأ، إعادة تحميل الصفحة بعد عرض الرسالة
     if (alertElement && alertElement.dataset.autoRefresh === 'true') {
         // انتظار 1.5 ثانية لإعطاء المستخدم وقتاً لرؤية الرسالة
         setTimeout(function() {
-            // بناء URL جديد بدون معاملات success/error وبتاريخ جديد لفرض reload
+            // بناء URL جديد بدون معاملات success/error
             const currentUrl = new URL(window.location.href);
             currentUrl.searchParams.delete('success');
             currentUrl.searchParams.delete('error');
@@ -1335,38 +1344,76 @@ function tasksHtml(string $value): string
         }, 1500);
     }
     
-    // التأكد من أن الصفحة لا تُخزن في cache
-    window.addEventListener('pageshow', function(event) {
-        // إذا كانت الصفحة من cache (back/forward), إعادة تحميل من السيرفر
-        if (event.persisted) {
-            window.location.reload(true);
-        }
-    });
+    // حل جذري: منع استخدام cache عند عمل refresh عادي (CTRL+R أو F5)
+    // نحفظ timestamp في sessionStorage عند تحميل الصفحة
+    try {
+        const pageLoadTime = Date.now().toString();
+        sessionStorage.setItem('tasks_page_load_time', pageLoadTime);
+    } catch (e) {
+        // تجاهل إذا كان sessionStorage غير متاح
+    }
     
-    // عند عمل refresh يدوي (F5), إضافة timestamp لفرض reload من السيرفر
-    window.addEventListener('beforeunload', function() {
-        // إضافة flag في sessionStorage للإشارة إلى أن المستخدم قام بعمل refresh
+    // عند عمل refresh (F5 أو CTRL+R)، نفحص إذا كانت الصفحة من cache
+    window.addEventListener('pageshow', function(event) {
+        // إذا كانت الصفحة من cache (back/forward أو refresh عادي)
+        if (event.persisted) {
+            // إعادة تحميل من السيرفر مع bypass cache
+            const url = new URL(window.location.href);
+            url.searchParams.set('_nocache', Date.now().toString());
+            window.location.href = url.toString();
+            return;
+        }
+        
+        // للـ refresh العادي، نضيف timestamp لفرض reload من السيرفر
         try {
-            sessionStorage.setItem('tasks_page_refresh', Date.now().toString());
+            const savedLoadTime = sessionStorage.getItem('tasks_page_load_time');
+            if (savedLoadTime) {
+                const currentUrl = new URL(window.location.href);
+                // إذا لم يكن هناك _nocache أو _refresh، أضفه
+                if (!currentUrl.searchParams.has('_nocache') && !currentUrl.searchParams.has('_refresh')) {
+                    currentUrl.searchParams.set('_nocache', Date.now().toString());
+                    window.history.replaceState({}, '', currentUrl.toString());
+                }
+            }
         } catch (e) {
             // تجاهل إذا كان sessionStorage غير متاح
         }
     });
     
-    // التحقق من flag refresh وإعادة تحميل إذا لزم الأمر
-    try {
-        const refreshFlag = sessionStorage.getItem('tasks_page_refresh');
-        if (refreshFlag) {
-            sessionStorage.removeItem('tasks_page_refresh');
-            // إذا كان URL يحتوي على success/error، أزل معامل _r إذا كان موجوداً
-            const url = new URL(window.location.href);
-            if (url.searchParams.has('_r')) {
-                url.searchParams.delete('_r');
-                window.history.replaceState({}, '', url.toString());
+    // معالجة refresh يدوي (F5, CTRL+R) - إضافة timestamp قبل refresh
+    let isRefreshing = false;
+    window.addEventListener('beforeunload', function() {
+        if (!isRefreshing) {
+            isRefreshing = true;
+            try {
+                sessionStorage.setItem('tasks_force_refresh', 'true');
+            } catch (e) {
+                // تجاهل
             }
         }
-    } catch (e) {
-        // تجاهل إذا كان sessionStorage غير متاح
-    }
+    });
+    
+    // عند تحميل الصفحة، إذا كان هناك flag refresh، أزل timestamp من URL
+    window.addEventListener('load', function() {
+        try {
+            const forceRefresh = sessionStorage.getItem('tasks_force_refresh');
+            if (forceRefresh === 'true') {
+                sessionStorage.removeItem('tasks_force_refresh');
+                const url = new URL(window.location.href);
+                if (url.searchParams.has('_nocache')) {
+                    url.searchParams.delete('_nocache');
+                    window.history.replaceState({}, '', url.toString());
+                }
+            }
+        } catch (e) {
+            // تجاهل
+        }
+    });
+    
+    // إضافة meta refresh tag لمنع cache في حالات معينة
+    const metaRefresh = document.createElement('meta');
+    metaRefresh.httpEquiv = 'Cache-Control';
+    metaRefresh.content = 'no-cache, no-store, must-revalidate';
+    document.head.appendChild(metaRefresh);
 })();
 </script>
