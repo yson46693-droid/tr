@@ -973,23 +973,60 @@ function login($username, $password, $rememberMe = false) {
     // حفظ CSRF token الحالي قبل إعادة توليد الجلسة (للمساعدة في التحقق)
     $currentCsrfToken = $_SESSION['csrf_token'] ?? null;
     
-    // تسجيل الدخول
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        // حفظ token السابق قبل إعادة توليد الجلسة
-        if ($currentCsrfToken) {
-            $_SESSION['csrf_token_previous'] = $currentCsrfToken;
-            $_SESSION['csrf_token_previous_time'] = time();
-        }
-        session_regenerate_id(true);
+    // التأكد من أن الجلسة نشطة
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
     }
     
-    // إنشاء token جديد بعد إعادة توليد الجلسة
-    generateCSRFToken(true);
+    // حفظ بيانات مؤقتة قبل إعادة توليد الجلسة
+    $tempData = [];
+    if (isset($_SESSION['csrf_token'])) {
+        $tempData['csrf_token_previous'] = $_SESSION['csrf_token'];
+        $tempData['csrf_token_previous_time'] = time();
+    }
+    
+    // حفظ بيانات المستخدم مباشرة في $_SESSION قبل إعادة التوليد
     $_SESSION['user_id'] = $user['id'];
     $_SESSION['username'] = $user['username'];
     $_SESSION['role'] = $user['role'];
     $_SESSION['logged_in'] = true;
-    $_SESSION['last_activity'] = time(); // تحديث وقت آخر نشاط
+    $_SESSION['last_activity'] = time();
+    
+    // حفظ البيانات المؤقتة
+    if (!empty($tempData)) {
+        $_SESSION = array_merge($_SESSION, $tempData);
+    }
+    
+    // إعادة توليد session_id مع الاحتفاظ بالبيانات (false = يحتفظ بالبيانات)
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_regenerate_id(false); // false = يحتفظ ببيانات الجلسة
+    }
+    
+    // إنشاء token جديد بعد إعادة توليد الجلسة
+    if (function_exists('generateCSRFToken')) {
+        generateCSRFToken(true);
+    }
+    
+    // التأكد مرة أخرى من وجود البيانات (في حالة فشل الإعداد السابق)
+    $_SESSION['user_id'] = $user['id'];
+    $_SESSION['username'] = $user['username'];
+    $_SESSION['role'] = $user['role'];
+    $_SESSION['logged_in'] = true;
+    $_SESSION['last_activity'] = time();
+    
+    // التأكد النهائي من أن البيانات موجودة في $_SESSION
+    // لا نستخدم session_write_close() لأن ذلك قد يفقد البيانات
+    if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || !isset($_SESSION['user_id']) || $_SESSION['user_id'] != $user['id']) {
+        error_log("Login WARNING: Session data verification failed - restoring data");
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+        $_SESSION['role'] = $user['role'];
+        $_SESSION['logged_in'] = true;
+        $_SESSION['last_activity'] = time();
+    }
+    
+    // التحقق النهائي من حفظ البيانات
+    error_log("Login: Final session check - logged_in: " . ($_SESSION['logged_in'] ?? 'NOT_SET') . " | user_id: " . ($_SESSION['user_id'] ?? 'NOT_SET'));
     
     // حفظ الجلسة في قاعدة البيانات - ضروري للتحقق
     // يجب الحصول على session_id بعد session_regenerate_id()
