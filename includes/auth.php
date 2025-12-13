@@ -113,6 +113,17 @@ function isLoggedIn() {
                 
                 // إذا لم توجد الجلسة في قاعدة البيانات لكن الجلسة PHP صالحة، أعد إنشاءها
                 if (!$sessionRecord) {
+                    // تسجيل محاولة إعادة إنشاء الجلسة
+                    if (file_exists(__DIR__ . '/session_logger.php')) {
+                        require_once __DIR__ . '/session_logger.php';
+                        if (function_exists('logSessionInfo')) {
+                            logSessionInfo('الجلسة غير موجودة في قاعدة البيانات - محاولة إعادة إنشائها', [
+                                'user_id' => $userId,
+                                'session_id' => substr($sessionId, 0, 20) . '...',
+                            ]);
+                        }
+                    }
+                    
                     // التحقق من أن المستخدم موجود ونشط
                     $user = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$userId]);
                     
@@ -121,7 +132,7 @@ function isLoggedIn() {
                         $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
                         $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
                         $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-                        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                        $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
                         
                         // حذف أي جلسة سابقة بنفس session_id (إن وجدت)
                         $db->execute("DELETE FROM sessions WHERE session_id = ?", [$sessionId]);
@@ -132,8 +143,23 @@ function isLoggedIn() {
                              VALUES (?, ?, ?, ?, ?, NOW())",
                             [$userId, $sessionId, $ipAddress, $userAgent, $expiresAt]
                         );
+                        
+                        // تسجيل نجاح إعادة إنشاء الجلسة
+                        if (function_exists('logSessionInfo')) {
+                            logSessionInfo('تم إعادة إنشاء الجلسة في قاعدة البيانات بنجاح', [
+                                'user_id' => $userId,
+                                'expires_at' => $expiresAt,
+                            ]);
+                        }
                     } else {
                         // المستخدم غير موجود أو غير نشط - الجلسة غير صالحة
+                        // تسجيل الفشل
+                        if (function_exists('logSessionFailure')) {
+                            logSessionFailure('المستخدم غير موجود أو غير نشط في قاعدة البيانات', [
+                                'user_id' => $userId,
+                            ]);
+                        }
+                        
                         // لا نحذف الجلسة PHP أثناء معالجة POST (لتجنب مشاكل CSRF)
                         // ولا نحذفها في API calls (لتجنب مشاكل AJAX)
                         $isPostRequest = $_SERVER['REQUEST_METHOD'] === 'POST';
@@ -160,6 +186,18 @@ function isLoggedIn() {
             }
         } catch (Exception $e) {
             error_log("Error checking session in database: " . $e->getMessage());
+            
+            // تسجيل الخطأ
+            if (file_exists(__DIR__ . '/session_logger.php')) {
+                require_once __DIR__ . '/session_logger.php';
+                if (function_exists('logSessionInfo')) {
+                    logSessionInfo('خطأ في التحقق من الجلسة في قاعدة البيانات', [
+                        'error' => $e->getMessage(),
+                        'user_id' => $userId ?? 'unknown',
+                    ]);
+                }
+            }
+            
             // في حالة الخطأ، نستمر بالجلسة PHP العادية
         }
     }

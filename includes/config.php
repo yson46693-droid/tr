@@ -114,6 +114,11 @@ if (session_status() === PHP_SESSION_NONE) {
     }
 }
 
+// تحميل session logger إذا كان متوفراً
+if (file_exists(__DIR__ . '/session_logger.php')) {
+    require_once __DIR__ . '/session_logger.php';
+}
+
 // التحقق الأمني المبسط: فقط تحديث الجلسة دون إلغاء الجلسة بشكل مفرط
 // الفحوصات الأمنية الصارمة تتم في auth.php عند الحاجة
 // ملاحظة: تحديث الـ cookie يتم في الكود أعلاه (lines 85-111)، لا حاجة لتحديثه هنا مرة أخرى
@@ -173,6 +178,20 @@ if (session_status() === PHP_SESSION_ACTIVE) {
             // فقط إذا لم يكن keep-alive request وليس في صفحة محمية
             if ($timeSinceActivity > (SESSION_LIFETIME + 3600) && !$isKeepAliveRequest && !$isProtectedPage) {
                 $userId = $_SESSION['user_id'] ?? 'unknown';
+                
+                // تسجيل سبب حذف الجلسة
+                if (file_exists(__DIR__ . '/session_logger.php')) {
+                    require_once __DIR__ . '/session_logger.php';
+                    if (function_exists('logSessionInfo')) {
+                        logSessionInfo('حذف الجلسة بسبب انتهاء وقت النشاط', [
+                            'user_id' => $userId,
+                            'time_since_activity' => $timeSinceActivity,
+                            'session_lifetime' => SESSION_LIFETIME,
+                            'threshold' => SESSION_LIFETIME + 3600,
+                        ]);
+                    }
+                }
+                
                 error_log("Session expired due to inactivity for user ID: {$userId} (time since activity: {$timeSinceActivity} seconds)");
                 
                 // حذف الجلسة فقط إذا كان المستخدم غير نشط فعلاً

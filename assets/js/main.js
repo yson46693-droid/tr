@@ -862,6 +862,41 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // فقط نعرض رسالة انتهاء الجلسة إذا كان الطلب فعلاً API call
             if (isApiCall) {
+                // تسجيل سبب ظهور رسالة انتهاء الجلسة
+                const logData = {
+                    timestamp: new Date().toISOString(),
+                    status: numericStatus,
+                    requestUrl: requestUrl,
+                    responseUrl: responseUrl,
+                    currentPath: currentPath,
+                    userAgent: navigator.userAgent,
+                    sessionStorage: {
+                        hasSession: typeof sessionStorage !== 'undefined',
+                        keys: typeof sessionStorage !== 'undefined' ? Object.keys(sessionStorage) : []
+                    }
+                };
+                
+                console.warn('Session End Overlay Triggered:', logData);
+                
+                // محاولة إرسال log إلى الخادم (اختياري)
+                try {
+                    fetch('/api/session_debug_log.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            type: 'session_end_overlay',
+                            data: logData
+                        }),
+                        credentials: 'same-origin'
+                    }).catch(() => {
+                        // تجاهل أخطاء إرسال log
+                    });
+                } catch (e) {
+                    // تجاهل الأخطاء
+                }
+                
                 const overlay = getOverlayElement();
                 const loginUrl = getLoginUrl(overlay);
                 showSessionOverlay(loginUrl);
