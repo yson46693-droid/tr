@@ -742,20 +742,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const SESSION_END_STATUS = new Set([401, 419, 440]);
     // 403 (Forbidden) ليس خطأ في الجلسة - هو خطأ في الصلاحيات
     const FORBIDDEN_STATUS = 403;
-    let overlayActivated = false;
 
     function getOverlayElement() {
-        return document.getElementById('sessionEndOverlay');
+        return null; // الـ overlay تم إزالته
     }
 
     function getLoginUrl(overlay) {
-        if (!overlay) {
-            return '/index.php';
-        }
-        const loginUrlAttr = overlay.getAttribute('data-login-url') || overlay.dataset.loginUrl;
-        if (loginUrlAttr && loginUrlAttr.trim() !== '') {
-            return loginUrlAttr;
-        }
         return '/index.php';
     }
 
@@ -764,36 +756,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showSessionOverlay(loginUrl) {
-        if (overlayActivated) {
-            return;
-        }
-        const overlay = getOverlayElement();
-        overlayActivated = true;
-
-        if (!overlay) {
-            redirectToLogin(loginUrl);
-            return;
-        }
-
-        overlay.removeAttribute('hidden');
-        overlay.setAttribute('aria-hidden', 'false');
-        document.body.classList.add('session-ended');
-
-        const actionButton = overlay.querySelector('[data-action="return-login"]');
-        if (actionButton) {
-            setTimeout(function() {
-                try {
-                    actionButton.focus();
-                } catch (focusError) {
-                    // ignore focus errors
-                }
-            }, 50);
-        }
-
-        overlay.dispatchEvent(new CustomEvent('sessionEndOverlayShown', {
-            bubbles: true,
-            detail: { redirected: false }
-        }));
+        // إعادة التوجيه مباشرة إلى صفحة تسجيل الدخول
+        redirectToLogin(loginUrl);
     }
 
     function handleSessionStatus(status, responseUrl = null, requestUrl = null) {
@@ -1066,32 +1030,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return originalXhrOpen.apply(this, arguments);
     };
 
-    document.addEventListener('DOMContentLoaded', function() {
-        const overlay = getOverlayElement();
-        if (!overlay) {
-            return;
-        }
-
-        const loginUrl = getLoginUrl(overlay);
-        const actionButton = overlay.querySelector('[data-action="return-login"]');
-
-        if (actionButton) {
-            actionButton.addEventListener('click', function(event) {
-                event.preventDefault();
-                redirectToLogin(loginUrl);
-            });
-        }
-
-        overlay.addEventListener('click', function(event) {
-            if (event.target === overlay) {
-                redirectToLogin(loginUrl);
-            }
-        });
-    });
-
     window.addEventListener('forceSessionEndNotice', function() {
-        const overlay = getOverlayElement();
-        const loginUrl = getLoginUrl(overlay);
+        const loginUrl = '/index.php';
         showSessionOverlay(loginUrl);
     });
 })();
