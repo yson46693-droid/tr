@@ -2038,17 +2038,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $materialSuppliers = [];
                 if (is_array($materialSuppliersInput)) {
                     foreach ($materialSuppliersInput as $key => $value) {
-                        $supplierId = intval($value);
-                        if ($supplierId > 0) {
-                            $materialSuppliers[$key] = $supplierId;
-                        }
+                        $materialSuppliers[$key] = intval($value);
                     }
                 }
-
-                // تسجيل البيانات المستلمة للتشخيص
-                error_log("Create from template - material_suppliers input: " . json_encode($materialSuppliersInput, JSON_UNESCAPED_UNICODE));
-                error_log("Create from template - material_suppliers processed: " . json_encode($materialSuppliers, JSON_UNESCAPED_UNICODE));
-                error_log("Create from template - POST data keys: " . implode(', ', array_keys($_POST)));
 
                 $materialHoneyVarietiesInput = $_POST['material_honey_varieties'] ?? [];
                 $materialHoneyStatesInput = $_POST['material_honey_states'] ?? [];
@@ -2076,8 +2068,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if (empty($materialSuppliers)) {
-                    error_log("Create from template - No material suppliers found. Template ID: {$templateId}, POST data: " . json_encode($_POST, JSON_UNESCAPED_UNICODE));
-                    throw new Exception('يرجى اختيار المورد المحاسب لكل مادة قبل إنشاء التشغيلة. تأكد من اختيار مورد لكل مادة في النموذج.');
+                    throw new Exception('يرجى اختيار المورد المحاسب لهذه المادة قبل إنشاء التشغيلة.');
                 }
 
                 $templateMode = $_POST['template_mode'] ?? 'advanced';
@@ -5417,15 +5408,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
             } catch (Exception $e) {
                 $db->rollBack();
-                $errorMessage = $e->getMessage();
-                $error = 'حدث خطأ في إنشاء الإنتاج: ' . $errorMessage;
-                error_log("Create from template error: " . $errorMessage);
-                error_log("Create from template error trace: " . $e->getTraceAsString());
-                error_log("Create from template POST data: " . json_encode($_POST, JSON_UNESCAPED_UNICODE));
-                
-                // إعادة التوجيه مع رسالة الخطأ
-                $redirectParams = ['page' => 'production'];
-                preventDuplicateSubmission(null, $redirectParams, null, $currentUser['role'], $error);
+                $error = 'حدث خطأ في إنشاء الإنتاج: ' . $e->getMessage();
+                error_log("Create from template error: " . $e->getMessage());
             }
         }
     }
@@ -6369,22 +6353,6 @@ $lang = isset($translations) ? $translations : [];
 <script>
 // إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات
 (function() {
-    // استثناء صفحة tasks من إعادة التوجيه التلقائية
-    const currentUrl = window.location.href || '';
-    const isTasksPage = currentUrl.includes('page=tasks') || 
-                       currentUrl.includes('tasks.php');
-    
-    if (isTasksPage) {
-        // لصفحة tasks، فقط إزالة معاملات success/error من URL بدون إعادة تحميل
-        const url = new URL(window.location.href);
-        if (url.searchParams.has('success') || url.searchParams.has('error')) {
-            url.searchParams.delete('success');
-            url.searchParams.delete('error');
-            window.history.replaceState({}, '', url.toString());
-        }
-        return; // لا نتابع مع باقي الكود
-    }
-    
     const successAlert = document.getElementById('successAlert');
     const errorAlert = document.getElementById('errorAlert');
     
@@ -9514,54 +9482,21 @@ function openCreateFromTemplateModal(element) {
 document.getElementById('createFromTemplateForm')?.addEventListener('submit', function(e) {
     const quantity = document.querySelector('input[name="quantity"]').value;
 
-    // مزامنة الحقول المخفية للموردين المجمّعين قبل الإرسال
-    const hiddenContainers = document.querySelectorAll('.aggregated-honey-hidden-inputs');
-    hiddenContainers.forEach(container => {
-        const componentCard = container.closest('.component-card');
-        if (componentCard) {
-            const supplierSelect = componentCard.querySelector('select[name^="material_suppliers"]');
-            const honeySelect = componentCard.querySelector('select[data-role="honey-variety"]');
-            
-            if (supplierSelect && honeySelect) {
-                const hiddenSuppliers = container.querySelectorAll('input[name^="material_suppliers"]');
-                const hiddenVarieties = container.querySelectorAll('input[name^="material_honey_varieties"]');
-                
-                hiddenSuppliers.forEach(hidden => {
-                    hidden.value = supplierSelect.value || '';
-                });
-                hiddenVarieties.forEach(hidden => {
-                    hidden.value = honeySelect.value || '';
-                });
-            }
-        }
-    });
-
     const supplierSelects = document.querySelectorAll('#templateSuppliersContainer select[data-role="component-supplier"]');
-    const hiddenSupplierInputs = document.querySelectorAll('#templateSuppliersContainer input[type="hidden"][name^="material_suppliers"]');
 
-    if (supplierSelects.length === 0 && hiddenSupplierInputs.length === 0) {
-        e.preventDefault();
+    if (supplierSelects.length === 0) {
+            e.preventDefault();
         alert('لا توجد مواد مرتبطة بالقالب، يرجى مراجعة القالب قبل إنشاء التشغيلة.');
-        return false;
-    }
+            return false;
+        }
 
-    // التحقق من جميع حقول الموردين المرئية
-    for (let select of supplierSelects) {
-        if (!select.value || select.value.trim() === '') {
-            e.preventDefault();
-            alert('يرجى اختيار المورد المناسب لهذه المادة للمتابعة');
-            select.focus();
-            return false;
-        }
-    }
-    
-    // التحقق من جميع حقول الموردين المخفية
-    for (let input of hiddenSupplierInputs) {
-        if (!input.value || input.value.trim() === '') {
-            e.preventDefault();
-            alert('يرجى التأكد من اختيار جميع الموردين المطلوبين');
-            return false;
-        }
+        for (let select of supplierSelects) {
+            if (!select.value) {
+                e.preventDefault();
+                alert('يرجى اختيار المورد المناسب لهذه المادة للمتابعة');
+                select.focus();
+                return false;
+            }
     }
 
     const honeyVarietyFields = document.querySelectorAll('#templateSuppliersContainer [data-role="honey-variety"]');
@@ -9607,13 +9542,6 @@ document.getElementById('createFromTemplateForm')?.addEventListener('submit', fu
         document.querySelector('input[name="quantity"]').focus();
         return false;
     }
-    
-    // تسجيل البيانات قبل الإرسال للتشخيص
-    console.log('Submitting create from template form');
-    console.log('Material suppliers:', Array.from(supplierSelects).map(s => ({ name: s.name, value: s.value })));
-    console.log('Hidden suppliers:', Array.from(hiddenSupplierInputs).map(i => ({ name: i.name, value: i.value })));
-    console.log('Quantity:', quantity);
-    console.log('Template ID:', document.getElementById('template_id')?.value);
 });
 
 document.getElementById('createFromTemplateModal')?.addEventListener('shown.bs.modal', function() {
@@ -10229,15 +10157,6 @@ window.addEventListener('beforeunload', function(e) {
 
 // التحقق من رسالة الخطأ الخاصة بالطلب المكرر وتحديث الصفحة تلقائياً
 function checkForDuplicateRequestError() {
-    // استثناء صفحة tasks من إعادة التوجيه التلقائية
-    const currentUrl = window.location.href || '';
-    const isTasksPage = currentUrl.includes('page=tasks') || 
-                       currentUrl.includes('tasks.php');
-    
-    if (isTasksPage) {
-        return; // لا نتحقق من رسائل الخطأ في صفحة tasks
-    }
-    
     const errorAlerts = document.querySelectorAll('.alert-danger');
     errorAlerts.forEach(function(alert) {
         const alertText = alert.textContent || alert.innerText;
