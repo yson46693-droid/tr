@@ -1091,36 +1091,21 @@ if (ob_get_level() > 0) {
                         //     });
                         // }, 5 * 60 * 1000); // 5 دقائق
                         
-                        // الاستماع للتحديثات - مع آلية لمنع التكرار
-                        const lastSWUpdateKey = 'last_sw_update_notification';
-                        let updateNotificationShown = false;
-                        
+                        // تم إزالة إشعار Service Worker Update - استخدام إشعار التحديث الفعلي من footer.php بدلاً منه
+                        // لا حاجة لإظهار إشعار Service Worker منفصل
                         reg.addEventListener('updatefound', function() {
                             const newWorker = reg.installing;
                             
                             newWorker.addEventListener('statechange', function() {
                                 if (newWorker.state === 'installed') {
-                                    if (navigator.serviceWorker.controller) {
-                                        // التحقق من عدم إظهار نفس الإشعار مؤخراً (خلال آخر ساعتين)
-                                        const lastNotification = localStorage.getItem(lastSWUpdateKey);
-                                        const now = Date.now();
-                                        const twoHours = 2 * 60 * 60 * 1000; // ساعتين
-                                        
-                                        if (!lastNotification || (now - parseInt(lastNotification)) > twoHours) {
-                                            showUpdateNotification();
-                                            localStorage.setItem(lastSWUpdateKey, now.toString());
-                                            updateNotificationShown = true;
-                                        }
-                                    } else {
+                                    if (!navigator.serviceWorker.controller) {
                                         // أول تثبيت
                                         console.log('Service Worker installed for the first time');
                                     }
                                 }
                                 
-                                // لا نعرض إشعار عند activated لتجنب التكرار
                                 if (newWorker.state === 'activated') {
                                     console.log('Service Worker activated');
-                                    // تم تفعيل التحديث - لا حاجة لإشعار إضافي
                                 }
                             });
                         });
@@ -1143,56 +1128,7 @@ if (ob_get_level() > 0) {
                     });
             });
             
-            // دالة لإظهار إشعار التحديث
-            function showUpdateNotification() {
-                // التحقق من عدم وجود إشعار موجود بالفعل
-                if (document.querySelector('.alert-info[data-sw-update="true"]')) {
-                    return;
-                }
-                
-                // إنشاء عنصر إشعار
-                const notification = document.createElement('div');
-                notification.setAttribute('data-sw-update', 'true');
-                notification.className = 'alert alert-info alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
-                notification.style.zIndex = '9999';
-                notification.style.maxWidth = '500px';
-                notification.innerHTML = `
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-arrow-clockwise me-2"></i>
-                        <strong>تحديث متاح!</strong>
-                        <span class="ms-2">تم اكتشاف نسخة جديدة من الموقع</span>
-                        <button type="button" class="btn btn-sm btn-primary ms-auto me-2" onclick="updateNow()">
-                            تحديث الآن
-                        </button>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" onclick="dismissSWUpdate()"></button>
-                    </div>
-                `;
-                document.body.appendChild(notification);
-                
-                // إضافة دالة التحديث
-                window.updateNow = function() {
-                    if (registration && registration.waiting) {
-                        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-                    }
-                    notification.remove();
-                };
-                
-                // دالة لإغلاق الإشعار
-                window.dismissSWUpdate = function() {
-                    const notif = document.querySelector('.alert-info[data-sw-update="true"]');
-                    if (notif) {
-                        notif.classList.remove('show');
-                        setTimeout(() => notif.remove(), 300);
-                    }
-                };
-                
-                // إزالة الإشعار بعد 30 ثانية
-                setTimeout(function() {
-                    if (notification.parentNode) {
-                        notification.remove();
-                    }
-                }, 30000);
-            }
+            // تم إزالة إشعار Service Worker Update - استخدام إشعار التحديث الفعلي من footer.php بدلاً منه
             
             // إعادة تحميل عند تركيز النافذة (للتحقق من التحديثات)
             window.addEventListener('focus', function() {
