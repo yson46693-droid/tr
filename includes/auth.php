@@ -268,7 +268,8 @@ function isLoggedIn() {
                         "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE id = ?",
                         [$newExpiresAt, $sessionRecord['id']]
                     );
-                    error_log("isLoggedIn() UPDATED: Session extended for user_id: {$userId}, reason: {$updateReason}, time_until_expiry: " . round($timeUntilExpiry / 3600, 2) . " hours, new expires_at: {$newExpiresAt}");
+                    // تم تعطيل التسجيل لتقليل استهلاك الموارد
+                    // error_log("isLoggedIn() UPDATED: Session extended for user_id: {$userId}, reason: {$updateReason}, time_until_expiry: " . round($timeUntilExpiry / 3600, 2) . " hours, new expires_at: {$newExpiresAt}");
                 }
             } else {
                 // فشل في إنشاء جدول الجلسات - خطأ في قاعدة البيانات
@@ -728,7 +729,8 @@ function getCurrentUser() {
     // إذا كان Cache متاحاً، استخدمه
     if (class_exists('Cache')) {
         $user = Cache::remember($cacheKey, function() use ($userId, $scriptName) {
-            error_log("getCurrentUser() - Loading from database (cache miss) for user ID {$userId} | Script: {$scriptName}");
+            // تم تعطيل التسجيل لتقليل استهلاك الموارد
+            // error_log("getCurrentUser() - Loading from database (cache miss) for user ID {$userId} | Script: {$scriptName}");
             return getCurrentUserFromDatabase($userId);
         }, 300); // 5 دقائق
         
@@ -736,24 +738,29 @@ function getCurrentUser() {
         if ($user === null) {
             Cache::forget($cacheKey);
             $duration = round((microtime(true) - $startTime) * 1000, 2);
-            error_log("getCurrentUser() NULL: User not found in database (from cache) for user ID {$userId} | Duration: {$duration}ms | Script: {$scriptName}");
+            // تم تعطيل التسجيل لتقليل استهلاك الموارد
+            // error_log("getCurrentUser() NULL: User not found in database (from cache) for user ID {$userId} | Duration: {$duration}ms | Script: {$scriptName}");
             return null;
         }
         
         $duration = round((microtime(true) - $startTime) * 1000, 2);
-        error_log("getCurrentUser() SUCCESS (from cache): User ID {$userId}, Role: " . ($user['role'] ?? 'NOT_SET') . " | Duration: {$duration}ms | Script: {$scriptName}");
+        // تم تعطيل التسجيل لتقليل استهلاك الموارد
+        // error_log("getCurrentUser() SUCCESS (from cache): User ID {$userId}, Role: " . ($user['role'] ?? 'NOT_SET') . " | Duration: {$duration}ms | Script: {$scriptName}");
         return $user;
     }
     
     // إذا لم يكن Cache متاحاً، استخدم الطريقة القديمة
-    error_log("getCurrentUser() - Loading from database (no cache) for user ID {$userId} | Script: {$scriptName}");
+    // تم تعطيل التسجيل لتقليل استهلاك الموارد
+    // error_log("getCurrentUser() - Loading from database (no cache) for user ID {$userId} | Script: {$scriptName}");
     $user = getCurrentUserFromDatabase($userId);
     
     $duration = round((microtime(true) - $startTime) * 1000, 2);
     if ($user) {
-        error_log("getCurrentUser() SUCCESS: User ID {$userId}, Role: " . ($user['role'] ?? 'NOT_SET') . ", Status: " . ($user['status'] ?? 'NOT_SET') . " | Duration: {$duration}ms | Script: {$scriptName}");
+        // تم تعطيل التسجيل لتقليل استهلاك الموارد
+        // error_log("getCurrentUser() SUCCESS: User ID {$userId}, Role: " . ($user['role'] ?? 'NOT_SET') . ", Status: " . ($user['status'] ?? 'NOT_SET') . " | Duration: {$duration}ms | Script: {$scriptName}");
     } else {
-        error_log("getCurrentUser() NULL: getCurrentUserFromDatabase() returned null for user ID {$userId} | Duration: {$duration}ms | Script: {$scriptName}");
+        // تم تعطيل التسجيل لتقليل استهلاك الموارد
+        // error_log("getCurrentUser() NULL: getCurrentUserFromDatabase() returned null for user ID {$userId} | Duration: {$duration}ms | Script: {$scriptName}");
     }
     
     return $user;
