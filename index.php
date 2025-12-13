@@ -290,32 +290,48 @@ if (isLoggedIn() && !$isLoginAttempt) {
         // محاولة تسجيل دخول لنفس الحساب - حذف الجلسة القديمة والسماح بتسجيل الدخول الجديد
         error_log("Login from new device: Deleting old session for user: {$currentUsername}");
         
-        // حذف الجلسة القديمة من قاعدة البيانات
+        // حذف الجلسة القديمة من قاعدة البيانات أولاً
         try {
             require_once __DIR__ . '/includes/db.php';
             require_once __DIR__ . '/includes/auth.php';
             $db = db();
             $userId = $_SESSION['user_id'] ?? 0;
+            $oldSessionId = session_id();
+            
             if ($userId > 0 && ensureSessionsTable()) {
+                // حذف جميع الجلسات للمستخدم (لتأكيد حذف الجلسة القديمة)
                 $db->execute("DELETE FROM sessions WHERE user_id = ?", [$userId]);
-                error_log("Login from new device: Old session deleted for user_id: {$userId}");
+                error_log("Login from new device: All sessions deleted for user_id: {$userId}, old_session_id: " . substr($oldSessionId, 0, 20));
+                
+                // التحقق من أن الجلسة تم حذفها
+                $verifyDelete = $db->queryOne("SELECT COUNT(*) as count FROM sessions WHERE user_id = ?", [$userId]);
+                if ($verifyDelete && $verifyDelete['count'] > 0) {
+                    error_log("Login from new device: WARNING - Sessions still exist after delete for user_id: {$userId}");
+                } else {
+                    error_log("Login from new device: Verified - All sessions deleted successfully for user_id: {$userId}");
+                }
             }
         } catch (Exception $e) {
             error_log("Login from new device: Error deleting old session: " . $e->getMessage());
         }
         
-        // حذف الجلسة PHP الحالية
+        // حذف الجلسة PHP الحالية بشكل كامل
+        $sessionName = session_name();
+        
+        // حذف جميع بيانات الجلسة
         $_SESSION = [];
         @session_unset();
         @session_destroy();
         
-        // حذف cookies
-        if (isset($_COOKIE[session_name()])) {
-            setcookie(session_name(), '', time() - 3600, '/');
+        // حذف session cookie من جميع المسارات
+        if (isset($_COOKIE[$sessionName])) {
+            setcookie($sessionName, '', time() - 3600, '/');
+            setcookie($sessionName, '', time() - 3600, '/', '');
+            unset($_COOKIE[$sessionName]);
         }
         
-        // السماح بمتابعة تسجيل الدخول (سيتم إنشاء جلسة جديدة في دالة login())
-        error_log("Login from new device: Old session cleared, allowing new login for: {$loginUsername}");
+        // التأكد من إنشاء جلسة جديدة تماماً (سيتم ذلك في login())
+        error_log("Login from new device: Old session completely cleared, allowing new login for: {$loginUsername}");
     } else {
         // محاولة تسجيل دخول بحساب مختلف - منع ذلك وإعادة التوجيه
         $userRole = $_SESSION['role'] ?? 'accountant';

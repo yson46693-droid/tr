@@ -147,82 +147,65 @@ function isLoggedIn() {
             if (ensureSessionsTable()) {
                 $db = db();
                 
-                // البحث عن الجلسة في قاعدة البيانات
+                // البحث عن الجلسة في قاعدة البيانات - يجب أن تطابق session_id تماماً
+                // لا نحاول "إصلاح" الجلسة لأن ذلك سيسمح للجهاز القديم بإعادة إنشاء الجلسة بعد حذفها
                 $sessionRecord = $db->queryOne(
                     "SELECT * FROM sessions WHERE user_id = ? AND session_id = ? AND expires_at > NOW()",
                     [$userId, $sessionId]
                 );
                 
-                // إذا لم توجد جلسة بنفس session_id، جرب البحث عن أي جلسة نشطة للمستخدم
-                if (!$sessionRecord) {
-                    $anySession = $db->queryOne(
-                        "SELECT * FROM sessions WHERE user_id = ? AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1",
-                        [$userId]
-                    );
-                    
-                    if ($anySession) {
-                        error_log("isLoggedIn() INFO: Found different session for user_id: {$userId}, stored session_id: " . substr($anySession['session_id'], 0, 20) . "... current session_id: " . substr($sessionId, 0, 20) . "...");
-                        // تحديث الجلسة في قاعدة البيانات لتستخدم session_id الحالي
-                        try {
-                            $db->execute("DELETE FROM sessions WHERE user_id = ?", [$userId]);
-                            $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                            $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-                            $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
-                            
-                            $db->execute(
-                                "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                                 VALUES (?, ?, ?, ?, ?, NOW())",
-                                [$userId, $sessionId, $ipAddress, $userAgent, $expiresAt]
-                            );
-                            
-                            error_log("isLoggedIn() FIXED: Updated session in database for user_id: {$userId}");
-                            $sessionRecord = $db->queryOne(
-                                "SELECT * FROM sessions WHERE user_id = ? AND session_id = ? AND expires_at > NOW()",
-                                [$userId, $sessionId]
-                            );
-                        } catch (Exception $fixError) {
-                            error_log("isLoggedIn() ERROR: Failed to fix session: " . $fixError->getMessage());
-                        }
-                    }
-                }
+                // === تحقق أمني: إذا لم توجد الجلسة بنفس session_id، الجلسة غير صالحة ===
+                // لا نحاول البحث عن جلسات أخرى أو إصلاح الجلسة لأن ذلك سيسمح للجهاز القديم
+                // بإعادة إنشاء الجلسة بعد حذفها عند تسجيل الدخول من جهاز جديد
                 
-                // إذا لم توجد الجلسة في قاعدة البيانات، الجلسة غير صالحة - حذفها
+                // إذا لم توجد الجلسة في قاعدة البيانات، الجلسة غير صالحة - حذفها فوراً
                 if (!$sessionRecord) {
                     // تسجيل تفصيلي للمساعدة في التشخيص
                     $allSessions = $db->query("SELECT * FROM sessions WHERE user_id = ?", [$userId]);
                     $sessionCount = count($allSessions);
-                    error_log("isLoggedIn() FALSE: Session not found in database for user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
+                    error_log("isLoggedIn() SECURITY: Session not found in database for user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
                     error_log("isLoggedIn() DEBUG: Total sessions for user_id {$userId}: {$sessionCount}");
                     
                     if ($sessionCount > 0) {
                         foreach ($allSessions as $sess) {
-                            error_log("isLoggedIn() DEBUG: Found session_id: " . substr($sess['session_id'], 0, 20) . "... (expires_at: {$sess['expires_at']})");
+                            error_log("isLoggedIn() DEBUG: Found OTHER session_id: " . substr($sess['session_id'], 0, 20) . "... (expires_at: {$sess['expires_at']}, created_at: {$sess['created_at']})");
+                            // هذا يعني أن هناك جلسة جديدة من جهاز آخر - الجهاز الحالي (القديم) يجب أن يُمنع
+                            error_log("isLoggedIn() SECURITY WARNING: Old device detected - session was deleted, access denied");
                         }
+                    } else {
+                        error_log("isLoggedIn() DEBUG: No sessions found for user_id {$userId} - session was deleted");
                     }
                     
-                    // حذف الجلسة PHP لأنها غير صالحة
+                    // === حذف فوري للجلسة PHP والـ cookies ===
+                    // هذا يمنع الجهاز القديم من الوصول حتى لو كان لديه session cookie
                     $_SESSION = [];
                     @session_unset();
                     @session_destroy();
                     
-                    // حذف cookies
-                    if (isset($_COOKIE[session_name()])) {
-                        setcookie(session_name(), '', time() - 3600, '/');
+                    // حذف session cookie من المتصفح
+                    $sessionName = session_name();
+                    if (isset($_COOKIE[$sessionName])) {
+                        // حذف cookie من جميع المسارات
+                        setcookie($sessionName, '', time() - 3600, '/');
+                        setcookie($sessionName, '', time() - 3600, '/', '');
+                        unset($_COOKIE[$sessionName]);
                     }
                     
                     // تسجيل فشل الجلسة للأمان
                     $duration = round((microtime(true) - $startTime) * 1000, 2);
                     if (function_exists('logSessionFailure')) {
-                        logSessionFailure('الجلسة غير موجودة في قاعدة البيانات', [
+                        logSessionFailure('الجلسة غير موجودة في قاعدة البيانات - الجهاز القديم مُنع من الوصول', [
                             'user_id' => $userId,
                             'session_id' => substr($sessionId, 0, 20),
+                            'reason' => 'Session deleted - new device login',
                             'duration_ms' => $duration,
                             'script' => $scriptName,
                             'uri' => $requestUri,
                         ]);
                     }
                     
+                    // إرجاع false لمنع الوصول
+                    error_log("isLoggedIn() ACCESS DENIED: Old device session invalidated - user must login again");
                     return false;
                 }
                 
