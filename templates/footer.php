@@ -1017,6 +1017,169 @@ if (!defined('ACCESS_ALLOWED')) {
     })();
     </script>
     <?php endif; ?>
+    
+    <!-- Error Handler: منع عرض ERR_FAILED وإعادة التوجيه تلقائياً -->
+    <script>
+    (function() {
+        'use strict';
+        
+        // منع التكرار
+        if (window.__errorHandlerActive) {
+            return;
+        }
+        window.__errorHandlerActive = true;
+        
+        // حساب مسار صفحة تسجيل الدخول
+        function getLoginUrl() {
+            const currentPath = window.location.pathname || '/';
+            const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+            const basePath = pathParts.length ? '/' + pathParts[0] : '';
+            return basePath ? basePath + '/index.php' : '/index.php';
+        }
+        
+        // إعادة التوجيه إلى صفحة تسجيل الدخول
+        function redirectToLogin() {
+            const loginUrl = getLoginUrl();
+            // استخدام replace بدلاً من href لمنع إضافة صفحة إلى history
+            window.location.replace(loginUrl);
+        }
+        
+        // التحقق من حالة الصفحة
+        function checkPageStatus() {
+            // التحقق من أن الصفحة تم تحميلها بشكل صحيح
+            if (document.readyState === 'complete') {
+                // التحقق من وجود محتوى أساسي في الصفحة
+                const mainContent = document.getElementById('main-content') || document.querySelector('main') || document.body;
+                if (mainContent && mainContent.children.length === 0 && document.body.innerHTML.trim().length < 100) {
+                    // الصفحة فارغة أو لم يتم تحميلها - إعادة التوجيه
+                    console.warn('Page appears empty or failed to load - redirecting to login');
+                    redirectToLogin();
+                    return;
+                }
+            }
+        }
+        
+        // معالجة أخطاء التحميل
+        window.addEventListener('error', function(event) {
+            // التحقق من أخطاء الشبكة أو التحميل
+            if (event.target && (event.target.tagName === 'SCRIPT' || event.target.tagName === 'LINK')) {
+                const src = event.target.src || event.target.href || '';
+                // إذا كان الخطأ في تحميل ملف مهم (مثل main.js أو header)
+                if (src.includes('.js') || src.includes('.css')) {
+                    console.warn('Failed to load resource:', src);
+                    // لا نعيد التوجيه فوراً - قد يكون خطأ مؤقت
+                }
+            }
+        }, true);
+        
+        // معالجة أخطاء Promise غير المعالجة
+        window.addEventListener('unhandledrejection', function(event) {
+            const error = event.reason;
+            if (error && typeof error === 'object') {
+                const errorMessage = error.message || error.toString() || '';
+                // التحقق من أخطاء الشبكة أو ERR_FAILED
+                if (errorMessage.includes('ERR_FAILED') || 
+                    errorMessage.includes('Failed to fetch') || 
+                    errorMessage.includes('NetworkError') ||
+                    errorMessage.includes('Load failed')) {
+                    console.warn('Network error detected:', errorMessage);
+                    // إعادة التوجيه بعد تأخير قصير
+                    setTimeout(redirectToLogin, 1000);
+                }
+            }
+        });
+        
+        // التحقق من حالة الاتصال
+        window.addEventListener('online', function() {
+            // عند الاتصال بالإنترنت، تحقق من حالة الصفحة
+            setTimeout(checkPageStatus, 2000);
+        });
+        
+        window.addEventListener('offline', function() {
+            // عند انقطاع الاتصال، لا نعيد التوجيه فوراً
+            // سننتظر حتى يعود الاتصال
+        });
+        
+        // التحقق من حالة الصفحة بعد التحميل
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(checkPageStatus, 1000);
+            });
+        } else {
+            setTimeout(checkPageStatus, 1000);
+        }
+        
+        // التحقق من حالة الصفحة بعد تحميلها بالكامل
+        window.addEventListener('load', function() {
+            setTimeout(checkPageStatus, 500);
+        });
+        
+        // معالجة أخطاء fetch (للطلبات AJAX)
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+            return originalFetch.apply(this, args)
+                .catch(function(error) {
+                    // التحقق من أخطاء ERR_FAILED
+                    if (error && (error.message && (
+                        error.message.includes('ERR_FAILED') ||
+                        error.message.includes('Failed to fetch') ||
+                        error.message.includes('NetworkError')
+                    ))) {
+                        console.warn('Fetch error detected:', error.message);
+                        // إذا كان الخطأ في طلب مهم (مثل session check)، أعد التوجيه
+                        const url = args[0] || '';
+                        if (typeof url === 'string' && (
+                            url.includes('check_session') ||
+                            url.includes('session_keepalive') ||
+                            url.includes('isLoggedIn')
+                        )) {
+                            setTimeout(redirectToLogin, 1000);
+                        }
+                    }
+                    throw error;
+                });
+        };
+        
+        // مراقبة تغييرات الصفحة (للتحقق من أخطاء التوجيه)
+        let lastUrl = window.location.href;
+        setInterval(function() {
+            const currentUrl = window.location.href;
+            // إذا تغيرت الصفحة إلى صفحة خطأ أو ERR_FAILED
+            if (currentUrl !== lastUrl) {
+                lastUrl = currentUrl;
+                // التحقق من أن الصفحة الحالية ليست صفحة تسجيل الدخول
+                if (!currentUrl.includes('index.php') && !currentUrl.includes('login')) {
+                    // التحقق من أن الصفحة تم تحميلها بشكل صحيح
+                    setTimeout(checkPageStatus, 2000);
+                }
+            }
+        }, 3000);
+        
+        // معالجة أخطاء XMLHttpRequest (للتوافق مع الكود القديم)
+        if (window.XMLHttpRequest) {
+            const originalOpen = XMLHttpRequest.prototype.open;
+            const originalSend = XMLHttpRequest.prototype.send;
+            
+            XMLHttpRequest.prototype.open = function(method, url, ...args) {
+                this._url = url;
+                return originalOpen.apply(this, [method, url, ...args]);
+            };
+            
+            XMLHttpRequest.prototype.send = function(...args) {
+                this.addEventListener('error', function() {
+                    const url = this._url || '';
+                    if (url.includes('check_session') || url.includes('session_keepalive')) {
+                        console.warn('XHR error for session check - redirecting to login');
+                        setTimeout(redirectToLogin, 1000);
+                    }
+                });
+                
+                return originalSend.apply(this, args);
+            };
+        }
+    })();
+    </script>
+    
         </main>
     </div>
 </body>
