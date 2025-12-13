@@ -47,6 +47,11 @@ function getPasswordMinLength(): int
  * التحقق من تسجيل الدخول
  */
 function isLoggedIn() {
+    // تسجيل بداية التحقق من الجلسة
+    $startTime = microtime(true);
+    $requestUri = $_SERVER['REQUEST_URI'] ?? 'unknown';
+    $scriptName = $_SERVER['SCRIPT_NAME'] ?? 'unknown';
+    
     // التحقق من أننا في profile.php أو attendance.php أو notifications API - منع حذف الجلسة
     $isProfilePage = false;
     $isAttendancePage = false;
@@ -95,13 +100,17 @@ function isLoggedIn() {
             @session_start();
         } else {
             // تسجيل سبب الفشل
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
             if (function_exists('logSessionFailure')) {
                 logSessionFailure('الجلسة غير نشطة و headers تم إرسالها بالفعل', [
                     'session_status' => session_status(),
                     'headers_sent' => headers_sent(),
+                    'duration_ms' => $duration,
+                    'script' => $scriptName,
+                    'uri' => $requestUri,
                 ]);
             }
-            error_log("isLoggedIn() FALSE: Session not started and headers already sent");
+            error_log("isLoggedIn() FALSE: Session not started and headers already sent | Duration: {$duration}ms | Script: {$scriptName} | URI: {$requestUri}");
             return false;
         }
     }
@@ -213,13 +222,17 @@ function isLoggedIn() {
     // التأكد من وجود $_SESSION
     if (!isset($_SESSION) || !is_array($_SESSION)) {
         // تسجيل سبب الفشل
+        $duration = round((microtime(true) - $startTime) * 1000, 2);
         if (function_exists('logSessionFailure')) {
             logSessionFailure('$_SESSION غير موجود أو ليس array', [
                 'has_session' => isset($_SESSION),
                 'is_array' => isset($_SESSION) && is_array($_SESSION),
+                'duration_ms' => $duration,
+                'script' => $scriptName,
+                'uri' => $requestUri,
             ]);
         }
-        error_log("isLoggedIn() FALSE: \$_SESSION not set or not array");
+        error_log("isLoggedIn() FALSE: \$_SESSION not set or not array | Duration: {$duration}ms | Script: {$scriptName} | URI: {$requestUri}");
         return false;
     }
     
@@ -227,15 +240,19 @@ function isLoggedIn() {
     if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
         // التحقق الإضافي: التأكد من وجود user_id في الجلسة
         if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
-            // تسجيل سبب الفشل
-            if (function_exists('logSessionFailure')) {
-                logSessionFailure('user_id غير موجود أو فارغ في الجلسة', [
-                    'has_user_id' => isset($_SESSION['user_id']),
-                    'user_id_value' => $_SESSION['user_id'] ?? null,
-                    'logged_in' => $_SESSION['logged_in'] ?? null,
-                ]);
-            }
-            error_log("isLoggedIn() FALSE: user_id not set or empty | logged_in: " . ($_SESSION['logged_in'] ?? 'NOT_SET'));
+        // تسجيل سبب الفشل
+        $duration = round((microtime(true) - $startTime) * 1000, 2);
+        if (function_exists('logSessionFailure')) {
+            logSessionFailure('user_id غير موجود أو فارغ في الجلسة', [
+                'has_user_id' => isset($_SESSION['user_id']),
+                'user_id_value' => $_SESSION['user_id'] ?? null,
+                'logged_in' => $_SESSION['logged_in'] ?? null,
+                'duration_ms' => $duration,
+                'script' => $scriptName,
+                'uri' => $requestUri,
+            ]);
+        }
+        error_log("isLoggedIn() FALSE: user_id not set or empty | logged_in: " . ($_SESSION['logged_in'] ?? 'NOT_SET') . " | Duration: {$duration}ms | Script: {$scriptName} | URI: {$requestUri}");
             
             // إذا لم يكن هناك user_id، إلغاء الجلسة فقط إذا لم نكن في profile.php أو attendance.php
             if (!$isProtectedPage) {
@@ -295,30 +312,52 @@ function isLoggedIn() {
             }
         }
         
+        // تسجيل نجاح التحقق
+        $duration = round((microtime(true) - $startTime) * 1000, 2);
+        if (function_exists('logSessionInfo')) {
+            logSessionInfo('isLoggedIn() SUCCESS', [
+                'duration_ms' => $duration,
+                'user_id' => $_SESSION['user_id'] ?? null,
+                'script' => $scriptName,
+                'uri' => $requestUri,
+            ]);
+        }
+        error_log("isLoggedIn() TRUE: User ID " . ($_SESSION['user_id'] ?? 'unknown') . " | Duration: {$duration}ms | Script: {$scriptName}");
         return true;
     }
     
     // إذا لم تكن هناك جلسة، التحقق من cookie "تذكرني"
     if (isset($_COOKIE['remember_token'])) {
         $rememberResult = checkRememberToken($_COOKIE['remember_token']);
-        if (!$rememberResult && function_exists('logSessionFailure')) {
-            logSessionFailure('فشل التحقق من remember_token', [
-                'has_remember_token' => isset($_COOKIE['remember_token']),
-            ]);
+        $duration = round((microtime(true) - $startTime) * 1000, 2);
+        if (!$rememberResult) {
+            if (function_exists('logSessionFailure')) {
+                logSessionFailure('فشل التحقق من remember_token', [
+                    'has_remember_token' => isset($_COOKIE['remember_token']),
+                    'duration_ms' => $duration,
+                ]);
+            }
+            error_log("isLoggedIn() FALSE: Remember token check failed | Duration: {$duration}ms | Script: {$scriptName}");
+        } else {
+            error_log("isLoggedIn() TRUE: Remember token valid | Duration: {$duration}ms | Script: {$scriptName}");
         }
         return $rememberResult;
     }
     
     // تسجيل سبب الفشل النهائي
+    $duration = round((microtime(true) - $startTime) * 1000, 2);
     if (function_exists('logSessionFailure')) {
         logSessionFailure('لا توجد جلسة مسجل دخول ولا remember_token', [
             'has_logged_in' => isset($_SESSION['logged_in']),
             'logged_in_value' => $_SESSION['logged_in'] ?? null,
             'has_user_id' => isset($_SESSION['user_id']),
             'has_remember_token' => isset($_COOKIE['remember_token']),
+            'duration_ms' => $duration,
+            'script' => $scriptName,
+            'uri' => $requestUri,
         ]);
     }
-    error_log("isLoggedIn() FALSE: No logged_in session and no remember_token | logged_in: " . ($_SESSION['logged_in'] ?? 'NOT_SET') . " | user_id: " . ($_SESSION['user_id'] ?? 'NOT_SET'));
+    error_log("isLoggedIn() FALSE: No logged_in session and no remember_token | logged_in: " . ($_SESSION['logged_in'] ?? 'NOT_SET') . " | user_id: " . ($_SESSION['user_id'] ?? 'NOT_SET') . " | Duration: {$duration}ms | Script: {$scriptName} | URI: {$requestUri}");
     
     return false;
 }
