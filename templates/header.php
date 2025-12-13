@@ -18,6 +18,14 @@ if (!headers_sent()) {
     header("Permissions-Policy: geolocation=(self), camera=(self), microphone=(self), notifications=(self)");
     // Feature-Policy كبديل للمتصفحات القديمة
     header("Feature-Policy: geolocation 'self'; camera 'self'; microphone 'self'; notifications 'self'");
+    
+    // === Cache Control Headers - منع تخزين الصفحات في cache ===
+    // هذه headers ضرورية لضمان تحديث البيانات بعد أي طلب
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
+    header('Pragma: no-cache');
+    header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+    header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
+    header('ETag: "' . md5(time() . rand() . session_id()) . '"');
 }
 
 require_once __DIR__ . '/../includes/config.php';

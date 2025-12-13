@@ -29,6 +29,150 @@ if (!defined('ACCESS_ALLOWED')) {
         </div>
     </footer>
     
+    <!-- حل شامل لحذف Cache بعد أي طلب في أي نموذج -->
+    <script>
+    (function() {
+        'use strict';
+        
+        // منع تخزين الصفحة في cache عند عمل refresh
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) {
+                // إذا كانت الصفحة من cache، أعد تحميلها من السيرفر
+                window.location.reload(true);
+            }
+        });
+        
+        // معالجة جميع النماذج لحذف cache بعد الإرسال
+        function setupFormCacheBusting() {
+            document.querySelectorAll('form[method="POST"]').forEach(function(form) {
+                // التحقق من عدم إضافة listener مرتين
+                if (form.dataset.cacheBustingSetup === 'true') {
+                    return;
+                }
+                form.dataset.cacheBustingSetup = 'true';
+                
+                form.addEventListener('submit', function(e) {
+                    // حفظ flag في sessionStorage أن هناك طلب جديد
+                    try {
+                        sessionStorage.setItem('form_submitted_' + Date.now(), 'true');
+                        sessionStorage.setItem('last_form_submit_time', Date.now().toString());
+                    } catch (err) {
+                        // تجاهل إذا كان sessionStorage غير متاح
+                    }
+                    
+                    // إضافة timestamp كمعامل خفي لفرض reload من السيرفر
+                    const timestamp = Date.now();
+                    let hasTimestampInput = false;
+                    
+                    // التحقق من وجود input timestamp
+                    const existingInputs = form.querySelectorAll('input[type="hidden"]');
+                    for (let input of existingInputs) {
+                        if (input.name === '_cache_bust' || input.name === '_t' || input.name === '_nocache') {
+                            input.value = timestamp;
+                            hasTimestampInput = true;
+                            break;
+                        }
+                    }
+                    
+                    // إضافة input timestamp إذا لم يكن موجوداً
+                    if (!hasTimestampInput) {
+                        const timestampInput = document.createElement('input');
+                        timestampInput.type = 'hidden';
+                        timestampInput.name = '_cache_bust';
+                        timestampInput.value = timestamp;
+                        form.appendChild(timestampInput);
+                    }
+                });
+            });
+        }
+        
+        // تهيئة عند تحميل الصفحة
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupFormCacheBusting);
+        } else {
+            setupFormCacheBusting();
+        }
+        
+        // إعادة تهيئة عند إضافة نماذج ديناميكية
+        if (typeof MutationObserver !== 'undefined') {
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.addedNodes.length > 0) {
+                        mutation.addedNodes.forEach(function(node) {
+                            if (node.nodeType === 1) {
+                                // التحقق من إضافة نماذج جديدة
+                                if (node.tagName === 'FORM' && node.method === 'POST') {
+                                    setupFormCacheBusting();
+                                } else if (node.querySelectorAll) {
+                                    const forms = node.querySelectorAll('form[method="POST"]');
+                                    if (forms.length > 0) {
+                                        setupFormCacheBusting();
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        }
+        
+        // عند تحميل الصفحة، التحقق من وجود طلبات حديثة
+        window.addEventListener('load', function() {
+            try {
+                const lastSubmitTime = sessionStorage.getItem('last_form_submit_time');
+                if (lastSubmitTime) {
+                    const timeDiff = Date.now() - parseInt(lastSubmitTime);
+                    // إذا كان الطلب منذ أقل من 30 ثانية، أزل cache parameters من URL
+                    if (timeDiff < 30000) {
+                        const url = new URL(window.location.href);
+                        let urlChanged = false;
+                        
+                        ['_cache_bust', '_t', '_nocache', '_r', '_refresh', '_auto_refresh'].forEach(function(param) {
+                            if (url.searchParams.has(param)) {
+                                url.searchParams.delete(param);
+                                urlChanged = true;
+                            }
+                        });
+                        
+                        if (urlChanged) {
+                            window.history.replaceState({}, '', url.toString());
+                        }
+                    }
+                }
+            } catch (e) {
+                // تجاهل
+            }
+        });
+        
+        // إضافة meta tags لمنع cache في جميع الصفحات
+        if (!document.querySelector('meta[http-equiv="Cache-Control"][content*="no-cache"]')) {
+            const metaCache = document.createElement('meta');
+            metaCache.httpEquiv = 'Cache-Control';
+            metaCache.content = 'no-cache, no-store, must-revalidate, max-age=0';
+            document.head.insertBefore(metaCache, document.head.firstChild);
+        }
+        
+        if (!document.querySelector('meta[http-equiv="Pragma"]')) {
+            const metaPragma = document.createElement('meta');
+            metaPragma.httpEquiv = 'Pragma';
+            metaPragma.content = 'no-cache';
+            document.head.appendChild(metaPragma);
+        }
+        
+        if (!document.querySelector('meta[http-equiv="Expires"]')) {
+            const metaExpires = document.createElement('meta');
+            metaExpires.httpEquiv = 'Expires';
+            metaExpires.content = '0';
+            document.head.appendChild(metaExpires);
+        }
+    })();
+    </script>
+    
     <!-- Session Keep-Alive Script - محسّن لمنع انتهاء الجلسة -->
     <script>
     (function() {
