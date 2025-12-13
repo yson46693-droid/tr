@@ -1542,10 +1542,10 @@ function tasksHtml(string $value): string
             fetchTasks();
         }, 2000);
         
-        // ثم كل 5 ثوانٍ
+        // ثم كل 30 ثانية (تقليل الاستخدام)
         autoRefreshInterval = setInterval(function() {
             fetchTasks();
-        }, 5000); // 5 ثوانٍ
+        }, 30000); // 30 ثانية بدلاً من 5 ثوانٍ لتقليل الاستخدام
     }
     
     // إيقاف التحديث التلقائي عند مغادرة الصفحة

@@ -978,46 +978,37 @@ function login($username, $password, $rememberMe = false) {
         session_start();
     }
     
-    // حفظ بيانات مؤقتة قبل إعادة توليد الجلسة
-    $tempData = [];
+    // حفظ بيانات المستخدم مباشرة في $_SESSION
+    $_SESSION['user_id'] = $user['id'];
+    $_SESSION['username'] = $user['username'];
+    $_SESSION['role'] = $user['role'];
+    $_SESSION['logged_in'] = true;
+    $_SESSION['last_activity'] = time();
+    
+    // حفظ CSRF token السابق إذا كان موجوداً
     if (isset($_SESSION['csrf_token'])) {
-        $tempData['csrf_token_previous'] = $_SESSION['csrf_token'];
-        $tempData['csrf_token_previous_time'] = time();
+        $_SESSION['csrf_token_previous'] = $_SESSION['csrf_token'];
+        $_SESSION['csrf_token_previous_time'] = time();
     }
     
-    // حفظ بيانات المستخدم مباشرة في $_SESSION قبل إعادة التوليد
-    $_SESSION['user_id'] = $user['id'];
-    $_SESSION['username'] = $user['username'];
-    $_SESSION['role'] = $user['role'];
-    $_SESSION['logged_in'] = true;
-    $_SESSION['last_activity'] = time();
-    
-    // حفظ البيانات المؤقتة
-    if (!empty($tempData)) {
-        $_SESSION = array_merge($_SESSION, $tempData);
-    }
-    
-    // إعادة توليد session_id مع الاحتفاظ بالبيانات (false = يحتفظ بالبيانات)
+    // === إعادة توليد session_id مع الحفاظ على البيانات ===
     if (session_status() === PHP_SESSION_ACTIVE) {
-        session_regenerate_id(false); // false = يحتفظ ببيانات الجلسة
-    }
-    
-    // إنشاء token جديد بعد إعادة توليد الجلسة
-    if (function_exists('generateCSRFToken')) {
-        generateCSRFToken(true);
-    }
-    
-    // التأكد مرة أخرى من وجود البيانات (في حالة فشل الإعداد السابق)
-    $_SESSION['user_id'] = $user['id'];
-    $_SESSION['username'] = $user['username'];
-    $_SESSION['role'] = $user['role'];
-    $_SESSION['logged_in'] = true;
-    $_SESSION['last_activity'] = time();
-    
-    // التأكد النهائي من أن البيانات موجودة في $_SESSION
-    // لا نستخدم session_write_close() لأن ذلك قد يفقد البيانات
-    if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || !isset($_SESSION['user_id']) || $_SESSION['user_id'] != $user['id']) {
-        error_log("Login WARNING: Session data verification failed - restoring data");
+        // حفظ نسخة احتياطية من البيانات قبل إعادة التوليد
+        $sessionBackup = [];
+        foreach ($_SESSION as $key => $value) {
+            $sessionBackup[$key] = $value;
+        }
+        
+        // إعادة توليد session_id (false = يحتفظ بالبيانات)
+        session_regenerate_id(false);
+        
+        // التأكد من أن البيانات لا تزال موجودة
+        if (empty($_SESSION) || !isset($_SESSION['user_id'])) {
+            error_log("Login WARNING: Session data lost after regenerate_id - restoring from backup");
+            $_SESSION = $sessionBackup;
+        }
+        
+        // التأكد مرة أخرى من البيانات الأساسية
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['username'] = $user['username'];
         $_SESSION['role'] = $user['role'];
@@ -1025,8 +1016,25 @@ function login($username, $password, $rememberMe = false) {
         $_SESSION['last_activity'] = time();
     }
     
-    // التحقق النهائي من حفظ البيانات
-    error_log("Login: Final session check - logged_in: " . ($_SESSION['logged_in'] ?? 'NOT_SET') . " | user_id: " . ($_SESSION['user_id'] ?? 'NOT_SET'));
+    // إنشاء token جديد بعد إعادة توليد الجلسة
+    if (function_exists('generateCSRFToken')) {
+        generateCSRFToken(true);
+    }
+    
+    // التحقق النهائي قبل حفظ الجلسة في قاعدة البيانات
+    if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || !isset($_SESSION['user_id']) || $_SESSION['user_id'] != $user['id']) {
+        error_log("Login CRITICAL: Session data verification failed before saving to DB - forcing restore");
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+        $_SESSION['role'] = $user['role'];
+        $_SESSION['logged_in'] = true;
+        $_SESSION['last_activity'] = time();
+    }
+    
+    // التأكد من أن session_id موجود
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
     
     // حفظ الجلسة في قاعدة البيانات - ضروري للتحقق
     // يجب الحصول على session_id بعد session_regenerate_id()
@@ -1083,11 +1091,30 @@ function login($username, $password, $rememberMe = false) {
                             [$userId, $sessionId, $ipAddress, $userAgent, $expiresAt]
                         );
                         error_log("Login: Retried saving session for user_id: {$userId}");
+                        
+                        // التحقق مرة أخرى
+                        $verifySession = $db->queryOne(
+                            "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
+                            [$userId, $sessionId]
+                        );
+                        if ($verifySession) {
+                            error_log("Login VERIFIED: Session confirmed after retry for user_id: {$userId}");
+                        }
                     } catch (Exception $retryError) {
                         error_log("Login ERROR: Retry failed: " . $retryError->getMessage());
                     }
                 } else {
                     error_log("Login VERIFIED: Session confirmed in database for user_id: {$userId}, session_id: " . substr($sessionId, 0, 20) . "...");
+                }
+                
+                // التأكد النهائي من وجود البيانات في $_SESSION بعد حفظ الجلسة
+                if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || !isset($_SESSION['user_id'])) {
+                    error_log("Login CRITICAL ERROR: Session data lost after saving to DB - restoring");
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['username'] = $user['username'];
+                    $_SESSION['role'] = $user['role'];
+                    $_SESSION['logged_in'] = true;
+                    $_SESSION['last_activity'] = time();
                 }
             } else {
                 error_log("Login ERROR: Failed to save session to database for user_id: {$userId}");

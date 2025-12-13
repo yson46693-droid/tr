@@ -1140,7 +1140,7 @@ if (!defined('ACCESS_ALLOWED')) {
                 });
         };
         
-        // مراقبة تغييرات الصفحة (للتحقق من أخطاء التوجيه)
+        // مراقبة تغييرات الصفحة (للتحقق من أخطاء التوجيه) - تقليل التكرار
         let lastUrl = window.location.href;
         setInterval(function() {
             const currentUrl = window.location.href;
@@ -1153,7 +1153,7 @@ if (!defined('ACCESS_ALLOWED')) {
                     setTimeout(checkPageStatus, 2000);
                 }
             }
-        }, 3000);
+        }, 10000); // 10 ثوانٍ بدلاً من 3 ثوانٍ لتقليل الاستخدام
         
         // معالجة أخطاء XMLHttpRequest (للتوافق مع الكود القديم)
         if (window.XMLHttpRequest) {
