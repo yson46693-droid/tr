@@ -92,20 +92,13 @@ if (isset($_COOKIE['remember_token'])) {
     }
 }
 
-// إنهاء الجلسة بشكل نهائي
+// إنهاء الجلسة بشكل نهائي - يجب أن يحدث بعد حذف الجلسة من قاعدة البيانات
 if (session_status() === PHP_SESSION_ACTIVE) {
     $cookieParams = session_get_cookie_params();
     $sessionName = session_name();
     
     // حذف جميع متغيرات الجلسة
     $_SESSION = [];
-    
-    // حذف جميع متغيرات الجلسة يدوياً
-    if (isset($_SESSION)) {
-        foreach ($_SESSION as $key => $value) {
-            unset($_SESSION[$key]);
-        }
-    }
     
     // إلغاء تسجيل جميع متغيرات الجلسة
     @session_unset();
@@ -124,6 +117,11 @@ if (session_status() === PHP_SESSION_ACTIVE) {
     
     // تدمير الجلسة نهائياً
     @session_destroy();
+    
+    // التأكد من حذف جميع cookies
+    if (isset($_COOKIE[$sessionName])) {
+        unset($_COOKIE[$sessionName]);
+    }
 }
 
 // حذف جميع الكوكيز المتعلقة بالجلسة
