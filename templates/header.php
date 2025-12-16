@@ -226,6 +226,23 @@ if (ob_get_level() > 0) {
     if (!isset($isMobile)) {
         $isMobile = (bool) preg_match('/(android|iphone|ipad|ipod|blackberry|iemobile|opera mini)/i', $_SERVER['HTTP_USER_AGENT'] ?? '');
     }
+    
+    // تحديد ASSETS_URL بشكل صحيح (يجب أن يكون قبل استخدامه في preload)
+    $assetsUrl = ASSETS_URL;
+    // إذا كان ASSETS_URL يبدأ بـ //، أزل /
+    if (strpos($assetsUrl, '//') === 0) {
+        $assetsUrl = '/' . ltrim($assetsUrl, '/');
+    }
+    // إذا لم يبدأ بـ /، أضفه
+    if (strpos($assetsUrl, '/') !== 0) {
+        $assetsUrl = '/' . $assetsUrl;
+    }
+    // إزالة /assets/ المكرر
+    $assetsUrl = rtrim($assetsUrl, '/') . '/';
+    
+    // استخدام رقم version ثابت لتحسين caching - يمكن تحديثه يدوياً عند الحاجة
+    // بدلاً من time() لتجنب cache invalidation في كل طلب وتحسين الأداء
+    $cacheVersion = defined('ASSETS_VERSION') ? ASSETS_VERSION : (defined('APP_VERSION') ? APP_VERSION : '1.0.0');
     ?>
     
     <!-- Performance: Preconnect to CDNs - محسّن للموبايل -->
@@ -249,25 +266,6 @@ if (ob_get_level() > 0) {
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link rel="dns-prefetch" href="https://code.jquery.com">
     <?php endif; ?>
-    
-    <?php
-    // تحديد ASSETS_URL بشكل صحيح
-    $assetsUrl = ASSETS_URL;
-    // إذا كان ASSETS_URL يبدأ بـ //، أزل /
-    if (strpos($assetsUrl, '//') === 0) {
-        $assetsUrl = '/' . ltrim($assetsUrl, '/');
-    }
-    // إذا لم يبدأ بـ /، أضفه
-    if (strpos($assetsUrl, '/') !== 0) {
-        $assetsUrl = '/' . $assetsUrl;
-    }
-    // إزالة /assets/ المكرر
-    $assetsUrl = rtrim($assetsUrl, '/') . '/';
-    
-    // استخدام رقم version ثابت لتحسين caching - يمكن تحديثه يدوياً عند الحاجة
-    // بدلاً من time() لتجنب cache invalidation في كل طلب وتحسين الأداء
-    $cacheVersion = defined('ASSETS_VERSION') ? ASSETS_VERSION : (defined('APP_VERSION') ? APP_VERSION : '1.0.0');
-    ?>
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
@@ -2607,6 +2605,147 @@ if (ob_get_level() > 0) {
         
     })();
     </script>
+    <!-- معالجة Refresh لمنع Error Code: -2 -->
+    <script>
+    (function() {
+        'use strict';
+        
+        // منع Error Code: -2 عند Refresh
+        window.addEventListener('beforeunload', function() {
+            // حفظ flag أن المستخدم يقوم بـ Refresh
+            try {
+                sessionStorage.setItem('is_refreshing', 'true');
+                sessionStorage.setItem('refresh_timestamp', Date.now().toString());
+                sessionStorage.setItem('refresh_url', window.location.href);
+            } catch (e) {
+                // تجاهل إذا كان sessionStorage غير متاح
+            }
+        });
+        
+        // معالجة Refresh عند تحميل الصفحة
+        window.addEventListener('pageshow', function(event) {
+            try {
+                const isRefreshing = sessionStorage.getItem('is_refreshing') === 'true';
+                const refreshUrl = sessionStorage.getItem('refresh_url');
+                const currentUrl = window.location.href;
+                
+                // إذا كان هذا refresh وكان URL مختلف، قد يكون هناك redirect
+                if (isRefreshing && refreshUrl && refreshUrl !== currentUrl) {
+                    // إزالة flags
+                    sessionStorage.removeItem('is_refreshing');
+                    sessionStorage.removeItem('refresh_timestamp');
+                    sessionStorage.removeItem('refresh_url');
+                    
+                    // إذا كانت الصفحة من cache، أعد تحميلها من السيرفر
+                    if (event.persisted) {
+                        const url = new URL(window.location.href);
+                        if (!url.searchParams.has('_refresh')) {
+                            url.searchParams.set('_refresh', Date.now().toString());
+                            setTimeout(function() {
+                                window.location.href = url.toString();
+                            }, 100);
+                        }
+                    }
+                } else if (isRefreshing) {
+                    // إزالة flags بعد 2 ثانية
+                    setTimeout(function() {
+                        sessionStorage.removeItem('is_refreshing');
+                        sessionStorage.removeItem('refresh_timestamp');
+                        sessionStorage.removeItem('refresh_url');
+                    }, 2000);
+                }
+            } catch (e) {
+                // تجاهل الأخطاء
+                console.warn('Error in refresh handler:', e);
+            }
+        });
+        
+        // معالجة أخطاء الاتصال عند Refresh
+        window.addEventListener('error', function(event) {
+            if (event.message && typeof event.message === 'string') {
+                const message = event.message.toLowerCase();
+                if (message.includes('error code: -2') || message.includes('err_failed') || 
+                    message.includes('connection failed') || message.includes('connection refused')) {
+                    // إذا كان هناك refresh نشط، حاول إعادة المحاولة
+                    const isRefreshing = sessionStorage.getItem('is_refreshing') === 'true';
+                    if (isRefreshing) {
+                        console.warn('Connection error during refresh, retrying...');
+                        setTimeout(function() {
+                            const url = new URL(window.location.href);
+                            url.searchParams.set('_retry', Date.now().toString());
+                            window.location.href = url.toString();
+                        }, 1000);
+                    }
+                }
+            }
+        }, true);
+    })();
+    </script>
+    <!-- معالجة زر تحديث الصفحة -->
+    <script>
+    (function() {
+        'use strict';
+        
+        function initRefreshButton() {
+            const refreshBtn = document.getElementById('refreshPageBtn');
+            if (!refreshBtn) return;
+            
+            refreshBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                try {
+                    // إنشاء URL جديد مع إزالة معاملات cache القديمة
+                    const url = new URL(window.location.href);
+                    
+                    // إزالة معاملات cache القديمة
+                    url.searchParams.delete('_nocache');
+                    url.searchParams.delete('_refresh');
+                    url.searchParams.delete('_cache_bust');
+                    url.searchParams.delete('_t');
+                    url.searchParams.delete('_r');
+                    url.searchParams.delete('_auto_refresh');
+                    url.searchParams.delete('_retry');
+                    
+                    // إضافة timestamp جديد لفرض إعادة تحميل من السيرفر
+                    url.searchParams.set('_nocache', Date.now().toString());
+                    
+                    // بناء URL النهائي مع hash إن وجد
+                    const newUrl = url.pathname + url.search + (window.location.hash || '');
+                    
+                    // محاولة مسح cache إن أمكن
+                    if ('caches' in window) {
+                        caches.keys().then(function(names) {
+                            names.forEach(function(name) {
+                                caches.delete(name).catch(function(err) {
+                                    console.warn('Failed to delete cache:', name, err);
+                                });
+                            });
+                        }).catch(function(err) {
+                            console.warn('Error accessing caches:', err);
+                        });
+                    }
+                    
+                    // إعادة تحميل الصفحة
+                    window.location.replace(newUrl);
+                } catch (error) {
+                    console.error('Error refreshing page:', error);
+                    // في حالة الخطأ، استخدم طريقة بسيطة
+                    window.location.reload(true);
+                }
+                
+                return false;
+            });
+        }
+        
+        // تهيئة الزر عند تحميل الصفحة
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initRefreshButton);
+        } else {
+            initRefreshButton();
+        }
+    })();
+    </script>
 </head>
 <body class="dashboard-body<?php echo isset($pageBodyClass) ? ' ' . htmlspecialchars($pageBodyClass) : ''; ?>"
       data-user-role="<?php echo htmlspecialchars(isset($currentUser['role']) ? $currentUser['role'] : ''); ?>"
@@ -2735,8 +2874,7 @@ if (ob_get_level() > 0) {
                    role="button" 
                    data-bs-toggle="tooltip" 
                    title="<?php echo isset($lang['refresh']) ? $lang['refresh'] : 'تحديث الصفحة'; ?>" 
-                   aria-label="<?php echo isset($lang['refresh']) ? $lang['refresh'] : 'تحديث الصفحة'; ?>"
-                   onclick="event.preventDefault(); window.location.reload(); return false;">
+                   aria-label="<?php echo isset($lang['refresh']) ? $lang['refresh'] : 'تحديث الصفحة'; ?>">
                     <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
                     <span class="visually-hidden"><?php echo isset($lang['refresh']) ? $lang['refresh'] : 'تحديث الصفحة'; ?></span>
                 </a>

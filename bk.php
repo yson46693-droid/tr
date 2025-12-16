@@ -118,42 +118,146 @@ if (!function_exists('createBackupUsingBkScript')) {
             }
         }
         
-        // طريقة PDO (تصدير عبر PHP)
-        try {
-            // استخدام TCP/IP للاتصال (مهم لـ InfinityFree)
-            $dsn = "mysql:host=$dbHost;port=$dbPort;dbname=$dbName;charset=utf8mb4";
-            // إضافة خيارات إضافية لضمان الاتصال عبر TCP/IP
-            $options = [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4",
-                PDO::ATTR_TIMEOUT => 30,
-                PDO::ATTR_PERSISTENT => false
-            ];
-            
-            $pdo = new PDO($dsn, $dbUser, $dbPass, $options);
-            
-            // اختبار الاتصال
-            $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
-        } catch (PDOException $e) {
-            $errorMsg = $e->getMessage();
-            // محاولة إصلاح خطأ socket
-            if (strpos($errorMsg, 'No such file or directory') !== false || strpos($errorMsg, '2002') !== false) {
-                // إعادة المحاولة مع إجبار TCP/IP
-                try {
-                    $dsn = "mysql:host=$dbHost;port=$dbPort;dbname=$dbName;charset=utf8mb4";
-                    $pdo = new PDO($dsn, $dbUser, $dbPass, [
-                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
-                    ]);
-                } catch (PDOException $e2) {
-                    return ['success' => false, 'message' => "فشل الاتصال بقاعدة البيانات: " . $e2->getMessage() . " (Host: $dbHost, Port: $dbPort)"];
+        // طريقة PDO أو mysqli (تصدير عبر PHP)
+        // التحقق من وجود pdo_mysql أو mysqli extension
+        $usePdo = extension_loaded('pdo_mysql');
+        $useMysqli = extension_loaded('mysqli');
+        
+        if (!$usePdo && !$useMysqli) {
+            return ['success' => false, 'message' => "pdo_mysql أو mysqli extension غير محمّل. يرجى تفعيل أحدهما في ملف php.ini"];
+        }
+        
+        $pdo = null;
+        $mysqli = null;
+        
+        // محاولة الاتصال باستخدام PDO أولاً (إن كان متاحاً)
+        if ($usePdo) {
+            try {
+                // استخدام TCP/IP للاتصال (مهم لـ InfinityFree)
+                $dsn = "mysql:host=$dbHost;port=$dbPort;dbname=$dbName;charset=utf8mb4";
+                // إضافة خيارات إضافية لضمان الاتصال عبر TCP/IP
+                $options = [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_TIMEOUT => 30,
+                    PDO::ATTR_PERSISTENT => false
+                ];
+                
+                // إضافة MYSQL_ATTR_INIT_COMMAND فقط إذا كان pdo_mysql محمّل ومعرّف
+                if (defined('PDO::MYSQL_ATTR_INIT_COMMAND')) {
+                    $options[PDO::MYSQL_ATTR_INIT_COMMAND] = "SET NAMES utf8mb4";
+                }
+                
+                $pdo = new PDO($dsn, $dbUser, $dbPass, $options);
+                
+                // اختبار الاتصال وتعيين charset
+                $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+            } catch (PDOException $e) {
+                $errorMsg = $e->getMessage();
+                // محاولة إصلاح خطأ socket
+                if (strpos($errorMsg, 'No such file or directory') !== false || strpos($errorMsg, '2002') !== false) {
+                    // إعادة المحاولة مع إجبار TCP/IP
+                    try {
+                        $dsn = "mysql:host=$dbHost;port=$dbPort;dbname=$dbName;charset=utf8mb4";
+                        $retryOptions = [
+                            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+                        ];
+                        
+                        // إضافة MYSQL_ATTR_INIT_COMMAND فقط إذا كان معرّف
+                        if (defined('PDO::MYSQL_ATTR_INIT_COMMAND')) {
+                            $retryOptions[PDO::MYSQL_ATTR_INIT_COMMAND] = "SET NAMES utf8mb4";
+                        }
+                        
+                        $pdo = new PDO($dsn, $dbUser, $dbPass, $retryOptions);
+                        $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+                    } catch (PDOException $e2) {
+                        // إذا فشل PDO، جرب mysqli
+                        $pdo = null;
+                    }
+                } else {
+                    // إذا فشل PDO، جرب mysqli
+                    $pdo = null;
+                }
+            } catch (Exception $e) {
+                // إذا فشل PDO، جرب mysqli
+                $pdo = null;
+            }
+        }
+        
+        // إذا فشل PDO أو لم يكن متاحاً، استخدم mysqli
+        if (!$pdo && $useMysqli) {
+            try {
+                $mysqli = new mysqli($dbHost, $dbUser, $dbPass, $dbName, $dbPort);
+                if ($mysqli->connect_error) {
+                    throw new Exception("فشل الاتصال: " . $mysqli->connect_error);
+                }
+                $mysqli->set_charset("utf8mb4");
+                $mysqli->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+            } catch (Exception $e) {
+                return ['success' => false, 'message' => "فشل الاتصال بقاعدة البيانات: " . $e->getMessage() . " (Host: $dbHost, Port: $dbPort)"];
+            }
+        }
+        
+        // التحقق من وجود اتصال صالح
+        if (!$pdo && !$mysqli) {
+            return ['success' => false, 'message' => "فشل الاتصال بقاعدة البيانات: لا يمكن استخدام PDO أو mysqli"];
+        }
+        
+        // Helper functions للتعامل مع PDO و mysqli بشكل موحد
+        $dbQuery = function($sql) use ($pdo, $mysqli) {
+            if ($pdo) {
+                return $pdo->query($sql);
+            } else {
+                $result = $mysqli->query($sql);
+                if (!$result) {
+                    throw new Exception($mysqli->error);
+                }
+                return $result;
+            }
+        };
+        
+        $dbFetch = function($result, $fetchMode = null) use ($pdo, $mysqli) {
+            if ($pdo) {
+                if ($fetchMode === PDO::FETCH_NUM) {
+                    return $result->fetch(PDO::FETCH_NUM);
+                } else {
+                    return $result->fetch(PDO::FETCH_ASSOC);
                 }
             } else {
-                return ['success' => false, 'message' => "فشل الاتصال بقاعدة البيانات: " . $errorMsg];
+                if ($fetchMode === 'NUM') {
+                    return $result->fetch_array(MYSQLI_NUM);
+                } else {
+                    return $result->fetch_assoc();
+                }
             }
-        } catch (Exception $e) {
-            return ['success' => false, 'message' => "فشل الاتصال بقاعدة البيانات: " . $e->getMessage()];
-        }
+        };
+        
+        $dbFetchAll = function($result) use ($pdo, $mysqli) {
+            if ($pdo) {
+                return $result->fetchAll(PDO::FETCH_ASSOC);
+            } else {
+                $rows = [];
+                while ($row = $result->fetch_assoc()) {
+                    $rows[] = $row;
+                }
+                return $rows;
+            }
+        };
+        
+        $dbPrepare = function($sql) use ($pdo, $mysqli) {
+            if ($pdo) {
+                return $pdo->prepare($sql);
+            } else {
+                return $mysqli->prepare($sql);
+            }
+        };
+        
+        $dbQuote = function($value) use ($pdo, $mysqli) {
+            if ($pdo) {
+                return $pdo->quote($value);
+            } else {
+                return "'" . $mysqli->real_escape_string($value) . "'";
+            }
+        };
         
         // ملف مؤقت نصي
         $tmpSql = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $filenameSql;
@@ -171,21 +275,31 @@ if (!function_exists('createBackupUsingBkScript')) {
         
         // جلب قائمة الجداول
         $tables = [];
-        $stmt = $pdo->query("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'");
-        while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
+        $result = $dbQuery("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'");
+        while ($row = $dbFetch($result, $pdo ? PDO::FETCH_NUM : 'NUM')) {
             $tables[] = $row[0];
+        }
+        if ($mysqli) {
+            $result->free();
         }
         
         // أيضاً جلب views
         $views = [];
-        $stmt = $pdo->query("SHOW FULL TABLES WHERE Table_type = 'VIEW'");
-        while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
+        $result = $dbQuery("SHOW FULL TABLES WHERE Table_type = 'VIEW'");
+        while ($row = $dbFetch($result, $pdo ? PDO::FETCH_NUM : 'NUM')) {
             $views[] = $row[0];
+        }
+        if ($mysqli) {
+            $result->free();
         }
         
         // تصدير كل جدول (CREATE + بيانات)
         foreach ($tables as $table) {
-            $cr = $pdo->query("SHOW CREATE TABLE `{$table}`")->fetch(PDO::FETCH_ASSOC);
+            $result = $dbQuery("SHOW CREATE TABLE `{$table}`");
+            $cr = $dbFetch($result);
+            if ($mysqli) {
+                $result->free();
+            }
             $createSql = $cr['Create Table'] ?? $cr['Create View'] ?? null;
             if ($createSql) {
                 fwrite($fh, "-- --------------------------------------------------------\n");
@@ -197,15 +311,22 @@ if (!function_exists('createBackupUsingBkScript')) {
             
             if (!$exportStructureOnly) {
                 // تصدير البيانات (INSERTs)
-                $colStmt = $pdo->query("DESCRIBE `{$table}`");
+                $colResult = $dbQuery("DESCRIBE `{$table}`");
                 $cols = [];
-                while ($c = $colStmt->fetch(PDO::FETCH_ASSOC)) {
+                while ($c = $dbFetch($colResult)) {
                     $cols[] = "`" . $c['Field'] . "`";
+                }
+                if ($mysqli) {
+                    $colResult->free();
                 }
                 $colList = implode(', ', $cols);
                 
-                $rowCountStmt = $pdo->query("SELECT COUNT(*) AS c FROM `{$table}`");
-                $rowCount = (int)$rowCountStmt->fetch(PDO::FETCH_ASSOC)['c'];
+                $rowCountResult = $dbQuery("SELECT COUNT(*) AS c FROM `{$table}`");
+                $rowCountRow = $dbFetch($rowCountResult);
+                $rowCount = (int)$rowCountRow['c'];
+                if ($mysqli) {
+                    $rowCountResult->free();
+                }
                 if ($rowCount === 0) {
                     fwrite($fh, "-- Empty table `{$table}`\n\n");
                     continue;
@@ -213,12 +334,22 @@ if (!function_exists('createBackupUsingBkScript')) {
                 
                 $batchSize = 500;
                 $offset = 0;
-                $select = $pdo->prepare("SELECT * FROM `{$table}` LIMIT :lim OFFSET :off");
                 while ($offset < $rowCount) {
-                    $select->bindValue(':lim', (int)$batchSize, PDO::PARAM_INT);
-                    $select->bindValue(':off', (int)$offset, PDO::PARAM_INT);
-                    $select->execute();
-                    $rows = $select->fetchAll(PDO::FETCH_ASSOC);
+                    if ($pdo) {
+                        $select = $pdo->prepare("SELECT * FROM `{$table}` LIMIT :lim OFFSET :off");
+                        $select->bindValue(':lim', (int)$batchSize, PDO::PARAM_INT);
+                        $select->bindValue(':off', (int)$offset, PDO::PARAM_INT);
+                        $select->execute();
+                        $rows = $select->fetchAll(PDO::FETCH_ASSOC);
+                    } else {
+                        $select = $mysqli->prepare("SELECT * FROM `{$table}` LIMIT ? OFFSET ?");
+                        $select->bind_param("ii", $batchSize, $offset);
+                        $select->execute();
+                        $result = $select->get_result();
+                        $rows = $dbFetchAll($result);
+                        $result->free();
+                        $select->close();
+                    }
                     if (!$rows) break;
                     
                     $values = [];
@@ -228,7 +359,7 @@ if (!function_exists('createBackupUsingBkScript')) {
                             if ($v === null) {
                                 $escaped[] = "NULL";
                             } else {
-                                $escaped[] = $pdo->quote($v);
+                                $escaped[] = $dbQuote($v);
                             }
                         }
                         $values[] = "(" . implode(", ", $escaped) . ")";
@@ -248,7 +379,11 @@ if (!function_exists('createBackupUsingBkScript')) {
         
         // تصدير الـ views
         foreach ($views as $view) {
-            $cr = $pdo->query("SHOW CREATE VIEW `{$view}`")->fetch(PDO::FETCH_ASSOC);
+            $result = $dbQuery("SHOW CREATE VIEW `{$view}`");
+            $cr = $dbFetch($result);
+            if ($mysqli) {
+                $result->free();
+            }
             if (!empty($cr['Create View'])) {
                 fwrite($fh, "-- --------------------------------------------------------\n");
                 fwrite($fh, "-- View structure for view `{$view}`\n");
@@ -258,8 +393,143 @@ if (!function_exists('createBackupUsingBkScript')) {
             }
         }
         
+        // تصدير الإجراءات المخزنة (Stored Procedures)
+        try {
+            $procedures = [];
+            $result = $dbQuery("SHOW PROCEDURE STATUS WHERE Db = " . $dbQuote($dbName));
+            while ($row = $dbFetch($result)) {
+                $procedures[] = $row['Name'];
+            }
+            if ($mysqli && $result) {
+                $result->free();
+            }
+            
+            foreach ($procedures as $proc) {
+                $result = $dbQuery("SHOW CREATE PROCEDURE `{$proc}`");
+                $cr = $dbFetch($result);
+                if ($mysqli) {
+                    $result->free();
+                }
+                if (!empty($cr['Create Procedure'])) {
+                    fwrite($fh, "-- --------------------------------------------------------\n");
+                    fwrite($fh, "-- Procedure structure for procedure `{$proc}`\n");
+                    fwrite($fh, "-- --------------------------------------------------------\n\n");
+                    fwrite($fh, "DROP PROCEDURE IF EXISTS `{$proc}`;\n");
+                    // إزالة DEFINER من الإجراء لتجنب مشاكل الصلاحيات
+                    $procSql = preg_replace('/DEFINER\s*=\s*[^\s]+\s+/i', '', $cr['Create Procedure']);
+                    fwrite($fh, $procSql . ";\n\n");
+                }
+            }
+        } catch (Exception $e) {
+            fwrite($fh, "-- Error exporting procedures: " . $e->getMessage() . "\n\n");
+        }
+        
+        // تصدير الدوال (Functions)
+        try {
+            $functions = [];
+            $result = $dbQuery("SHOW FUNCTION STATUS WHERE Db = " . $dbQuote($dbName));
+            while ($row = $dbFetch($result)) {
+                $functions[] = $row['Name'];
+            }
+            if ($mysqli && $result) {
+                $result->free();
+            }
+            
+            foreach ($functions as $func) {
+                $result = $dbQuery("SHOW CREATE FUNCTION `{$func}`");
+                $cr = $dbFetch($result);
+                if ($mysqli) {
+                    $result->free();
+                }
+                if (!empty($cr['Create Function'])) {
+                    fwrite($fh, "-- --------------------------------------------------------\n");
+                    fwrite($fh, "-- Function structure for function `{$func}`\n");
+                    fwrite($fh, "-- --------------------------------------------------------\n\n");
+                    fwrite($fh, "DROP FUNCTION IF EXISTS `{$func}`;\n");
+                    // إزالة DEFINER من الدالة لتجنب مشاكل الصلاحيات
+                    $funcSql = preg_replace('/DEFINER\s*=\s*[^\s]+\s+/i', '', $cr['Create Function']);
+                    fwrite($fh, $funcSql . ";\n\n");
+                }
+            }
+        } catch (Exception $e) {
+            fwrite($fh, "-- Error exporting functions: " . $e->getMessage() . "\n\n");
+        }
+        
+        // تصدير المشغلات (Triggers)
+        try {
+            $triggers = [];
+            $result = $dbQuery("SHOW TRIGGERS");
+            while ($row = $dbFetch($result)) {
+                $triggers[] = $row['Trigger'];
+            }
+            if ($mysqli && $result) {
+                $result->free();
+            }
+            
+            foreach ($triggers as $trigger) {
+                $result = $dbQuery("SHOW CREATE TRIGGER `{$trigger}`");
+                $cr = $dbFetch($result);
+                if ($mysqli) {
+                    $result->free();
+                }
+                if (!empty($cr['SQL Original Statement'])) {
+                    fwrite($fh, "-- --------------------------------------------------------\n");
+                    fwrite($fh, "-- Trigger structure for trigger `{$trigger}`\n");
+                    fwrite($fh, "-- --------------------------------------------------------\n\n");
+                    fwrite($fh, "DROP TRIGGER IF EXISTS `{$trigger}`;\n");
+                    // إزالة DEFINER من المشغل لتجنب مشاكل الصلاحيات
+                    $triggerSql = preg_replace('/DEFINER\s*=\s*[^\s]+\s+/i', '', $cr['SQL Original Statement']);
+                    fwrite($fh, $triggerSql . ";\n\n");
+                }
+            }
+        } catch (Exception $e) {
+            fwrite($fh, "-- Error exporting triggers: " . $e->getMessage() . "\n\n");
+        }
+        
+        // تصدير الأحداث (Events)
+        try {
+            $events = [];
+            $result = $dbQuery("SHOW EVENTS");
+            while ($row = $dbFetch($result)) {
+                $events[] = $row['Name'];
+            }
+            if ($mysqli && $result) {
+                $result->free();
+            }
+            
+            foreach ($events as $event) {
+                $result = $dbQuery("SHOW CREATE EVENT `{$event}`");
+                $cr = $dbFetch($result);
+                if ($mysqli) {
+                    $result->free();
+                }
+                if (!empty($cr['Create Event'])) {
+                    fwrite($fh, "-- --------------------------------------------------------\n");
+                    fwrite($fh, "-- Event structure for event `{$event}`\n");
+                    fwrite($fh, "-- --------------------------------------------------------\n\n");
+                    fwrite($fh, "DROP EVENT IF EXISTS `{$event}`;\n");
+                    // إزالة DEFINER من الحدث لتجنب مشاكل الصلاحيات
+                    $eventSql = preg_replace('/DEFINER\s*=\s*[^\s]+\s+/i', '', $cr['Create Event']);
+                    fwrite($fh, $eventSql . ";\n\n");
+                }
+            }
+        } catch (Exception $e) {
+            fwrite($fh, "-- Error exporting events: " . $e->getMessage() . "\n\n");
+        }
+        
         fwrite($fh, "SET FOREIGN_KEY_CHECKS=1;\n");
         fclose($fh);
+        
+        // حفظ نوع الاتصال قبل إغلاقه
+        $connectionMethod = $pdo ? 'pdo' : 'mysqli';
+        
+        // إغلاق الاتصال
+        if ($pdo) {
+            $pdo = null;
+        }
+        if ($mysqli) {
+            $mysqli->close();
+        }
         
         // ضغط الملف المؤقت إلى gzip النهائي
         $fpIn = fopen($tmpSql, 'rb');
@@ -276,7 +546,7 @@ if (!function_exists('createBackupUsingBkScript')) {
                 'success' => true,
                 'file_path' => $fullPathGz,
                 'filename' => $filenameGz,
-                'method' => 'pdo'
+                'method' => $connectionMethod
             ];
         } else {
             if ($fpIn) fclose($fpIn);

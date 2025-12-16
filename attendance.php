@@ -160,18 +160,33 @@ if (empty($checkoutColumn)) {
     }
 }
 
+// التحقق من أن المستخدم موجود وله id صحيح
+if (!$currentUser || !isset($currentUser['id']) || empty($currentUser['id'])) {
+    $dashboardUrl = getDashboardUrl($_SESSION['role'] ?? 'accountant');
+    if (!headers_sent()) {
+        header('Location: ' . $dashboardUrl);
+        exit;
+    }
+    die('تعذر تحميل بيانات المستخدم');
+}
+
 // التحقق من أن المستخدم ليس مدير (المدير ليس له حضور وانصراف)
-if ($currentUser['role'] === 'manager') {
-    header('Location: ' . getDashboardUrl('manager'));
-    exit;
+if (isset($currentUser['role']) && $currentUser['role'] === 'manager') {
+    if (!headers_sent()) {
+        header('Location: ' . getDashboardUrl('manager'));
+        exit;
+    }
 }
 
 // الحصول على موعد العمل الرسمي
 $workTime = getOfficialWorkTime($currentUser['id']);
 
 if (!$workTime) {
-    header('Location: ' . getDashboardUrl($currentUser['role']));
-    exit;
+    $userRole = $currentUser['role'] ?? 'accountant';
+    if (!headers_sent()) {
+        header('Location: ' . getDashboardUrl($userRole));
+        exit;
+    }
 }
 
 // الحصول على سجلات اليوم
@@ -199,13 +214,34 @@ if (!empty($todayRecords)) {
 }
 
 // الحصول على إحصائيات الشهر الحالي
-$monthStats = getAttendanceStatistics($currentUser['id'], date('Y-m'));
+$monthStats = [];
+$todayHours = 0;
+$delayStats = [];
 
-// حساب الساعات الحالية اليوم
-$todayHours = calculateTodayHours($currentUser['id'], $today);
-
-// حساب إحصائيات التأخير الشهرية بالاعتماد على أول تسجيل حضور يومي
-$delayStats = calculateMonthlyDelaySummary($currentUser['id'], date('Y-m'));
+if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
+    try {
+        $monthStats = getAttendanceStatistics($currentUser['id'], date('Y-m'));
+    } catch (Exception $e) {
+        error_log('Error getting attendance statistics: ' . $e->getMessage());
+        $monthStats = [];
+    }
+    
+    try {
+        // حساب الساعات الحالية اليوم
+        $todayHours = calculateTodayHours($currentUser['id'], $today);
+    } catch (Exception $e) {
+        error_log('Error calculating today hours: ' . $e->getMessage());
+        $todayHours = 0;
+    }
+    
+    try {
+        // حساب إحصائيات التأخير الشهرية بالاعتماد على أول تسجيل حضور يومي
+        $delayStats = calculateMonthlyDelaySummary($currentUser['id'], date('Y-m'));
+    } catch (Exception $e) {
+        error_log('Error calculating delay summary: ' . $e->getMessage());
+        $delayStats = [];
+    }
+}
 
 require_once __DIR__ . '/includes/lang/' . getCurrentLanguage() . '.php';
 $lang = isset($translations) ? $translations : [];
@@ -383,6 +419,7 @@ $lang = isset($translations) ? $translations : [];
                                 <th>تسجيل الحضور</th>
                                 <th>تسجيل الانصراف</th>
                                 <th>التأخير</th>
+                                <th>سبب التأخير</th>
                                 <th>ساعات العمل</th>
                                 <th>الحالة</th>
                             </tr>
@@ -404,6 +441,13 @@ $lang = isset($translations) ? $translations : [];
                                             <span class="badge bg-success">في الوقت</span>
                                         <?php endif; ?>
                                     </td>
+                                    <td data-label="سبب التأخير">
+                                        <?php if (!empty($record['delay_reason']) && $record['delay_minutes'] > 0): ?>
+                                            <span class="text-muted small"><?php echo htmlspecialchars($record['delay_reason']); ?></span>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
                                     <td data-label="ساعات العمل">
                                         <?php echo isset($record['work_hours']) && $record['work_hours'] > 0 ? formatHours($record['work_hours']) : '-'; ?>
                                     </td>
@@ -419,7 +463,7 @@ $lang = isset($translations) ? $translations : [];
                         </tbody>
                         <tfoot>
                             <tr class="table-info">
-                                <td colspan="4" class="text-end"><strong>إجمالي ساعات اليوم:</strong></td>
+                                <td colspan="5" class="text-end"><strong>إجمالي ساعات اليوم:</strong></td>
                                 <td colspan="2"><strong><?php echo $todayHours; ?> ساعة</strong></td>
                             </tr>
                         </tfoot>
@@ -518,6 +562,28 @@ $lang = isset($translations) ? $translations : [];
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
             </div>
             <div class="modal-body">
+                <!-- ملخص الوقت (للتسجيل الحضور فقط) -->
+                <div id="timeSummaryContainer" style="display: none;" class="mb-3">
+                    <div class="card border-info">
+                        <div class="card-body p-3">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="small text-muted mb-1">الوقت الحالي</div>
+                                    <div class="fw-bold" id="currentTimeDisplay">--:--</div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="small text-muted mb-1">موعد العمل</div>
+                                    <div class="fw-bold" id="officialTimeDisplay">--:--</div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="small text-muted mb-1">الحالة</div>
+                                    <div id="timeStatusDisplay" class="fw-bold">--</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <div id="cameraContainer" class="text-center">
                     <div id="cameraLoading" class="text-center mb-3" style="display: none;">
                         <div class="spinner-border text-primary" role="status">
@@ -534,6 +600,11 @@ $lang = isset($translations) ? $translations : [];
                 </div>
                 <div id="capturedImageContainer" style="display: none; text-align: center;">
                     <img id="capturedImage" src="" alt="الصورة الملتقطة" style="max-width: 100%; border-radius: 8px;">
+                </div>
+                <div class="mt-3" id="delayReasonContainer" style="display: none;">
+                    <label class="form-label">سبب التأخير <span class="text-muted">(اختياري)</span></label>
+                    <textarea class="form-control" id="delayReason" rows="2" placeholder="يرجى كتابة سبب التأخير إن وجد..." disabled></textarea>
+                    <small class="text-muted">يتم تفعيل هذا الحقل تلقائياً في حالة التأخير</small>
                 </div>
             </div>
             <div class="modal-footer">

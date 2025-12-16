@@ -530,6 +530,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $paymentType = $_POST['payment_type'] ?? 'full';
         $prepaidAmount = cleanFinancialValue($_POST['prepaid_amount'] ?? 0);
         $paidAmountInput = cleanFinancialValue($_POST['paid_amount'] ?? 0);
+        $cartNotes = trim($_POST['cart_notes'] ?? '');
         $notes = trim($_POST['notes'] ?? '');
         $dueDateInput = trim($_POST['due_date'] ?? '');
         $dueDate = null;
@@ -640,7 +641,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // إضافة عناصر منفصلة لكل باتش
                     foreach ($batchItems as $batchItem) {
                         $itemBatchId = $batchItem['batch_id'] ?? null;
-                        error_log("Manager POS: Adding batch item to cart - product_id: $productId, batch_id: " . ($itemBatchId ?? 'NULL') . ", quantity: " . $batchItem['quantity']);
+                        // تعطيل التسجيل الروتيني
+                        // error_log("Manager POS: Adding batch item to cart - product_id: $productId, batch_id: " . ($itemBatchId ?? 'NULL') . ", quantity: " . $batchItem['quantity']);
                         $normalizedCart[] = [
                             'product_id' => $productId,
                             'batch_id' => $itemBatchId,
@@ -858,6 +860,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ];
                 }
 
+                // دمج ملاحظات السلة مع الملاحظات الإضافية
+                $combinedNotes = '';
+                if (!empty($cartNotes) && !empty($notes)) {
+                    $combinedNotes = trim($cartNotes) . "\n" . trim($notes);
+                } elseif (!empty($cartNotes)) {
+                    $combinedNotes = trim($cartNotes);
+                } elseif (!empty($notes)) {
+                    $combinedNotes = trim($notes);
+                }
+                
                 // استخدام tempCustomerId لإنشاء الفاتورة (لأن invoices table مرتبط بـ customers)
                 // تمرير created_from_pos = true لأن هذه فاتورة من نقطة البيع
                 $invoiceResult = createInvoice(
@@ -867,7 +879,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $invoiceItems,
                     0,
                     $prepaidAmount,
-                    $notes,
+                    $combinedNotes,
                     $currentUser['id'],
                     $dueDate,
                     true  // created_from_pos = true
@@ -1103,7 +1115,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $batchId = ($batchIdRaw !== null && $batchIdRaw !== '' && (int)$batchIdRaw > 0) ? (int)$batchIdRaw : null;
                     $productType = $item['product_type'] ?? 'external';
 
-                    error_log("Manager POS: Processing sale item - product_id: $productId, batch_id_raw: " . ($batchIdRaw ?? 'NULL') . ", batch_id: " . ($batchId ?? 'NULL') . ", quantity: $quantity, product_type: $productType");
+                    // تعطيل التسجيل الروتيني
+                    // error_log("Manager POS: Processing sale item - product_id: $productId, batch_id_raw: " . ($batchIdRaw ?? 'NULL') . ", batch_id: " . ($batchId ?? 'NULL') . ", quantity: $quantity, product_type: $productType");
 
                     // التحقق من الكمية مباشرة من finished_products قبل البيع (مثل نقطة بيع المندوب)
                     // هذا مهم جداً لضمان أن الكمية متاحة فعلياً
@@ -1150,7 +1163,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             throw new RuntimeException('الكمية المتاحة للمنتج ' . $item['name'] . ' غير كافية. المتاح: ' . number_format($availableQuantity, 2) . '، المطلوب: ' . number_format($quantity, 2));
                         }
                         
-                        error_log("Manager POS: Verified quantity from finished_products - batch_id: $batchId, quantity_produced: $quantityProduced, pending: $pendingQty, available: $availableQuantity, requested: $quantity");
+                        // تعطيل التسجيل الروتيني
+                        // error_log("Manager POS: Verified quantity from finished_products - batch_id: $batchId, quantity_produced: $quantityProduced, pending: $pendingQty, available: $availableQuantity, requested: $quantity");
                     } elseif ($productType === 'external') {
                         // للمنتجات الخارجية: التحقق من products مباشرة
                         $product = $db->queryOne(
@@ -1403,6 +1417,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $conn->commit();
 
+                // تحديث الملاحظات في قاعدة البيانات لضمان ظهورها في الفاتورة المطبوعة
+                if (!empty($combinedNotes)) {
+                    try {
+                        $db->execute(
+                            "UPDATE invoices SET notes = ? WHERE id = ?",
+                            [$combinedNotes, $invoiceId]
+                        );
+                    } catch (Throwable $notesUpdateError) {
+                        error_log('Error updating invoice notes: ' . $notesUpdateError->getMessage());
+                    }
+                }
+
                 $invoiceData = getInvoice($invoiceId);
                 
                 // تحديث invoiceData بالمبالغ الصحيحة لضمان ظهورها بشكل صحيح في الفاتورة المطبوعة
@@ -1420,6 +1446,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } else {
                         $invoiceData['credit_used'] = 0;
                         $invoiceData['paid_from_credit'] = 0;
+                    }
+                    
+                    // التأكد من أن notes موجودة في invoiceData (من combinedNotes المحفوظة)
+                    // استخدام combinedNotes دائماً إذا كانت غير فارغة لضمان ظهور ملاحظات السلة في الفاتورة
+                    if (!empty($combinedNotes)) {
+                        $existingNotes = trim((string)($invoiceData['notes'] ?? ''));
+                        if (!empty($existingNotes) && $existingNotes !== $combinedNotes) {
+                            // إذا كانت هناك ملاحظات موجودة مختلفة عن combinedNotes، ندمجها
+                            $invoiceData['notes'] = trim($existingNotes . "\n" . $combinedNotes);
+                        } else {
+                            // استخدام combinedNotes مباشرة
+                            $invoiceData['notes'] = $combinedNotes;
+                        }
                     }
                 }
                 
@@ -2762,11 +2801,28 @@ try {
             #posPartialAmount[type="number"] {
                 direction: ltr !important;
                 text-align: left !important;
+                unicode-bidi: embed !important;
             }
             .pos-cart-table input[type="number"]:focus,
             #posPartialAmount[type="number"]:focus {
                 direction: ltr !important;
                 text-align: left !important;
+                unicode-bidi: embed !important;
+                outline: 2px solid rgba(30, 58, 95, 0.3) !important;
+                outline-offset: 2px !important;
+            }
+            /* تحسين حقل السعر للتعديل السهل */
+            .pos-price-input {
+                direction: ltr !important;
+                text-align: left !important;
+                unicode-bidi: embed !important;
+            }
+            .pos-price-input:focus {
+                direction: ltr !important;
+                text-align: left !important;
+                unicode-bidi: embed !important;
+                outline: 2px solid rgba(30, 58, 95, 0.3) !important;
+                outline-offset: 2px !important;
             }
             .pos-summary-card-neutral {
                 background: #0f172a;
@@ -3107,6 +3163,12 @@ try {
                                 </div>
                             </div>
 
+                            <div class="mb-3">
+                                <label class="form-label">ملاحظات الفاتوره <span class="text-muted">(اختياري)</span></label>
+                                <textarea class="form-control form-control-sm" name="cart_notes" id="posCartNotes" rows="2" placeholder="ملاحظات خاصه بالمسئول عن توصيل المنتجات  ..."></textarea>
+                                <small class="text-muted">هذه الملاحظات ستظهر في نهاية الفاتورة المطبوعة</small>
+                            </div>
+
                             <div class="row g-2 g-md-3 align-items-start mb-3">
                                 <div class="col-12 col-sm-6">
                                     <div class="pos-summary-card-neutral">
@@ -3154,7 +3216,7 @@ try {
                                 </div>
                                 <div class="mt-3 d-none" id="posPartialWrapper">
                                     <label class="form-label">مبلغ التحصيل الجزئي</label>
-                                    <input type="number" class="form-control text-muted" id="posPartialAmount" placeholder="0" step="1" dir="ltr" style="text-align: left;">
+                                    <input type="number" class="form-control text-muted pos-price-input" id="posPartialAmount" placeholder="0" step="1" dir="ltr" style="text-align: left; width: 100%;">
                                 </div>
                                 <div class="mt-3 d-none" id="posDueDateWrapper">
                                     <label class="form-label">تاريخ الاستحقاق <span class="text-muted">(اختياري)</span></label>
@@ -3163,11 +3225,7 @@ try {
                                 </div>
                             </div>
 
-                            <div class="mb-3">
-                                <label class="form-label">ملاحظات إضافية <span class="text-muted">(اختياري)</span></label>
-                                <textarea class="form-control form-control-sm" name="notes" rows="3" placeholder="مثال: تعليمات التسليم، شروط خاصة..."></textarea>
-                            </div>
-
+                            
                             <div class="d-flex flex-wrap gap-2 justify-content-between">
                                 <button type="button" class="btn btn-outline-secondary btn-sm flex-fill flex-md-none" id="posResetFormBtn">
                                     <i class="bi bi-arrow-repeat me-1 me-md-2"></i><span class="d-none d-sm-inline">إعادة تعيين</span>
@@ -3455,8 +3513,13 @@ try {
                     partialValue = Math.max(0, netTotal - 0);
                 }
                 // لا نطبق toFixed أثناء الكتابة، فقط عند blur أو change
+                // وعند التطبيق، نعرض القيمة بدون .00 إذا كانت صحيحة
                 if (!isInputFocused) {
-                    elements.partialInput.value = partialValue.toFixed(2);
+                    if (partialValue % 1 === 0) {
+                        elements.partialInput.value = partialValue.toString();
+                    } else {
+                        elements.partialInput.value = partialValue.toFixed(2);
+                    }
                 }
                 paidAmount = partialValue;
             }
@@ -3520,7 +3583,7 @@ try {
                         </div>
                     </td>
                     <td data-label="سعر الوحدة">
-                        <input type="number" step="0.01" min="0" class="form-control" data-cart-price data-product-id="${item.product_id}" value="${sanitizedPrice.toFixed(2)}" dir="ltr" style="text-align: left;">
+                        <input type="number" step="1" min="0" class="form-control pos-price-input" data-cart-price data-product-id="${item.product_id}" value="${sanitizedPrice}" dir="ltr" style="text-align: left; width: 100%;">
                     </td>
                     <td data-label="الإجمالي" class="fw-semibold">${formatCurrency(sanitizedQty * sanitizedPrice)}</td>
                     <td data-label="إجراءات" class="text-end">
@@ -3596,13 +3659,39 @@ try {
         renderCart();
     }
 
-    function updateUnitPrice(productId, value) {
+    function updateUnitPrice(productId, value, skipRender = false) {
         const item = cart.find((entry) => entry.product_id === productId);
         if (!item) return;
+        // السماح بإدخال الأرقام العشرية حتى مع step="1"
         let price = sanitizeNumber(value);
         if (price < 0) price = 0;
+        // تقريب إلى رقمين عشريين فقط عند الحفظ النهائي
+        price = roundTwo(price);
         item.unit_price = price;
-        renderCart();
+        // تحديث الإجمالي مباشرة بدون إعادة رسم الجدول
+        if (!skipRender) {
+            updateSummary();
+            // تحديث صف الإجمالي فقط
+            const row = document.querySelector(`tr[data-product-id="${productId}"]`);
+            if (row) {
+                const totalCell = row.querySelector('td[data-label="الإجمالي"]');
+                if (totalCell) {
+                    const qty = sanitizeNumber(item.quantity);
+                    totalCell.textContent = formatCurrency(qty * price);
+                }
+            }
+        } else {
+            // حتى عند skipRender، نحدث الإجمالي فقط بدون لمس حقل السعر
+            updateSummary();
+            const row = document.querySelector(`tr[data-product-id="${productId}"]`);
+            if (row) {
+                const totalCell = row.querySelector('td[data-label="الإجمالي"]');
+                if (totalCell) {
+                    const qty = sanitizeNumber(item.quantity);
+                    totalCell.textContent = formatCurrency(qty * price);
+                }
+            }
+        }
     }
 
     elements.inventoryButtons.forEach((button) => {
@@ -3649,8 +3738,67 @@ try {
             const priceInput = event.target.matches('[data-cart-price]') ? event.target : null;
             const productId = parseInt(event.target.dataset.productId || '0', 10);
             if (qtyInput) updateQuantity(productId, qtyInput.value);
-            if (priceInput) updateUnitPrice(productId, priceInput.value);
+            if (priceInput) {
+                // تحديث السعر مباشرة بدون إعادة رسم الجدول (لتجنب فقدان التركيز)
+                updateUnitPrice(productId, priceInput.value, true);
+            }
         });
+        
+        // إضافة event listener للتعامل مع paste و keydown في حقل السعر
+        elements.cartBody.addEventListener('paste', function (event) {
+            const priceInput = event.target.matches('[data-cart-price]') ? event.target : null;
+            if (priceInput) {
+                // السماح باللصق ثم تنظيف القيمة
+                setTimeout(() => {
+                    const productId = parseInt(priceInput.dataset.productId || '0', 10);
+                    updateUnitPrice(productId, priceInput.value, true);
+                }, 10);
+            }
+        });
+        
+        elements.cartBody.addEventListener('keydown', function (event) {
+            const priceInput = event.target.matches('[data-cart-price]') ? event.target : null;
+            if (priceInput) {
+                // التأكد من أن الحقل في وضع LTR عند التركيز
+                priceInput.style.direction = 'ltr';
+                priceInput.style.textAlign = 'left';
+                // السماح بجميع المفاتيح في حقل السعر
+                if (event.key === 'Enter' || event.key === 'Tab') {
+                    const productId = parseInt(priceInput.dataset.productId || '0', 10);
+                    // عند الضغط على Enter أو Tab، تحديث القيمة النهائية
+                    updateUnitPrice(productId, priceInput.value, false);
+                }
+            }
+        });
+        
+        // عند فقدان التركيز (blur)، تحديث القيمة النهائية
+        elements.cartBody.addEventListener('blur', function (event) {
+            const priceInput = event.target.matches('[data-cart-price]') ? event.target : null;
+            if (priceInput) {
+                const productId = parseInt(priceInput.dataset.productId || '0', 10);
+                // تحديث القيمة النهائية عند فقدان التركيز
+                const finalPrice = sanitizeNumber(priceInput.value);
+                if (finalPrice >= 0) {
+                    priceInput.value = finalPrice; // عرض القيمة بدون .00 إذا كانت صحيحة
+                    updateUnitPrice(productId, finalPrice, false);
+                }
+            }
+        }, true);
+        
+        // إضافة event listener للتركيز على حقل السعر
+        elements.cartBody.addEventListener('focus', function (event) {
+            const priceInput = event.target.matches('[data-cart-price]') ? event.target : null;
+            if (priceInput) {
+                // التأكد من أن الحقل في وضع LTR عند التركيز
+                priceInput.style.direction = 'ltr';
+                priceInput.style.textAlign = 'left';
+                priceInput.style.unicodeBidi = 'embed';
+                // تحديد النص بالكامل لتسهيل التعديل
+                setTimeout(() => {
+                    priceInput.select();
+                }, 10);
+            }
+        }, true);
     }
 
     if (elements.clearCart) {
@@ -3672,9 +3820,96 @@ try {
     }
 
     if (elements.partialInput) {
-        elements.partialInput.addEventListener('input', updateSummary);
+        // معالجة input (مطابق لحقل سعر الوحدة)
+        // لا نقوم بأي معالجة إضافية هنا، فقط تحديث الملخص
+        // السماح بإدخال الأرقام العشرية حتى مع step="1" (مثل حقل السعر)
+        elements.partialInput.addEventListener('input', function() {
+            // التأكد من أن الحقل في وضع LTR أثناء الإدخال
+            elements.partialInput.style.direction = 'ltr';
+            elements.partialInput.style.textAlign = 'left';
+            updateSummary();
+        });
         
-        // معالجة النقر على الأسهم (step arrows) - استخدام mouseup للكشف
+        // معالجة paste (مطابق لحقل سعر الوحدة)
+        elements.partialInput.addEventListener('paste', function(event) {
+            setTimeout(() => {
+                const inputValue = elements.partialInput.value.trim();
+                if (inputValue === '') {
+                    updateSummary();
+                    return;
+                }
+                const value = sanitizeNumber(inputValue);
+                if (value >= 0) {
+                    // عرض القيمة بدون .00 إذا كانت صحيحة، أو مع .00 إذا كانت كسرية
+                    if (value % 1 === 0) {
+                        elements.partialInput.value = value.toString();
+                    } else {
+                        elements.partialInput.value = value.toFixed(2);
+                    }
+                    updateSummary();
+                }
+            }, 10);
+        });
+        
+        // معالجة keydown (مطابق لحقل سعر الوحدة)
+        elements.partialInput.addEventListener('keydown', function(event) {
+            // التأكد من أن الحقل في وضع LTR عند التركيز
+            elements.partialInput.style.direction = 'ltr';
+            elements.partialInput.style.textAlign = 'left';
+            // السماح بجميع المفاتيح في حقل المبلغ الجزئي
+            if (event.key === 'Enter' || event.key === 'Tab') {
+                // عند الضغط على Enter أو Tab، تحديث القيمة النهائية
+                const inputValue = elements.partialInput.value.trim();
+                if (inputValue === '') {
+                    updateSummary();
+                    return;
+                }
+                const value = sanitizeNumber(inputValue);
+                if (value >= 0) {
+                    // عرض القيمة بدون .00 إذا كانت صحيحة، أو مع .00 إذا كانت كسرية
+                    if (value % 1 === 0) {
+                        elements.partialInput.value = value.toString();
+                    } else {
+                        elements.partialInput.value = value.toFixed(2);
+                    }
+                    updateSummary();
+                }
+            }
+        });
+        
+        // معالجة blur (مطابق لحقل سعر الوحدة)
+        elements.partialInput.addEventListener('blur', function() {
+            const inputValue = elements.partialInput.value.trim();
+            if (inputValue === '' || inputValue === '0') {
+                elements.partialInput.value = '';
+                updateSummary();
+                return;
+            }
+            const finalValue = sanitizeNumber(inputValue);
+            if (finalValue >= 0) {
+                // عرض القيمة بدون .00 إذا كانت صحيحة، أو مع .00 إذا كانت كسرية
+                if (finalValue % 1 === 0) {
+                    elements.partialInput.value = finalValue.toString();
+                } else {
+                    elements.partialInput.value = finalValue.toFixed(2);
+                }
+                updateSummary();
+            }
+        });
+        
+        // معالجة focus (مطابق لحقل سعر الوحدة)
+        elements.partialInput.addEventListener('focus', function() {
+            // التأكد من أن الحقل في وضع LTR عند التركيز
+            elements.partialInput.style.direction = 'ltr';
+            elements.partialInput.style.textAlign = 'left';
+            elements.partialInput.style.unicodeBidi = 'embed';
+            // تحديد النص بالكامل لتسهيل التعديل
+            setTimeout(() => {
+                elements.partialInput.select();
+            }, 10);
+        });
+        
+        // معالجة mouseup (للتنظيف عند النقر على الأسهم)
         elements.partialInput.addEventListener('mouseup', function() {
             setTimeout(function() {
                 const value = sanitizeNumber(elements.partialInput.value);
@@ -3682,7 +3917,7 @@ try {
                     elements.partialInput.value = '';
                     updateSummary();
                 } else if (!isNaN(value) && value > 0) {
-                    elements.partialInput.value = value.toFixed(2);
+                    elements.partialInput.value = value;
                     updateSummary();
                 }
             }, 10);

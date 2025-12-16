@@ -89,7 +89,8 @@ function getBasePath() {
 
 /**
  * Get dashboard URL
- * دالة محسّنة لضمان عدم تكرار خطأ DNS_PROBE_FINISHED_NXDOMAIN
+ * دالة محسّنة لضمان عدم تكرار خطأ DNS_PROBE_FINISHED_NXDOMAIN و ERR_FAILED
+ * تضمن إرجاع مسار نسبي فقط بدون أي بروتوكول أو hostname أو منفذ
  */
 function getDashboardUrl($role = null) {
     $base = getBasePath();
@@ -102,6 +103,15 @@ function getDashboardUrl($role = null) {
     // إزالة / من النهاية إذا كان موجوداً
     $base = rtrim($base, '/');
     
+    // إزالة 'dashboard' من base إذا كان موجوداً لمنع تكرار dashboard/dashboard
+    if (!empty($base)) {
+        $baseParts = explode('/', trim($base, '/'));
+        $baseParts = array_filter($baseParts, function($part) {
+            return $part !== 'dashboard' && !empty($part);
+        });
+        $base = !empty($baseParts) ? '/' . implode('/', $baseParts) : '';
+    }
+    
     // بناء المسار - دائماً يبدأ بـ /
     if ($role) {
         $url = ($base ? $base : '') . '/dashboard/' . $role . '.php';
@@ -109,22 +119,28 @@ function getDashboardUrl($role = null) {
         $url = ($base ? $base : '') . '/dashboard/';
     }
     
-    // تنظيف شامل للمسار - إزالة أي بروتوكول أو hostname
-    // 1. إزالة أي بروتوكول كامل (http://hostname أو https://hostname)
-    $url = preg_replace('/^https?:\/\/[^\/]+/', '', $url);
+    // تنظيف شامل للمسار - إزالة أي بروتوكول أو hostname أو منفذ
+    // 1. إزالة أي بروتوكول كامل مع hostname ومنفذ (http://hostname:port أو https://hostname:port)
+    $url = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $url);
     $url = preg_replace('/^\/\//', '/', $url);
     
-    // 2. التأكد من أن المسار يبدأ بـ /
+    // 2. إزالة أي hostname مع منفذ إذا كان موجوداً في بداية المسار
+    // مثال: localhost:8000/dashboard/production.php -> /dashboard/production.php
+    if (preg_match('/^\/[^\/]+:[0-9]+\//', $url)) {
+        $url = preg_replace('/^\/[^\/]+:[0-9]+/', '', $url);
+    }
+    
+    // 3. التأكد من أن المسار يبدأ بـ /
     if (strpos($url, '/') !== 0) {
         $url = '/' . $url;
     }
     
-    // 3. تنظيف المسار (إزالة // المكررة)
+    // 4. تنظيف المسار (إزالة // المكررة)
     $url = preg_replace('/\/+/', '/', $url);
     
-    // 4. إزالة أي hostname إذا كان موجوداً (مثل albarakah.free.nf)
-    // إذا كان المسار يحتوي على نقطة بعد / مباشرة، قد يكون hostname
-    if (preg_match('/^\/[^\/]+\.[a-z]/i', $url)) {
+    // 5. إزالة أي hostname إذا كان موجوداً (مثل albarakah.free.nf أو localhost:8000)
+    // إذا كان المسار يحتوي على نقطة أو نقطتين بعد / مباشرة، قد يكون hostname
+    if (preg_match('/^\/[^\/]+(\.[a-z]|:[0-9])/i', $url)) {
         // إذا كان يبدو كـ hostname، استخراج المسار فقط
         $parts = explode('/', $url);
         // البحث عن 'dashboard' في المسار
@@ -138,40 +154,160 @@ function getDashboardUrl($role = null) {
         }
     }
     
-    // 5. التحقق النهائي: إذا كان المسار لا يحتوي على 'dashboard'، أضفه
+    // 6. التحقق النهائي: إذا كان المسار لا يحتوي على 'dashboard'، أضفه
     if (strpos($url, '/dashboard') === false) {
         $url = ($base ? $base : '') . '/dashboard/' . ($role ? $role . '.php' : '');
     }
     
-    // 6. التأكد من أن المسار لا يحتوي على http:// أو https:// مرة أخرى
+    // 7. التأكد من أن المسار لا يحتوي على http:// أو https:// مرة أخرى
     if (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0) {
         $parsed = parse_url($url);
         $url = $parsed['path'] ?? (($base ? $base : '') . '/dashboard/' . ($role ? $role . '.php' : ''));
     }
     
-    // 7. التحقق النهائي: التأكد من أن المسار يبدأ بـ / ولا يحتوي على بروتوكول
+    // 8. التحقق النهائي: التأكد من أن المسار يبدأ بـ / ولا يحتوي على بروتوكول
     if (strpos($url, '/') !== 0) {
         $url = '/' . $url;
     }
     
-    // 8. تنظيف نهائي: إزالة أي مسافات
+    // 9. تنظيف نهائي: إزالة أي مسافات
     $url = trim($url);
     
-    // 9. التأكد من أن المسار لا يحتوي على :// (بروتوكول)
+    // 10. التأكد من أن المسار لا يحتوي على :// (بروتوكول)
     if (strpos($url, '://') !== false) {
         $parsed = parse_url($url);
         $url = $parsed['path'] ?? (($base ? $base : '') . '/dashboard/' . ($role ? $role . '.php' : ''));
     }
     
-    // 10. تنظيف نهائي للمسار
+    // 11. إزالة أي منفذ من المسار (مثل :8000 في منتصف المسار - يجب ألا يحدث لكن للاحتياط)
+    $url = preg_replace('/:[0-9]+\//', '/', $url);
+    $url = preg_replace('/:[0-9]+$/', '', $url);
+    
+    // 12. تنظيف نهائي للمسار
     $url = preg_replace('/\/+/', '/', $url);
     
-    // 11. التأكد من أن المسار صحيح نهائياً
+    // 12.5. إزالة أي تكرار لـ 'dashboard' في المسار (مثل /dashboard/dashboard/manager.php)
+    $urlParts = explode('/', trim($url, '/'));
+    $cleanedParts = [];
+    $dashboardFound = false;
+    foreach ($urlParts as $part) {
+        if ($part === 'dashboard') {
+            if (!$dashboardFound) {
+                $cleanedParts[] = $part;
+                $dashboardFound = true;
+            }
+            // تجاهل أي 'dashboard' إضافي
+        } else {
+            $cleanedParts[] = $part;
+        }
+    }
+    $url = '/' . implode('/', $cleanedParts);
+    
+    // 12.6. فحص نهائي: التأكد من أن المسار يحتوي على '/dashboard/' وأن role موجود
+    if ($role) {
+        // إذا كان role موجوداً، يجب أن يكون المسار /dashboard/role.php
+        if (strpos($url, '/dashboard/') === false) {
+            // إذا لم يكن هناك dashboard في المسار، أعد بناءه من الصفر
+            $url = '/dashboard/' . $role . '.php';
+        } else {
+            // التحقق من أن role موجود في نهاية المسار
+            $expectedEnd = '/dashboard/' . $role . '.php';
+            if (substr($url, -strlen($expectedEnd)) !== $expectedEnd && substr($url, -strlen('/' . $role . '.php')) !== '/' . $role . '.php') {
+                // إذا كان role غير موجود في نهاية المسار، أعد بناءه
+                $url = '/dashboard/' . $role . '.php';
+            }
+        }
+    } else {
+        // إذا لم يكن هناك role، يجب أن يكون المسار /dashboard/
+        if (strpos($url, '/dashboard') === false) {
+            $url = '/dashboard/';
+        }
+    }
+    
+    // 13. التأكد من أن المسار صحيح نهائياً ولا يحتوي على أي بروتوكول أو hostname
     if (empty($url) || $url === '/') {
-        $url = ($base ? $base : '') . '/dashboard/' . ($role ? $role . '.php' : '');
+        $url = '/dashboard/' . ($role ? $role . '.php' : '');
+    }
+    
+    // 14. التحقق النهائي: التأكد من أن المسار نسبي فقط (يبدأ بـ / ولا يحتوي على :// أو :port)
+    if (strpos($url, '://') !== false || preg_match('/:[0-9]+/', $url)) {
+        // إذا كان لا يزال يحتوي على بروتوكول أو منفذ، استخراج المسار فقط
+        $parsed = parse_url($url);
+        if ($parsed && isset($parsed['path'])) {
+            $url = $parsed['path'];
+            // إزالة تكرار dashboard مرة أخرى بعد parse_url
+            $urlParts = explode('/', trim($url, '/'));
+            $cleanedParts = [];
+            $dashboardFound = false;
+            foreach ($urlParts as $part) {
+                if ($part === 'dashboard') {
+                    if (!$dashboardFound) {
+                        $cleanedParts[] = $part;
+                        $dashboardFound = true;
+                    }
+                } else {
+                    $cleanedParts[] = $part;
+                }
+            }
+            $url = '/' . implode('/', $cleanedParts);
+        } else {
+            // كحل أخير، استخدم المسار الافتراضي
+            $url = '/dashboard/' . ($role ? $role . '.php' : '');
+        }
+        // التأكد من أن المسار يبدأ بـ /
         if (strpos($url, '/') !== 0) {
             $url = '/' . $url;
         }
+    }
+    
+    // 15. فحص نهائي نهائي: التأكد من أن المسار صحيح 100%
+    // إزالة أي منفذ نهائياً
+    $url = preg_replace('/:[0-9]+/', '', $url);
+    $url = preg_replace('/\/+/', '/', $url);
+    
+    // التأكد من أن المسار يحتوي على /dashboard/ إذا كان role موجوداً
+    if ($role) {
+        $expectedPath = '/dashboard/' . $role . '.php';
+        // إذا كان المسار لا يحتوي على dashboard أو role، أعد بناءه بالكامل
+        if (strpos($url, '/dashboard/') === false) {
+            error_log("getDashboardUrl WARNING: Missing /dashboard/ in URL: {$url}, rebuilding to: {$expectedPath}");
+            $url = $expectedPath;
+        } elseif (substr($url, -strlen($role . '.php')) !== $role . '.php') {
+            error_log("getDashboardUrl WARNING: Role mismatch in URL: {$url}, expected: {$expectedPath}");
+            $url = $expectedPath;
+        }
+        
+        // فحص إضافي: إذا كان المسار يبدأ مباشرة بـ role.php بدون dashboard
+        if (strpos($url, '/' . $role . '.php') === 0 || $url === '/' . $role . '.php') {
+            error_log("getDashboardUrl ERROR: URL missing /dashboard/ prefix: {$url}, fixing to: {$expectedPath}");
+            $url = $expectedPath;
+        }
+    } else {
+        // إذا لم يكن هناك role، يجب أن ينتهي بـ /dashboard/
+        if (strpos($url, '/dashboard') === false) {
+            $url = '/dashboard/';
+        }
+    }
+    
+    // تنظيف نهائي نهائي
+    $url = trim($url);
+    if (empty($url) || $url === '/') {
+        $url = '/dashboard/' . ($role ? $role . '.php' : '');
+    }
+    
+    // التأكد من أن المسار يبدأ بـ / ولا يحتوي على أي بروتوكول أو منفذ
+    if (strpos($url, '/') !== 0) {
+        $url = '/' . $url;
+    }
+    
+    // إزالة أي بروتوكول نهائياً (للاحتياط)
+    $url = preg_replace('/^https?:\/\//', '', $url);
+    $url = preg_replace('/^\/\//', '/', $url);
+    
+    // فحص نهائي نهائي نهائي: التأكد من أن المسار صحيح 100%
+    if ($role && (strpos($url, '/dashboard/') === false || substr($url, -strlen($role . '.php')) !== $role . '.php')) {
+        error_log("getDashboardUrl CRITICAL: Final URL validation failed: {$url}, forcing: /dashboard/{$role}.php");
+        $url = '/dashboard/' . $role . '.php';
     }
     
     return $url;
@@ -203,6 +339,16 @@ function getRelativeUrl($path) {
     
     // إزالة / من النهاية
     $base = rtrim($base, '/');
+    
+    // إزالة 'dashboard' من base إذا كان المسار المطلوب يبدأ بـ 'dashboard/'
+    // لمنع تكرار dashboard/dashboard
+    if (strpos($path, 'dashboard/') === 0) {
+        $baseParts = explode('/', trim($base, '/'));
+        $baseParts = array_filter($baseParts, function($part) {
+            return $part !== 'dashboard' && !empty($part);
+        });
+        $base = !empty($baseParts) ? '/' . implode('/', $baseParts) : '';
+    }
     
     return $base . '/' . $path;
 }
@@ -243,6 +389,9 @@ function redirectAfterPost($page, $filters = [], $excludeParams = ['id'], $role 
     if ($pageNum !== null && $pageNum > 1) {
         $redirectParams['p'] = $pageNum;
     }
+    
+    // إضافة معامل _nocache لمسح الكاش
+    $redirectParams['_nocache'] = time() * 1000 + rand(0, 999);
     
     $redirectUrl = getDashboardUrl($role) . '?' . http_build_query($redirectParams);
     

@@ -654,9 +654,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         if ($submissionToken === '' || $submissionToken !== $storedToken) {
             // إما لم يتم إرسال token أو token غير صحيح (duplicate submission)
-            $_SESSION[$sessionErrorKey] = 'تم إرسال هذا الطلب مسبقاً. يرجى عدم إعادة تحميل الصفحة.';
-            productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
-            exit;
+            $errorMessage = 'تم إرسال هذا الطلب مسبقاً. يرجى عدم إعادة تحميل الصفحة.';
+            
+            // التحقق من أن الطلب هو AJAX request
+            $isAjaxRequest = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                            strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+            
+            if ($isAjaxRequest) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(400);
+                echo json_encode([
+                    'success' => false,
+                    'message' => $errorMessage
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            } else {
+                $_SESSION[$sessionErrorKey] = $errorMessage;
+                productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                exit;
+            }
         }
         
         // حذف token فوراً بعد التحقق منه لمنع الإرسال المزدوج
@@ -1153,13 +1169,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 }
                             }
 
-                            $_SESSION[$sessionSuccessKey] = sprintf(
+                            $successMessage = sprintf(
                                 'تم تنفيذ نقل المنتجات رقم %s بواسطة المدير بنجاح دون الحاجة للموافقة.',
                                 $transferNumber
                             );
-                            // حذف token بعد نجاح الطلب لمنع إعادة الإرسال
-                            unset($_SESSION[$sessionTokenKey]);
-                            productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                            
+                            // التحقق من أن الطلب هو AJAX request
+                            $isAjaxRequest = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                                            strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+                            
+                            if ($isAjaxRequest) {
+                                // إرجاع JSON للـ AJAX request
+                                header('Content-Type: application/json; charset=utf-8');
+                                echo json_encode([
+                                    'success' => true,
+                                    'message' => $successMessage,
+                                    'transfer_number' => $transferNumber,
+                                    'transfer_id' => $transferId
+                                ], JSON_UNESCAPED_UNICODE);
+                                // حذف token بعد نجاح الطلب لمنع إعادة الإرسال
+                                unset($_SESSION[$sessionTokenKey]);
+                                exit;
+                            } else {
+                                // إرجاع HTML عادي (POST redirect)
+                                $_SESSION[$sessionSuccessKey] = $successMessage;
+                                // حذف token بعد نجاح الطلب لمنع إعادة الإرسال
+                                unset($_SESSION[$sessionTokenKey]);
+                                productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                            }
                         } catch (Throwable $autoApprovalError) {
                             error_log('final_products auto-approval transfer error: ' . $autoApprovalError->getMessage());
                             $_SESSION[$sessionErrorKey] = sprintf(
@@ -1172,13 +1209,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     } else {
                         // المستخدم ليس مديراً - الطلب تم إنشاؤه بنجاح وتم إرساله للموافقة
-                        $_SESSION[$sessionSuccessKey] = sprintf(
+                        $successMessage = sprintf(
                             'تم إرسال طلب النقل رقم %s إلى المدير للموافقة عليه.',
                             $transferNumber
                         );
-                        // حذف token بعد نجاح الطلب لمنع إعادة الإرسال
-                        unset($_SESSION[$sessionTokenKey]);
-                        productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                        
+                        // التحقق من أن الطلب هو AJAX request
+                        $isAjaxRequest = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                                        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+                        
+                        if ($isAjaxRequest) {
+                            // إرجاع JSON للـ AJAX request
+                            header('Content-Type: application/json; charset=utf-8');
+                            echo json_encode([
+                                'success' => true,
+                                'message' => $successMessage,
+                                'transfer_number' => $transferNumber,
+                                'transfer_id' => $transferId
+                            ], JSON_UNESCAPED_UNICODE);
+                            // حذف token بعد نجاح الطلب لمنع إعادة الإرسال
+                            unset($_SESSION[$sessionTokenKey]);
+                            exit;
+                        } else {
+                            // إرجاع HTML عادي (POST redirect)
+                            $_SESSION[$sessionSuccessKey] = $successMessage;
+                            // حذف token بعد نجاح الطلب لمنع إعادة الإرسال
+                            unset($_SESSION[$sessionTokenKey]);
+                            productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                        }
                     }
                 } else {
                     // الطلب لم يتم إنشاؤه بنجاح حسب الشرط - التحقق مرة أخرى من قاعدة البيانات
@@ -1218,13 +1276,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($verifyTransfer) {
                         // الطلب موجود في قاعدة البيانات! كان هناك خطأ في الإرجاع من createWarehouseTransfer
                         error_log("Warning: Transfer was created (ID: {$verifyTransfer['id']}, Number: {$verifyTransfer['transfer_number']}) but createWarehouseTransfer may have returned error. Details: " . json_encode($result));
-                        $_SESSION[$sessionSuccessKey] = sprintf(
+                        $successMessage = sprintf(
                             'تم إرسال طلب النقل رقم %s إلى المدير للموافقة عليه.',
                             $verifyTransfer['transfer_number']
                         );
-                        // حذف token
-                        unset($_SESSION[$sessionTokenKey]);
-                        productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                        
+                        // التحقق من أن الطلب هو AJAX request
+                        $isAjaxRequest = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                                        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+                        
+                        if ($isAjaxRequest) {
+                            header('Content-Type: application/json; charset=utf-8');
+                            echo json_encode([
+                                'success' => true,
+                                'message' => $successMessage,
+                                'transfer_number' => $verifyTransfer['transfer_number'],
+                                'transfer_id' => $verifyTransfer['id']
+                            ], JSON_UNESCAPED_UNICODE);
+                            unset($_SESSION[$sessionTokenKey]);
+                            exit;
+                        } else {
+                            $_SESSION[$sessionSuccessKey] = $successMessage;
+                            unset($_SESSION[$sessionTokenKey]);
+                            productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                        }
                     } else {
                         // الطلب غير موجود - هناك خطأ حقيقي
                         $errorMessage = $result['message'] ?? 'تعذر إنشاء طلب النقل.';
@@ -1239,8 +1314,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!empty($transferErrors)) {
             $error = implode(' | ', array_unique($transferErrors));
-            // إعادة إنشاء token للسماح بإعادة المحاولة في حالة وجود أخطاء
-            $_SESSION[$sessionTokenKey] = bin2hex(random_bytes(32));
+            
+            // التحقق من أن الطلب هو AJAX request
+            $isAjaxRequest = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                            strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+            
+            if ($isAjaxRequest) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(400);
+                echo json_encode([
+                    'success' => false,
+                    'message' => $error
+                ], JSON_UNESCAPED_UNICODE);
+                // إعادة إنشاء token للسماح بإعادة المحاولة في حالة وجود أخطاء
+                $_SESSION[$sessionTokenKey] = bin2hex(random_bytes(32));
+                exit;
+            } else {
+                // إعادة إنشاء token للسماح بإعادة المحاولة في حالة وجود أخطاء
+                $_SESSION[$sessionTokenKey] = bin2hex(random_bytes(32));
+            }
         }
     } elseif ($isProductionRole && $postAction === 'transfer_external_product') {
         // معالج نقل المنتجات الخارجية لعمال الإنتاج فقط
@@ -3782,14 +3874,16 @@ if (!window.transferFormInitialized) {
 
         // تعطيل زر الإرسال بعد النقر لمنع double-click
         let isSubmitting = false;
-        transferForm.addEventListener('submit', (event) => {
+        transferForm.addEventListener('submit', async (event) => {
+            event.preventDefault(); // منع الإرسال العادي
+            
             if (isSubmitting) {
-                event.preventDefault();
                 return;
             }
             
             isSubmitting = true;
             const submitButton = transferForm.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton ? submitButton.innerHTML : 'إرسال الطلب';
             if (submitButton) {
                 submitButton.disabled = true;
                 submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جارٍ الإرسال...';
@@ -3800,10 +3894,9 @@ if (!window.transferFormInitialized) {
                 isSubmitting = false;
                 if (submitButton) {
                     submitButton.disabled = false;
-                    submitButton.innerHTML = submitButton.getAttribute('data-original-text') || 'إرسال الطلب';
+                    submitButton.innerHTML = originalButtonText;
                 }
-                event.preventDefault();
-                alert('أضف منتجاً واحداً على الأقل قبل إرسال الطلب.');
+                showErrorMessage('أضف منتجاً واحداً على الأقل قبل إرسال الطلب.');
                 return;
             }
 
@@ -3812,24 +3905,22 @@ if (!window.transferFormInitialized) {
                 const quantityInput = row.querySelector('.quantity-input');
 
                 if (!select || !quantityInput) {
-                    event.preventDefault();
                     isSubmitting = false;
                     if (submitButton) {
                         submitButton.disabled = false;
-                        submitButton.innerHTML = submitButton.getAttribute('data-original-text') || 'إرسال الطلب';
+                        submitButton.innerHTML = originalButtonText;
                     }
-                    alert('يرجى التأكد من إدخال بيانات صحيحة لكل منتج.');
+                    showErrorMessage('يرجى التأكد من إدخال بيانات صحيحة لكل منتج.');
                     return;
                 }
 
                 if (!select.value) {
-                    event.preventDefault();
                     isSubmitting = false;
                     if (submitButton) {
                         submitButton.disabled = false;
-                        submitButton.innerHTML = submitButton.getAttribute('data-original-text') || 'إرسال الطلب';
+                        submitButton.innerHTML = originalButtonText;
                     }
-                    alert('اختر المنتج المراد نقله.');
+                    showErrorMessage('اختر المنتج المراد نقله.');
                     return;
                 }
 
@@ -3838,40 +3929,192 @@ if (!window.transferFormInitialized) {
                 const value = parseFloat(quantityInput.value || '0');
 
                 if (value < min) {
-                    event.preventDefault();
                     isSubmitting = false;
                     if (submitButton) {
                         submitButton.disabled = false;
-                        submitButton.innerHTML = submitButton.getAttribute('data-original-text') || 'إرسال الطلب';
+                        submitButton.innerHTML = originalButtonText;
                     }
-                    alert('يرجى إدخال كمية أكبر من الصفر.');
+                    showErrorMessage('يرجى إدخال كمية أكبر من الصفر.');
                     return;
                 }
 
                 if (max > 0 && value > max) {
-                    event.preventDefault();
                     isSubmitting = false;
                     if (submitButton) {
                         submitButton.disabled = false;
-                        submitButton.innerHTML = submitButton.getAttribute('data-original-text') || 'إرسال الطلب';
+                        submitButton.innerHTML = originalButtonText;
                     }
-                    alert('الكمية المطلوبة تتجاوز المتاح في المخزن الرئيسي.');
+                    showErrorMessage('الكمية المطلوبة تتجاوز المتاح في المخزن الرئيسي.');
                     return;
                 }
             }
 
             const destinationSelect = document.getElementById('transferToWarehouse');
             if (destinationSelect && !destinationSelect.value) {
-                event.preventDefault();
                 isSubmitting = false;
                 if (submitButton) {
                     submitButton.disabled = false;
-                    submitButton.innerHTML = submitButton.getAttribute('data-original-text') || 'إرسال الطلب';
+                    submitButton.innerHTML = originalButtonText;
                 }
-                alert('يرجى اختيار المخزن الوجهة قبل إرسال الطلب.');
+                showErrorMessage('يرجى اختيار المخزن الوجهة قبل إرسال الطلب.');
                 return;
             }
+
+            // إرسال النموذج باستخدام AJAX
+            try {
+                const formData = new FormData(transferForm);
+                
+                const response = await fetch(window.location.href, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData,
+                    credentials: 'same-origin'
+                });
+
+                const contentType = response.headers.get('content-type');
+                let result;
+                
+                if (contentType && contentType.includes('application/json')) {
+                    // الاستجابة JSON
+                    result = await response.json();
+                } else {
+                    // الاستجابة HTML - يعني أن الطلب تم بنجاح لكن الخادم لم يعد JSON
+                    // في هذه الحالة، نعرض رسالة نجاح عامة
+                    showSuccessMessage('تم إرسال طلب النقل بنجاح! سيتم مراجعته والموافقة عليه.');
+                    
+                    // إغلاق النموذج وإعادة تحميل الصفحة بعد ثانيتين
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('requestTransferModal'));
+                    if (modal) {
+                        modal.hide();
+                    }
+                    
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                    return;
+                }
+
+                if (result.success) {
+                    // بناء رسالة النجاح
+                    let successMsg = result.message || 'تم إرسال طلب النقل بنجاح!';
+                    if (result.transfer_number) {
+                        successMsg += '\nرقم الطلب: ' + result.transfer_number;
+                    }
+                    
+                    showSuccessMessage(successMsg);
+                    
+                    // إغلاق النموذج
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('requestTransferModal'));
+                    if (modal) {
+                        modal.hide();
+                    }
+                    
+                    // إعادة تحميل الصفحة بعد ثانيتين لضمان تحديث البيانات
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    isSubmitting = false;
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalButtonText;
+                    }
+                    showErrorMessage(result.message || result.error || 'حدث خطأ أثناء إرسال الطلب.');
+                }
+            } catch (error) {
+                console.error('Error submitting transfer form:', error);
+                isSubmitting = false;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonText;
+                }
+                showErrorMessage('حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+            }
         });
+        
+        // دالة لإظهار رسالة النجاح
+        function showSuccessMessage(message) {
+            // إنشاء حاوية Toast إذا لم تكن موجودة
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+                toastContainer.style.zIndex = '9999';
+                document.body.appendChild(toastContainer);
+            }
+            
+            const toastId = 'success-toast-' + Date.now();
+            const toastHtml = `
+                <div id="${toastId}" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi bi-check-circle-fill fs-4 me-2"></i>
+                                <strong class="me-auto">تمت العملية بنجاح!</strong>
+                            </div>
+                            <div class="small" style="white-space: pre-line;">${message.replace(/\n/g, '<br>')}</div>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            const toastElement = document.getElementById(toastId);
+            if (toastElement && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+                const toast = new bootstrap.Toast(toastElement);
+                toast.show();
+                
+                // إزالة العنصر بعد إخفائه
+                toastElement.addEventListener('hidden.bs.toast', function() {
+                    toastElement.remove();
+                });
+            }
+        }
+        
+        // دالة لإظهار رسالة الخطأ
+        function showErrorMessage(message) {
+            // إنشاء حاوية Toast إذا لم تكن موجودة
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+                toastContainer.style.zIndex = '9999';
+                document.body.appendChild(toastContainer);
+            }
+            
+            const toastId = 'error-toast-' + Date.now();
+            const toastHtml = `
+                <div id="${toastId}" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi bi-exclamation-triangle-fill fs-4 me-2"></i>
+                                <strong class="me-auto">خطأ!</strong>
+                            </div>
+                            <div class="small">${message}</div>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            const toastElement = document.getElementById(toastId);
+            if (toastElement && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+                const toast = new bootstrap.Toast(toastElement);
+                toast.show();
+                
+                // إزالة العنصر بعد إخفائه
+                toastElement.addEventListener('hidden.bs.toast', function() {
+                    toastElement.remove();
+                });
+            }
+        }
     });
 }
 </script>

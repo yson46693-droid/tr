@@ -65,6 +65,40 @@ $error = $_SESSION['warehouse_transfer_error'] ?? '';
 $success = $_SESSION['warehouse_transfer_success'] ?? '';
 unset($_SESSION['warehouse_transfer_error'], $_SESSION['warehouse_transfer_success']);
 
+// عرض رسائل النجاح والخطأ
+if ($success || $error) {
+    echo '<div class="position-fixed top-0 end-0 p-3" style="z-index: 9999;">';
+    if ($success) {
+        echo '<div class="toast align-items-center text-white bg-success border-0 show" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">';
+        echo '<div class="d-flex">';
+        echo '<div class="toast-body">';
+        echo '<div class="d-flex align-items-center mb-2">';
+        echo '<i class="bi bi-check-circle-fill fs-4 me-2"></i>';
+        echo '<strong class="me-auto">تمت العملية بنجاح!</strong>';
+        echo '</div>';
+        echo '<div class="small">' . nl2br(htmlspecialchars($success)) . '</div>';
+        echo '</div>';
+        echo '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>';
+        echo '</div>';
+        echo '</div>';
+    }
+    if ($error) {
+        echo '<div class="toast align-items-center text-white bg-danger border-0 show" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">';
+        echo '<div class="d-flex">';
+        echo '<div class="toast-body">';
+        echo '<div class="d-flex align-items-center mb-2">';
+        echo '<i class="bi bi-exclamation-triangle-fill fs-4 me-2"></i>';
+        echo '<strong class="me-auto">خطأ!</strong>';
+        echo '</div>';
+        echo '<div class="small">' . nl2br(htmlspecialchars($error)) . '</div>';
+        echo '</div>';
+        echo '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>';
+        echo '</div>';
+        echo '</div>';
+    }
+    echo '</div>';
+}
+
 // Pagination
 $pageNum = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
 $perPage = 20;
@@ -1195,11 +1229,36 @@ if (isset($_GET['id'])) {
     </div>
 <?php endif; ?>
 
-<?php if ($success): ?>
-    <div class="alert alert-success alert-dismissible fade show" id="successAlert" data-auto-refresh="true">
-        <i class="bi bi-check-circle-fill me-2"></i>
-        <div style="white-space: pre-line;"><?php echo htmlspecialchars($success); ?></div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+<?php if ($success || $error): ?>
+    <div class="position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+        <?php if ($success): ?>
+            <div class="toast align-items-center text-white bg-success border-0 show" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-check-circle-fill fs-4 me-2"></i>
+                            <strong class="me-auto">تمت العملية بنجاح!</strong>
+                        </div>
+                        <div class="small" style="white-space: pre-line;"><?php echo htmlspecialchars($success); ?></div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        <?php endif; ?>
+        <?php if ($error): ?>
+            <div class="toast align-items-center text-white bg-danger border-0 show" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-exclamation-triangle-fill fs-4 me-2"></i>
+                            <strong class="me-auto">خطأ!</strong>
+                        </div>
+                        <div class="small" style="white-space: pre-line;"><?php echo htmlspecialchars($error); ?></div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        <?php endif; ?>
     </div>
 <?php endif; ?>
 
@@ -2586,13 +2645,22 @@ document.addEventListener('DOMContentLoaded', function() {
     if (alertElement && alertElement.dataset.autoRefresh === 'true') {
         // انتظار 3 ثوانٍ لإعطاء المستخدم وقتاً لرؤية الرسالة
         setTimeout(function() {
-            // إعادة تحميل الصفحة بدون معاملات GET لمنع تكرار الطلبات
+            // إعادة تحميل الصفحة بدون معاملات GET لمنع تكرار الطلبات مع مسح الكاش
             const currentUrl = new URL(window.location.href);
             // إزالة معاملات success و error من URL
             currentUrl.searchParams.delete('success');
             currentUrl.searchParams.delete('error');
+            // إزالة جميع معاملات cache السابقة قبل إضافة واحدة جديدة
+            currentUrl.searchParams.delete('_nocache');
+            currentUrl.searchParams.delete('_refresh');
+            currentUrl.searchParams.delete('_cache_bust');
+            currentUrl.searchParams.delete('_t');
+            currentUrl.searchParams.delete('_r');
+            currentUrl.searchParams.delete('_auto_refresh');
+            // إضافة معامل _nocache لمسح الكاش
+            currentUrl.searchParams.set('_nocache', Date.now());
             // إعادة تحميل الصفحة
-            window.location.href = currentUrl.toString();
+            window.location.replace(currentUrl.toString());
         }, 3000);
     }
 })();

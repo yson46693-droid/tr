@@ -1,0 +1,3 @@
+[2025-12-16 09:38:19] redirectAfterPost called | URL: /dashboard/accountant.php?page=local_customers&_nocache=1765870699510 | Page: local_customers | Role: accountant | Headers sent: no
+[2025-12-16 10:48:22] redirectAfterPost called | URL: /dashboard/manager.php?page=local_customers&_nocache=1765874902790 | Page: local_customers | Role: manager | Headers sent: no
+[2025-12-16 10:49:50] redirectAfterPost called | URL: /dashboard/manager.php?page=representatives_customers&_nocache=1765874990081 | Page: representatives_customers | Role: manager | Headers sent: yes

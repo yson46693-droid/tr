@@ -26,6 +26,71 @@ $currentUser = getCurrentUser();
 $currentRole = strtolower((string)($currentUser['role'] ?? 'manager'));
 $db = db();
 
+// إنشاء جدول customer_phones إذا لم يكن موجوداً (يستخدم نفس الجدول للعملاء)
+try {
+    $customerPhonesTable = $db->queryOne("SHOW TABLES LIKE 'customer_phones'");
+    if (empty($customerPhonesTable)) {
+        $db->execute("
+            CREATE TABLE IF NOT EXISTS `customer_phones` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `customer_id` int(11) NOT NULL,
+                `phone` varchar(20) NOT NULL,
+                `is_primary` tinyint(1) DEFAULT 0,
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                KEY `customer_id` (`customer_id`),
+                CONSTRAINT `customer_phones_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        error_log('Table customer_phones created successfully');
+    }
+} catch (Exception $e) {
+    error_log('Error creating customer_phones table: ' . $e->getMessage());
+}
+
+// معالجة get_customer_phones AJAX
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && trim($_GET['action']) === 'get_customer_phones') {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-cache, must-revalidate');
+    
+    $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
+    
+    if ($customerId <= 0) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'معرف العميل غير صحيح'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
+    try {
+        $phones = $db->query(
+            "SELECT phone FROM customer_phones WHERE customer_id = ? ORDER BY is_primary DESC, id ASC",
+            [$customerId]
+        );
+        
+        $phoneNumbers = array_map(function($row) {
+            return $row['phone'];
+        }, $phones);
+        
+        echo json_encode([
+            'success' => true,
+            'phones' => $phoneNumbers
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $e) {
+        error_log('Get customer phones error: ' . $e->getMessage());
+        echo json_encode([
+            'success' => false,
+            'message' => 'حدث خطأ أثناء جلب أرقام الهواتف'
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
+
 // تحديد dashboard script بشكل صريح بناءً على الدور
 $dashboardScript = 'manager.php';
 if ($currentRole === 'accountant') {
@@ -280,6 +345,124 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 [],
                 $currentRole
             );
+        }
+    }
+}
+
+// معالجة تعديل العميل
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_POST['action']) === 'edit_customer') {
+    $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
+    $phone = trim($_POST['phone'] ?? '');
+    $address = trim($_POST['address'] ?? '');
+    $regionId = isset($_POST['region_id']) && $_POST['region_id'] !== '' ? (int)$_POST['region_id'] : null;
+    
+    if ($customerId <= 0) {
+        $_SESSION['error_message'] = 'معرف العميل غير صحيح';
+    } else {
+        try {
+            // التحقق من وجود العميل
+            $customer = $db->queryOne("SELECT id, name FROM customers WHERE id = ?", [$customerId]);
+            if (!$customer) {
+                $_SESSION['error_message'] = 'العميل غير موجود';
+            } else {
+                // التحقق من الصلاحيات
+                $canEdit = false;
+                $allowedFields = [];
+                
+                if ($currentRole === 'manager') {
+                    // المدير يعدل جميع البيانات ما عدا اسم العميل
+                    $canEdit = true;
+                    $allowedFields = ['phone', 'address', 'region_id', 'balance'];
+                } elseif (in_array($currentRole, ['accountant', 'sales'], true)) {
+                    // المحاسب والمندوب يعدلون فقط (العنوان – الهاتف – المنطقة)
+                    $canEdit = true;
+                    $allowedFields = ['phone', 'address', 'region_id'];
+                }
+                
+                if (!$canEdit) {
+                    $_SESSION['error_message'] = 'غير مصرح لك بتعديل هذا العميل';
+                } else {
+                    $updateFields = [];
+                    $updateValues = [];
+                    
+                    if (in_array('phone', $allowedFields)) {
+                        $updateFields[] = 'phone = ?';
+                        $updateValues[] = $phone ?: null;
+                        
+                        // تحديث أرقام الهواتف في جدول customer_phones
+                        $phones = $_POST['phones'] ?? [];
+                        if (is_array($phones) && !empty($phones)) {
+                            // حذف الأرقام القديمة
+                            $db->execute("DELETE FROM customer_phones WHERE customer_id = ?", [$customerId]);
+                            
+                            // إضافة الأرقام الجديدة
+                            $firstPhone = true;
+                            foreach ($phones as $phoneNumber) {
+                                $phoneNumber = trim($phoneNumber);
+                                if (!empty($phoneNumber)) {
+                                    $db->execute(
+                                        "INSERT INTO customer_phones (customer_id, phone, is_primary) VALUES (?, ?, ?)",
+                                        [$customerId, $phoneNumber, $firstPhone ? 1 : 0]
+                                    );
+                                    $firstPhone = false;
+                                }
+                            }
+                        } elseif (!empty($phone)) {
+                            // إذا لم تكن هناك أرقام متعددة، احفظ الرقم الواحد
+                            $db->execute("DELETE FROM customer_phones WHERE customer_id = ?", [$customerId]);
+                            $db->execute(
+                                "INSERT INTO customer_phones (customer_id, phone, is_primary) VALUES (?, ?, ?)",
+                                [$customerId, $phone, 1]
+                            );
+                        }
+                    }
+                    
+                    if (in_array('address', $allowedFields)) {
+                        $updateFields[] = 'address = ?';
+                        $updateValues[] = $address ?: null;
+                    }
+                    
+                    if (in_array('region_id', $allowedFields)) {
+                        $updateFields[] = 'region_id = ?';
+                        $updateValues[] = $regionId;
+                    }
+                    
+                    if (in_array('balance', $allowedFields)) {
+                        $balance = isset($_POST['balance']) ? cleanFinancialValue($_POST['balance'], true) : null;
+                        if ($balance !== null) {
+                            $updateFields[] = 'balance = ?';
+                            $updateValues[] = $balance;
+                        }
+                    }
+                    
+                    if (!empty($updateFields)) {
+                        $updateValues[] = $customerId;
+                        $db->execute(
+                            "UPDATE customers SET " . implode(', ', $updateFields) . " WHERE id = ?",
+                            $updateValues
+                        );
+                        
+                        logAudit($currentUser['id'], 'edit_rep_customer', 'customer', $customerId, null, [
+                            'name' => $customer['name'],
+                            'updated_fields' => $allowedFields
+                        ]);
+                        
+                        $_SESSION['success_message'] = 'تم تعديل بيانات العميل بنجاح';
+                        
+                        redirectAfterPost(
+                            'representatives_customers',
+                            [],
+                            [],
+                            $currentRole
+                        );
+                    } else {
+                        $_SESSION['error_message'] = 'لم يتم تحديد أي حقول للتعديل';
+                    }
+                }
+            }
+        } catch (Throwable $editError) {
+            error_log('Edit rep customer error: ' . $editError->getMessage());
+            $_SESSION['error_message'] = 'حدث خطأ أثناء تعديل بيانات العميل';
         }
     }
 }
@@ -654,7 +837,7 @@ renderRepresentativeCards($representatives, [
 <?php
 // جلب جميع عملاء المندوبين للجدول
 $allCustomersPageNum = isset($_GET['cp']) ? max(1, intval($_GET['cp'])) : 1;
-$allCustomersPerPage = 20;
+$allCustomersPerPage = 6;
 $allCustomersOffset = ($allCustomersPageNum - 1) * $allCustomersPerPage;
 
 $allCustomersSearch = trim($_GET['cs'] ?? '');
@@ -796,7 +979,31 @@ try {
                         <?php foreach ($allCustomers as $customer): ?>
                             <tr>
                                 <td><strong><?php echo htmlspecialchars($customer['name']); ?></strong></td>
-                                <td><?php echo htmlspecialchars($customer['phone'] ?? '-'); ?></td>
+                                <td>
+                                    <?php
+                                    // جلب أرقام الهواتف من جدول customer_phones
+                                    $customerPhones = $db->query(
+                                        "SELECT phone FROM customer_phones WHERE customer_id = ? ORDER BY is_primary DESC, id ASC",
+                                        [$customer['id']]
+                                    );
+                                    if (empty($customerPhones) && !empty($customer['phone'])) {
+                                        // إذا لم تكن هناك أرقام في customer_phones، استخدم الرقم القديم
+                                        $customerPhones = [['phone' => $customer['phone']]];
+                                    }
+                                    if (!empty($customerPhones)) {
+                                        foreach ($customerPhones as $phoneData) {
+                                            $phoneNumber = trim($phoneData['phone'] ?? '');
+                                            if (!empty($phoneNumber)) {
+                                                echo '<a href="tel:' . htmlspecialchars($phoneNumber) . '" class="btn btn-sm btn-outline-primary me-1 mb-1" title="اتصل بـ ' . htmlspecialchars($phoneNumber) . '">';
+                                                echo '<i class="bi bi-telephone-fill"></i> ';
+                                                echo '</a>';
+                                            }
+                                        }
+                                    } else {
+                                        echo '-';
+                                    }
+                                    ?>
+                                </td>
                                 <td>
                                     <?php
                                         $customerBalanceValue = isset($customer['balance']) ? (float) $customer['balance'] : 0.0;
@@ -856,6 +1063,20 @@ try {
                                     $rawBalance = number_format($customerBalance, 2, '.', '');
                                     ?>
                                     <div class="d-flex flex-wrap align-items-center gap-2">
+                                        <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-warning edit-rep-customer-btn"
+                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
+                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
+                                            data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
+                                            data-customer-address="<?php echo htmlspecialchars($customer['address'] ?? ''); ?>"
+                                            data-customer-region-id="<?php echo (int)($customer['region_id'] ?? 0); ?>"
+                                            data-customer-balance="<?php echo $rawBalance; ?>"
+                                        >
+                                            <i class="bi bi-pencil me-1"></i>تعديل
+                                        </button>
+                                        <?php endif; ?>
                                         <button
                                             type="button"
                                             class="btn btn-sm <?php echo $customerBalance > 0 ? 'btn-success' : 'btn-outline-secondary'; ?> all-customers-collect-btn"
@@ -907,28 +1128,36 @@ try {
                 </li>
                 
                 <?php
-                $startPage = max(1, $allCustomersPageNum - 2);
-                $endPage = min($allCustomersTotalPages, $allCustomersPageNum + 2);
+                // عرض 3 أرقام صفحات فقط
+                $pagesToShow = 3;
+                $halfPages = floor($pagesToShow / 2);
                 
-                if ($startPage > 1): ?>
-                    <li class="page-item"><a class="page-link" href="?page=representatives_customers&cp=1<?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?>">1</a></li>
-                    <?php if ($startPage > 2): ?>
-                        <li class="page-item disabled"><span class="page-link">...</span></li>
-                    <?php endif; ?>
-                <?php endif; ?>
+                // حساب الصفحات للعرض
+                if ($allCustomersTotalPages <= $pagesToShow) {
+                    // إذا كان العدد الإجمالي للصفحات أقل من أو يساوي 3، اعرض كل الصفحات
+                    $startPage = 1;
+                    $endPage = $allCustomersTotalPages;
+                } else {
+                    // حساب الصفحات حول الصفحة الحالية
+                    $startPage = max(1, $allCustomersPageNum - $halfPages);
+                    $endPage = min($allCustomersTotalPages, $allCustomersPageNum + $halfPages);
+                    
+                    // تعديل إذا كنا في البداية أو النهاية
+                    if ($endPage - $startPage < $pagesToShow - 1) {
+                        if ($startPage == 1) {
+                            $endPage = min($allCustomersTotalPages, $startPage + $pagesToShow - 1);
+                        } else {
+                            $startPage = max(1, $endPage - $pagesToShow + 1);
+                        }
+                    }
+                }
                 
-                <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                // عرض أزرار الصفحات
+                for ($i = $startPage; $i <= $endPage; $i++): ?>
                     <li class="page-item <?php echo $i == $allCustomersPageNum ? 'active' : ''; ?>">
                         <a class="page-link" href="?page=representatives_customers&cp=<?php echo $i; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?>"><?php echo $i; ?></a>
                     </li>
                 <?php endfor; ?>
-                
-                <?php if ($endPage < $allCustomersTotalPages): ?>
-                    <?php if ($endPage < $allCustomersTotalPages - 1): ?>
-                        <li class="page-item disabled"><span class="page-link">...</span></li>
-                    <?php endif; ?>
-                    <li class="page-item"><a class="page-link" href="?page=representatives_customers&cp=<?php echo $allCustomersTotalPages; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?>"><?php echo $allCustomersTotalPages; ?></a></li>
-                <?php endif; ?>
                 
                 <li class="page-item <?php echo $allCustomersPageNum >= $allCustomersTotalPages ? 'disabled' : ''; ?>">
                     <a class="page-link" href="?page=representatives_customers&cp=<?php echo $allCustomersPageNum + 1; ?><?php echo $allCustomersSearch ? '&cs=' . urlencode($allCustomersSearch) : ''; ?>&cds=<?php echo urlencode($allCustomersDebtStatus); ?>">
@@ -2875,5 +3104,242 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 });
+
+// معالج تعديل عميل المندوب
+document.addEventListener('DOMContentLoaded', function() {
+    var editRepCustomerButtons = document.querySelectorAll('.edit-rep-customer-btn');
+    var editRepCustomerModal = document.getElementById('editRepCustomerModal');
+    
+    if (editRepCustomerModal && editRepCustomerButtons.length > 0) {
+        editRepCustomerButtons.forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                var customerId = this.getAttribute('data-customer-id');
+                var customerName = this.getAttribute('data-customer-name');
+                var customerPhone = this.getAttribute('data-customer-phone') || '';
+                var customerAddress = this.getAttribute('data-customer-address') || '';
+                var customerRegionId = this.getAttribute('data-customer-region-id') || '';
+                var customerBalance = this.getAttribute('data-customer-balance') || '0';
+                
+                if (!customerId) {
+                    console.error('Customer ID not found');
+                    return;
+                }
+                
+                var idInput = document.getElementById('editRepCustomerId');
+                var nameInput = document.getElementById('editRepCustomerName');
+                var phoneInput = document.getElementById('editRepCustomerPhone');
+                var addressInput = document.getElementById('editRepCustomerAddress');
+                var regionInput = document.getElementById('editRepCustomerRegionId');
+                var balanceInput = document.getElementById('editRepCustomerBalance');
+                var editPhoneContainer = document.getElementById('editRepPhoneNumbersContainer');
+                
+                if (idInput) idInput.value = customerId;
+                if (nameInput) nameInput.value = customerName || '';
+                if (addressInput) addressInput.value = customerAddress;
+                if (regionInput) regionInput.value = customerRegionId;
+                if (balanceInput) balanceInput.value = customerBalance;
+                
+                // تحميل أرقام الهواتف المتعددة
+                if (editPhoneContainer) {
+                    editPhoneContainer.innerHTML = '';
+                    // جلب أرقام الهواتف من قاعدة البيانات عبر AJAX
+                    fetch('?action=get_customer_phones&customer_id=' + customerId)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.phones && data.phones.length > 0) {
+                                data.phones.forEach(function(phone, index) {
+                                    var phoneGroup = document.createElement('div');
+                                    phoneGroup.className = 'input-group mb-2';
+                                    phoneGroup.innerHTML = `
+                                        <input type="text" class="form-control phone-input" name="phones[]" value="${phone}" placeholder="مثال: 01234567890">
+                                        <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    `;
+                                    editPhoneContainer.appendChild(phoneGroup);
+                                });
+                            } else if (customerPhone) {
+                                // إذا لم تكن هناك أرقام في customer_phones، استخدم الرقم القديم
+                                var phoneGroup = document.createElement('div');
+                                phoneGroup.className = 'input-group mb-2';
+                                phoneGroup.innerHTML = `
+                                    <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                `;
+                                editPhoneContainer.appendChild(phoneGroup);
+                            } else {
+                                // إضافة حقل فارغ واحد
+                                var phoneGroup = document.createElement('div');
+                                phoneGroup.className = 'input-group mb-2';
+                                phoneGroup.innerHTML = `
+                                    <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                `;
+                                editPhoneContainer.appendChild(phoneGroup);
+                            }
+                            if (typeof updateEditRepRemoveButtons === 'function') {
+                                updateEditRepRemoveButtons();
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error loading phones:', error);
+                            // في حالة الخطأ، استخدم الرقم القديم
+                            if (customerPhone) {
+                                var phoneGroup = document.createElement('div');
+                                phoneGroup.className = 'input-group mb-2';
+                                phoneGroup.innerHTML = `
+                                    <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                `;
+                                editPhoneContainer.appendChild(phoneGroup);
+                            }
+                            if (typeof updateEditRepRemoveButtons === 'function') {
+                                updateEditRepRemoveButtons();
+                            }
+                        });
+                } else if (phoneInput) {
+                    phoneInput.value = customerPhone;
+                }
+                
+                try {
+                    var modal = bootstrap.Modal.getOrCreateInstance(editRepCustomerModal);
+                    modal.show();
+                } catch (err) {
+                    console.error('Error showing modal:', err);
+                    // Fallback
+                    var modal = new bootstrap.Modal(editRepCustomerModal);
+                    modal.show();
+                }
+            });
+        });
+    } else {
+        if (!editRepCustomerModal) {
+            console.warn('Edit rep customer modal not found');
+        }
+        if (editRepCustomerButtons.length === 0) {
+            console.warn('Edit rep customer buttons not found');
+        }
+    }
+    
+    // معالج إضافة رقم هاتف في نموذج التعديل
+    const addEditRepPhoneBtn = document.getElementById('addEditRepPhoneBtn');
+    const editRepPhoneContainer = document.getElementById('editRepPhoneNumbersContainer');
+    
+    if (addEditRepPhoneBtn && editRepPhoneContainer) {
+        addEditRepPhoneBtn.addEventListener('click', function() {
+            var phoneInputGroup = document.createElement('div');
+            phoneInputGroup.className = 'input-group mb-2';
+            phoneInputGroup.innerHTML = `
+                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+            editRepPhoneContainer.appendChild(phoneInputGroup);
+            updateEditRepRemoveButtons();
+        });
+        
+        editRepPhoneContainer.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-phone-btn')) {
+                e.target.closest('.input-group').remove();
+                updateEditRepRemoveButtons();
+            }
+        });
+    }
+    
+    // تحديث حالة أزرار الحذف للنموذج التعديل
+    function updateEditRepRemoveButtons() {
+        if (editRepPhoneContainer) {
+            const phoneGroups = editRepPhoneContainer.querySelectorAll('.input-group');
+            phoneGroups.forEach(function(group, index) {
+                const removeBtn = group.querySelector('.remove-phone-btn');
+                if (removeBtn) {
+                    removeBtn.style.display = phoneGroups.length > 1 ? 'block' : 'none';
+                }
+            });
+        }
+    }
+    window.updateEditRepRemoveButtons = updateEditRepRemoveButtons;
+});
 </script>
+
+<!-- Modal تعديل عميل المندوب -->
+<?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
+<div class="modal fade" id="editRepCustomerModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تعديل بيانات عميل المندوب</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+                <input type="hidden" name="action" value="edit_customer">
+                <input type="hidden" name="customer_id" id="editRepCustomerId">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم العميل</label>
+                        <input type="text" class="form-control" id="editRepCustomerName" disabled>
+                        <small class="text-muted">لا يمكن تعديل اسم العميل</small>
+                    </div>
+                    <?php if ($currentRole === 'manager'): ?>
+                    <div class="mb-3">
+                        <label class="form-label">ديون العميل / رصيد العميل</label>
+                        <input type="number" class="form-control" name="balance" id="editRepCustomerBalance" step="0.01" placeholder="مثال: 0 أو -500">
+                        <small class="text-muted">
+                            <strong>إدخال قيمة سالبة:</strong> يتم اعتبارها رصيد دائن للعميل (مبلغ متاح للعميل).
+                        </small>
+                    </div>
+                    <?php endif; ?>
+                    <div class="mb-3">
+                        <label class="form-label">أرقام الهاتف</label>
+                        <div id="editRepPhoneNumbersContainer">
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="addEditRepPhoneBtn">
+                            <i class="bi bi-plus-circle"></i> إضافة رقم آخر
+                        </button>
+                        <input type="hidden" name="phone" id="editRepCustomerPhone" value="">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">العنوان</label>
+                        <textarea class="form-control" name="address" id="editRepCustomerAddress" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">المنطقة</label>
+                        <div class="input-group">
+                            <select class="form-select" name="region_id" id="editRepCustomerRegionId">
+                                <option value="">اختر المنطقة</option>
+                                <?php
+                                $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                                foreach ($regions as $region):
+                                ?>
+                                    <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 

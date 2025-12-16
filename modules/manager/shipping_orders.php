@@ -209,6 +209,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'add_local_customer') {
+        $name = trim($_POST['customer_name'] ?? '');
+        $phone = trim($_POST['customer_phone'] ?? '');
+        $address = trim($_POST['customer_address'] ?? '');
+        $balance = isset($_POST['customer_balance']) ? cleanFinancialValue($_POST['customer_balance'], true) : 0;
+
+        if ($name === '') {
+            $_SESSION[$sessionErrorKey] = 'يجب إدخال اسم العميل.';
+        } else {
+            try {
+                // التحقق من وجود جدول local_customers
+                $localCustomersTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+                if (empty($localCustomersTableExists)) {
+                    throw new RuntimeException('جدول العملاء المحليين غير موجود. يرجى التأكد من إعداد النظام.');
+                }
+
+                // التحقق من عدم تكرار اسم العميل
+                $existingCustomer = $db->queryOne("SELECT id FROM local_customers WHERE name = ?", [$name]);
+                if ($existingCustomer) {
+                    throw new InvalidArgumentException('اسم العميل مستخدم بالفعل. يرجى اختيار اسم آخر.');
+                }
+
+                // إضافة العميل الجديد
+                $result = $db->execute(
+                    "INSERT INTO local_customers (name, phone, address, balance, status, created_by) VALUES (?, ?, ?, ?, 'active', ?)",
+                    [
+                        $name,
+                        $phone !== '' ? $phone : null,
+                        $address !== '' ? $address : null,
+                        $balance,
+                        $currentUser['id'] ?? null,
+                    ]
+                );
+
+                $newCustomerId = (int)($result['insert_id'] ?? 0);
+                if ($newCustomerId <= 0) {
+                    throw new RuntimeException('فشل إضافة العميل: لم يتم الحصول على معرف العميل.');
+                }
+
+                // تسجيل العملية
+                require_once __DIR__ . '/../../includes/audit_log.php';
+                logAudit($currentUser['id'], 'add_local_customer_from_shipping', 'local_customer', $newCustomerId, null, [
+                    'name' => $name,
+                    'from_shipping_page' => true,
+                ]);
+
+                // إرجاع معرف العميل الجديد في الجلسة لاستخدامه في JavaScript
+                $_SESSION['new_customer_id'] = $newCustomerId;
+                $_SESSION['new_customer_name'] = $name;
+                $_SESSION['new_customer_phone'] = $phone;
+                $_SESSION[$sessionSuccessKey] = 'تم إضافة العميل بنجاح.';
+            } catch (InvalidArgumentException $validationError) {
+                $_SESSION[$sessionErrorKey] = $validationError->getMessage();
+            } catch (Throwable $addError) {
+                error_log('shipping_orders: add local customer error -> ' . $addError->getMessage());
+                $errorMessage = $addError->getMessage();
+                if (stripos($errorMessage, 'duplicate') !== false || stripos($errorMessage, '1062') !== false) {
+                    $_SESSION[$sessionErrorKey] = 'يوجد عميل مسجل مسبقاً بنفس الاسم.';
+                } else {
+                    $_SESSION[$sessionErrorKey] = 'تعذر إضافة العميل: ' . htmlspecialchars($errorMessage);
+                }
+            }
+        }
+
+        redirectAfterPost('shipping_orders', [], [], 'manager');
+        exit;
+    }
+
     if ($action === 'create_shipping_order') {
         $shippingCompanyId = isset($_POST['shipping_company_id']) ? (int)$_POST['shipping_company_id'] : 0;
         $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
@@ -1350,20 +1418,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $totalAmount = (float)($order['total_amount'] ?? 0.0);
+            
+            // الحصول على المبلغ المحصل من العميل (إن وجد)
+            $collectedAmount = isset($_POST['collected_amount']) ? (float)$_POST['collected_amount'] : 0.0;
+            if ($collectedAmount < 0) {
+                $collectedAmount = 0.0;
+            }
+            if ($collectedAmount > $totalAmount) {
+                throw new InvalidArgumentException('المبلغ المحصل لا يمكن أن يكون أكبر من المبلغ الإجمالي للطلب.');
+            }
 
+            // الخطوة 1: خصم المبلغ الإجمالي من دين الشركة الحالي
+            // عند التسليم، يتم خصم المبلغ الإجمالي من دين الشركة لأن الطلب تم تسليمه للعميل
             $db->execute(
                 "UPDATE shipping_companies SET balance = balance - ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
                 [$totalAmount, $currentUser['id'] ?? null, $order['shipping_company_id']]
             );
 
-            // تحديث رصيد العميل في الجدول المناسب (إضافة المبلغ كدين)
+            // الخطوة 2: إضافة المبلغ الإجمالي إلى ديون العميل
+            // الخطوة 3: خصم المبلغ الذي تم تحصيله من العميل كتحصيل
+            // المتبقي في ديون العميل = المبلغ الإجمالي - المبلغ الذي تم تحصيله
+            // الصيغة: الرصيد الجديد = الرصيد الحالي + المبلغ الإجمالي - المبلغ المحصل
             $currentBalance = (float)($customer['balance'] ?? 0.0);
-            $newBalance = round($currentBalance + $totalAmount, 2);
+            $newBalance = round($currentBalance + $totalAmount - $collectedAmount, 2);
             
             $db->execute(
                 "UPDATE {$customerTable} SET balance = ?, updated_at = NOW() WHERE id = ?",
                 [$newBalance, $order['customer_id']]
             );
+            
+            // الخطوة 4: تسجيل عملية التحصيل في accountant_transactions إذا تم تحصيل مبلغ من العميل
+            // هذا يسجل المبلغ المحصل كتحصيل في خزنة الشركة
+            if ($collectedAmount > 0) {
+                $accountantTableCheck = $db->queryOne("SHOW TABLES LIKE 'accountant_transactions'");
+                if (!empty($accountantTableCheck)) {
+                    $customerName = $customer['name'] ?? 'غير محدد';
+                    $description = 'تحصيل من عميل: ' . $customerName . ' (طلب شحن #' . ($order['order_number'] ?? $orderId) . ')';
+                    $referenceNumber = 'COL-CUST-' . $order['customer_id'] . '-' . date('YmdHis');
+                    
+                    $db->execute(
+                        "INSERT INTO accountant_transactions 
+                            (transaction_type, amount, sales_rep_id, description, reference_number, 
+                             status, approved_by, created_by, approved_at)
+                         VALUES (?, ?, NULL, ?, ?, 'approved', ?, ?, NOW())",
+                        [
+                            'income',  // نوع المعاملة: إيراد (تحصيل من عميل وليس من مندوب)
+                            $collectedAmount,
+                            $description,
+                            $referenceNumber,
+                            $currentUser['id'],
+                            $currentUser['id']
+                        ]
+                    );
+                }
+            }
 
             $db->execute(
                 "UPDATE shipping_company_orders SET status = 'delivered', delivered_at = NOW(), updated_by = ?, updated_at = NOW() WHERE id = ?",
@@ -2520,6 +2628,7 @@ try {
             sc.balance AS company_balance,
             COALESCE(lc.name, c.name) AS customer_name,
             COALESCE(lc.phone, c.phone) AS customer_phone,
+            COALESCE(lc.balance, c.balance, 0) AS customer_balance,
             i.invoice_number
         FROM shipping_company_orders sco
         LEFT JOIN shipping_companies sc ON sco.shipping_company_id = sc.id
@@ -2678,17 +2787,22 @@ $hasShippingCompanies = !empty($shippingCompanies);
                     </div>
                     <div class="col-lg-4 col-md-6">
                         <label class="form-label">العميل <span class="text-danger">*</span></label>
-                        <select class="form-select" name="customer_id" required>
-                            <option value="">اختر العميل</option>
-                            <?php foreach ($activeCustomers as $customer): ?>
-                                <option value="<?php echo (int)$customer['id']; ?>">
-                                    <?php echo htmlspecialchars($customer['name']); ?>
-                                    <?php if (!empty($customer['phone'])): ?>
-                                        - <?php echo htmlspecialchars($customer['phone']); ?>
-                                    <?php endif; ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <div class="input-group">
+                            <select class="form-select" name="customer_id" id="customerSelect" required>
+                                <option value="">اختر العميل</option>
+                                <?php foreach ($activeCustomers as $customer): ?>
+                                    <option value="<?php echo (int)$customer['id']; ?>">
+                                        <?php echo htmlspecialchars($customer['name']); ?>
+                                        <?php if (!empty($customer['phone'])): ?>
+                                            - <?php echo htmlspecialchars($customer['phone']); ?>
+                                        <?php endif; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#addLocalCustomerModal" title="إضافة عميل جديد">
+                                <i class="bi bi-plus"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="col-lg-4">
                         <label class="form-label">المخزن المصدر</label>
@@ -2904,13 +3018,20 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                                         <i class="bi bi-x-circle me-1"></i>طلب ملغي
                                                     </button>
                                                 </form>
-                                                <form method="POST" class="d-inline" onsubmit="return confirm('هل ترغب في تأكيد تسليم الطلب للعميل ونقل الدين من شركة الشحن إلى العميل؟');">
-                                                    <input type="hidden" name="action" value="complete_shipping_order">
-                                                    <input type="hidden" name="order_id" value="<?php echo (int)$order['id']; ?>">
-                                                    <button type="submit" class="btn btn-success btn-sm">
-                                                        <i class="bi bi-check-circle me-1"></i>تم التسليم
-                                                    </button>
-                                                </form>
+                                                <button type="button" 
+                                                        class="btn btn-success btn-sm" 
+                                                        data-bs-toggle="modal" 
+                                                        data-bs-target="#deliveryModal"
+                                                        data-order-id="<?php echo (int)$order['id']; ?>"
+                                                        data-order-number="<?php echo htmlspecialchars($order['order_number'] ?? ''); ?>"
+                                                        data-customer-id="<?php echo (int)($order['customer_id'] ?? 0); ?>"
+                                                        data-customer-name="<?php echo htmlspecialchars($order['customer_name'] ?? 'غير محدد'); ?>"
+                                                        data-customer-balance="<?php echo (float)($order['customer_balance'] ?? 0); ?>"
+                                                        data-total-amount="<?php echo (float)$order['total_amount']; ?>"
+                                                        data-shipping-company-name="<?php echo htmlspecialchars($order['shipping_company_name'] ?? 'غير معروف'); ?>"
+                                                        data-company-balance="<?php echo (float)($order['company_balance'] ?? 0); ?>">
+                                                    <i class="bi bi-check-circle me-1"></i>تم التسليم
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -3074,6 +3195,44 @@ $hasShippingCompanies = !empty($shippingCompanies);
                     <div class="mb-0">
                         <label class="form-label">ملاحظات</label>
                         <textarea class="form-control" name="company_notes" rows="2" placeholder="أي معلومات إضافية (اختياري)"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save me-1"></i>حفظ
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addLocalCustomerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>إضافة عميل جديد</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" id="addLocalCustomerForm">
+                <input type="hidden" name="action" value="add_local_customer">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم العميل <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="customer_name" id="newCustomerName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">رقم الهاتف</label>
+                        <input type="text" class="form-control" name="customer_phone" id="newCustomerPhone" placeholder="مثال: 01000000000">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">العنوان</label>
+                        <textarea class="form-control" name="customer_address" id="newCustomerAddress" rows="2" placeholder="عنوان العميل (اختياري)"></textarea>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">الرصيد الابتدائي</label>
+                        <input type="number" class="form-control" name="customer_balance" id="newCustomerBalance" value="0" step="0.01" min="0">
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -3372,6 +3531,182 @@ $hasShippingCompanies = !empty($shippingCompanies);
 
             // إذا تم التحقق من كل شيء، أرسل النموذج
             this.submit();
+        });
+    }
+})();
+</script>
+
+<!-- Modal لتسليم الطلب -->
+<div class="modal fade" id="deliveryModal" tabindex="-1" aria-labelledby="deliveryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="deliveryModalLabel">
+                    <i class="bi bi-check-circle me-2"></i>تأكيد تسليم الطلب
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" id="deliveryForm">
+                <input type="hidden" name="action" value="complete_shipping_order">
+                <input type="hidden" name="order_id" id="modal_order_id">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>ملاحظة:</strong> سيتم نقل الدين من شركة الشحن إلى العميل تلقائياً.
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-2">معلومات الطلب</h6>
+                            <p class="mb-1"><strong>رقم الطلب:</strong> <span id="modal_order_number"></span></p>
+                            <p class="mb-1"><strong>شركة الشحن:</strong> <span id="modal_shipping_company"></span></p>
+                            <p class="mb-1"><strong>دين الشركة الحالي:</strong> <span id="modal_company_balance" class="text-danger"></span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-2">معلومات العميل</h6>
+                            <p class="mb-1"><strong>اسم العميل:</strong> <span id="modal_customer_name"></span></p>
+                            <p class="mb-1"><strong>الرصيد الحالي:</strong> <span id="modal_customer_balance"></span></p>
+                            <p class="mb-1"><strong>المبلغ الإجمالي:</strong> <span id="modal_total_amount" class="text-primary fw-bold"></span></p>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="mb-3">
+                        <label for="collected_amount" class="form-label">
+                            <i class="bi bi-cash-coin me-1"></i>المبلغ الذي تم تحصيله من العميل
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="number" 
+                               class="form-control" 
+                               id="collected_amount" 
+                               name="collected_amount" 
+                               step="0.01" 
+                               min="0" 
+                               required
+                               placeholder="أدخل المبلغ المحصل من العميل">
+                        <div class="form-text">
+                            سيتم خصم هذا المبلغ من ديون العميل بعد نقل الدين من الشركة.
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning" id="balance_warning" style="display: none;">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <span id="balance_warning_text"></span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle me-1"></i>تأكيد التسليم
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    const deliveryModal = document.getElementById('deliveryModal');
+    const deliveryForm = document.getElementById('deliveryForm');
+    const collectedAmountInput = document.getElementById('collected_amount');
+    const balanceWarning = document.getElementById('balance_warning');
+    const balanceWarningText = document.getElementById('balance_warning_text');
+    
+    if (deliveryModal) {
+        deliveryModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const orderId = button.getAttribute('data-order-id');
+            const orderNumber = button.getAttribute('data-order-number');
+            const customerId = button.getAttribute('data-customer-id');
+            const customerName = button.getAttribute('data-customer-name');
+            const customerBalance = parseFloat(button.getAttribute('data-customer-balance') || 0);
+            const totalAmount = parseFloat(button.getAttribute('data-total-amount') || 0);
+            const shippingCompanyName = button.getAttribute('data-shipping-company-name');
+            const companyBalance = parseFloat(button.getAttribute('data-company-balance') || 0);
+            
+            // تعبئة البيانات في الـ modal
+            document.getElementById('modal_order_id').value = orderId;
+            document.getElementById('modal_order_number').textContent = '#' + orderNumber;
+            document.getElementById('modal_shipping_company').textContent = shippingCompanyName;
+            document.getElementById('modal_company_balance').textContent = companyBalance.toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
+            document.getElementById('modal_customer_name').textContent = customerName;
+            document.getElementById('modal_customer_balance').textContent = customerBalance.toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
+            document.getElementById('modal_total_amount').textContent = totalAmount.toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
+            
+            // تعيين القيمة الافتراضية للمبلغ المحصل (يمكن أن يكون 0 أو المبلغ الكامل)
+            collectedAmountInput.value = '';
+            collectedAmountInput.max = totalAmount;
+            balanceWarning.style.display = 'none';
+        });
+        
+        // التحقق من المبلغ المحصل عند الإدخال
+        if (collectedAmountInput) {
+            collectedAmountInput.addEventListener('input', function() {
+                const collectedAmount = parseFloat(this.value) || 0;
+                const totalAmount = parseFloat(document.getElementById('modal_total_amount').textContent.replace(/[^\d.-]/g, '')) || 0;
+                const customerBalance = parseFloat(document.getElementById('modal_customer_balance').textContent.replace(/[^\d.-]/g, '')) || 0;
+                const newCustomerDebt = customerBalance + totalAmount - collectedAmount;
+                
+                if (collectedAmount > totalAmount) {
+                    balanceWarningText.textContent = 'المبلغ المحصل أكبر من المبلغ الإجمالي للطلب!';
+                    balanceWarning.className = 'alert alert-danger';
+                    balanceWarning.style.display = 'block';
+                } else if (collectedAmount > 0) {
+                    balanceWarningText.textContent = 'بعد التسليم، سيكون رصيد العميل: ' + 
+                        newCustomerDebt.toLocaleString('ar-EG', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ج.م';
+                    balanceWarning.className = 'alert alert-info';
+                    balanceWarning.style.display = 'block';
+                } else {
+                    balanceWarning.style.display = 'none';
+                }
+            });
+        }
+        
+        // تنظيف البيانات عند إغلاق الـ modal
+        deliveryModal.addEventListener('hidden.bs.modal', function() {
+            collectedAmountInput.value = '';
+            balanceWarning.style.display = 'none';
+        });
+    }
+    
+    // معالجة إضافة عميل جديد
+    const addLocalCustomerModal = document.getElementById('addLocalCustomerModal');
+    const addLocalCustomerForm = document.getElementById('addLocalCustomerForm');
+    const customerSelect = document.getElementById('customerSelect');
+    
+    if (addLocalCustomerModal && addLocalCustomerForm && customerSelect) {
+        // عند إغلاق الـ modal بعد إضافة عميل جديد، تحديث القائمة واختيار العميل الجديد
+        addLocalCustomerModal.addEventListener('hidden.bs.modal', function() {
+            <?php if (!empty($_SESSION['new_customer_id'])): ?>
+                const newCustomerId = <?php echo (int)$_SESSION['new_customer_id']; ?>;
+                const newCustomerName = <?php echo json_encode($_SESSION['new_customer_name'] ?? '', JSON_UNESCAPED_UNICODE); ?>;
+                const newCustomerPhone = <?php echo json_encode($_SESSION['new_customer_phone'] ?? '', JSON_UNESCAPED_UNICODE); ?>;
+                
+                // إضافة العميل الجديد إلى القائمة
+                const option = document.createElement('option');
+                option.value = newCustomerId;
+                option.selected = true;
+                let optionText = newCustomerName;
+                if (newCustomerPhone) {
+                    optionText += ' - ' + newCustomerPhone;
+                }
+                option.textContent = optionText;
+                customerSelect.appendChild(option);
+                
+                // مسح البيانات من الجلسة
+                <?php 
+                unset($_SESSION['new_customer_id']);
+                unset($_SESSION['new_customer_name']);
+                unset($_SESSION['new_customer_phone']);
+                ?>
+            <?php endif; ?>
+            
+            // تنظيف النموذج
+            addLocalCustomerForm.reset();
         });
     }
 })();

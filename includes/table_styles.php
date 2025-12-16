@@ -15,7 +15,10 @@ $isAjaxRequest = (
     )
 );
 
-if (!defined('GLOBAL_TABLE_STYLES_RENDERED') && !$isAjaxRequest) {
+// Skip output if headers already sent
+$headersSent = headers_sent();
+
+if (!defined('GLOBAL_TABLE_STYLES_RENDERED') && !$isAjaxRequest && !$headersSent) {
     define('GLOBAL_TABLE_STYLES_RENDERED', true);
     ?>
     <style>

@@ -18,6 +18,11 @@ if (!defined('CUSTOMERS_MODULE_BOOTSTRAPPED')) {
     require_once __DIR__ . '/../../includes/customer_history.php';
     require_once __DIR__ . '/../../includes/invoices.php';
     require_once __DIR__ . '/../../includes/salary_calculator.php';
+    
+    // تحميل نظام Cache
+    if (file_exists(__DIR__ . '/../../includes/cache.php')) {
+        require_once __DIR__ . '/../../includes/cache.php';
+    }
 
     requireRole(['sales', 'accountant', 'manager']);
 }
@@ -29,6 +34,71 @@ if (!defined('CUSTOMERS_PURCHASE_HISTORY_AJAX')) {
 $currentUser = getCurrentUser();
 $isSalesUser = isset($currentUser['role']) && $currentUser['role'] === 'sales';
 $db = db();
+
+// إنشاء جدول customer_phones إذا لم يكن موجوداً
+try {
+    $customerPhonesTable = $db->queryOne("SHOW TABLES LIKE 'customer_phones'");
+    if (empty($customerPhonesTable)) {
+        $db->execute("
+            CREATE TABLE IF NOT EXISTS `customer_phones` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `customer_id` int(11) NOT NULL,
+                `phone` varchar(20) NOT NULL,
+                `is_primary` tinyint(1) DEFAULT 0,
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                KEY `customer_id` (`customer_id`),
+                CONSTRAINT `customer_phones_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        error_log('Table customer_phones created successfully');
+    }
+} catch (Exception $e) {
+    error_log('Error creating customer_phones table: ' . $e->getMessage());
+}
+
+// معالجة get_customer_phones AJAX
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && trim($_GET['action']) === 'get_customer_phones') {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-cache, must-revalidate');
+    
+    $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
+    
+    if ($customerId <= 0) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'معرف العميل غير صحيح'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
+    try {
+        $phones = $db->query(
+            "SELECT phone FROM customer_phones WHERE customer_id = ? ORDER BY is_primary DESC, id ASC",
+            [$customerId]
+        );
+        
+        $phoneNumbers = array_map(function($row) {
+            return $row['phone'];
+        }, $phones);
+        
+        echo json_encode([
+            'success' => true,
+            'phones' => $phoneNumbers
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $e) {
+        error_log('Get customer phones error: ' . $e->getMessage());
+        echo json_encode([
+            'success' => false,
+            'message' => 'حدث خطأ أثناء جلب أرقام الهواتف'
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
+}
 
 // معالجة add_region_ajax قبل أي شيء آخر لمنع أي output
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_POST['action']) === 'add_region_ajax') {
@@ -73,6 +143,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_P
         $regionId = $db->getLastInsertId();
         
         logAudit($currentUser['id'], 'add_region', 'region', $regionId, null, ['name' => $name]);
+        
+        // مسح الكاش بعد إضافة المنطقة
+        if (class_exists('Cache')) {
+            Cache::flush();
+        }
         
         echo json_encode([
             'success' => true,
@@ -176,6 +251,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_P
                 'longitude' => $longitude,
             ]
         );
+        
+        // مسح الكاش بعد تحديث موقع العميل
+        if (class_exists('Cache')) {
+            Cache::flush();
+        }
 
         echo json_encode([
             'success' => true,
@@ -880,6 +960,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     }
 
                     $_SESSION['success_message'] = implode(' ', array_filter($messageParts));
+                    
+                    // مسح الكاش بعد تحصيل المبلغ
+                    if (class_exists('Cache')) {
+                        Cache::flush();
+                    }
                 }
 
                 $redirectFilters = [];
@@ -960,6 +1045,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         if (in_array('phone', $allowedFields)) {
                             $updateFields[] = 'phone = ?';
                             $updateValues[] = $phone ?: null;
+                            
+                            // تحديث أرقام الهواتف في جدول customer_phones
+                            $phones = $_POST['phones'] ?? [];
+                            if (is_array($phones) && !empty($phones)) {
+                                // حذف الأرقام القديمة
+                                $db->execute("DELETE FROM customer_phones WHERE customer_id = ?", [$customerId]);
+                                
+                                // إضافة الأرقام الجديدة
+                                $firstPhone = true;
+                                foreach ($phones as $phoneNumber) {
+                                    $phoneNumber = trim($phoneNumber);
+                                    if (!empty($phoneNumber)) {
+                                        $db->execute(
+                                            "INSERT INTO customer_phones (customer_id, phone, is_primary) VALUES (?, ?, ?)",
+                                            [$customerId, $phoneNumber, $firstPhone ? 1 : 0]
+                                        );
+                                        $firstPhone = false;
+                                    }
+                                }
+                            } elseif (!empty($phone)) {
+                                // إذا لم تكن هناك أرقام متعددة، احفظ الرقم الواحد
+                                $db->execute("DELETE FROM customer_phones WHERE customer_id = ?", [$customerId]);
+                                $db->execute(
+                                    "INSERT INTO customer_phones (customer_id, phone, is_primary) VALUES (?, ?, ?)",
+                                    [$customerId, $phone, 1]
+                                );
+                            }
                         }
                         
                         if (in_array('address', $allowedFields)) {
@@ -1138,11 +1250,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $customerValues
                 );
 
-                logAudit($currentUser['id'], 'add_customer', 'customer', $result['insert_id'], null, [
+                $customerId = (int)$result['insert_id'];
+                
+                // حفظ أرقام الهواتف المتعددة
+                $phones = $_POST['phones'] ?? [];
+                if (is_array($phones) && !empty($phones)) {
+                    $firstPhone = true;
+                    foreach ($phones as $phoneNumber) {
+                        $phoneNumber = trim($phoneNumber);
+                        if (!empty($phoneNumber)) {
+                            $db->execute(
+                                "INSERT INTO customer_phones (customer_id, phone, is_primary) VALUES (?, ?, ?)",
+                                [$customerId, $phoneNumber, $firstPhone ? 1 : 0]
+                            );
+                            $firstPhone = false;
+                        }
+                    }
+                } elseif (!empty($phone)) {
+                    // إذا لم تكن هناك أرقام متعددة، احفظ الرقم الواحد في جدول customer_phones
+                    $db->execute(
+                        "INSERT INTO customer_phones (customer_id, phone, is_primary) VALUES (?, ?, ?)",
+                        [$customerId, $phone, 1]
+                    );
+                }
+
+                logAudit($currentUser['id'], 'add_customer', 'customer', $customerId, null, [
                     'name' => $name
                 ]);
 
                 $_SESSION['success_message'] = 'تم إضافة العميل بنجاح';
+                
+                // مسح الكاش بعد إضافة العميل
+                if (class_exists('Cache')) {
+                    Cache::flush();
+                }
 
                 $redirectFilters = [];
                 if (!empty($section)) {
@@ -1403,9 +1544,16 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
         <i class="bi bi-people me-2"></i><?php echo $isSalesUser ? 'عملائي' : 'العملاء'; ?>
     </h2>
     <?php if ($section === 'company'): ?>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
-        <i class="bi bi-person-plus me-2"></i>إضافة عميل جديد
-    </button>
+    <div class="d-flex gap-2">
+        <?php if (in_array($currentRole, ['manager', 'accountant'], true)): ?>
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#importCustomersModal">
+            <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد من CSV
+        </button>
+        <?php endif; ?>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
+            <i class="bi bi-person-plus me-2"></i>إضافة عميل جديد
+        </button>
+    </div>
     <?php endif; ?>
 </div>
 
@@ -4380,6 +4528,113 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+
+    // معالج استيراد العملاء من Excel
+    var importCustomersForm = document.getElementById('importCustomersForm');
+    var importCustomersModal = document.getElementById('importCustomersModal');
+    
+    if (importCustomersForm) {
+        importCustomersForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            var fileInput = document.getElementById('excelFileInput');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                alert('يرجى اختيار ملف Excel');
+                return;
+            }
+            
+            var file = fileInput.files[0];
+            if (file.size > 10 * 1024 * 1024) {
+                alert('حجم الملف يجب ألا يتجاوز 10 ميجابايت');
+                return;
+            }
+            
+            var formData = new FormData();
+            formData.append('excel_file', file);
+            formData.append('action', 'import_customers');
+            
+            // إظهار شريط التقدم
+            var progressDiv = document.getElementById('importProgress');
+            var progressBar = progressDiv.querySelector('.progress-bar');
+            var statusDiv = document.getElementById('importStatus');
+            var resultsDiv = document.getElementById('importResults');
+            var errorsDiv = document.getElementById('importErrors');
+            var submitBtn = document.getElementById('importSubmitBtn');
+            
+            progressDiv.classList.remove('d-none');
+            resultsDiv.classList.add('d-none');
+            errorsDiv.classList.add('d-none');
+            progressBar.style.width = '0%';
+            statusDiv.textContent = 'جاري رفع الملف...';
+            submitBtn.disabled = true;
+            
+            fetch('<?php echo getRelativeUrl("api/import_customers.php"); ?>', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            })
+            .then(response => response.json())
+            .then(data => {
+                progressBar.style.width = '100%';
+                
+                if (data.success) {
+                    statusDiv.textContent = 'تم الاستيراد بنجاح!';
+                    statusDiv.className = 'text-center text-success';
+                    
+                    var resultsContent = document.getElementById('importResultsContent');
+                    var html = '<ul class="mb-0">';
+                    html += '<li>تم استيراد: <strong>' + (data.imported || 0) + '</strong> عميل</li>';
+                    if (data.skipped && data.skipped > 0) {
+                        html += '<li>تم تخطي: <strong>' + data.skipped + '</strong> عميل (مكرر)</li>';
+                    }
+                    if (data.errors && data.errors.length > 0) {
+                        html += '<li>أخطاء: <strong>' + data.errors.length + '</strong> سطر</li>';
+                    }
+                    html += '</ul>';
+                    resultsContent.innerHTML = html;
+                    resultsDiv.classList.remove('d-none');
+                    
+                    // إعادة تحميل الصفحة بعد 2 ثانية
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    statusDiv.textContent = 'فشل الاستيراد';
+                    statusDiv.className = 'text-center text-danger';
+                    
+                    var errorsContent = document.getElementById('importErrorsContent');
+                    var html = '<p>' + (data.message || 'حدث خطأ أثناء الاستيراد') + '</p>';
+                    if (data.errors && data.errors.length > 0) {
+                        html += '<ul class="mb-0"><li>' + data.errors.join('</li><li>') + '</li></ul>';
+                    }
+                    errorsContent.innerHTML = html;
+                    errorsDiv.classList.remove('d-none');
+                }
+                
+                submitBtn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Import error:', error);
+                statusDiv.textContent = 'حدث خطأ في الاتصال بالخادم';
+                statusDiv.className = 'text-center text-danger';
+                errorsDiv.classList.remove('d-none');
+                document.getElementById('importErrorsContent').innerHTML = '<p>' + error.message + '</p>';
+                submitBtn.disabled = false;
+            });
+        });
+    }
+    
+    // إعادة تعيين النموذج عند إغلاق الـ Modal
+    if (importCustomersModal) {
+        importCustomersModal.addEventListener('hidden.bs.modal', function() {
+            if (importCustomersForm) {
+                importCustomersForm.reset();
+            }
+            document.getElementById('importProgress').classList.add('d-none');
+            document.getElementById('importResults').classList.add('d-none');
+            document.getElementById('importErrors').classList.add('d-none');
+        });
+    }
     
     // معالج تعديل العميل
     var editCustomerButtons = document.querySelectorAll('.edit-customer-btn');
@@ -4409,12 +4664,78 @@ document.addEventListener('DOMContentLoaded', function () {
                 var addressInput = document.getElementById('editCustomerAddress');
                 var regionInput = document.getElementById('editCustomerRegionId');
                 var balanceInput = document.getElementById('editCustomerBalance');
+                var editPhoneContainer = document.getElementById('editPhoneNumbersContainer');
                 
                 if (idInput) idInput.value = customerId;
                 if (nameInput) nameInput.value = customerName || '';
-                if (phoneInput) phoneInput.value = customerPhone;
                 if (addressInput) addressInput.value = customerAddress;
                 if (regionInput) regionInput.value = customerRegionId;
+                
+                // تحميل أرقام الهواتف المتعددة
+                if (editPhoneContainer) {
+                    editPhoneContainer.innerHTML = '';
+                    // جلب أرقام الهواتف من قاعدة البيانات عبر AJAX
+                    fetch('?action=get_customer_phones&customer_id=' + customerId)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.phones && data.phones.length > 0) {
+                                data.phones.forEach(function(phone, index) {
+                                    var phoneGroup = document.createElement('div');
+                                    phoneGroup.className = 'input-group mb-2';
+                                    phoneGroup.innerHTML = `
+                                        <input type="text" class="form-control phone-input" name="phones[]" value="${phone}" placeholder="مثال: 01234567890">
+                                        <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    `;
+                                    editPhoneContainer.appendChild(phoneGroup);
+                                });
+                            } else if (customerPhone) {
+                                // إذا لم تكن هناك أرقام في customer_phones، استخدم الرقم القديم
+                                var phoneGroup = document.createElement('div');
+                                phoneGroup.className = 'input-group mb-2';
+                                phoneGroup.innerHTML = `
+                                    <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                `;
+                                editPhoneContainer.appendChild(phoneGroup);
+                            } else {
+                                // إضافة حقل فارغ واحد
+                                var phoneGroup = document.createElement('div');
+                                phoneGroup.className = 'input-group mb-2';
+                                phoneGroup.innerHTML = `
+                                    <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                `;
+                                editPhoneContainer.appendChild(phoneGroup);
+                            }
+                            updateEditRemoveButtons();
+                        })
+                        .catch(error => {
+                            console.error('Error loading phones:', error);
+                            // في حالة الخطأ، استخدم الرقم القديم
+                            if (customerPhone) {
+                                var phoneGroup = document.createElement('div');
+                                phoneGroup.className = 'input-group mb-2';
+                                phoneGroup.innerHTML = `
+                                    <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                `;
+                                editPhoneContainer.appendChild(phoneGroup);
+                            }
+                            if (typeof updateEditRemoveButtons === 'function') {
+                                updateEditRemoveButtons();
+                            }
+                        });
+                } else if (phoneInput) {
+                    phoneInput.value = customerPhone;
+                }
                 if (balanceInput) balanceInput.value = customerBalance;
                 
                 try {
@@ -4661,7 +4982,31 @@ document.addEventListener('DOMContentLoaded', function () {
                         <?php foreach ($customers as $customer): ?>
                             <tr>
                                 <td><strong><?php echo htmlspecialchars($customer['name']); ?></strong></td>
-                                <td><?php echo htmlspecialchars($customer['phone'] ?? '-'); ?></td>
+                                <td>
+                                    <?php
+                                    // جلب أرقام الهواتف من جدول customer_phones
+                                    $customerPhones = $db->query(
+                                        "SELECT phone FROM customer_phones WHERE customer_id = ? ORDER BY is_primary DESC, id ASC",
+                                        [$customer['id']]
+                                    );
+                                    if (empty($customerPhones) && !empty($customer['phone'])) {
+                                        // إذا لم تكن هناك أرقام في customer_phones، استخدم الرقم القديم
+                                        $customerPhones = [['phone' => $customer['phone']]];
+                                    }
+                                    if (!empty($customerPhones)) {
+                                        foreach ($customerPhones as $phoneData) {
+                                            $phoneNumber = trim($phoneData['phone'] ?? '');
+                                            if (!empty($phoneNumber)) {
+                                                echo '<a href="tel:' . htmlspecialchars($phoneNumber) . '" class="btn btn-sm btn-outline-primary me-1 mb-1" title="اتصل بـ ' . htmlspecialchars($phoneNumber) . '">';
+                                                echo '<i class="bi bi-telephone-fill"></i> ';
+                                                echo '</a>';
+                                            }
+                                        }
+                                    } else {
+                                        echo '-';
+                                    }
+                                    ?>
+                                </td>
                                 <td>
                                     <?php
                                         $customerBalanceValue = isset($customer['balance']) ? (float) $customer['balance'] : 0.0;
@@ -4918,8 +5263,19 @@ document.addEventListener('DOMContentLoaded', function () {
                         <input type="text" class="form-control" name="name" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">رقم الهاتف</label>
-                        <input type="text" class="form-control" name="phone" placeholder="مثال: 01234567890">
+                        <label class="form-label">أرقام الهاتف</label>
+                        <div id="phoneNumbersContainer">
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="addPhoneBtn">
+                            <i class="bi bi-plus-circle"></i> إضافة رقم آخر
+                        </button>
+                        <input type="hidden" name="phone" value=""> <!-- للحفاظ على التوافق مع الكود القديم -->
                     </div>
                     <div class="mb-3">
                         <label class="form-label">ديون العميل / رصيد العميل</label>
@@ -4979,6 +5335,65 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
 </div>
 
+<!-- Modal استيراد العملاء من Excel -->
+<?php if (in_array($currentRole, ['manager', 'accountant'], true)): ?>
+<div class="modal fade" id="importCustomersModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-file-earmark-excel me-2"></i>استيراد العملاء من Excel
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="importCustomersForm" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>تعليمات الاستيراد:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>يجب أن يحتوي ملف Excel على الأعمدة التالية: <strong>اسم العميل</strong> (مطلوب)، <strong>رقم الهاتف</strong>، <strong>العنوان</strong>، <strong>الرصيد</strong></li>
+                            <li>يجب أن يكون الصف الأول هو رؤوس الأعمدة</li>
+                            <li>الملفات المدعومة: .xlsx, .xls</li>
+                            <li>سيتم تخطي العملاء المكررين (بناءً على الاسم ورقم الهاتف)</li>
+                        </ul>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">اختر ملف Excel <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" name="excel_file" id="excelFileInput" accept=".csv,.xlsx,.xls" required>
+                        <small class="text-muted">الحجم الأقصى: 10 ميجابايت</small>
+                    </div>
+                    <div id="importProgress" class="d-none">
+                        <div class="progress mb-3">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <div id="importStatus" class="text-center"></div>
+                    </div>
+                    <div id="importResults" class="d-none">
+                        <div class="alert alert-success">
+                            <h6><i class="bi bi-check-circle me-2"></i>تم الاستيراد بنجاح</h6>
+                            <div id="importResultsContent"></div>
+                        </div>
+                    </div>
+                    <div id="importErrors" class="d-none">
+                        <div class="alert alert-danger">
+                            <h6><i class="bi bi-exclamation-triangle me-2"></i>أخطاء أثناء الاستيراد</h6>
+                            <div id="importErrorsContent"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-success" id="importSubmitBtn">
+                        <i class="bi bi-upload me-2"></i>استيراد
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Modal تعديل عميل -->
 <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
 <div class="modal fade" id="editCustomerModal" tabindex="-1">
@@ -5008,8 +5423,19 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
                     <?php endif; ?>
                     <div class="mb-3">
-                        <label class="form-label">رقم الهاتف</label>
-                        <input type="text" class="form-control" name="phone" id="editCustomerPhone" placeholder="مثال: 01234567890">
+                        <label class="form-label">أرقام الهاتف</label>
+                        <div id="editPhoneNumbersContainer">
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="addEditPhoneBtn">
+                            <i class="bi bi-plus-circle"></i> إضافة رقم آخر
+                        </button>
+                        <input type="hidden" name="phone" id="editCustomerPhone" value="">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">العنوان</label>
@@ -5131,5 +5557,100 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     });
+})();
+
+// إدارة أرقام الهواتف المتعددة
+(function() {
+    // للنموذج الإضافة
+    const addPhoneBtn = document.getElementById('addPhoneBtn');
+    const phoneContainer = document.getElementById('phoneNumbersContainer');
+    
+    if (addPhoneBtn && phoneContainer) {
+        // إضافة رقم هاتف جديد
+        addPhoneBtn.addEventListener('click', function() {
+            const phoneInputGroup = document.createElement('div');
+            phoneInputGroup.className = 'input-group mb-2';
+            phoneInputGroup.innerHTML = `
+                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+            phoneContainer.appendChild(phoneInputGroup);
+            
+            // إظهار أزرار الحذف
+            updateRemoveButtons(phoneContainer);
+        });
+        
+        // حذف رقم هاتف
+        phoneContainer.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-phone-btn')) {
+                e.target.closest('.input-group').remove();
+                updateRemoveButtons(phoneContainer);
+            }
+        });
+    }
+    
+    // للنموذج التعديل
+    const addEditPhoneBtn = document.getElementById('addEditPhoneBtn');
+    const editPhoneContainer = document.getElementById('editPhoneNumbersContainer');
+    
+    if (addEditPhoneBtn && editPhoneContainer) {
+        // إضافة رقم هاتف جديد
+        addEditPhoneBtn.addEventListener('click', function() {
+            const phoneInputGroup = document.createElement('div');
+            phoneInputGroup.className = 'input-group mb-2';
+            phoneInputGroup.innerHTML = `
+                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+            editPhoneContainer.appendChild(phoneInputGroup);
+            
+            // إظهار أزرار الحذف
+            updateEditRemoveButtons();
+        });
+        
+        // حذف رقم هاتف
+        editPhoneContainer.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-phone-btn')) {
+                e.target.closest('.input-group').remove();
+                updateEditRemoveButtons();
+            }
+        });
+    }
+    
+    // تحديث حالة أزرار الحذف للنموذج الإضافة
+    function updateRemoveButtons(container) {
+        const phoneGroups = container.querySelectorAll('.input-group');
+        phoneGroups.forEach((group, index) => {
+            const removeBtn = group.querySelector('.remove-phone-btn');
+            if (removeBtn) {
+                removeBtn.style.display = phoneGroups.length > 1 ? 'block' : 'none';
+            }
+        });
+    }
+    
+    // تحديث حالة أزرار الحذف للنموذج التعديل
+    function updateEditRemoveButtons() {
+        if (editPhoneContainer) {
+            const phoneGroups = editPhoneContainer.querySelectorAll('.input-group');
+            phoneGroups.forEach((group, index) => {
+                const removeBtn = group.querySelector('.remove-phone-btn');
+                if (removeBtn) {
+                    removeBtn.style.display = phoneGroups.length > 1 ? 'block' : 'none';
+                }
+            });
+        }
+    }
+    
+    // جعل الدالة متاحة عالمياً
+    window.updateEditRemoveButtons = updateEditRemoveButtons;
+    
+    // تحديث عند التحميل
+    if (phoneContainer) {
+        updateRemoveButtons(phoneContainer);
+    }
 })();
 </script>

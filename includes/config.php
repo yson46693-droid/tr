@@ -9,11 +9,11 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
-define('DB_HOST', 'sql107.infinityfree.com');
+define('DB_HOST', 'localhost');
 define('DB_PORT', '3306');
-define('DB_USER', 'if0_40673233');
-define('DB_PASS', 'Osama744');
-define('DB_NAME', 'if0_40673233_co_db');
+define('DB_USER', 'root');
+define('DB_PASS', '');
+define('DB_NAME', '1');
 
 // إعدادات المنطقة الزمنية - مصر/القاهرة
 date_default_timezone_set('Africa/Cairo');
@@ -54,11 +54,30 @@ define('DATETIME_FORMAT', 'd/m/Y g:i A');
 
 // إعدادات الجلسة - 7 أيام (604800 ثانية)
 define('SESSION_LIFETIME', 3600 * 24 * 7); // 7 أيام
-ini_set('session.gc_maxlifetime', SESSION_LIFETIME);
-ini_set('session.cookie_lifetime', SESSION_LIFETIME);
-// إعدادات إضافية لتحسين استقرار الجلسات
-ini_set('session.gc_probability', 1);
-ini_set('session.gc_divisor', 1000); // تنظيف الجلسات القديمة بنسبة 0.1%
+
+// إعدادات timeout لمنع توقف الخادم
+// زيادة timeout للطلبات الطويلة (مثل keep-alive)
+if (!ini_get('max_execution_time') || ini_get('max_execution_time') < 60) {
+    @ini_set('max_execution_time', 60); // 60 ثانية للطلبات العادية
+}
+if (!ini_get('max_input_time') || ini_get('max_input_time') < 60) {
+    @ini_set('max_input_time', 60); // 60 ثانية لمعالجة المدخلات
+}
+// إعدادات timeout للاتصال بقاعدة البيانات
+// تقليل timeout لتجنب التعليق
+if (!ini_get('default_socket_timeout') || ini_get('default_socket_timeout') > 10) {
+    @ini_set('default_socket_timeout', 5); // 5 ثواني للاتصال بقاعدة البيانات (مخفض)
+}
+
+// إعدادات الجلسة - يجب تعيينها قبل بدء الجلسة
+// التحقق من حالة الجلسة قبل محاولة تغيير الإعدادات
+if (session_status() === PHP_SESSION_NONE) {
+    ini_set('session.gc_maxlifetime', SESSION_LIFETIME);
+    ini_set('session.cookie_lifetime', SESSION_LIFETIME);
+    // إعدادات إضافية لتحسين استقرار الجلسات
+    ini_set('session.gc_probability', 1);
+    ini_set('session.gc_divisor', 1000); // تنظيف الجلسات القديمة بنسبة 0.1%
+}
 
 $isHttps = (
     (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
@@ -373,6 +392,27 @@ ini_set('display_errors', 1);
 mb_internal_encoding('UTF-8');
 mb_http_output('UTF-8');
 
+/**
+ * دالة مساعدة لمسح الكاش بعد العمليات بشكل فوري
+ * يمكن استدعاؤها من أي مكان لضمان ظهور النتائج بشكل لحظي
+ * يتم المسح فوراً بدون انتظار لضمان التحديث الفوري
+ */
+function clearCache() {
+    if (file_exists(__DIR__ . '/cache.php')) {
+        require_once __DIR__ . '/cache.php';
+        if (class_exists('Cache')) {
+            try {
+                // مسح الكاش فوراً بشكل متزامن
+                Cache::flush();
+            } catch (Exception $e) {
+                error_log("Cache flush error: " . $e->getMessage());
+            } catch (Throwable $e) {
+                error_log("Cache flush error (Throwable): " . $e->getMessage());
+            }
+        }
+    }
+}
+
 // دالة مساعدة للحصول على اللغة الحالية
 function getCurrentLanguage() {
     return $_SESSION['language'] ?? DEFAULT_LANGUAGE;
@@ -549,11 +589,13 @@ function preventDuplicateSubmission($successMessage = null, $redirectParams = []
     // إذا كانت هناك رسالة نجاح، حفظها في session
     if ($successMessage !== null && $successMessage !== '') {
         $_SESSION['success_message'] = $successMessage;
+        error_log("preventDuplicateSubmission: Saved success message to session: " . $successMessage);
     }
     
     // إذا كانت هناك رسالة خطأ، حفظها في session
     if ($errorMessage !== null && $errorMessage !== '') {
         $_SESSION['error_message'] = $errorMessage;
+        error_log("preventDuplicateSubmission: Saved error message to session: " . $errorMessage);
     }
     
     // بناء URL إعادة التوجيه
@@ -588,18 +630,49 @@ function preventDuplicateSubmission($successMessage = null, $redirectParams = []
         }
     }
     
-    // إضافة cache-busting parameter لضمان تحديث الصفحة بعد إنشاء/تحديث البيانات
+    // إضافة cache-busting parameters لضمان تحديث الصفحة بعد إنشاء/تحديث البيانات
     // هذا يمنع المتصفح من عرض نسخة قديمة من الصفحة
     $separator = (strpos($redirectUrl, '?') !== false) ? '&' : '?';
-    $redirectUrl .= $separator . '_t=' . time();
+    $timestamp = time();
     
-    // إذا لم يكن الرابط مطلقاً، تأكد من أنه يبدأ بشرطة مائلة
+    // إذا كان _v موجود في redirectParams، استخدمه، وإلا أضف _t و _v جديدين
+    if (isset($redirectParams['_v'])) {
+        $redirectUrl .= $separator . '_v=' . $redirectParams['_v'] . '&_t=' . $redirectParams['_v'];
+    } else {
+        $redirectUrl .= $separator . '_v=' . $timestamp . '&_t=' . $timestamp;
+    }
+    
+    // تنظيف شامل: إزالة أي بروتوكول أو hostname أو منفذ من redirectUrl
+    // 1. إزالة أي بروتوكول كامل مع hostname ومنفذ
+    $redirectUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $redirectUrl);
+    $redirectUrl = preg_replace('/^\/\//', '/', $redirectUrl);
+    
+    // 2. إزالة أي hostname مع منفذ إذا كان موجوداً
+    if (preg_match('/^\/[^\/]+:[0-9]+\//', $redirectUrl)) {
+        $redirectUrl = preg_replace('/^\/[^\/]+:[0-9]+/', '', $redirectUrl);
+    }
+    
+    // 3. التأكد من أن المسار نسبي فقط (يبدأ بـ /)
     if (!preg_match('/^https?:\/\//i', $redirectUrl)) {
         // استخدام substr بدلاً من str_starts_with للتوافق مع PHP < 8.0
         if (substr($redirectUrl, 0, 1) !== '/') {
             $redirectUrl = '/' . ltrim($redirectUrl, '/');
         }
+    } else {
+        // إذا كان لا يزال يحتوي على بروتوكول، استخراج المسار فقط
+        $parsed = parse_url($redirectUrl);
+        $redirectUrl = $parsed['path'] ?? '/';
+        if (!empty($parsed['query'])) {
+            $redirectUrl .= '?' . $parsed['query'];
+        }
     }
+    
+    // 4. إزالة أي منفذ من المسار (للاحتياط)
+    $redirectUrl = preg_replace('/:[0-9]+\//', '/', $redirectUrl);
+    $redirectUrl = preg_replace('/:[0-9]+$/', '', $redirectUrl);
+    
+    // 5. تنظيف نهائي
+    $redirectUrl = preg_replace('/\/+/', '/', $redirectUrl);
     
     // إضافة headers لمنع caching عند إعادة التوجيه
     header('Cache-Control: no-cache, no-store, must-revalidate, max-age=0');
@@ -628,9 +701,19 @@ function preventDuplicateSubmission($successMessage = null, $redirectParams = []
  * @return string|null رسالة النجاح أو null
  */
 function getSuccessMessage() {
+    // استخدام request ID لمنع قراءة الرسالة مرتين في نفس الطلب
+    $requestId = $_SERVER['REQUEST_TIME_FLOAT'] . '_' . (session_id() ?: 'nosession');
+    
+    if (isset($_SESSION['success_message_read_request_id']) && 
+        $_SESSION['success_message_read_request_id'] === $requestId) {
+        // تم قراءة الرسالة بالفعل في هذا الطلب
+        return null;
+    }
+    
     if (isset($_SESSION['success_message'])) {
         $message = $_SESSION['success_message'];
         unset($_SESSION['success_message']);
+        $_SESSION['success_message_read_request_id'] = $requestId; // وضع flag أن الرسالة تم قراءتها
         return $message;
     }
     return null;
@@ -643,9 +726,19 @@ function getSuccessMessage() {
  * @return string|null رسالة الخطأ أو null
  */
 function getErrorMessage() {
+    // استخدام request ID لمنع قراءة الرسالة مرتين في نفس الطلب
+    $requestId = $_SERVER['REQUEST_TIME_FLOAT'] . '_' . (session_id() ?: 'nosession');
+    
+    if (isset($_SESSION['error_message_read_request_id']) && 
+        $_SESSION['error_message_read_request_id'] === $requestId) {
+        // تم قراءة الرسالة بالفعل في هذا الطلب
+        return null;
+    }
+    
     if (isset($_SESSION['error_message'])) {
         $message = $_SESSION['error_message'];
         unset($_SESSION['error_message']);
+        $_SESSION['error_message_read_request_id'] = $requestId; // وضع flag أن الرسالة تم قراءتها
         return $message;
     }
     return null;

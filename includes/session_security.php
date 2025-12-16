@@ -62,42 +62,29 @@ function initSecureSession() {
                 $isKeepAliveRequest = true;
             }
             
-            // إذا كان هناك وقت آخر نشاط سابق، نفحصه
-            if (isset($_SESSION['last_activity_previous'])) {
-                $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
-                // منع حذف الجلسة نهائياً - تحديثها بدلاً من حذفها
-                if ($timeSinceActivity > $timeout && !$isKeepAliveRequest && !$isProtectedPage) {
-                    // بدلاً من حذف الجلسة، نحدثها فقط لمنع انتهاء الجلسة
-                    error_log("Session timeout detected but extending instead of destroying: time since activity = {$timeSinceActivity} seconds");
-                    $_SESSION['last_activity'] = time();
-                    $_SESSION['last_activity_previous'] = time();
-                    // تحديث session cookie أيضاً
-                    if (!headers_sent() && session_id()) {
-                        $isHttps = (
-                            (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-                            (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
-                        );
-                        setcookie(session_name(), session_id(), [
-                            'expires' => time() + $sessionLifetime,
-                            'path' => '/',
-                            'domain' => '',
-                            'secure' => $isHttps,
-                            'httponly' => true,
-                            'samesite' => $isHttps ? 'None' : 'Lax',
-                        ]);
-                    }
-                } else {
-                    // تحديث آخر نشاط
-                    $_SESSION['last_activity'] = time();
-                    // تحديث previous فقط إذا لم يكن keep-alive request
-                    if (!$isKeepAliveRequest) {
-                        $_SESSION['last_activity_previous'] = time();
-                    }
-                }
-            } else {
-                // لا يوجد وقت سابق - نعتبر الجلسة جديدة ونحفظ الوقت الحالي
-                $_SESSION['last_activity'] = time();
+            // تعطيل فحص timeout - لا نهي الجلسة أبداً بناءً على الخمول
+            // تحديث آخر نشاط دائماً
+            $_SESSION['last_activity'] = time();
+            if (!$isKeepAliveRequest) {
                 $_SESSION['last_activity_previous'] = time();
+            } elseif (!isset($_SESSION['last_activity_previous'])) {
+                $_SESSION['last_activity_previous'] = time();
+            }
+            
+            // تحديث session cookie دائماً لضمان بقاء الجلسة صالحة
+            if (!headers_sent() && session_id()) {
+                $isHttps = (
+                    (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+                    (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
+                );
+                setcookie(session_name(), session_id(), [
+                    'expires' => time() + $sessionLifetime,
+                    'path' => '/',
+                    'domain' => '',
+                    'secure' => $isHttps,
+                    'httponly' => true,
+                    'samesite' => $isHttps ? 'None' : 'Lax',
+                ]);
             }
         } else {
             // المستخدم غير مسجل دخول - فقط تحديث آخر نشاط
@@ -197,44 +184,29 @@ function initSecureSession() {
                 $isKeepAliveRequest = true;
             }
             
-            // التحقق فقط إذا كان هناك وقت آخر نشاط سابق
-            if (isset($_SESSION['last_activity_previous'])) {
-                $timeSinceActivity = time() - $_SESSION['last_activity_previous'];
-                
-                // فقط في حالة عدم وجود keep-alive request ومرور وقت كبير جداً
-                // نمنع حذف الجلسة نهائياً ونحدثها بدلاً من ذلك
-                if ($timeSinceActivity > $timeout && !$isKeepAliveRequest && !$isProtectedPage) {
-                    // بدلاً من حذف الجلسة، نحدثها فقط
-                    error_log("Session timeout detected but extending instead of destroying: time since activity = {$timeSinceActivity} seconds");
-                    $_SESSION['last_activity'] = time();
-                    $_SESSION['last_activity_previous'] = time();
-                    // تحديث session cookie أيضاً
-                    if (!headers_sent() && session_id()) {
-                        $isHttps = (
-                            (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-                            (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
-                        );
-                        setcookie(session_name(), session_id(), [
-                            'expires' => time() + $sessionLifetime,
-                            'path' => '/',
-                            'domain' => '',
-                            'secure' => $isHttps,
-                            'httponly' => true,
-                            'samesite' => $isHttps ? 'None' : 'Lax',
-                        ]);
-                    }
-                } else {
-                    // تحديث آخر نشاط
-                    $_SESSION['last_activity'] = time();
-                    // تحديث previous فقط إذا لم يكن keep-alive request (لتجنب التحديث المستمر)
-                    if (!$isKeepAliveRequest) {
-                        $_SESSION['last_activity_previous'] = time();
-                    }
-                }
-            } else {
-                // لا يوجد وقت سابق - نعتبر الجلسة جديدة ونحفظ الوقت الحالي
-                $_SESSION['last_activity'] = time();
+            // تعطيل فحص timeout - لا نهي الجلسة أبداً بناءً على الخمول
+            // تحديث آخر نشاط دائماً
+            $_SESSION['last_activity'] = time();
+            if (!$isKeepAliveRequest) {
                 $_SESSION['last_activity_previous'] = time();
+            } elseif (!isset($_SESSION['last_activity_previous'])) {
+                $_SESSION['last_activity_previous'] = time();
+            }
+            
+            // تحديث session cookie دائماً لضمان بقاء الجلسة صالحة
+            if (!headers_sent() && session_id()) {
+                $isHttps = (
+                    (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+                    (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
+                );
+                setcookie(session_name(), session_id(), [
+                    'expires' => time() + $sessionLifetime,
+                    'path' => '/',
+                    'domain' => '',
+                    'secure' => $isHttps,
+                    'httponly' => true,
+                    'samesite' => $isHttps ? 'None' : 'Lax',
+                ]);
             }
         } else {
             // المستخدم غير مسجل دخول - فقط تحديث آخر نشاط

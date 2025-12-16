@@ -1887,7 +1887,7 @@ function approveReturn(int $returnId, ?int $approvedBy = null, ?string $notes = 
         $db->beginTransaction();
         
         try {
-            // 1. تحديث حالة المرتجع إلى approved
+            // 1. تحديث حالة المرتجع إلى approved - التأكد من حفظ البيانات مباشرة في قاعدة البيانات
             $updateResult = $db->execute(
                 "UPDATE returns SET status = 'approved', approved_by = ?, approved_at = NOW(), notes = ? WHERE id = ?",
                 [$approvedBy, $notes ?: null, $returnId]
@@ -1895,6 +1895,11 @@ function approveReturn(int $returnId, ?int $approvedBy = null, ?string $notes = 
             
             if (($updateResult['affected_rows'] ?? 0) === 0) {
                 throw new RuntimeException('فشل تحديث حالة المرتجع إلى approved');
+            }
+            
+            // التأكد من حفظ التغييرات في قاعدة البيانات
+            if (method_exists($db->getConnection(), 'commit')) {
+                $db->getConnection()->commit();
             }
             
             error_log("Return {$returnId} status updated to 'approved', affected rows: " . ($updateResult['affected_rows'] ?? 0));

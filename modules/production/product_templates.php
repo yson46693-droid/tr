@@ -10,19 +10,55 @@ if (!defined('ACCESS_ALLOWED')) {
 mb_internal_encoding('UTF-8');
 mb_http_output('UTF-8');
 
-require_once __DIR__ . '/../../includes/config.php';
-require_once __DIR__ . '/../../includes/db.php';
-require_once __DIR__ . '/../../includes/auth.php';
-require_once __DIR__ . '/../../includes/path_helper.php';
-require_once __DIR__ . '/../../includes/audit_log.php';
-require_once __DIR__ . '/../../includes/production_helper.php';
+// تحميل الملفات الأساسية فقط إذا لم تكن محملة بالفعل
+// عند التحميل من dashboard/manager.php، هذه الملفات موجودة بالفعل
+if (!function_exists('db')) {
+    require_once __DIR__ . '/../../includes/config.php';
+    require_once __DIR__ . '/../../includes/db.php';
+}
+if (!function_exists('getCurrentUser')) {
+    require_once __DIR__ . '/../../includes/auth.php';
+}
+if (!function_exists('getBasePath')) {
+    require_once __DIR__ . '/../../includes/path_helper.php';
+}
+if (!function_exists('logAudit')) {
+    require_once __DIR__ . '/../../includes/audit_log.php';
+}
+if (!function_exists('ensureProductTemplatesExtendedSchema')) {
+    require_once __DIR__ . '/../../includes/production_helper.php';
+}
 
-requireRole(['production', 'manager']);
+// التحقق من الصلاحيات فقط إذا لم يتم التحقق بالفعل
+// عند التحميل من dashboard/manager.php، تم التحقق بالفعل بواسطة requireRole(['manager', 'accountant'])
+// لذلك نتخطى التحقق هنا لتجنب التضارب
 
-$currentUser = getCurrentUser();
-$db = db();
-$error = '';
-$success = '';
+// الحصول على المستخدم الحالي وقاعدة البيانات - تعيد استخدام المتغيرات الموجودة إن وجدت
+// عند التحميل من dashboard/manager.php، $currentUser و $db موجودان بالفعل
+if (!isset($currentUser)) {
+    if (function_exists('getCurrentUser')) {
+        $currentUser = getCurrentUser();
+    }
+}
+if (!isset($db)) {
+    if (function_exists('db')) {
+        $db = db();
+    }
+}
+
+// التأكد من وجود المتغيرات المطلوبة
+if (!isset($currentUser) || !isset($db)) {
+    error_log('product_templates.php: Missing required variables - currentUser: ' . (isset($currentUser) ? 'set' : 'NOT SET') . ', db: ' . (isset($db) ? 'set' : 'NOT SET'));
+    // لا نوقف التنفيذ لأن هذا قد يسبب مشاكل، بل نترك الملف يحاول الاستمرار
+}
+
+// تهيئة المتغيرات فقط إذا لم تكن موجودة
+if (!isset($error)) {
+    $error = '';
+}
+if (!isset($success)) {
+    $success = '';
+}
 
 // معالجة AJAX requests
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'template_details' && isset($_GET['template_id'])) {
@@ -138,13 +174,29 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'template_details' && isset($_GET[
 }
 
 // الحصول على رسالة النجاح من session (بعد redirect)
-$sessionSuccess = getSuccessMessage();
-if ($sessionSuccess) {
-    $success = $sessionSuccess;
+if (function_exists('getSuccessMessage')) {
+    $sessionSuccess = getSuccessMessage();
+    if ($sessionSuccess) {
+        $success = $sessionSuccess;
+    }
 }
 
-ensureProductTemplatesExtendedSchema($db);
-syncAllUnifiedTemplatesToProductTemplates($db);
+// استدعاء دوال الإعداد فقط إذا كانت موجودة
+if (function_exists('ensureProductTemplatesExtendedSchema') && isset($db)) {
+    try {
+        ensureProductTemplatesExtendedSchema($db);
+    } catch (Exception $e) {
+        error_log('Error in ensureProductTemplatesExtendedSchema: ' . $e->getMessage());
+    }
+}
+
+if (function_exists('syncAllUnifiedTemplatesToProductTemplates') && isset($db)) {
+    try {
+        syncAllUnifiedTemplatesToProductTemplates($db);
+    } catch (Exception $e) {
+        error_log('Error in syncAllUnifiedTemplatesToProductTemplates: ' . $e->getMessage());
+    }
+}
 
 // إنشاء الجداول إذا لم تكن موجودة
 try {

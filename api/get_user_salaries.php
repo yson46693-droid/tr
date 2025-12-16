@@ -119,8 +119,8 @@ try {
     // ملاحظة: نستخدم COALESCE للتعامل مع القيم NULL
     $query = "SELECT s.*, 
                      COALESCE(s.accumulated_amount, s.total_amount, 0) as calculated_accumulated,
-                     COALESCE(s.paid_amount, 0) as paid_amount,
-                     (COALESCE(s.accumulated_amount, s.total_amount, 0) - COALESCE(s.paid_amount, 0)) as remaining,
+                     COALESCE(s.settlements_advances, 0) as settlements_advances,
+                     (COALESCE(s.accumulated_amount, s.total_amount, 0) - COALESCE(s.settlements_advances, 0)) as remaining,
                      s.id as salary_id";
     
     // بناء الاستعلام بناءً على نوع عمود month أولاً
@@ -422,13 +422,15 @@ try {
         );
         
         $accumulated = $accumulatedData['accumulated'];
-        $paid = floatval($salary['paid_amount'] ?? 0);
-        $remaining = max(0, $accumulated - $paid);
+        // حساب المتبقي بناءً على التسويات والسلف (settlements_advances) وليس paid_amount
+        // لتجنب المضاعفة لأن التسويات تُسجل في settlements_advances (مطابق لبطاقة الموظف)
+        $settlementsAdvances = cleanFinancialValue($salary['settlements_advances'] ?? 0);
+        $remaining = max(0, $accumulated - $settlementsAdvances);
         
         // تسجيل للتشخيص (يمكن حذفه لاحقاً)
         error_log(sprintf(
-            'get_user_salaries.php: salary_id=%d, user_id=%d, month=%d, year=%d, baseAmount=%.2f, bonus=%.2f, collectionsBonus=%.2f, deductions=%.2f, currentTotal=%.2f, dbTotalAmount=%.2f, accumulated=%.2f, paid=%.2f, remaining=%.2f',
-            $salaryId, $userId, $month, $year, $baseAmount, $bonus, $collectionsBonus, $deductions, $currentTotal, $dbTotalAmount, $accumulated, $paid, $remaining
+            'get_user_salaries.php: salary_id=%d, user_id=%d, month=%d, year=%d, baseAmount=%.2f, bonus=%.2f, collectionsBonus=%.2f, deductions=%.2f, currentTotal=%.2f, dbTotalAmount=%.2f, accumulated=%.2f, settlementsAdvances=%.2f, remaining=%.2f',
+            $salaryId, $userId, $month, $year, $baseAmount, $bonus, $collectionsBonus, $deductions, $currentTotal, $dbTotalAmount, $accumulated, $settlementsAdvances, $remaining
         ));
         
         // عرض جميع الرواتب حتى لو كان المتبقي صفر (لإتاحة التسوية الكاملة)
@@ -484,7 +486,7 @@ try {
                     'month_label' => $monthLabel,
                     'total_amount' => $currentTotal,
                     'accumulated_amount' => $accumulated,
-                    'paid_amount' => $paid,
+                    'settlements_advances' => $settlementsAdvances,
                     'remaining' => $remaining,
                     'status' => $salary['status'] ?? 'calculated'
                 ];
@@ -498,7 +500,7 @@ try {
                 'month_label' => $monthLabel,
                 'total_amount' => $currentTotal,
                 'accumulated_amount' => $accumulated,
-                'paid_amount' => $paid,
+                'settlements_advances' => $settlementsAdvances,
                 'remaining' => $remaining,
                 'status' => $salary['status'] ?? 'calculated'
             ];

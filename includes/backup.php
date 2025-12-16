@@ -101,6 +101,43 @@ function createDatabaseBackup($backupType = 'daily', $userId = null) {
         deleteOldBackups($backupType, $maxBackupsToKeep);
         enforceBackupLimit($maxBackupsToKeep);
 
+        // إرسال النسخة الاحتياطية عبر تليجرام للنسخ اليدوية (إن كان تليجرام مُعد)
+        if ($backupType === 'manual') {
+            try {
+                if (file_exists(__DIR__ . '/simple_telegram.php')) {
+                    require_once __DIR__ . '/simple_telegram.php';
+                    
+                    if (function_exists('isTelegramConfigured') && isTelegramConfigured() && function_exists('sendTelegramFile')) {
+                        $captionLines = [
+                            '🗃️ نسخة احتياطية يدوية',
+                            'التاريخ: ' . date('Y-m-d H:i:s'),
+                            'الملف: ' . $filename,
+                            'الحجم: ' . formatFileSize($finalFileSize)
+                        ];
+                        if ($userId) {
+                            try {
+                                $user = $db->queryOne("SELECT username FROM users WHERE id = ?", [$userId]);
+                                if ($user && !empty($user['username'])) {
+                                    $captionLines[] = 'أنشأها: ' . $user['username'];
+                                }
+                            } catch (Exception $e) {
+                                // تجاهل خطأ جلب اسم المستخدم
+                            }
+                        }
+                        $caption = implode("\n", $captionLines);
+                        
+                        $sendResult = sendTelegramFile($filePath, $caption);
+                        if ($sendResult === false) {
+                            error_log('Failed to send manual backup to Telegram: ' . $filename);
+                        }
+                    }
+                }
+            } catch (Exception $telegramError) {
+                // لا نريد أن نفشل إنشاء النسخة الاحتياطية إذا فشل الإرسال عبر تليجرام
+                error_log('Error sending manual backup to Telegram: ' . $telegramError->getMessage());
+            }
+        }
+
         return [
             'success' => true,
             'filename' => $filename,
@@ -277,44 +314,85 @@ function restoreDatabase($backupId) {
         }
 
         $connection = getDB();
+        if (!$connection) {
+            throw new Exception('فشل الاتصال بقاعدة البيانات');
+        }
+        
         $connection->set_charset('utf8mb4');
 
         $connection->autocommit(false);
         $connection->query('SET FOREIGN_KEY_CHECKS = 0');
         $connection->query('SET UNIQUE_CHECKS = 0');
+        $connection->query('SET SQL_MODE = ""');
 
+        $executedCount = 0;
+        $skippedCount = 0;
+        
         try {
-            foreach ($statements as $statement) {
-                $normalized = strtoupper(ltrim($statement));
-                if ($normalized === '' || $normalized === ';') {
+            foreach ($statements as $index => $statement) {
+                $statement = trim($statement);
+                if (empty($statement) || $statement === ';') {
+                    $skippedCount++;
                     continue;
                 }
 
+                $normalized = strtoupper(ltrim($statement));
+                
+                // تخطي التعليقات والبيانات الوصفية
+                if (
+                    strpos($normalized, '--') === 0 ||
+                    strpos($normalized, '/*') === 0 ||
+                    strpos($normalized, '#') === 0
+                ) {
+                    $skippedCount++;
+                    continue;
+                }
+
+                // تخطي أوامر الإدارة
                 if (
                     strpos($normalized, 'START TRANSACTION') === 0 ||
                     strpos($normalized, 'COMMIT') === 0 ||
                     strpos($normalized, 'ROLLBACK') === 0 ||
                     strpos($normalized, 'SET AUTOCOMMIT') === 0 ||
                     strpos($normalized, 'LOCK TABLES') === 0 ||
-                    strpos($normalized, 'UNLOCK TABLES') === 0
+                    strpos($normalized, 'UNLOCK TABLES') === 0 ||
+                    strpos($normalized, 'SET NAMES') === 0 ||
+                    strpos($normalized, 'SET CHARACTER SET') === 0 ||
+                    strpos($normalized, 'SET FOREIGN_KEY_CHECKS') === 0 ||
+                    strpos($normalized, 'SET UNIQUE_CHECKS') === 0 ||
+                    strpos($normalized, 'SET SQL_MODE') === 0 ||
+                    strpos($normalized, 'DELIMITER') === 0
                 ) {
+                    $skippedCount++;
                     continue;
                 }
 
+                // تنفيذ الاستعلام
                 if ($connection->query($statement) === false) {
                     $error = $connection->error ?: 'خطأ غير معروف أثناء تنفيذ الاستعلام';
-                    throw new Exception($error);
+                    $errorCode = $connection->errno ?: 0;
+                    throw new Exception("خطأ في الاستعلام #" . ($index + 1) . ": " . $error . " (كود الخطأ: " . $errorCode . ")");
                 }
+                
+                $executedCount++;
             }
 
             $connection->commit();
         } catch (Exception $executionError) {
-            $connection->rollback();
+            try {
+                $connection->rollback();
+            } catch (Exception $rollbackError) {
+                error_log('Failed to rollback: ' . $rollbackError->getMessage());
+            }
             throw $executionError;
         } finally {
-            $connection->query('SET FOREIGN_KEY_CHECKS = 1');
-            $connection->query('SET UNIQUE_CHECKS = 1');
-            $connection->autocommit(true);
+            try {
+                $connection->query('SET FOREIGN_KEY_CHECKS = 1');
+                $connection->query('SET UNIQUE_CHECKS = 1');
+                $connection->autocommit(true);
+            } catch (Exception $cleanupError) {
+                error_log('Failed to restore database settings: ' . $cleanupError->getMessage());
+            }
         }
 
         return [

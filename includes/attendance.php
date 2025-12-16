@@ -154,6 +154,17 @@ function resolveAttendanceMonthParts($month, ?int $year = null): array
  */
 function calculateMonthlyDelaySummary(int $userId, $month, ?int $year = null): array
 {
+    if (!$userId || $userId <= 0 || !is_numeric($userId)) {
+        return [
+            'total_minutes' => 0,
+            'average_minutes' => 0.0,
+            'delay_days' => 0,
+            'attendance_days' => 0,
+            'details' => []
+        ];
+    }
+    
+    $userId = (int)$userId;
     $db = db();
     $parts = resolveAttendanceMonthParts($month, $year);
     $monthKey = $parts['month_key'];
@@ -649,7 +660,7 @@ function canRequestAdvance($userId) {
 /**
  * تسجيل حضور مع صورة
  */
-function recordAttendanceCheckIn($userId, $photoBase64 = null) {
+function recordAttendanceCheckIn($userId, $photoBase64 = null, $delayReason = null) {
     $db = db();
     $now = date('Y-m-d H:i:s');
     $today = date('Y-m-d');
@@ -660,6 +671,16 @@ function recordAttendanceCheckIn($userId, $photoBase64 = null) {
     
     // حساب التأخير
     $delayMinutes = calculateDelay($now, $officialStart);
+    
+    // التحقق من وجود عمود delay_reason وإضافته إذا لم يكن موجوداً
+    $hasDelayReasonColumn = !empty($db->queryOne("SHOW COLUMNS FROM attendance_records LIKE 'delay_reason'"));
+    if (!$hasDelayReasonColumn) {
+        try {
+            $db->execute("ALTER TABLE attendance_records ADD COLUMN `delay_reason` text DEFAULT NULL AFTER `delay_minutes`");
+        } catch (Throwable $e) {
+            error_log('Error adding delay_reason column: ' . $e->getMessage());
+        }
+    }
     
     // إدراج تسجيل حضور جديد
     $savedPhotoAbsolute = null;
@@ -678,12 +699,30 @@ function recordAttendanceCheckIn($userId, $photoBase64 = null) {
     }
 
     $storedPhotoValue = $savedPhotoRelative ?? ($photoBase64 ? 'captured' : null);
+    
+    // تنظيف سبب التأخير (فقط إذا كان هناك تأخير)
+    $cleanDelayReason = null;
+    if ($delayMinutes > 0 && !empty(trim($delayReason))) {
+        $cleanDelayReason = trim($delayReason);
+    }
 
-    $result = $db->execute(
-        "INSERT INTO attendance_records (user_id, date, check_in_time, delay_minutes, photo_path, created_at) 
-         VALUES (?, ?, ?, ?, ?, NOW())",
-        [$userId, $today, $now, $delayMinutes, $storedPhotoValue]
-    );
+    // التحقق مرة أخرى من وجود العمود بعد محاولة إضافته
+    $hasDelayReasonColumn = !empty($db->queryOne("SHOW COLUMNS FROM attendance_records LIKE 'delay_reason'"));
+    
+    // بناء استعلام INSERT ديناميكياً بناءً على وجود عمود delay_reason
+    if ($hasDelayReasonColumn) {
+        $result = $db->execute(
+            "INSERT INTO attendance_records (user_id, date, check_in_time, delay_minutes, delay_reason, photo_path, created_at) 
+             VALUES (?, ?, ?, ?, ?, ?, NOW())",
+            [$userId, $today, $now, $delayMinutes, $cleanDelayReason, $storedPhotoValue]
+        );
+    } else {
+        $result = $db->execute(
+            "INSERT INTO attendance_records (user_id, date, check_in_time, delay_minutes, photo_path, created_at) 
+             VALUES (?, ?, ?, ?, ?, NOW())",
+            [$userId, $today, $now, $delayMinutes, $storedPhotoValue]
+        );
+    }
     
     $recordId = $result['insert_id'];
     
@@ -1491,6 +1530,13 @@ function getAttendanceStatistics($userId, $month = null) {
         'today_records' => []
     ];
     
+    // التحقق من أن userId صحيح
+    if (!$userId || $userId <= 0 || !is_numeric($userId)) {
+        return $stats;
+    }
+    
+    $userId = (int)$userId;
+    
     // التحقق من وجود الجدول
     $tableCheck = $db->queryOne("SHOW TABLES LIKE 'attendance_records'");
     if (empty($tableCheck)) {
@@ -1517,21 +1563,39 @@ function getAttendanceStatistics($userId, $month = null) {
     
     // حساب الساعات الإجمالية (بما في ذلك السجلات غير المكتملة) باستخدام calculateMonthlyHours
     // لضمان التطابق مع حساب الراتب
-    $parts = explode('-', $month);
-    $year = isset($parts[0]) ? (int)$parts[0] : (int)date('Y');
-    $monthNum = isset($parts[1]) ? (int)$parts[1] : (int)date('m');
-    require_once __DIR__ . '/salary_calculator.php';
-    $stats['total_hours'] = calculateMonthlyHours($userId, $monthNum, $year);
+    try {
+        $parts = explode('-', $month);
+        $year = isset($parts[0]) ? (int)$parts[0] : (int)date('Y');
+        $monthNum = isset($parts[1]) ? (int)$parts[1] : (int)date('m');
+        require_once __DIR__ . '/salary_calculator.php';
+        $stats['total_hours'] = calculateMonthlyHours($userId, $monthNum, $year);
+    } catch (Exception $e) {
+        error_log('Error calculating monthly hours in getAttendanceStatistics: ' . $e->getMessage());
+        $stats['total_hours'] = 0;
+    }
     
-    $delaySummary = calculateMonthlyDelaySummary($userId, $month);
-    $stats['average_delay'] = $delaySummary['average_minutes'];
-    $stats['delay_count'] = $delaySummary['delay_days'];
-    $stats['total_delay_minutes'] = $delaySummary['total_minutes'];
+    try {
+        $delaySummary = calculateMonthlyDelaySummary($userId, $month);
+        $stats['average_delay'] = $delaySummary['average_minutes'] ?? 0.0;
+        $stats['delay_count'] = $delaySummary['delay_days'] ?? 0;
+        $stats['total_delay_minutes'] = $delaySummary['total_minutes'] ?? 0;
+    } catch (Exception $e) {
+        error_log('Error calculating delay summary in getAttendanceStatistics: ' . $e->getMessage());
+        $stats['average_delay'] = 0.0;
+        $stats['delay_count'] = 0;
+        $stats['total_delay_minutes'] = 0;
+    }
     
     // ساعات اليوم
-    $today = date('Y-m-d');
-    $stats['today_hours'] = calculateTodayHours($userId, $today);
-    $stats['today_records'] = getTodayAttendanceRecords($userId, $today);
+    try {
+        $today = date('Y-m-d');
+        $stats['today_hours'] = calculateTodayHours($userId, $today);
+        $stats['today_records'] = getTodayAttendanceRecords($userId, $today);
+    } catch (Exception $e) {
+        error_log('Error calculating today hours/records in getAttendanceStatistics: ' . $e->getMessage());
+        $stats['today_hours'] = 0;
+        $stats['today_records'] = [];
+    }
     
     return $stats;
 }

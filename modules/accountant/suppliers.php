@@ -16,6 +16,11 @@ require_once __DIR__ . '/../../includes/path_helper.php';
 require_once __DIR__ . '/../../includes/table_styles.php';
 require_once __DIR__ . '/../../includes/production_helper.php';
 
+// تحميل نظام Cache إذا كان متوفراً
+if (file_exists(__DIR__ . '/../../includes/cache.php')) {
+    require_once __DIR__ . '/../../includes/cache.php';
+}
+
 requireRole(['accountant', 'manager']);
 
 $currentUser = getCurrentUser();
@@ -344,51 +349,109 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     "INSERT INTO suppliers (supplier_code, type, name, contact_person, phone, email, address, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     [$supplierCode, $type, $name, $contact_person ?: null, $phone ?: null, $email ?: null, $address ?: null, $status]
                 );
-                // تطبيق PRG pattern لمنع التكرار
+                
+                // مسح الكاش بعد إضافة مورد جديد
+                if (class_exists('Cache')) {
+                    Cache::flush();
+                }
+                
+                // مسح الكاش بعد إضافة مورد جديد
+                if (class_exists('Cache')) {
+                    Cache::flush();
+                }
+                
+                // تطبيق PRG pattern لمنع التكرار مع versioning
                 $successMessage = 'تم إضافة المورد بنجاح - كود المورد: ' . $supplierCode;
-                preventDuplicateSubmission($successMessage, ['page' => 'suppliers'], null, $currentUser['role']);
+                $version = time();
+                $redirectParams = ['page' => 'suppliers', '_v' => $version];
+                preventDuplicateSubmission($successMessage, $redirectParams, null, $currentUser['role']);
             } catch (Exception $e) {
                 $error = 'حدث خطأ: ' . $e->getMessage();
             }
         }
     } elseif ($action === 'edit') {
         $id = intval($_POST['id'] ?? 0);
-        $name = trim($_POST['name'] ?? '');
-        $type = $_POST['type'] ?? null;
-        $contact_person = trim($_POST['contact_person'] ?? '');
-        $phone = trim($_POST['phone'] ?? '');
-        $email = trim($_POST['email'] ?? '');
-        $address = trim($_POST['address'] ?? '');
-        $status = $_POST['status'] ?? 'active';
+        $userRole = strtolower($currentUser['role'] ?? '');
+        $isAccountant = $userRole === 'accountant';
         
-        if (empty($name)) {
-            $error = 'اسم المورد مطلوب';
-        } elseif (empty($type)) {
-            $error = 'نوع المورد مطلوب';
-        } else {
+        if ($isAccountant) {
+            // المحاسب يمكنه تعديل العنوان ورقم الهاتف فقط
+            $phone = trim($_POST['phone'] ?? '');
+            $address = trim($_POST['address'] ?? '');
+            
             try {
-                $currentSupplier = $db->queryOne("SELECT type, supplier_code FROM suppliers WHERE id = ?", [$id]);
-                
-                $supplierCode = $currentSupplier['supplier_code'] ?? null;
-                if ($currentSupplier && $currentSupplier['type'] !== $type) {
-                    $supplierCode = generateSupplierCode($type, $db);
+                $db->execute(
+                    "UPDATE suppliers SET phone = ?, address = ?, updated_at = NOW() WHERE id = ?",
+                    [$phone ?: null, $address ?: null, $id]
+                );
+                // مسح الكاش بعد تعديل المورد
+                if (class_exists('Cache')) {
+                    Cache::flush();
                 }
                 
-                $db->execute(
-                    "UPDATE suppliers SET supplier_code = ?, type = ?, name = ?, contact_person = ?, phone = ?, email = ?, address = ?, status = ?, updated_at = NOW() WHERE id = ?",
-                    [$supplierCode, $type, $name, $contact_person ?: null, $phone ?: null, $email ?: null, $address ?: null, $status, $id]
-                );
-                // تطبيق PRG pattern لمنع التكرار
-                $successMessage = 'تم تحديث المورد بنجاح';
-                preventDuplicateSubmission($successMessage, ['page' => 'suppliers'], null, $currentUser['role']);
+                // تطبيق PRG pattern لمنع التكرار مع versioning
+                $successMessage = 'تم تحديث بيانات المورد بنجاح';
+                $version = time();
+                $redirectParams = ['page' => 'suppliers', '_v' => $version];
+                preventDuplicateSubmission($successMessage, $redirectParams, null, $currentUser['role']);
             } catch (Exception $e) {
                 $error = 'حدث خطأ: ' . $e->getMessage();
             }
+        } else {
+            // المدير يمكنه تعديل جميع البيانات
+            $name = trim($_POST['name'] ?? '');
+            $type = $_POST['type'] ?? null;
+            $contact_person = trim($_POST['contact_person'] ?? '');
+            $phone = trim($_POST['phone'] ?? '');
+            $email = trim($_POST['email'] ?? '');
+            $address = trim($_POST['address'] ?? '');
+            $status = $_POST['status'] ?? 'active';
+            
+            if (empty($name)) {
+                $error = 'اسم المورد مطلوب';
+            } elseif (empty($type)) {
+                $error = 'نوع المورد مطلوب';
+            } else {
+                try {
+                    $currentSupplier = $db->queryOne("SELECT type, supplier_code FROM suppliers WHERE id = ?", [$id]);
+                    
+                    $supplierCode = $currentSupplier['supplier_code'] ?? null;
+                    if ($currentSupplier && $currentSupplier['type'] !== $type) {
+                        $supplierCode = generateSupplierCode($type, $db);
+                    }
+                    
+                    $db->execute(
+                        "UPDATE suppliers SET supplier_code = ?, type = ?, name = ?, contact_person = ?, phone = ?, email = ?, address = ?, status = ?, updated_at = NOW() WHERE id = ?",
+                        [$supplierCode, $type, $name, $contact_person ?: null, $phone ?: null, $email ?: null, $address ?: null, $status, $id]
+                    );
+                    
+                    // مسح الكاش بعد تعديل المورد
+                    if (class_exists('Cache')) {
+                        Cache::flush();
+                    }
+                    
+                    // مسح الكاش بعد تعديل المورد
+                    if (class_exists('Cache')) {
+                        Cache::flush();
+                    }
+                    
+                    // تطبيق PRG pattern لمنع التكرار مع versioning
+                    $successMessage = 'تم تحديث المورد بنجاح';
+                    $version = time();
+                    $redirectParams = ['page' => 'suppliers', '_v' => $version];
+                    preventDuplicateSubmission($successMessage, $redirectParams, null, $currentUser['role']);
+                } catch (Exception $e) {
+                    $error = 'حدث خطأ: ' . $e->getMessage();
+                }
+            }
         }
     } elseif ($action === 'add_balance' || $action === 'record_payment') {
-        // منع المحاسب من تسجيل معاملات مالية للموردين
-        if (strtolower($currentUser['role'] ?? '') === 'accountant') {
-            $error = 'غير مصرح لك بتسجيل معاملات مالية للموردين. يرجى التواصل مع المدير.';
+        $userRole = strtolower($currentUser['role'] ?? '');
+        $isAccountant = $userRole === 'accountant';
+        
+        // السماح للمحاسب بإضافة رصيد فقط، وليس تسجيل سداد
+        if ($isAccountant && $action === 'record_payment') {
+            $error = 'غير مصرح لك بتسجيل سداد للموردين. يرجى التواصل مع المدير.';
         } else {
             $supplierId = intval($_POST['supplier_id'] ?? 0);
             $amount = cleanFinancialValue($_POST['amount'] ?? 0);
@@ -483,11 +546,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         
                         $db->commit();
                         
+                        // مسح الكاش بعد تحديث الرصيد
+                        if (class_exists('Cache')) {
+                            // مسح كاش المورد المحدد إذا كان موجوداً
+                            Cache::forget("supplier_{$supplierId}");
+                            Cache::forget("supplier_balance_{$supplierId}");
+                            // مسح كاش قائمة الموردين
+                            Cache::flush();
+                        }
+                        
                         $success = $action === 'add_balance'
                             ? 'تم إضافة الرصيد للمورد بنجاح.'
                             : 'تم تسجيل السداد للمورد بنجاح.';
-                        $redirectUrl = '?page=suppliers&success=' . urlencode($success);
+                        
+                        // إضافة versioning parameter لضمان تحديث الصفحة وعدم عرض كاش قديم
+                        $version = time();
+                        $redirectUrl = '?page=suppliers&success=' . urlencode($success) . '&_v=' . $version . '&_t=' . $version;
                         if (!headers_sent()) {
+                            // إضافة headers لمنع التخزين المؤقت
+                            header('Cache-Control: no-cache, no-store, must-revalidate, max-age=0');
+                            header('Pragma: no-cache');
+                            header('Expires: 0');
                             header('Location: ' . $redirectUrl);
                             exit;
                         } else {
@@ -506,20 +585,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } elseif ($action === 'delete') {
-        $id = intval($_POST['id'] ?? 0);
-        if ($id > 0) {
+        // منع المحاسب من حذف الموردين
+        if (strtolower($currentUser['role'] ?? '') === 'accountant') {
+            $error = 'غير مصرح لك بحذف الموردين. يرجى التواصل مع المدير.';
+        } else {
+            $id = intval($_POST['id'] ?? 0);
+            if ($id > 0) {
             try {
                 $db->execute("DELETE FROM suppliers WHERE id = ?", [$id]);
+                
+                // مسح الكاش بعد حذف المورد
+                if (class_exists('Cache')) {
+                    Cache::flush();
+                }
+                
                 $success = 'تم حذف المورد بنجاح';
+                $version = time();
+                $redirectUrl = '?page=suppliers&success=' . urlencode($success) . '&_v=' . $version . '&_t=' . $version;
+                
                 if (!headers_sent()) {
-                    header('Location: ?page=suppliers&success=' . urlencode($success));
+                    header('Location: ' . $redirectUrl);
                     exit;
                 } else {
-                    echo '<script>window.location.href = "?page=suppliers&success=' . urlencode($success) . '";</script>';
+                    echo '<script>window.location.href = "' . htmlspecialchars($redirectUrl, ENT_QUOTES) . '";</script>';
                     exit;
                 }
-            } catch (Exception $e) {
-                $error = 'حدث خطأ: ' . $e->getMessage();
+                } catch (Exception $e) {
+                    $error = 'حدث خطأ: ' . $e->getMessage();
+                }
             }
         }
     }
@@ -656,7 +749,7 @@ if (isset($_GET['edit'])) {
                                 </td>
                                 <td data-label="الإجراءات">
                                     <div class="btn-group btn-group-sm flex-wrap">
-                                        <?php if (strtolower($currentUser['role'] ?? '') !== 'accountant'): ?>
+                                        <!-- زر إضافة رصيد - متاح للمحاسب والمدير -->
                                         <button type="button"
                                                 class="btn btn-success mb-1"
                                                 data-bs-toggle="modal"
@@ -667,6 +760,8 @@ if (isset($_GET['edit'])) {
                                             <i class="bi bi-plus-circle"></i>
                                             <span class="d-none d-lg-inline">إضافة رصيد</span>
                                         </button>
+                                        <?php if (strtolower($currentUser['role'] ?? '') !== 'accountant'): ?>
+                                        <!-- زر تسجيل سداد - متاح للمدير فقط -->
                                         <button type="button"
                                                 class="btn btn-warning mb-1"
                                                 data-bs-toggle="modal"
@@ -691,10 +786,12 @@ if (isset($_GET['edit'])) {
                                             <i class="bi bi-pencil"></i>
                                             <span class="d-none d-md-inline"><?php echo isset($lang['edit']) ? $lang['edit'] : 'تعديل'; ?></span>
                                         </a>
+                                        <?php if (strtolower($currentUser['role'] ?? '') !== 'accountant'): ?>
                                         <button type="button" class="btn btn-outline-danger mb-1" onclick="deleteSupplier(<?php echo $supplierId; ?>, '<?php echo htmlspecialchars($supplier['name'], ENT_QUOTES); ?>')" data-bs-toggle="tooltip" title="<?php echo isset($lang['delete']) ? $lang['delete'] : 'حذف'; ?>">
                                             <i class="bi bi-trash"></i>
                                             <span class="d-none d-md-inline"><?php echo isset($lang['delete']) ? $lang['delete'] : 'حذف'; ?></span>
                                         </button>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>
@@ -1087,6 +1184,12 @@ $historyTypeLabels = [
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" style="max-height: calc(100vh - 200px); overflow-y: auto;">
+                    <?php 
+                    $userRole = strtolower($currentUser['role'] ?? '');
+                    $isAccountant = $userRole === 'accountant';
+                    ?>
+                    
+                    <?php if (!$isAccountant): ?>
                     <div class="mb-3">
                         <label class="form-label">كود المورد</label>
                         <input type="text" class="form-control" value="<?php echo htmlspecialchars($editSupplier['supplier_code'] ?? '-'); ?>" readonly>
@@ -1110,14 +1213,18 @@ $historyTypeLabels = [
                         </select>
                         <small class="text-muted">سيتم توليد كود جديد إذا تم تغيير النوع</small>
                     </div>
+                    <?php endif; ?>
+                    
                     <div class="mb-3">
                         <label class="form-label"><?php echo isset($lang['phone']) ? $lang['phone'] : 'الهاتف'; ?></label>
-                        <input type="text" class="form-control" name="phone" value="<?php echo htmlspecialchars($editSupplier['phone'] ?? ''); ?>">
+                        <input type="text" class="form-control" name="phone" value="<?php echo htmlspecialchars($editSupplier['phone'] ?? ''); ?>" <?php echo $isAccountant ? 'required' : ''; ?>>
                     </div>
                     <div class="mb-3">
                         <label class="form-label"><?php echo isset($lang['address']) ? $lang['address'] : 'العنوان'; ?></label>
-                        <textarea class="form-control" name="address" rows="3"><?php echo htmlspecialchars($editSupplier['address'] ?? ''); ?></textarea>
+                        <textarea class="form-control" name="address" rows="3" <?php echo $isAccountant ? 'required' : ''; ?>><?php echo htmlspecialchars($editSupplier['address'] ?? ''); ?></textarea>
                     </div>
+                    
+                    <?php if (!$isAccountant): ?>
                     <div class="mb-3">
                         <label class="form-label"><?php echo isset($lang['status']) ? $lang['status'] : 'الحالة'; ?></label>
                         <select class="form-select" name="status">
@@ -1125,6 +1232,7 @@ $historyTypeLabels = [
                             <option value="inactive" <?php echo $editSupplier['status'] === 'inactive' ? 'selected' : ''; ?>><?php echo isset($lang['inactive']) ? $lang['inactive'] : 'غير نشط'; ?></option>
                         </select>
                     </div>
+                    <?php endif; ?>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" data-bs-dismiss="modal"><?php echo isset($lang['cancel']) ? $lang['cancel'] : 'إلغاء'; ?></button>

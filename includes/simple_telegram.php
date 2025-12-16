@@ -35,7 +35,8 @@ function isTelegramConfigured() {
  */
 function sendTelegramMessage($message, $chatId = null) {
     if (!isTelegramConfigured()) {
-        error_log("Telegram not configured");
+        // تعطيل التسجيل الروتيني لتقليل سجلات الأخطاء
+        // error_log("Telegram not configured");
         return false;
     }
     
@@ -107,6 +108,7 @@ function sendTelegramMessageWithButtons($message, array $buttons, $chatId = null
     }
 
     $inlineKeyboard = [];
+    $skippedButtons = 0;
     foreach ($buttons as $row) {
         $rowButtons = [];
         foreach ($row as $button) {
@@ -115,6 +117,30 @@ function sendTelegramMessageWithButtons($message, array $buttons, $chatId = null
             if ($text === '' || $url === '') {
                 continue;
             }
+            
+            // Telegram doesn't accept localhost URLs in inline keyboard buttons
+            // Check if URL is localhost or private IP
+            $parsedUrl = parse_url($url);
+            if ($parsedUrl) {
+                $host = $parsedUrl['host'] ?? '';
+                $isLocalhost = (
+                    $host === 'localhost' ||
+                    $host === '127.0.0.1' ||
+                    $host === '::1' ||
+                    preg_match('/^127\./', $host) ||
+                    preg_match('/^192\.168\./', $host) ||
+                    preg_match('/^10\./', $host) ||
+                    preg_match('/^172\.(1[6-9]|2[0-9]|3[0-1])\./', $host)
+                );
+                
+                if ($isLocalhost) {
+                    $skippedButtons++;
+                    // تعطيل التسجيل الروتيني
+                    // error_log("Telegram: Skipping localhost URL in button: {$url}");
+                    continue;
+                }
+            }
+            
             $rowButtons[] = [
                 'text' => $text,
                 'url'  => $url,
@@ -123,6 +149,12 @@ function sendTelegramMessageWithButtons($message, array $buttons, $chatId = null
         if (!empty($rowButtons)) {
             $inlineKeyboard[] = $rowButtons;
         }
+    }
+    
+    // If all buttons were skipped due to localhost URLs, log a warning
+    if ($skippedButtons > 0 && empty($inlineKeyboard)) {
+        // تعطيل التسجيل الروتيني
+        // error_log("Telegram: All buttons were skipped due to localhost URLs. Message will be sent without buttons.");
     }
 
     $chatId = $chatId ?? TELEGRAM_CHAT_ID;
@@ -172,7 +204,10 @@ function sendTelegramMessageWithButtons($message, array $buttons, $chatId = null
         }
 
         $errorDesc = $result['description'] ?? 'Unknown error';
-        error_log("Telegram API error (buttons): " . $errorDesc);
+        // تسجيل الأخطاء الحرجة فقط
+        if ($httpCode >= 500 || strpos($errorDesc, 'rate limit') !== false) {
+            error_log("Telegram API error (buttons): " . $errorDesc);
+        }
         return [
             'success' => false,
             'error' => $errorDesc,
@@ -184,9 +219,12 @@ function sendTelegramMessageWithButtons($message, array $buttons, $chatId = null
     if (!empty($curlError)) {
         $errorMessage .= ' - ' . $curlError;
     }
-    error_log("Telegram HTTP error (buttons): {$errorMessage}");
-    if (!empty($response)) {
-        error_log("Telegram error response (buttons): " . substr($response, 0, 500));
+    // تسجيل الأخطاء الحرجة فقط (5xx)
+    if ($httpCode >= 500) {
+        error_log("Telegram HTTP error (buttons): {$errorMessage}");
+        if (!empty($response)) {
+            error_log("Telegram error response (buttons): " . substr($response, 0, 500));
+        }
     }
 
     return [
@@ -200,20 +238,39 @@ function sendTelegramMessageWithButtons($message, array $buttons, $chatId = null
  */
 function sendTelegramFile($filePath, $caption = '', $chatId = null) {
     if (!isTelegramConfigured()) {
-        error_log("Telegram not configured");
+        // تعطيل التسجيل الروتيني
+        // error_log("Telegram not configured");
         return false;
     }
     
     if (!file_exists($filePath)) {
-        error_log("File not found: " . $filePath);
+        // تسجيل الأخطاء الحرجة فقط
+        error_log("Telegram: File not found: " . $filePath);
         return false;
     }
     
     $chatId = $chatId ?? TELEGRAM_CHAT_ID;
     $url = TELEGRAM_API_URL . '/sendDocument';
     
-    // تحديد نوع الملف
-    $mimeType = mime_content_type($filePath);
+    // تحديد نوع الملف - استخدام طرق متعددة للتوافق
+    $mimeType = '';
+    
+    // محاولة 1: استخدام mime_content_type إذا كان متاحاً
+    if (function_exists('mime_content_type')) {
+        $mimeType = mime_content_type($filePath);
+    }
+    
+    // محاولة 2: استخدام finfo class إذا كان متاحاً
+    if (!$mimeType && class_exists('finfo')) {
+        $mode = defined('FILEINFO_MIME_TYPE') ? FILEINFO_MIME_TYPE : 0;
+        $finfo = @finfo_open($mode);
+        if ($finfo) {
+            $mimeType = @finfo_file($finfo, $filePath);
+            @finfo_close($finfo);
+        }
+    }
+    
+    // محاولة 3: استخدام extension كبديل نهائي
     if (!$mimeType) {
         $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
         $mimeTypes = [
@@ -222,7 +279,12 @@ function sendTelegramFile($filePath, $caption = '', $chatId = null) {
             'xls' => 'application/vnd.ms-excel',
             'csv' => 'text/csv',
             'html' => 'text/html',
-            'txt' => 'text/plain'
+            'txt' => 'text/plain',
+            'sql' => 'text/plain',
+            'gz' => 'application/gzip',
+            'zip' => 'application/zip',
+            'json' => 'application/json',
+            'xml' => 'application/xml'
         ];
         $mimeType = $mimeTypes[$ext] ?? 'application/octet-stream';
     }
@@ -276,11 +338,13 @@ function sendTelegramFile($filePath, $caption = '', $chatId = null) {
  */
 function sendTelegramPhoto($photoData, $caption = '', $chatId = null, $isBase64 = false) {
     if (!isTelegramConfigured()) {
-        error_log("Telegram not configured - cannot send photo");
+        // تعطيل التسجيل الروتيني
+        // error_log("Telegram not configured - cannot send photo");
         return false;
     }
     
-    error_log("sendTelegramPhoto called - isBase64: " . ($isBase64 ? 'yes' : 'no') . ", photoData type: " . gettype($photoData));
+    // تعطيل التسجيل الروتيني
+    // error_log("sendTelegramPhoto called - isBase64: " . ($isBase64 ? 'yes' : 'no') . ", photoData type: " . gettype($photoData));
     
     $chatId = $chatId ?? TELEGRAM_CHAT_ID;
     $url = TELEGRAM_API_URL . '/sendPhoto';
@@ -290,7 +354,8 @@ function sendTelegramPhoto($photoData, $caption = '', $chatId = null, $isBase64 
     
     // معالجة base64
     if ($isBase64) {
-        error_log("Processing base64 image, data length: " . strlen($photoData));
+        // تعطيل التسجيل الروتيني
+        // error_log("Processing base64 image, data length: " . strlen($photoData));
         
         if (empty($photoData)) {
             error_log("ERROR: Base64 photo data is empty!");
@@ -307,7 +372,8 @@ function sendTelegramPhoto($photoData, $caption = '', $chatId = null, $isBase64 
             $cleanData .= str_repeat('=', 4 - $mod);
         }
         
-        error_log("Cleaned data length: " . strlen($cleanData));
+        // تعطيل التسجيل الروتيني
+        // error_log("Cleaned data length: " . strlen($cleanData));
         
         $imageData = base64_decode($cleanData, true);
         
@@ -316,7 +382,8 @@ function sendTelegramPhoto($photoData, $caption = '', $chatId = null, $isBase64 
             return false;
         }
         
-        error_log("Decoded image data length: " . strlen($imageData) . " bytes");
+        // تعطيل التسجيل الروتيني
+        // error_log("Decoded image data length: " . strlen($imageData) . " bytes");
         
         // استخدام مجلد مؤقت في نفس المجلد إذا كان sys_get_temp_dir() لا يعمل
         $tempDir = sys_get_temp_dir();
@@ -341,7 +408,8 @@ function sendTelegramPhoto($photoData, $caption = '', $chatId = null, $isBase64 
             return false;
         }
         
-        error_log("Temp file created: {$tempFile}, size: {$bytesWritten} bytes");
+        // تعطيل التسجيل الروتيني
+        // error_log("Temp file created: {$tempFile}, size: {$bytesWritten} bytes");
         
         // التحقق من أن الملف موجود ويمكن قراءته
         if (!file_exists($tempFile) || filesize($tempFile) === 0) {
@@ -374,7 +442,8 @@ function sendTelegramPhoto($photoData, $caption = '', $chatId = null, $isBase64 
     
     $photo = new CURLFile($photoPath, 'image/jpeg', 'attendance_photo.jpg');
     
-    error_log("Preparing to send photo: file={$photoPath}, size={$fileSize} bytes, chat_id={$chatId}");
+    // تعطيل التسجيل الروتيني
+    // error_log("Preparing to send photo: file={$photoPath}, size={$fileSize} bytes, chat_id={$chatId}");
     
     $allowedCaptionTags = '<b><strong><i><em><u><s><code><pre><a>';
     $cleanCaption = strip_tags($caption, $allowedCaptionTags);
@@ -413,30 +482,40 @@ function sendTelegramPhoto($photoData, $caption = '', $chatId = null, $isBase64 
         @unlink($tempFile);
     }
     
-    // تسجيل تفاصيل الاستجابة للتشخيص
-    error_log("Telegram Photo Send Response: HTTP {$httpCode}, Response length: " . strlen($response));
-    if ($httpCode !== 200) {
-        error_log("Telegram Photo Send Error: {$curlError}, Response: " . substr($response, 0, 500));
+    // تسجيل الأخطاء الحرجة فقط (5xx)
+    if ($httpCode >= 500) {
+        error_log("Telegram Photo Send Response: HTTP {$httpCode}, Response length: " . strlen($response));
+        if ($curlError) {
+            error_log("Telegram Photo Send Error: {$curlError}, Response: " . substr($response, 0, 500));
+        }
     }
     
     if ($httpCode === 200) {
         $result = json_decode($response, true);
         if (isset($result['ok']) && $result['ok']) {
-            error_log("Telegram photo sent successfully to chat {$chatId}");
+            // تعطيل التسجيل الروتيني
+            // error_log("Telegram photo sent successfully to chat {$chatId}");
             return $result;
         } else {
             $errorDesc = $result['description'] ?? 'Unknown error';
             $errorCode = $result['error_code'] ?? 'N/A';
-            error_log("Telegram API error: Code {$errorCode}, Description: {$errorDesc}");
-            error_log("Full response: " . json_encode($result, JSON_UNESCAPED_UNICODE));
+            // تسجيل الأخطاء الحرجة فقط
+            if ($errorCode >= 500 || (is_string($errorDesc) && strpos($errorDesc, 'rate limit') !== false)) {
+                error_log("Telegram API error: Code {$errorCode}, Description: {$errorDesc}");
+            }
+            // تعطيل التسجيل التفصيلي
+            // error_log("Full response: " . json_encode($result, JSON_UNESCAPED_UNICODE));
             return false;
         }
     } else {
-        error_log("Telegram HTTP error: {$httpCode}. cURL Error: {$curlError}");
-        if ($response) {
-            $errorResponse = json_decode($response, true);
-            if ($errorResponse) {
-                error_log("Telegram error response: " . json_encode($errorResponse, JSON_UNESCAPED_UNICODE));
+        // تسجيل الأخطاء الحرجة فقط (5xx)
+        if ($httpCode >= 500) {
+            error_log("Telegram HTTP error: {$httpCode}. cURL Error: {$curlError}");
+            if ($response) {
+                $errorResponse = json_decode($response, true);
+                if ($errorResponse) {
+                    error_log("Telegram error response: " . json_encode($errorResponse, JSON_UNESCAPED_UNICODE));
+                }
             }
         }
         return false;
@@ -466,7 +545,8 @@ function testTelegramConnection() {
  */
 function sendSalarySettlementToTelegram($settlementId, $salary, $settlementAmount, $previousAccumulated, $remainingAfter, $settlementType, $settlementDate, $invoicePath = null) {
     if (!isTelegramConfigured()) {
-        error_log("Telegram not configured - cannot send salary settlement");
+        // تعطيل التسجيل الروتيني
+        // error_log("Telegram not configured - cannot send salary settlement");
         return false;
     }
     
@@ -478,15 +558,17 @@ function sendSalarySettlementToTelegram($settlementId, $salary, $settlementAmoun
         $employeeName = $salary['full_name'] ?? $salary['username'] ?? 'غير محدد';
         $formattedDate = formatDate($settlementDate);
         
-        // بناء الرسالة
+        // بناء الرسالة - استخدام formatCurrency لضمان نفس التنسيق المستخدم في بطاقة الموظف
+        require_once __DIR__ . '/config.php';
+        
         $message = "💰 <b>عملية تسوية مستحقات موظف ({$settlementTypeLabel})</b>\n\n";
         $message .= "👤 <b>الموظف:</b> " . htmlspecialchars($employeeName) . "\n";
         $message .= "📅 <b>تاريخ التسوية:</b> " . htmlspecialchars($formattedDate) . "\n";
-        $message .= "💵 <b>المبلغ التراكمي السابق:</b> " . number_format($previousAccumulated, 2) . " ج.م\n";
-        $message .= "✅ <b>المبلغ المسدد:</b> " . number_format($settlementAmount, 2) . " ج.م\n";
+        $message .= "💵 <b>المبلغ التراكمي السابق:</b> " . formatCurrency($previousAccumulated) . "\n";
+        $message .= "✅ <b>المبلغ المسدد:</b> " . formatCurrency($settlementAmount) . "\n";
         
         if ($remainingAfter > 0) {
-            $message .= "⚠️ <b>المتبقي بعد التسوية:</b> " . number_format($remainingAfter, 2) . " ج.م\n";
+            $message .= "⚠️ <b>المتبقي بعد التسوية:</b> " . formatCurrency($remainingAfter) . "\n";
         } else {
             $message .= "✅ <b>تم تسوية جميع المستحقات</b>\n";
         }

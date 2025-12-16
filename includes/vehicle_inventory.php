@@ -2327,13 +2327,19 @@ function approveWarehouseTransfer($transferId, $approvedBy = null) {
         
         $db->getConnection()->begin_transaction();
         
-        // تحديث حالة الطلب
-        $db->execute(
+        // تحديث حالة الطلب - التأكد من حفظ البيانات مباشرة في قاعدة البيانات
+        $updateResult = $db->execute(
             "UPDATE warehouse_transfers 
              SET status = 'approved', approved_by = ?, approved_at = NOW() 
              WHERE id = ?",
             [$approvedBy, $transferId]
         );
+        
+        // التحقق من أن التحديث تم بنجاح
+        if (($updateResult['affected_rows'] ?? 0) === 0) {
+            $db->getConnection()->rollback();
+            throw new Exception('فشل تحديث حالة طلب النقل');
+        }
         
         // الحصول على العناصر
         $items = $db->query(

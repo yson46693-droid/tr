@@ -391,8 +391,8 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => 'تسجيل مهام الإنتاج',
-                'icon' => 'bi-gear',
+                'title' => 'إرسال مهام الإنتاج',
+                'icon' => 'bi-send-check',
                 'url' => $baseUrl . 'accountant.php?page=production_tasks',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'production_tasks'),
                 'badge' => null
@@ -432,6 +432,13 @@ switch ($role) {
                 'icon' => 'bi-droplet',
                 'url' => $baseUrl . 'accountant.php?page=raw_materials_warehouse',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'raw_materials_warehouse'),
+                'badge' => null
+            ],
+            [
+                'title' => 'نقل المنتجات',
+                'icon' => 'bi-arrow-left-right',
+                'url' => $baseUrl . 'accountant.php?page=warehouse_transfers',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'warehouse_transfers'),
                 'badge' => null
             ],
             ['divider' => true, 'title' => 'أدوات'],

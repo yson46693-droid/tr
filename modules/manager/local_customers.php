@@ -34,6 +34,28 @@ if (!defined('LOCAL_CUSTOMERS_PURCHASE_HISTORY_AJAX')) {
 $currentUser = getCurrentUser();
 $db = db();
 
+// إنشاء جدول local_customer_phones إذا لم يكن موجوداً
+try {
+    $localCustomerPhonesTable = $db->queryOne("SHOW TABLES LIKE 'local_customer_phones'");
+    if (empty($localCustomerPhonesTable)) {
+        $db->execute("
+            CREATE TABLE IF NOT EXISTS `local_customer_phones` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `customer_id` int(11) NOT NULL,
+                `phone` varchar(20) NOT NULL,
+                `is_primary` tinyint(1) DEFAULT 0,
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                KEY `customer_id` (`customer_id`),
+                CONSTRAINT `local_customer_phones_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `local_customers` (`id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        error_log('Table local_customer_phones created successfully');
+    }
+} catch (Exception $e) {
+    error_log('Error creating local_customer_phones table: ' . $e->getMessage());
+}
+
 // التأكد من وجود الجداول
 try {
     // إنشاء جدول regions إذا لم يكن موجوداً
@@ -227,6 +249,49 @@ try {
     }
 } catch (Throwable $e) {
     error_log('Error checking local_customers tables: ' . $e->getMessage());
+}
+
+// معالجة get_local_customer_phones AJAX
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && trim($_GET['action']) === 'get_local_customer_phones') {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-cache, must-revalidate');
+    
+    $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
+    
+    if ($customerId <= 0) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'معرف العميل غير صحيح'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
+    try {
+        $phones = $db->query(
+            "SELECT phone FROM local_customer_phones WHERE customer_id = ? ORDER BY is_primary DESC, id ASC",
+            [$customerId]
+        );
+        
+        $phoneNumbers = array_map(function($row) {
+            return $row['phone'];
+        }, $phones);
+        
+        echo json_encode([
+            'success' => true,
+            'phones' => $phoneNumbers
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $e) {
+        error_log('Get local customer phones error: ' . $e->getMessage());
+        echo json_encode([
+            'success' => false,
+            'message' => 'حدث خطأ أثناء جلب أرقام الهواتف'
+        ], JSON_UNESCAPED_UNICODE);
+    }
+    exit;
 }
 
 // معالجة add_region_ajax قبل أي شيء آخر لمنع أي output
@@ -710,6 +775,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (in_array('phone', $allowedFields)) {
                             $updateFields[] = 'phone = ?';
                             $updateValues[] = $phone ?: null;
+                            
+                            // تحديث أرقام الهواتف في جدول local_customer_phones
+                            $phones = $_POST['phones'] ?? [];
+                            if (is_array($phones) && !empty($phones)) {
+                                // حذف الأرقام القديمة
+                                $db->execute("DELETE FROM local_customer_phones WHERE customer_id = ?", [$customerId]);
+                                
+                                // إضافة الأرقام الجديدة
+                                $firstPhone = true;
+                                foreach ($phones as $phoneNumber) {
+                                    $phoneNumber = trim($phoneNumber);
+                                    if (!empty($phoneNumber)) {
+                                        $db->execute(
+                                            "INSERT INTO local_customer_phones (customer_id, phone, is_primary) VALUES (?, ?, ?)",
+                                            [$customerId, $phoneNumber, $firstPhone ? 1 : 0]
+                                        );
+                                        $firstPhone = false;
+                                    }
+                                }
+                            } elseif (!empty($phone)) {
+                                // إذا لم تكن هناك أرقام متعددة، احفظ الرقم الواحد
+                                $db->execute("DELETE FROM local_customer_phones WHERE customer_id = ?", [$customerId]);
+                                $db->execute(
+                                    "INSERT INTO local_customer_phones (customer_id, phone, is_primary) VALUES (?, ?, ?)",
+                                    [$customerId, $phone, 1]
+                                );
+                            }
                         }
                         
                         if (in_array('address', $allowedFields)) {
@@ -855,7 +947,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $customerValues
                 );
 
-                logAudit($currentUser['id'], 'add_local_customer', 'local_customer', $result['insert_id'], null, [
+                $customerId = (int)$result['insert_id'];
+                
+                // حفظ أرقام الهواتف المتعددة
+                $phones = $_POST['phones'] ?? [];
+                if (is_array($phones) && !empty($phones)) {
+                    $firstPhone = true;
+                    foreach ($phones as $phoneNumber) {
+                        $phoneNumber = trim($phoneNumber);
+                        if (!empty($phoneNumber)) {
+                            $db->execute(
+                                "INSERT INTO local_customer_phones (customer_id, phone, is_primary) VALUES (?, ?, ?)",
+                                [$customerId, $phoneNumber, $firstPhone ? 1 : 0]
+                            );
+                            $firstPhone = false;
+                        }
+                    }
+                } elseif (!empty($phone)) {
+                    // إذا لم تكن هناك أرقام متعددة، احفظ الرقم الواحد في جدول local_customer_phones
+                    $db->execute(
+                        "INSERT INTO local_customer_phones (customer_id, phone, is_primary) VALUES (?, ?, ?)",
+                        [$customerId, $phone, 1]
+                    );
+                }
+
+                logAudit($currentUser['id'], 'add_local_customer', 'local_customer', $customerId, null, [
                     'name' => $name
                 ]);
 
@@ -1086,9 +1202,14 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
     <h2 class="mb-2 mb-md-0">
         <i class="bi bi-people me-2"></i>العملاء المحليين
     </h2>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addLocalCustomerModal">
-        <i class="bi bi-person-plus me-2"></i>إضافة عميل محلي جديد
-    </button>
+    <div class="d-flex gap-2">
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#importLocalCustomersModal">
+            <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد من CSV
+        </button>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addLocalCustomerModal">
+            <i class="bi bi-person-plus me-2"></i>إضافة عميل محلي جديد
+        </button>
+    </div>
 </div>
 
 <div class="row g-3 mb-4">
@@ -1236,7 +1357,31 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                         <?php foreach ($customers as $customer): ?>
                             <tr>
                                 <td><strong><?php echo htmlspecialchars($customer['name']); ?></strong></td>
-                                <td><?php echo htmlspecialchars($customer['phone'] ?? '-'); ?></td>
+                                <td>
+                                    <?php
+                                    // جلب أرقام الهواتف من جدول local_customer_phones
+                                    $customerPhones = $db->query(
+                                        "SELECT phone FROM local_customer_phones WHERE customer_id = ? ORDER BY is_primary DESC, id ASC",
+                                        [$customer['id']]
+                                    );
+                                    if (empty($customerPhones) && !empty($customer['phone'])) {
+                                        // إذا لم تكن هناك أرقام في local_customer_phones، استخدم الرقم القديم
+                                        $customerPhones = [['phone' => $customer['phone']]];
+                                    }
+                                    if (!empty($customerPhones)) {
+                                        foreach ($customerPhones as $phoneData) {
+                                            $phoneNumber = trim($phoneData['phone'] ?? '');
+                                            if (!empty($phoneNumber)) {
+                                                echo '<a href="tel:' . htmlspecialchars($phoneNumber) . '" class="btn btn-sm btn-outline-primary me-1 mb-1" title="اتصل بـ ' . htmlspecialchars($phoneNumber) . '">';
+                                                echo '<i class="bi bi-telephone-fill"></i> ' ;
+                                                echo '</a>';
+                                            }
+                                        }
+                                    } else {
+                                        echo '-';
+                                    }
+                                    ?>
+                                </td>
                                 <td>
                                     <?php
                                         $customerBalanceValue = isset($customer['balance']) ? (float) $customer['balance'] : 0.0;
@@ -1453,8 +1598,19 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                         <input type="text" class="form-control" name="name" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">رقم الهاتف</label>
-                        <input type="text" class="form-control" name="phone" placeholder="مثال: 01234567890">
+                        <label class="form-label">أرقام الهاتف</label>
+                        <div id="phoneNumbersContainer">
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="addPhoneBtn">
+                            <i class="bi bi-plus-circle"></i> إضافة رقم آخر
+                        </button>
+                        <input type="hidden" name="phone" value=""> <!-- للحفاظ على التوافق مع الكود القديم -->
                     </div>
                     <div class="mb-3">
                         <label class="form-label">ديون العميل / رصيد العميل</label>
@@ -2882,13 +3038,81 @@ document.addEventListener('DOMContentLoaded', function() {
                 var addressInput = document.getElementById('editLocalCustomerAddress');
                 var regionInput = document.getElementById('editLocalCustomerRegionId');
                 var balanceInput = document.getElementById('editLocalCustomerBalance');
+                var editPhoneContainer = document.getElementById('editPhoneNumbersContainer');
                 
                 if (idInput) idInput.value = customerId;
                 if (nameInput) nameInput.value = customerName || '';
-                if (phoneInput) phoneInput.value = customerPhone;
                 if (addressInput) addressInput.value = customerAddress;
                 if (regionInput) regionInput.value = customerRegionId;
                 if (balanceInput) balanceInput.value = customerBalance;
+                
+                // تحميل أرقام الهواتف المتعددة
+                if (editPhoneContainer) {
+                    editPhoneContainer.innerHTML = '';
+                    // جلب أرقام الهواتف من قاعدة البيانات عبر AJAX
+                    fetch('?action=get_local_customer_phones&customer_id=' + customerId)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.phones && data.phones.length > 0) {
+                                data.phones.forEach(function(phone, index) {
+                                    var phoneGroup = document.createElement('div');
+                                    phoneGroup.className = 'input-group mb-2';
+                                    phoneGroup.innerHTML = `
+                                        <input type="text" class="form-control phone-input" name="phones[]" value="${phone}" placeholder="مثال: 01234567890">
+                                        <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    `;
+                                    editPhoneContainer.appendChild(phoneGroup);
+                                });
+                            } else if (customerPhone) {
+                                // إذا لم تكن هناك أرقام في local_customer_phones، استخدم الرقم القديم
+                                var phoneGroup = document.createElement('div');
+                                phoneGroup.className = 'input-group mb-2';
+                                phoneGroup.innerHTML = `
+                                    <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                `;
+                                editPhoneContainer.appendChild(phoneGroup);
+                            } else {
+                                // إضافة حقل فارغ واحد
+                                var phoneGroup = document.createElement('div');
+                                phoneGroup.className = 'input-group mb-2';
+                                phoneGroup.innerHTML = `
+                                    <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                `;
+                                editPhoneContainer.appendChild(phoneGroup);
+                            }
+                            if (typeof updateEditRemoveButtons === 'function') {
+                                updateEditRemoveButtons();
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error loading phones:', error);
+                            // في حالة الخطأ، استخدم الرقم القديم
+                            if (customerPhone) {
+                                var phoneGroup = document.createElement('div');
+                                phoneGroup.className = 'input-group mb-2';
+                                phoneGroup.innerHTML = `
+                                    <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                `;
+                                editPhoneContainer.appendChild(phoneGroup);
+                            }
+                            if (typeof updateEditRemoveButtons === 'function') {
+                                updateEditRemoveButtons();
+                            }
+                        });
+                } else if (phoneInput) {
+                    phoneInput.value = customerPhone;
+                }
                 
                 try {
                     var modal = bootstrap.Modal.getOrCreateInstance(editLocalCustomerModal);
@@ -3036,7 +3260,245 @@ document.addEventListener('DOMContentLoaded', function() {
             console.warn('Add region from local customer modal not found');
         }
     }
+    
+    // معالج استيراد العملاء المحليين من CSV
+    var importLocalCustomersForm = document.getElementById('importLocalCustomersForm');
+    var importLocalCustomersModal = document.getElementById('importLocalCustomersModal');
+    
+    if (importLocalCustomersForm) {
+        importLocalCustomersForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            var fileInput = document.getElementById('localExcelFileInput');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                alert('يرجى اختيار ملف CSV أو Excel');
+                return;
+            }
+            
+            var file = fileInput.files[0];
+            if (file.size > 10 * 1024 * 1024) {
+                alert('حجم الملف يجب ألا يتجاوز 10 ميجابايت');
+                return;
+            }
+            
+            var formData = new FormData();
+            formData.append('excel_file', file);
+            formData.append('action', 'import_local_customers');
+            
+            // إظهار شريط التقدم
+            var progressDiv = document.getElementById('localImportProgress');
+            var progressBar = progressDiv.querySelector('.progress-bar');
+            var statusDiv = document.getElementById('localImportStatus');
+            var resultsDiv = document.getElementById('localImportResults');
+            var errorsDiv = document.getElementById('localImportErrors');
+            var submitBtn = document.getElementById('localImportSubmitBtn');
+            
+            progressDiv.classList.remove('d-none');
+            resultsDiv.classList.add('d-none');
+            errorsDiv.classList.add('d-none');
+            progressBar.style.width = '0%';
+            statusDiv.textContent = 'جاري رفع الملف...';
+            submitBtn.disabled = true;
+            
+            fetch('<?php echo getRelativeUrl("api/import_local_customers.php"); ?>', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                // التحقق من حالة الاستجابة
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error('خطأ في الخادم: ' + response.status + ' ' + response.statusText + (text ? ' - ' + text.substring(0, 200) : ''));
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (progressBar) progressBar.style.width = '100%';
+                
+                if (data.success) {
+                    if (statusDiv) {
+                        statusDiv.textContent = 'تم الاستيراد بنجاح!';
+                        statusDiv.className = 'text-center text-success';
+                    }
+                    
+                    var resultsContent = document.getElementById('localImportResultsContent');
+                    if (resultsContent) {
+                        var html = '<ul class="mb-0">';
+                        html += '<li>تم استيراد: <strong>' + (data.imported || 0) + '</strong> عميل محلي</li>';
+                        if (data.skipped && data.skipped > 0) {
+                            html += '<li>تم تخطي: <strong>' + data.skipped + '</strong> عميل (مكرر)</li>';
+                        }
+                        if (data.errors && data.errors.length > 0) {
+                            html += '<li>أخطاء: <strong>' + data.errors.length + '</strong> سطر</li>';
+                        }
+                        html += '</ul>';
+                        resultsContent.innerHTML = html;
+                    }
+                    if (resultsDiv) {
+                        resultsDiv.classList.remove('d-none');
+                    }
+                    
+                    // إعادة تحميل الصفحة بعد 2 ثانية
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    if (statusDiv) {
+                        statusDiv.textContent = 'فشل الاستيراد';
+                        statusDiv.className = 'text-center text-danger';
+                    }
+                    
+                    var errorsContent = document.getElementById('localImportErrorsContent');
+                    if (errorsContent) {
+                        var html = '<p>' + (data.message || 'حدث خطأ أثناء الاستيراد') + '</p>';
+                        if (data.errors && data.errors.length > 0) {
+                            html += '<ul class="mb-0"><li>' + data.errors.join('</li><li>') + '</li></ul>';
+                        }
+                        errorsContent.innerHTML = html;
+                    }
+                    if (errorsDiv) {
+                        errorsDiv.classList.remove('d-none');
+                    }
+                }
+                
+                if (submitBtn) submitBtn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Import error:', error);
+                if (statusDiv) {
+                    statusDiv.textContent = 'حدث خطأ في الاتصال بالخادم';
+                    statusDiv.className = 'text-center text-danger';
+                }
+                if (errorsDiv) {
+                    errorsDiv.classList.remove('d-none');
+                }
+                var errorMessage = error.message || 'حدث خطأ غير معروف';
+                var errorsContent = document.getElementById('localImportErrorsContent');
+                if (errorsContent) {
+                    errorsContent.innerHTML = '<p>' + errorMessage + '</p><p class="text-muted small mt-2">يرجى التحقق من ملف error_log في الخادم لمزيد من التفاصيل</p>';
+                } else {
+                    console.error('localImportErrorsContent element not found');
+                    alert('حدث خطأ: ' + errorMessage);
+                }
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                }
+            });
+        });
+    }
+    
+    // إعادة تعيين النموذج عند إغلاق الـ Modal
+    if (importLocalCustomersModal) {
+        importLocalCustomersModal.addEventListener('hidden.bs.modal', function() {
+            if (importLocalCustomersForm) {
+                importLocalCustomersForm.reset();
+            }
+            var progressDiv = document.getElementById('localImportProgress');
+            var resultsDiv = document.getElementById('localImportResults');
+            var errorsDiv = document.getElementById('localImportErrors');
+            if (progressDiv) progressDiv.classList.add('d-none');
+            if (resultsDiv) resultsDiv.classList.add('d-none');
+            if (errorsDiv) errorsDiv.classList.add('d-none');
+        });
+    }
 });
+
+// إدارة أرقام الهواتف المتعددة
+(function() {
+    // للنموذج الإضافة
+    const addPhoneBtn = document.getElementById('addPhoneBtn');
+    const phoneContainer = document.getElementById('phoneNumbersContainer');
+    
+    if (addPhoneBtn && phoneContainer) {
+        // إضافة رقم هاتف جديد
+        addPhoneBtn.addEventListener('click', function() {
+            const phoneInputGroup = document.createElement('div');
+            phoneInputGroup.className = 'input-group mb-2';
+            phoneInputGroup.innerHTML = `
+                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+            phoneContainer.appendChild(phoneInputGroup);
+            
+            // إظهار أزرار الحذف
+            updateRemoveButtons(phoneContainer);
+        });
+        
+        // حذف رقم هاتف
+        phoneContainer.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-phone-btn')) {
+                e.target.closest('.input-group').remove();
+                updateRemoveButtons(phoneContainer);
+            }
+        });
+    }
+    
+    // للنموذج التعديل
+    const addEditPhoneBtn = document.getElementById('addEditPhoneBtn');
+    const editPhoneContainer = document.getElementById('editPhoneNumbersContainer');
+    
+    if (addEditPhoneBtn && editPhoneContainer) {
+        // إضافة رقم هاتف جديد
+        addEditPhoneBtn.addEventListener('click', function() {
+            const phoneInputGroup = document.createElement('div');
+            phoneInputGroup.className = 'input-group mb-2';
+            phoneInputGroup.innerHTML = `
+                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+            editPhoneContainer.appendChild(phoneInputGroup);
+            
+            // إظهار أزرار الحذف
+            updateEditRemoveButtons();
+        });
+        
+        // حذف رقم هاتف
+        editPhoneContainer.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-phone-btn')) {
+                e.target.closest('.input-group').remove();
+                updateEditRemoveButtons();
+            }
+        });
+    }
+    
+    // تحديث حالة أزرار الحذف للنموذج الإضافة
+    function updateRemoveButtons(container) {
+        const phoneGroups = container.querySelectorAll('.input-group');
+        phoneGroups.forEach((group, index) => {
+            const removeBtn = group.querySelector('.remove-phone-btn');
+            if (removeBtn) {
+                removeBtn.style.display = phoneGroups.length > 1 ? 'block' : 'none';
+            }
+        });
+    }
+    
+    // تحديث حالة أزرار الحذف للنموذج التعديل
+    function updateEditRemoveButtons() {
+        if (editPhoneContainer) {
+            const phoneGroups = editPhoneContainer.querySelectorAll('.input-group');
+            phoneGroups.forEach((group, index) => {
+                const removeBtn = group.querySelector('.remove-phone-btn');
+                if (removeBtn) {
+                    removeBtn.style.display = phoneGroups.length > 1 ? 'block' : 'none';
+                }
+            });
+        }
+    }
+    
+    // جعل الدالة متاحة عالمياً
+    window.updateEditRemoveButtons = updateEditRemoveButtons;
+    
+    // تحديث عند التحميل
+    if (phoneContainer) {
+        updateRemoveButtons(phoneContainer);
+    }
+})();
 </script>
 
 <!-- Modal تعديل عميل محلي -->
@@ -3067,8 +3529,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                     <?php endif; ?>
                     <div class="mb-3">
-                        <label class="form-label">رقم الهاتف</label>
-                        <input type="text" class="form-control" name="phone" id="editLocalCustomerPhone" placeholder="مثال: 01234567890">
+                        <label class="form-label">أرقام الهاتف</label>
+                        <div id="editPhoneNumbersContainer">
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="addEditPhoneBtn">
+                            <i class="bi bi-plus-circle"></i> إضافة رقم آخر
+                        </button>
+                        <input type="hidden" name="phone" id="editLocalCustomerPhone" value="">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">العنوان</label>
@@ -3133,6 +3606,64 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 <?php endif; ?>
+
+<!-- Modal استيراد العملاء المحليين من CSV -->
+<div class="modal fade" id="importLocalCustomersModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد العملاء المحليين من ملف CSV
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="importLocalCustomersForm" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>تعليمات الاستيراد:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>يجب أن يحتوي الملف على الأعمدة التالية في الصف الأول: <strong>اسم العميل</strong> (مطلوب)، <strong>رقم الهاتف</strong>، <strong>العنوان</strong>، <strong>الرصيد</strong>، <strong>المنطقة</strong></li>
+                            <li>يجب أن يكون الصف الأول هو رؤوس الأعمدة</li>
+                            <li><strong>الملفات المدعومة:</strong> <strong>.csv</strong> (مفضّل - بدون مكتبات)، .xlsx, .xls (يتطلب مكتبة إضافية)</li>
+                            <li>لتصدير Excel كـ CSV: في Excel اختر <strong>ملف > حفظ باسم > CSV UTF-8</strong></li>
+                            <li>سيتم تخطي العملاء المكررين (بناءً على الاسم ورقم الهاتف)</li>
+                        </ul>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">اختر ملف CSV أو Excel <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" name="excel_file" id="localExcelFileInput" accept=".csv,.xlsx,.xls" required>
+                        <small class="text-muted">الحجم الأقصى: 10 ميجابايت | يُفضل استخدام ملف CSV</small>
+                    </div>
+                    <div id="localImportProgress" class="d-none">
+                        <div class="progress mb-3">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <div id="localImportStatus" class="text-center"></div>
+                    </div>
+                    <div id="localImportResults" class="d-none">
+                        <div class="alert alert-success">
+                            <h6><i class="bi bi-check-circle me-2"></i>تم الاستيراد بنجاح</h6>
+                            <div id="localImportResultsContent"></div>
+                        </div>
+                    </div>
+                    <div id="localImportErrors" class="d-none">
+                        <div class="alert alert-danger">
+                            <h6><i class="bi bi-exclamation-triangle me-2"></i>أخطاء أثناء الاستيراد</h6>
+                            <div id="localImportErrorsContent"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-success" id="localImportSubmitBtn">
+                        <i class="bi bi-upload me-2"></i>استيراد
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 </script>
 
 <style>

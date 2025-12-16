@@ -160,12 +160,65 @@ if (!defined('ASSETS_URL')) {
     }
 }
 
+// === تنظيف URL من معاملات _nocache عند انتهاء الجلسة (قبل التحقق من الجلسة) ===
+// هذا يمنع ERR_FAILED عند محاولة الوصول إلى index.php?_nocache=... بعد انتهاء الجلسة
+$requestUri = $_SERVER['REQUEST_URI'] ?? '';
+if (preg_match('/[?&](_nocache|_refresh|_cache_bust|_t|_r|_auto_refresh)=\d+/', $requestUri)) {
+    // التحقق من الجلسة أولاً
+    $sessionCheck = isLoggedIn();
+    
+    // إذا كانت الجلسة منتهية، نظف URL وأعد التوجيه
+    if (!$sessionCheck) {
+        // تنظيف URL من معاملات cache
+        $cleanUri = preg_replace('/[?&](_nocache|_refresh|_cache_bust|_t|_r|_auto_refresh)=\d+/', '', $requestUri);
+        $cleanUri = rtrim($cleanUri, '?&');
+        
+        // تنظيف شامل للمسار: إزالة أي بروتوكول أو hostname أو منفذ لمنع ERR_FAILED
+        $cleanUri = preg_replace('/^https?:\/\/[^\/]+/', '', $cleanUri);
+        $cleanUri = preg_replace('/^\/\//', '/', $cleanUri);
+        if (preg_match('/^\/[^\/]+:[0-9]+\//', $cleanUri)) {
+            $cleanUri = preg_replace('/^\/[^\/]+:[0-9]+/', '', $cleanUri);
+        }
+        $cleanUri = preg_replace('/:[0-9]+\//g', '/', $cleanUri);
+        $cleanUri = preg_replace('/:[0-9]+$/g', '', $cleanUri);
+        if (strpos($cleanUri, '/') !== 0) {
+            $cleanUri = '/' . $cleanUri;
+        }
+        $cleanUri = preg_replace('/\/+/', '/', $cleanUri);
+        $cleanUri = trim($cleanUri);
+        if (strpos($cleanUri, '://') !== false) {
+            $parsed = parse_url($cleanUri);
+            $cleanUri = $parsed['path'] ?? '/index.php';
+        }
+        if (empty($cleanUri) || $cleanUri === '/') {
+            $cleanUri = '/index.php';
+        }
+        
+        // إعادة التوجيه إلى URL نظيف
+        if ($requestUri !== $cleanUri && !headers_sent()) {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            header('Location: ' . $cleanUri, true, 303);
+            exit;
+        } elseif ($requestUri !== $cleanUri) {
+            $escapedUrl = htmlspecialchars($cleanUri, ENT_QUOTES, 'UTF-8');
+            echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
+            echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
+            exit;
+        }
+    }
+}
+
 // === التحقق من وجود جلسة نشطة ===
 // إذا كان هناك محاولة تسجيل دخول (POST) بنفس الحساب، نسمح بها وحذف الجلسة القديمة
 // إذا لم يكن هناك POST، نعيد التوجيه إلى الداشبورد
 $isLoginAttempt = ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['username']) || isset($_POST['login_method'])));
 
-if (isLoggedIn() && !$isLoginAttempt) {
+// التحقق من الجلسة - isLoggedIn() يتحقق من قاعدة البيانات ويحذف الجلسة إذا لم تكن موجودة
+$isUserLoggedIn = isLoggedIn();
+
+if ($isUserLoggedIn && !$isLoginAttempt) {
     // يوجد جلسة نشطة ولا توجد محاولة تسجيل دخول - إعادة التوجيه إلى الداشبورد
     $userRole = $_SESSION['role'] ?? 'accountant';
     
@@ -249,6 +302,17 @@ if (isLoggedIn() && !$isLoginAttempt) {
             ob_end_clean();
         }
         
+        // تنظيف URL قبل إرساله في JSON response
+        $dashboardUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $dashboardUrl);
+        $dashboardUrl = preg_replace('/^\/\//', '/', $dashboardUrl);
+        if (preg_match('/^\/[^\/]+:[0-9]+\//', $dashboardUrl)) {
+            $dashboardUrl = preg_replace('/^\/[^\/]+:[0-9]+/', '', $dashboardUrl);
+        }
+        if (strpos($dashboardUrl, '/') !== 0) {
+            $dashboardUrl = '/' . $dashboardUrl;
+        }
+        $dashboardUrl = preg_replace('/\/+/', '/', $dashboardUrl);
+        
         // إرجاع JSON response للتعامل معها في JavaScript
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
@@ -270,6 +334,17 @@ if (isLoggedIn() && !$isLoginAttempt) {
         ob_end_clean();
     }
     
+    // تنظيف نهائي للمسار قبل إعادة التوجيه
+    $dashboardUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $dashboardUrl);
+    $dashboardUrl = preg_replace('/^\/\//', '/', $dashboardUrl);
+    if (preg_match('/^\/[^\/]+:[0-9]+\//', $dashboardUrl)) {
+        $dashboardUrl = preg_replace('/^\/[^\/]+:[0-9]+/', '', $dashboardUrl);
+    }
+    if (strpos($dashboardUrl, '/') !== 0) {
+        $dashboardUrl = '/' . $dashboardUrl;
+    }
+    $dashboardUrl = preg_replace('/\/+/', '/', $dashboardUrl);
+    
     if (!headers_sent()) {
         header('Location: ' . $dashboardUrl, true, 303);
         exit;
@@ -279,7 +354,7 @@ if (isLoggedIn() && !$isLoginAttempt) {
         echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
         exit;
     }
-} elseif (isLoggedIn() && $isLoginAttempt) {
+} elseif ($isUserLoggedIn && $isLoginAttempt) {
     // === يوجد جلسة نشطة وهناك محاولة تسجيل دخول ===
     // نتحقق من أن محاولة تسجيل الدخول لنفس الحساب
     // إذا كانت لنفس الحساب، نحذف الجلسة القديمة ونسمح بتسجيل الدخول الجديد
@@ -288,7 +363,8 @@ if (isLoggedIn() && !$isLoginAttempt) {
     
     if (!empty($loginUsername) && strtolower(trim($loginUsername)) === strtolower(trim($currentUsername))) {
         // محاولة تسجيل دخول لنفس الحساب - حذف الجلسة القديمة والسماح بتسجيل الدخول الجديد
-        error_log("Login from new device: Deleting old session for user: {$currentUsername}");
+        // تعطيل التسجيل لتقليل الضغط على السيرفر
+        // error_log("Login from new device: Deleting old session for user: {$currentUsername}");
         
         // حذف الجلسة القديمة من قاعدة البيانات أولاً
         try {
@@ -301,18 +377,12 @@ if (isLoggedIn() && !$isLoginAttempt) {
             if ($userId > 0 && ensureSessionsTable()) {
                 // حذف جميع الجلسات للمستخدم (لتأكيد حذف الجلسة القديمة)
                 $db->execute("DELETE FROM sessions WHERE user_id = ?", [$userId]);
-                error_log("Login from new device: All sessions deleted for user_id: {$userId}, old_session_id: " . substr($oldSessionId, 0, 20));
-                
-                // التحقق من أن الجلسة تم حذفها
-                $verifyDelete = $db->queryOne("SELECT COUNT(*) as count FROM sessions WHERE user_id = ?", [$userId]);
-                if ($verifyDelete && $verifyDelete['count'] > 0) {
-                    error_log("Login from new device: WARNING - Sessions still exist after delete for user_id: {$userId}");
-                } else {
-                    error_log("Login from new device: Verified - All sessions deleted successfully for user_id: {$userId}");
-                }
+                // تعطيل التسجيل لتقليل الضغط على السيرفر
+                // error_log("Login from new device: All sessions deleted for user_id: {$userId}");
             }
         } catch (Exception $e) {
-            error_log("Login from new device: Error deleting old session: " . $e->getMessage());
+            // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
+            // error_log("Login from new device: Error deleting old session: " . $e->getMessage());
         }
         
         // حذف الجلسة PHP الحالية بشكل كامل
@@ -331,7 +401,8 @@ if (isLoggedIn() && !$isLoginAttempt) {
         }
         
         // التأكد من إنشاء جلسة جديدة تماماً (سيتم ذلك في login())
-        error_log("Login from new device: Old session completely cleared, allowing new login for: {$loginUsername}");
+        // تعطيل التسجيل لتقليل الضغط على السيرفر
+        // error_log("Login from new device: Old session completely cleared, allowing new login for: {$loginUsername}");
     } else {
         // محاولة تسجيل دخول بحساب مختلف - منع ذلك وإعادة التوجيه
         $userRole = $_SESSION['role'] ?? 'accountant';
@@ -396,11 +467,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($csrfResult === false) {
                     $error = 'خطأ في التحقق الأمني. يرجى تحديث الصفحة والمحاولة مرة أخرى.';
                 }
-            } catch (Throwable $e) {
-                $error = 'حدث خطأ أثناء التحقق الأمني. يرجى المحاولة مرة أخرى.';
-                error_log("CSRF protection error: " . $e->getMessage());
-                error_log("CSRF protection stack trace: " . $e->getTraceAsString());
-            }
+                } catch (Throwable $e) {
+                    $error = 'حدث خطأ أثناء التحقق الأمني. يرجى المحاولة مرة أخرى.';
+                    // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
+                    // error_log("CSRF protection error: " . $e->getMessage());
+                }
         }
         
         // تنظيف المدخلات
@@ -421,7 +492,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $error = $rateLimitCheck['message'];
                     }
                 } catch (Exception $e) {
-                    error_log("Rate limiter error: " . $e->getMessage());
+                    // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
+                    // error_log("Rate limiter error: " . $e->getMessage());
                 }
             }
             
@@ -446,7 +518,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         try {
                             RateLimiter::resetAttempts($username);
                         } catch (Exception $e) {
-                            error_log("Rate limiter reset error: " . $e->getMessage());
+                            // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
+                            // error_log("Rate limiter reset error: " . $e->getMessage());
                         }
                     }
                     // تجديد معرف الجلسة
@@ -467,27 +540,100 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($sessionId && $userId > 0) {
                         try {
                             $db = db();
-                            // التحقق من وجود الجلسة في قاعدة البيانات
-                            $sessionCheck = $db->queryOne(
-                                "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
-                                [$userId, $sessionId]
-                            );
-                            if (!$sessionCheck) {
-                                error_log("Login WARNING: Session not found in DB before redirect, waiting...");
-                                // انتظار قصير وإعادة المحاولة
-                                usleep(100000); // 0.1 ثانية
+                            // التحقق من وجود الجلسة في قاعدة البيانات مع إعادة المحاولة
+                            // البحث بدون شرط expires_at - لا نهي الجلسة أبداً بناءً على الخمول
+                            $maxRetries = 5;
+                            $sessionCheck = null;
+                            for ($retry = 0; $retry < $maxRetries; $retry++) {
                                 $sessionCheck = $db->queryOne(
                                     "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
                                     [$userId, $sessionId]
                                 );
+                                
+                                if ($sessionCheck) {
+                                    // إذا وُجدت الجلسة لكنها منتهية الصلاحية، نمددها دائماً (لا نهي الجلسة أبداً)
+                                    if (strtotime($sessionCheck['expires_at']) < time()) {
+                                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                                        $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                                        $db->execute(
+                                            "UPDATE sessions SET expires_at = ?, last_activity = NOW() WHERE id = ?",
+                                            [$newExpiresAt, $sessionCheck['id']]
+                                        );
+                                        $sessionCheck['expires_at'] = $newExpiresAt;
+                                        // تعطيل التسجيل لتقليل الضغط على السيرفر
+                                        // error_log("Login: Session expired but extended for user_id: {$userId}");
+                                    } else {
+                                        // تحديث expires_at دائماً لضمان بقاء الجلسة صالحة - لا نهي الجلسة أبداً بناءً على الخمول
+                                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                                        $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                                        $db->execute(
+                                            "UPDATE sessions SET expires_at = ?, last_activity = NOW() WHERE id = ?",
+                                            [$newExpiresAt, $sessionCheck['id']]
+                                        );
+                                    }
+                                    break; // الجلسة موجودة، توقف عن إعادة المحاولة
+                                }
+                                
+                                if ($retry < $maxRetries - 1) {
+                                    // انتظار قصير قبل إعادة المحاولة
+                                    usleep(100000); // 0.1 ثانية
+                                    // تعطيل التسجيل لتقليل الضغط على السيرفر
+                                    // error_log("Login: Retry {$retry} - Session not found in DB before redirect, waiting...");
+                                }
                             }
+                            
                             if ($sessionCheck) {
-                                error_log("Login: Session verified in database before redirect");
+                                // تعطيل التسجيل لتقليل الضغط على السيرفر
+                                // error_log("Login: Session verified in database before redirect");
                             } else {
-                                error_log("Login ERROR: Session not found in database before redirect - this may cause ERR_FAILED");
+                                // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
+                                // error_log("Login ERROR: Session not found in database after {$maxRetries} retries before redirect");
+                                // محاولة إعادة حفظ الجلسة كحل أخير
+                                try {
+                                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                                    $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                                    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                                    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                                    
+                                    $db->execute(
+                                        "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                                         VALUES (?, ?, ?, ?, ?, NOW())
+                                         ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?",
+                                        [$userId, $sessionId, $ipAddress, $userAgent, $expiresAt, $expiresAt]
+                                    );
+                                    // تعطيل التسجيل لتقليل الضغط على السيرفر
+                                    // error_log("Login: Re-saved session to database as last resort");
+                                } catch (Exception $saveError) {
+                                    // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
+                                    // error_log("Login ERROR: Failed to re-save session: " . $saveError->getMessage());
+                                }
                             }
                         } catch (Exception $e) {
-                            error_log("Login: Error checking session before redirect: " . $e->getMessage());
+                            // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
+                            // error_log("Login: Error checking session before redirect: " . $e->getMessage());
+                        }
+                    }
+                    
+                    // التأكد من أن session cookie موجود في $_COOKIE
+                    $sessionName = session_name();
+                    if (!isset($_COOKIE[$sessionName]) || $_COOKIE[$sessionName] !== $sessionId) {
+                        // تعطيل التسجيل لتقليل الضغط على السيرفر
+                        // error_log("Login WARNING: Session cookie mismatch - setting cookie again");
+                        if (!headers_sent()) {
+                            $isHttps = (
+                                (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+                                (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
+                            );
+                            $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                            setcookie($sessionName, $sessionId, [
+                                'expires' => time() + $sessionLifetime,
+                                'path' => '/',
+                                'domain' => '',
+                                'secure' => $isHttps,
+                                'httponly' => true,
+                                'samesite' => $isHttps ? 'None' : 'Lax',
+                            ]);
+                            $_COOKIE[$sessionName] = $sessionId;
                         }
                     }
                     
@@ -505,13 +651,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // تنظيف المسار من المسارات المكررة
                     $dashboardUrl = preg_replace('/\/+/', '/', $dashboardUrl);
                     
+                    // فحص نهائي: التأكد من أن المسار يحتوي على /dashboard/ وأن role موجود
+                    if ($userRole) {
+                        $expectedPath = '/dashboard/' . $userRole . '.php';
+                        // إذا كان المسار لا يحتوي على dashboard أو role غير موجود، أعد بناءه
+                        if (strpos($dashboardUrl, '/dashboard/') === false || substr($dashboardUrl, -strlen($userRole . '.php')) !== $userRole . '.php') {
+                            // تعطيل التسجيل لتقليل الضغط على السيرفر
+                            // error_log("Login WARNING: Invalid dashboard URL detected: {$dashboardUrl}, rebuilding to: {$expectedPath}");
+                            $dashboardUrl = $expectedPath;
+                        }
+                    }
+                    
                     // تنظيف output buffer قبل التوجيه
                     while (ob_get_level() > 0) {
                         ob_end_clean();
                     }
                     
-                    // تسجيل المسار للتشخيص
-                    error_log("Login redirect - Dashboard URL: {$dashboardUrl} | Role: {$userRole} | Session ID: " . substr($sessionId ?? '', 0, 20));
+                    // تعطيل التسجيل لتقليل الضغط على السيرفر
+                    // error_log("Login redirect - Dashboard URL: {$dashboardUrl} | Role: {$userRole}");
+                    
+                    // تنظيف نهائي للمسار قبل إعادة التوجيه لمنع ERR_FAILED
+                    $dashboardUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $dashboardUrl);
+                    $dashboardUrl = preg_replace('/^\/\//', '/', $dashboardUrl);
+                    if (preg_match('/^\/[^\/]+:[0-9]+\//', $dashboardUrl)) {
+                        $dashboardUrl = preg_replace('/^\/[^\/]+:[0-9]+/', '', $dashboardUrl);
+                    }
+                    if (strpos($dashboardUrl, '/') !== 0) {
+                        $dashboardUrl = '/' . $dashboardUrl;
+                    }
+                    $dashboardUrl = preg_replace('/\/+/', '/', $dashboardUrl);
+                    
+                    // فحص نهائي نهائي: إزالة أي منفذ والتأكد من المسار الصحيح
+                    $dashboardUrl = preg_replace('/:[0-9]+/', '', $dashboardUrl);
+                    if ($userRole && (strpos($dashboardUrl, '/dashboard/') === false || substr($dashboardUrl, -strlen($userRole . '.php')) !== $userRole . '.php')) {
+                        $dashboardUrl = '/dashboard/' . $userRole . '.php';
+                    }
                     
                     // استخدام header redirect مباشرة (بدون JavaScript) لضمان التوجيه الصحيح
                     if (!headers_sent()) {
@@ -1006,6 +1180,35 @@ $lang = $translations;
                 if (event.persisted) {
                     splashScreen.style.display = 'none';
                     splashScreen.classList.add('hidden');
+                    
+                    // معالجة Refresh لمنع Error Code: -2
+                    try {
+                        // إذا كان هناك refresh parameter، تأكد من إزالته بعد التحميل
+                        const url = new URL(window.location.href);
+                        let cleaned = false;
+                        
+                        // إزالة جميع معاملات _nocache و _refresh المتكررة
+                        const paramsToRemove = ['_refresh', '_nocache', '_cache_bust', '_t', '_r', '_auto_refresh'];
+                        paramsToRemove.forEach(function(param) {
+                            if (url.searchParams.has(param)) {
+                                url.searchParams.delete(param);
+                                cleaned = true;
+                            }
+                        });
+                        
+                        // إذا تم تنظيف URL، استبدله
+                        if (cleaned) {
+                            setTimeout(function() {
+                                try {
+                                    window.history.replaceState({}, '', url.toString());
+                                } catch (e) {
+                                    // تجاهل الأخطاء في replaceState
+                                }
+                            }, 100);
+                        }
+                    } catch (e) {
+                        // تجاهل الأخطاء
+                    }
                     return;
                 }
                 
@@ -1131,6 +1334,60 @@ $lang = $translations;
             return apiPath.startsWith('/') ? apiPath : '/' + apiPath;
         }
         
+        /**
+         * دالة لتنظيف URL وإزالة أي بروتوكول أو hostname أو منفذ
+         * تضمن إرجاع مسار نسبي فقط لمنع خطأ ERR_FAILED
+         * مهم: لا تزيل /dashboard/ من المسار
+         */
+        function cleanUrl(url) {
+            if (!url || typeof url !== 'string') {
+                return '/';
+            }
+            
+            // حفظ المسار الأصلي للتحقق لاحقاً
+            const originalUrl = url;
+            
+            // إزالة أي بروتوكول (http:// أو https://)
+            url = url.replace(/^https?:\/\//i, '');
+            
+            // إزالة // المكررة من البداية (لكن احتفظ بـ / الأولى)
+            url = url.replace(/^\/\/+/, '/');
+            
+            // إزالة hostname مع منفذ إذا كان موجوداً (مثل localhost:8000/)
+            // لكن فقط إذا كان قبل المسار الفعلي
+            url = url.replace(/^[^\/]+:[0-9]+\//, '/');
+            // لا تزيل hostname بدون منفذ إذا كان المسار يبدأ بـ /dashboard/
+            if (!url.startsWith('/dashboard/') && !url.startsWith('/')) {
+                url = url.replace(/^[^\/]+\//, '/');
+            }
+            
+            // إزالة أي منفذ من منتصف المسار (للاحتياط)
+            url = url.replace(/:[0-9]+\//g, '/');
+            url = url.replace(/:[0-9]+$/g, '');
+            
+            // التأكد من أن المسار يبدأ بـ /
+            if (!url.startsWith('/')) {
+                url = '/' + url;
+            }
+            
+            // تنظيف المسارات المكررة (لكن احتفظ بـ /dashboard/)
+            url = url.replace(/\/+/g, '/');
+            
+            // فحص نهائي: إذا كان المسار يحتوي على dashboard في الأصل، تأكد من أنه موجود
+            if (originalUrl.includes('/dashboard/') && !url.includes('/dashboard/')) {
+                // إذا كان المسار الأصلي يحتوي على dashboard ولكن النظيف لا يحتويه، أعد بناءه
+                const roleMatch = originalUrl.match(/\/([^\/]+)\.php/);
+                if (roleMatch && roleMatch[1]) {
+                    url = '/dashboard/' + roleMatch[1] + '.php';
+                }
+            }
+            
+            // إزالة أي مسافات
+            url = url.trim();
+            
+            return url || '/';
+        }
+        
         // معالجة نموذج تسجيل الدخول مع موقت 5 ثواني وإعادة المحاولة
         const loginForm = document.getElementById('loginForm');
         const loginSubmitBtn = document.getElementById('loginSubmitBtn');
@@ -1174,7 +1431,22 @@ $lang = $translations;
                     formData.append('ajax_login', '1');
                     formData.append('csrf_token', document.querySelector('input[name="csrf_token"]')?.value || '');
                     
-                    const loginResponse = await fetch(window.location.href, {
+                    // التأكد من إرسال الطلب إلى index.php وليس الصفحة الحالية
+                    // حساب المسار الصحيح لصفحة تسجيل الدخول
+                    const currentPath = window.location.pathname || '/';
+                    let loginUrl;
+                    
+                    // إذا كنا في index.php، استخدم الرابط الحالي
+                    if (currentPath.endsWith('index.php') || currentPath.endsWith('/') || currentPath === '/') {
+                        loginUrl = window.location.href.split('?')[0]; // إزالة query parameters
+                    } else {
+                        // إذا كنا في صفحة أخرى، احسب المسار الصحيح لـ index.php
+                        const pathParts = currentPath.split('/').filter(p => p && p !== 'dashboard' && p !== 'modules' && !p.endsWith('.php'));
+                        const basePath = pathParts.length > 0 ? '/' + pathParts[0] : '';
+                        loginUrl = window.location.origin + (basePath + '/index.php').replace(/\/+/g, '/');
+                    }
+                    
+                    const loginResponse = await fetch(loginUrl, {
                         method: 'POST',
                         body: formData
                     });
@@ -1214,12 +1486,21 @@ $lang = $translations;
                         
                         let dashboardUrl;
                         if (redirectUrl) {
-                            dashboardUrl = redirectUrl;
+                            // تنظيف URL من أي بروتوكول أو hostname أو منفذ
+                            dashboardUrl = cleanUrl(redirectUrl);
                         } else {
                             const currentPath = window.location.pathname || '/';
                             const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
                             const basePath = pathParts.length ? '/' + pathParts[0] : '';
                             dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                            // تنظيف URL للتأكد
+                            dashboardUrl = cleanUrl(dashboardUrl);
+                        }
+                        
+                        // فحص نهائي: التأكد من أن المسار يحتوي على /dashboard/
+                        if (userRole && !dashboardUrl.includes('/dashboard/')) {
+                            console.warn('Dashboard URL missing /dashboard/, fixing:', dashboardUrl);
+                            dashboardUrl = `/dashboard/${userRole}.php`;
                         }
                         
                         setTimeout(() => {
@@ -1268,7 +1549,15 @@ $lang = $translations;
                         const currentPath = window.location.pathname || '/';
                         const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
                         const basePath = pathParts.length ? '/' + pathParts[0] : '';
-                        const dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                        let dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                        // تنظيف URL للتأكد من أنه نسبي فقط
+                        dashboardUrl = cleanUrl(dashboardUrl);
+                        
+                        // فحص نهائي: التأكد من أن المسار يحتوي على /dashboard/
+                        if (userRole && !dashboardUrl.includes('/dashboard/')) {
+                            console.warn('Dashboard URL missing /dashboard/, fixing:', dashboardUrl);
+                            dashboardUrl = `/dashboard/${userRole}.php`;
+                        }
                         
                         setTimeout(() => {
                             window.location.href = dashboardUrl;
@@ -1309,7 +1598,15 @@ $lang = $translations;
                             const currentPath = window.location.pathname || '/';
                             const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
                             const basePath = pathParts.length ? '/' + pathParts[0] : '';
-                            const dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                            let dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                            // تنظيف URL للتأكد من أنه نسبي فقط
+                            dashboardUrl = cleanUrl(dashboardUrl);
+                            
+                            // فحص نهائي: التأكد من أن المسار يحتوي على /dashboard/
+                            if (userRole && !dashboardUrl.includes('/dashboard/')) {
+                                console.warn('Dashboard URL missing /dashboard/, fixing:', dashboardUrl);
+                                dashboardUrl = `/dashboard/${userRole}.php`;
+                            }
                             
                             setTimeout(() => {
                                 window.location.href = dashboardUrl;
@@ -1333,7 +1630,15 @@ $lang = $translations;
                             const currentPath = window.location.pathname || '/';
                             const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
                             const basePath = pathParts.length ? '/' + pathParts[0] : '';
-                            const dashboardUrl = basePath ? `${basePath}/dashboard/accountant.php` : `/dashboard/accountant.php`;
+                            let dashboardUrl = basePath ? `${basePath}/dashboard/accountant.php` : `/dashboard/accountant.php`;
+                            // تنظيف URL للتأكد من أنه نسبي فقط
+                            dashboardUrl = cleanUrl(dashboardUrl);
+                            
+                            // فحص نهائي: التأكد من أن المسار يحتوي على /dashboard/
+                            if (!dashboardUrl.includes('/dashboard/')) {
+                                console.warn('Dashboard URL missing /dashboard/, fixing:', dashboardUrl);
+                                dashboardUrl = `/dashboard/accountant.php`;
+                            }
                             
                             loadingMessage.textContent = 'يوجد جلسة نشطة بالفعل جاري التحويل إلى النظام';
                             setTimeout(() => {

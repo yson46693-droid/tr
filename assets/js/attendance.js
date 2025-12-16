@@ -193,12 +193,14 @@ function stopCamera() {
 }
 
 // التقاط صورة
-function capturePhoto() {
+async function capturePhoto() {
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const capturedImage = document.getElementById('capturedImage');
     const cameraContainer = document.getElementById('cameraContainer');
     const capturedImageContainer = document.getElementById('capturedImageContainer');
+    const delayReasonContainer = document.getElementById('delayReasonContainer');
+    const delayReasonInput = document.getElementById('delayReason');
     
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -219,6 +221,68 @@ function capturePhoto() {
     document.getElementById('captureBtn').style.display = 'none';
     document.getElementById('retakeBtn').style.display = 'inline-block';
     document.getElementById('submitBtn').style.display = 'inline-block';
+    
+    // تحديث ملخص الوقت بعد التقاط الصورة
+    if (currentAction === 'check_in') {
+        updateTimeSummary();
+    }
+    
+    // التحقق من التأخير فقط عند تسجيل الحضور
+    if (currentAction === 'check_in' && delayReasonContainer && delayReasonInput) {
+        try {
+            // الحصول على موعد العمل الرسمي
+            const apiPath = getAttendanceApiPath();
+            const response = await fetch(apiPath + '?action=get_work_time', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json; charset=utf-8'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.work_time) {
+                    const now = new Date();
+                    const today = now.toISOString().split('T')[0];
+                    const officialStartTime = new Date(today + 'T' + data.work_time.start);
+                    const checkInTime = new Date(now);
+                    
+                    // التحقق من التأخير (إذا كان وقت الحضور بعد موعد الحضور الرسمي)
+                    if (checkInTime > officialStartTime) {
+                        // هناك تأخير - تفعيل الحقل
+                        delayReasonContainer.style.display = 'block';
+                        delayReasonInput.disabled = false;
+                        delayReasonInput.placeholder = 'يرجى كتابة سبب التأخير...';
+                        delayReasonInput.style.opacity = '1';
+                        delayReasonInput.style.cursor = 'text';
+                    } else {
+                        // لا يوجد تأخير - تعطيل الحقل
+                        delayReasonContainer.style.display = 'block';
+                        delayReasonInput.disabled = true;
+                        delayReasonInput.value = '';
+                        delayReasonInput.placeholder = 'لا يوجد تأخير - الحضور في الوقت المحدد';
+                        delayReasonInput.style.opacity = '0.6';
+                        delayReasonInput.style.cursor = 'not-allowed';
+                    }
+                } else {
+                    // في حالة عدم توفر موعد العمل، إخفاء الحقل
+                    delayReasonContainer.style.display = 'none';
+                }
+            } else {
+                // في حالة خطأ، إخفاء الحقل
+                delayReasonContainer.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error checking work time:', error);
+            // في حالة خطأ، إخفاء الحقل
+            delayReasonContainer.style.display = 'none';
+        }
+    } else {
+        // عند تسجيل الانصراف، إخفاء حقل سبب التأخير
+        if (delayReasonContainer) {
+            delayReasonContainer.style.display = 'none';
+        }
+    }
 }
 
 // إعادة التقاط
@@ -229,6 +293,16 @@ function retakePhoto() {
     document.getElementById('retakeBtn').style.display = 'none';
     document.getElementById('submitBtn').style.display = 'none';
     document.getElementById('captureBtn').style.display = 'inline-block';
+    
+    // إخفاء حقل سبب التأخير
+    const delayReasonContainer = document.getElementById('delayReasonContainer');
+    if (delayReasonContainer) {
+        delayReasonContainer.style.display = 'none';
+    }
+    const delayReasonInput = document.getElementById('delayReason');
+    if (delayReasonInput) {
+        delayReasonInput.value = '';
+    }
     
     initCamera();
 }
@@ -255,10 +329,17 @@ async function submitAttendance(action) {
             apiPath: apiPath
         });
         
+        // الحصول على سبب التأخير (فقط عند تسجيل الحضور)
+        const delayReasonInput = document.getElementById('delayReason');
+        const delayReason = (action === 'check_in' && delayReasonInput && !delayReasonInput.disabled) 
+            ? delayReasonInput.value.trim() 
+            : '';
+        
         // إرسال الصورة كـ JSON (أفضل للبيانات الكبيرة)
         const payload = {
             action: action,
-            photo: capturedPhoto
+            photo: capturedPhoto,
+            delay_reason: delayReason
         };
         
         console.log('Payload photo value:', payload.photo ? 'exists (length: ' + payload.photo.length + ')' : 'missing');
@@ -299,9 +380,12 @@ async function submitAttendance(action) {
             // تحديث حالة الأزرار بناءً على الإجراء
             updateButtonsState(action);
             
-            // إعادة تحميل الصفحة بعد ثانية ونصف
+            // إعادة تحميل الصفحة مع cache-busting بعد ثانية ونصف
             setTimeout(() => {
-                window.location.reload();
+                // إضافة timestamp لضمان إعادة تحميل من السيرفر وليس من cache
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('_refresh', Date.now());
+                window.location.href = currentUrl.toString();
             }, 1500);
         } else {
             showAlert('danger', data.message || 'فشل التسجيل');
@@ -398,6 +482,107 @@ function showAlert(type, message) {
     }, 5000);
 }
 
+// متغيرات لتخزين موعد العمل و interval للتحديث
+let workTimeData = null;
+let timeSummaryInterval = null;
+
+// عرض ملخص الوقت
+async function updateTimeSummary() {
+    if (currentAction !== 'check_in') {
+        const timeSummaryContainer = document.getElementById('timeSummaryContainer');
+        if (timeSummaryContainer) {
+            timeSummaryContainer.style.display = 'none';
+        }
+        // إيقاف interval إذا كان يعمل
+        if (timeSummaryInterval) {
+            clearInterval(timeSummaryInterval);
+            timeSummaryInterval = null;
+        }
+        return;
+    }
+    
+    try {
+        // إذا لم نكن قد حصلنا على موعد العمل بعد، احصل عليه
+        if (!workTimeData) {
+            const apiPath = getAttendanceApiPath();
+            const response = await fetch(apiPath + '?action=get_work_time', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json; charset=utf-8'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.work_time) {
+                    workTimeData = data.work_time;
+                } else {
+                    return;
+                }
+            } else {
+                return;
+            }
+        }
+        
+        // تحديث العرض
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        const officialStartTime = new Date(today + 'T' + workTimeData.start);
+        const checkInTime = new Date(now);
+        
+        // تحديث عرض الوقت الحالي
+        const currentTimeDisplay = document.getElementById('currentTimeDisplay');
+        if (currentTimeDisplay) {
+            const hours = String(checkInTime.getHours()).padStart(2, '0');
+            const minutes = String(checkInTime.getMinutes()).padStart(2, '0');
+            currentTimeDisplay.textContent = hours + ':' + minutes;
+        }
+        
+        // تحديث عرض موعد العمل
+        const officialTimeDisplay = document.getElementById('officialTimeDisplay');
+        if (officialTimeDisplay) {
+            const officialHours = String(officialStartTime.getHours()).padStart(2, '0');
+            const officialMinutes = String(officialStartTime.getMinutes()).padStart(2, '0');
+            officialTimeDisplay.textContent = officialHours + ':' + officialMinutes;
+        }
+        
+        // تحديث عرض الحالة
+        const timeStatusDisplay = document.getElementById('timeStatusDisplay');
+        if (timeStatusDisplay) {
+            const diffMs = checkInTime - officialStartTime;
+            const diffMinutes = Math.round(diffMs / 60000);
+            
+            if (diffMinutes > 0) {
+                // تأخير
+                timeStatusDisplay.innerHTML = '<span class="badge bg-warning">متأخر ' + diffMinutes + ' دقيقة</span>';
+                timeStatusDisplay.className = 'fw-bold text-warning';
+            } else if (diffMinutes < 0) {
+                // مبكر
+                const earlyMinutes = Math.abs(diffMinutes);
+                timeStatusDisplay.innerHTML = '<span class="badge bg-info">مبكر ' + earlyMinutes + ' دقيقة</span>';
+                timeStatusDisplay.className = 'fw-bold text-info';
+            } else {
+                // في الوقت
+                timeStatusDisplay.innerHTML = '<span class="badge bg-success">في الوقت</span>';
+                timeStatusDisplay.className = 'fw-bold text-success';
+            }
+        }
+        
+        // إظهار ملخص الوقت
+        const timeSummaryContainer = document.getElementById('timeSummaryContainer');
+        if (timeSummaryContainer) {
+            timeSummaryContainer.style.display = 'block';
+        }
+        
+    } catch (error) {
+        console.error('Error updating time summary:', error);
+        const timeSummaryContainer = document.getElementById('timeSummaryContainer');
+        if (timeSummaryContainer) {
+            timeSummaryContainer.style.display = 'none';
+        }
+    }
+}
+
 // معالجة فتح الـ modal
 document.addEventListener('DOMContentLoaded', function() {
     const cameraModal = document.getElementById('cameraModal');
@@ -452,15 +637,42 @@ document.addEventListener('DOMContentLoaded', function() {
         capturedPhoto = null;
         const cameraContainer = document.getElementById('cameraContainer');
         const capturedImageContainer = document.getElementById('capturedImageContainer');
+        const delayReasonContainer = document.getElementById('delayReasonContainer');
+        const delayReasonInput = document.getElementById('delayReason');
         
         if (cameraContainer) cameraContainer.style.display = 'block';
         if (capturedImageContainer) capturedImageContainer.style.display = 'none';
         if (captureBtn) captureBtn.style.display = 'none';
         if (retakeBtn) retakeBtn.style.display = 'none';
         if (submitBtn) submitBtn.style.display = 'none';
+        if (delayReasonContainer) delayReasonContainer.style.display = 'none';
+        if (delayReasonInput) {
+            delayReasonInput.value = '';
+            delayReasonInput.disabled = true;
+        }
         
         // إيقاف أي stream سابق
         stopCamera();
+        
+        // تحديث ملخص الوقت (للتسجيل الحضور فقط)
+        workTimeData = null; // إعادة تعيين
+        if (currentAction === 'check_in') {
+            updateTimeSummary();
+            // تحديث الوقت كل ثانية
+            if (timeSummaryInterval) {
+                clearInterval(timeSummaryInterval);
+            }
+            timeSummaryInterval = setInterval(updateTimeSummary, 1000);
+        } else {
+            const timeSummaryContainer = document.getElementById('timeSummaryContainer');
+            if (timeSummaryContainer) {
+                timeSummaryContainer.style.display = 'none';
+            }
+            if (timeSummaryInterval) {
+                clearInterval(timeSummaryInterval);
+                timeSummaryInterval = null;
+            }
+        }
         
         // إزالة backdrop بعد تأخير قصير (للتأكد من إزالته حتى لو تم إنشاؤه بعد فتح Modal)
         setTimeout(() => {
@@ -482,6 +694,13 @@ document.addEventListener('DOMContentLoaded', function() {
         stopCamera();
         capturedPhoto = null;
         currentAction = null;
+        workTimeData = null; // إعادة تعيين
+        
+        // إيقاف interval تحديث الوقت
+        if (timeSummaryInterval) {
+            clearInterval(timeSummaryInterval);
+            timeSummaryInterval = null;
+        }
         
         // إيقاف مراقبة backdrop
         if (cameraModal.dataset.backdropInterval) {

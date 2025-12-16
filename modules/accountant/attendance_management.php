@@ -454,6 +454,7 @@ $backUrl = '?page=attendance_management&month=' . urlencode($selectedMonth);
                             <th>تسجيل الحضور</th>
                             <th>تسجيل الانصراف</th>
                             <th>التأخير</th>
+                            <th>سبب التأخير</th>
                             <th>ساعات العمل</th>
                             <th>الحالة</th>
                         </tr>
@@ -461,7 +462,7 @@ $backUrl = '?page=attendance_management&month=' . urlencode($selectedMonth);
                     <tbody>
                         <?php if (empty($selectedUserRecords)): ?>
                             <tr>
-                                <td colspan="6" class="text-center text-muted">لا توجد سجلات</td>
+                                <td colspan="7" class="text-center text-muted">لا توجد سجلات</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($selectedUserRecords as $record): ?>
@@ -478,6 +479,13 @@ $backUrl = '?page=attendance_management&month=' . urlencode($selectedMonth);
                                             <span class="badge bg-warning"><?php echo $record['delay_minutes']; ?> دقيقة</span>
                                         <?php else: ?>
                                             <span class="badge bg-success">في الوقت</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td data-label="سبب التأخير">
+                                        <?php if (!empty($record['delay_reason']) && $record['delay_minutes'] > 0): ?>
+                                            <span class="text-muted small"><?php echo htmlspecialchars($record['delay_reason']); ?></span>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
                                         <?php endif; ?>
                                     </td>
                                     <td data-label="ساعات العمل">

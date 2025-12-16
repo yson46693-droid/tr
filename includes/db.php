@@ -11,6 +11,11 @@ if (!defined('ACCESS_ALLOWED')) {
 
 require_once __DIR__ . '/config.php';
 
+// تحميل نظام الكاش إذا كان متوفراً
+if (file_exists(__DIR__ . '/cache.php')) {
+    require_once __DIR__ . '/cache.php';
+}
+
 class Database {
     private static $instance = null;
     private $connection;
@@ -18,10 +23,49 @@ class Database {
     
     private function __construct() {
         try {
-            $this->connection = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+            // إعدادات timeout للاتصال بقاعدة البيانات
+            // استخدام timeout قصير لمنع تعليق الخادم
+            $connectTimeout = 3; // 3 ثواني للاتصال (مخفض)
+            $readTimeout = 5; // 5 ثواني للقراءة (مخفض)
+            $writeTimeout = 5; // 5 ثواني للكتابة (مخفض)
+            
+            // تعيين timeout قبل الاتصال
+            ini_set('default_socket_timeout', $connectTimeout);
+            
+            // إنشاء الاتصال مع timeout
+            // استخدام mysqli_report لتقليل الأخطاء أثناء الاتصال
+            mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+            
+            try {
+                $this->connection = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+            } catch (mysqli_sql_exception $e) {
+                // إذا فشل الاتصال، حاول بدون قاعدة البيانات أولاً للتحقق من الاتصال
+                try {
+                    $testConnection = @new mysqli(DB_HOST, DB_USER, DB_PASS, null, DB_PORT);
+                    if ($testConnection->connect_error) {
+                        throw new Exception("Cannot connect to MySQL server: " . $testConnection->connect_error);
+                    }
+                    $testConnection->close();
+                    throw new Exception("Database '" . DB_NAME . "' not found or access denied. Please check database name and user permissions.");
+                } catch (mysqli_sql_exception $testError) {
+                    throw new Exception("MySQL connection error: " . $testError->getMessage());
+                }
+            }
             
             if ($this->connection->connect_error) {
                 throw new Exception("Connection failed: " . $this->connection->connect_error);
+            }
+            
+            // تعيين timeout للاتصال بعد الاتصال الناجح
+            if (method_exists($this->connection, 'options')) {
+                // استخدام القيم الرقمية للثوابت إذا لم تكن معرّفة (لتوافق مع إصدارات PHP القديمة)
+                $optConnectTimeout = defined('MYSQLI_OPT_CONNECT_TIMEOUT') ? MYSQLI_OPT_CONNECT_TIMEOUT : 2;
+                $optReadTimeout = defined('MYSQLI_OPT_READ_TIMEOUT') ? MYSQLI_OPT_READ_TIMEOUT : 11;
+                $optWriteTimeout = defined('MYSQLI_OPT_WRITE_TIMEOUT') ? MYSQLI_OPT_WRITE_TIMEOUT : 12;
+                
+                @$this->connection->options($optConnectTimeout, $connectTimeout);
+                @$this->connection->options($optReadTimeout, $readTimeout);
+                @$this->connection->options($optWriteTimeout, $writeTimeout);
             }
             
             // تعيين ترميز UTF-8
@@ -36,6 +80,8 @@ class Database {
                 if ($columnCheck instanceof mysqli_result) {
                     if ($columnCheck->num_rows === 0) {
                         $this->connection->query("ALTER TABLE `users` ADD COLUMN `profile_photo` LONGTEXT NULL AFTER `phone`");
+                        // مسح الكاش بعد تعديل الجدول
+                        $this->clearCache();
                     }
                     $columnCheck->free();
                 }
@@ -63,6 +109,8 @@ class Database {
                             foreach ($queries as $query) {
                                 if (!empty($query) && !preg_match('/^--/', $query)) {
                                     $this->connection->query($query);
+                                    // مسح الكاش بعد تنفيذ الاستعلام
+                                    $this->clearCache();
                                 }
                             }
                         }
@@ -84,6 +132,8 @@ class Database {
                               CONSTRAINT `pwa_splash_sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
                             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                         ");
+                        // مسح الكاش بعد إنشاء الجدول
+                        $this->clearCache();
                     }
                 }
                 if ($tableCheck instanceof mysqli_result) {
@@ -107,8 +157,40 @@ class Database {
         } catch (Exception $e) {
             // تسجيل الخطأ في ملف السجل
             error_log("Database connection error: " . $e->getMessage());
-            // عرض رسالة الخطأ (للتطوير - سيتم تعطيلها لاحقاً)
-            die("Database connection error: " . $e->getMessage());
+            error_log("Connection details - Host: " . DB_HOST . ", Port: " . DB_PORT . ", Database: " . DB_NAME . ", User: " . DB_USER);
+            
+            // رسالة خطأ واضحة للمستخدم
+            $errorMessage = "خطأ في الاتصال بقاعدة البيانات.\n\n";
+            $errorMessage .= "الرجاء التحقق من:\n";
+            $errorMessage .= "1. أن خادم MySQL (XAMPP) يعمل\n";
+            $errorMessage .= "2. إعدادات الاتصال في ملف config.php صحيحة\n";
+            $errorMessage .= "3. اسم قاعدة البيانات موجود\n";
+            $errorMessage .= "4. المستخدم لديه صلاحيات الوصول\n\n";
+            $errorMessage .= "تفاصيل الخطأ: " . htmlspecialchars($e->getMessage());
+            
+            die("<div style='font-family: Arial, sans-serif; padding: 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; color: #721c24; direction: rtl; text-align: right;'>" . 
+                "<h3 style='margin-top: 0;'>⚠️ خطأ في الاتصال بقاعدة البيانات</h3>" . 
+                "<pre style='background: white; padding: 10px; border-radius: 3px; white-space: pre-wrap;'>" . 
+                htmlspecialchars($errorMessage) . 
+                "</pre></div>");
+        } catch (Throwable $e) {
+            // معالجة جميع أنواع الأخطاء
+            error_log("Database connection error (Throwable): " . $e->getMessage());
+            error_log("Connection details - Host: " . DB_HOST . ", Port: " . DB_PORT . ", Database: " . DB_NAME . ", User: " . DB_USER);
+            
+            $errorMessage = "خطأ في الاتصال بقاعدة البيانات.\n\n";
+            $errorMessage .= "الرجاء التحقق من:\n";
+            $errorMessage .= "1. أن خادم MySQL (XAMPP) يعمل\n";
+            $errorMessage .= "2. إعدادات الاتصال في ملف config.php صحيحة\n";
+            $errorMessage .= "3. اسم قاعدة البيانات موجود\n";
+            $errorMessage .= "4. المستخدم لديه صلاحيات الوصول\n\n";
+            $errorMessage .= "تفاصيل الخطأ: " . htmlspecialchars($e->getMessage());
+            
+            die("<div style='font-family: Arial, sans-serif; padding: 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; color: #721c24; direction: rtl; text-align: right;'>" . 
+                "<h3 style='margin-top: 0;'>⚠️ خطأ في الاتصال بقاعدة البيانات</h3>" . 
+                "<pre style='background: white; padding: 10px; border-radius: 3px; white-space: pre-wrap;'>" . 
+                htmlspecialchars($errorMessage) . 
+                "</pre></div>");
         }
     }
     
@@ -218,6 +300,33 @@ class Database {
         $insertId = $stmt->insert_id;
         $stmt->close();
         
+        // مسح الكاش فوراً بعد أي عملية تعديل (INSERT/UPDATE/DELETE) لضمان ظهور النتائج بشكل لحظي
+        // يتم المسح فوراً بدون انتظار لضمان التحديث الفوري
+        if (class_exists('Cache')) {
+            try {
+                // التحقق من نوع الاستعلام للتأكد أنه تعديلي
+                $sqlUpper = strtoupper(trim($sql));
+                $isModifying = preg_match('/^\s*(INSERT|UPDATE|DELETE|REPLACE|TRUNCATE)/i', $sqlUpper);
+                
+                if ($isModifying) {
+                    // مسح الكاش فوراً بشكل متزامن لضمان التحديث الفوري
+                    Cache::flush();
+                    
+                    // مسح الكاش من الذاكرة أيضاً للتأكد من التحديث الفوري
+                    if (method_exists('Cache', 'flush')) {
+                        // التأكد من مسح جميع أنواع الكاش
+                        Cache::flush();
+                    }
+                }
+            } catch (Exception $e) {
+                // تجاهل أخطاء مسح الكاش لتجنب تعطيل العملية
+                error_log("Cache flush error: " . $e->getMessage());
+            } catch (Throwable $e) {
+                // معالجة جميع أنواع الأخطاء
+                error_log("Cache flush error (Throwable): " . $e->getMessage());
+            }
+        }
+        
         return [
             'affected_rows' => $affectedRows,
             'insert_id' => $insertId
@@ -237,7 +346,20 @@ class Database {
      */
     public function commit() {
         $this->inTransaction = false;
-        return $this->connection->commit();
+        $result = $this->connection->commit();
+        
+        // مسح الكاش فوراً بعد تأكيد المعاملة لضمان ظهور التغييرات بشكل لحظي
+        if ($result && class_exists('Cache')) {
+            try {
+                // مسح الكاش فوراً بدون انتظار
+                Cache::flush();
+            } catch (Exception $e) {
+                // تجاهل أخطاء مسح الكاش
+                error_log("Cache flush error after commit: " . $e->getMessage());
+            }
+        }
+        
+        return $result;
     }
     
     /**
@@ -276,6 +398,53 @@ class Database {
         if ($this->connection) {
             $this->connection->close();
         }
+    }
+    
+    /**
+     * مسح الكاش بعد العمليات بشكل فوري
+     * يمكن استدعاؤها يدوياً بعد العمليات التي تستخدم connection->query مباشرة
+     * يتم المسح فوراً لضمان ظهور النتائج بشكل لحظي
+     */
+    public function clearCache() {
+        if (class_exists('Cache')) {
+            try {
+                // مسح الكاش فوراً بشكل متزامن
+                Cache::flush();
+            } catch (Exception $e) {
+                error_log("Cache flush error: " . $e->getMessage());
+            } catch (Throwable $e) {
+                error_log("Cache flush error (Throwable): " . $e->getMessage());
+            }
+        }
+    }
+    
+    /**
+     * تنفيذ استعلام مباشر مع مسح الكاش التلقائي للعمليات التعديلية
+     * هذه الدالة للاستعلامات التي لا يمكن استخدام prepared statements معها
+     * 
+     * @param string $sql الاستعلام
+     * @param bool $isModifying هل الاستعلام يعدل البيانات (INSERT/UPDATE/DELETE/ALTER)
+     * @return mysqli_result|bool نتيجة الاستعلام
+     */
+    public function rawQuery($sql, $isModifying = false) {
+        // تحديد نوع الاستعلام تلقائياً إذا لم يتم تحديده
+        if (!$isModifying) {
+            $sqlUpper = strtoupper(trim($sql));
+            $isModifying = preg_match('/^\s*(INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE|REPLACE)/i', $sqlUpper);
+        }
+        
+        $result = $this->connection->query($sql);
+        
+        // مسح الكاش فوراً بعد أي عملية تعديل
+        if ($isModifying && $result !== false && class_exists('Cache')) {
+            try {
+                Cache::flush();
+            } catch (Exception $e) {
+                error_log("Cache flush error after rawQuery: " . $e->getMessage());
+            }
+        }
+        
+        return $result;
     }
 
     /**
@@ -368,6 +537,8 @@ class Database {
 
             if (!empty($alterParts)) {
                 $this->connection->query("ALTER TABLE vehicle_inventory " . implode(', ', $alterParts));
+                // مسح الكاش بعد تعديل الجدول
+                $this->clearCache();
             }
 
             $indexesResult = $this->connection->query("SHOW INDEXES FROM vehicle_inventory");
@@ -400,6 +571,8 @@ class Database {
 
             if (!empty($indexAlterParts)) {
                 $this->connection->query("ALTER TABLE vehicle_inventory " . implode(', ', $indexAlterParts));
+                // مسح الكاش بعد تعديل الفهارس
+                $this->clearCache();
             }
 
             // تحديث القيد UNIQUE ليشمل finished_batch_id للسماح بمنتجات من نفس النوع برقم تشغيلة مختلف
@@ -420,6 +593,8 @@ class Database {
                     // في MySQL، يمكن أن يكون هناك عدة صفوف بنفس (vehicle_id, product_id) إذا كان finished_batch_id NULL
                     // ولكن يجب أن يكون هناك صف واحد فقط لكل (vehicle_id, product_id, finished_batch_id) حيث finished_batch_id NOT NULL
                     $this->connection->query("ALTER TABLE vehicle_inventory ADD UNIQUE KEY `vehicle_product_batch_unique` (`vehicle_id`, `product_id`, `finished_batch_id`)");
+                    // مسح الكاش بعد تعديل القيد
+                    $this->clearCache();
                 } catch (Throwable $constraintError) {
                     error_log("Error updating vehicle_inventory unique constraint: " . $constraintError->getMessage());
                 }
@@ -427,6 +602,8 @@ class Database {
                 // إضافة القيد الجديد مباشرة إذا لم يكن هناك قيد قديم
                 try {
                     $this->connection->query("ALTER TABLE vehicle_inventory ADD UNIQUE KEY `vehicle_product_batch_unique` (`vehicle_id`, `product_id`, `finished_batch_id`)");
+                    // مسح الكاش بعد إضافة القيد
+                    $this->clearCache();
                 } catch (Throwable $constraintError) {
                     error_log("Error adding vehicle_inventory unique constraint: " . $constraintError->getMessage());
                 }
@@ -436,6 +613,8 @@ class Database {
                 "INSERT INTO system_settings (`key`, `value`, updated_at) VALUES ('vehicle_inventory_upgraded', '1', NOW())
                  ON DUPLICATE KEY UPDATE `value` = '1', updated_at = NOW()"
             );
+            // مسح الكاش بعد تحديث الإعدادات
+            $this->clearCache();
 
             $flagDir = dirname($flagFile);
             if (!is_dir($flagDir)) {
@@ -511,10 +690,14 @@ class Database {
             // إضافة الأعمدة واحداً تلو الآخر بالترتيب الصحيح
             if ($needsRepId) {
                 $this->connection->query("ALTER TABLE `customers` ADD COLUMN `rep_id` INT NULL AFTER `id`");
+                // مسح الكاش بعد تعديل الجدول
+                $this->clearCache();
             }
             if ($needsCreatedFromPos) {
                 $afterColumn = $needsRepId ? 'rep_id' : 'id';
                 $this->connection->query("ALTER TABLE `customers` ADD COLUMN `created_from_pos` TINYINT(1) NOT NULL DEFAULT 0 AFTER `{$afterColumn}`");
+                // مسح الكاش بعد تعديل الجدول
+                $this->clearCache();
             }
             if ($needsCreatedByAdmin) {
                 if (!$needsCreatedFromPos) {
@@ -523,6 +706,8 @@ class Database {
                     $afterColumn = 'created_from_pos';
                 }
                 $this->connection->query("ALTER TABLE `customers` ADD COLUMN `created_by_admin` TINYINT(1) NOT NULL DEFAULT 0 AFTER `{$afterColumn}`");
+                // مسح الكاش بعد تعديل الجدول
+                $this->clearCache();
             }
 
             // إضافة مفتاح rep_id إذا تم إضافته
@@ -535,6 +720,8 @@ class Database {
                     }
                     if (!$hasIndex) {
                         $this->connection->query("ALTER TABLE `customers` ADD KEY `rep_id` (`rep_id`)");
+                        // مسح الكاش بعد إضافة الفهرس
+                        $this->clearCache();
                     }
                 } catch (Throwable $indexError) {
                     error_log('Customers rep_id index migration error: ' . $indexError->getMessage());
@@ -623,6 +810,8 @@ class Database {
             // إضافة القيد الجديد
             try {
                 $this->connection->query("ALTER TABLE vehicle_inventory ADD UNIQUE KEY `vehicle_product_batch_unique` (`vehicle_id`, `product_id`, `finished_batch_id`)");
+                // مسح الكاش بعد إضافة القيد
+                $this->clearCache();
                 $updated = true;
             } catch (Throwable $addError) {
                 // قد يكون القيد موجود بالفعل أو هناك مشكلة أخرى

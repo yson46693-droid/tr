@@ -27,7 +27,13 @@ $error = '';
 $success = '';
 
 // قراءة الرسائل من session (Post-Redirect-Get pattern)
+// Debug: تسجيل session قبل قراءة الرسائل
+error_log('Production page - Session before applyPRGPattern: success_message=' . (isset($_SESSION['success_message']) ? $_SESSION['success_message'] : 'NOT SET') . ', error_message=' . (isset($_SESSION['error_message']) ? $_SESSION['error_message'] : 'NOT SET'));
+
 applyPRGPattern($error, $success);
+
+// Debug: تسجيل الرسائل للتأكد من أنها موجودة
+error_log('Production page messages after applyPRGPattern - Error: ' . ($error ?: 'none') . ', Success: ' . ($success ?: 'none'));
 
 ensureProductTemplatesExtendedSchema($db);
 syncAllUnifiedTemplatesToProductTemplates($db);
@@ -4504,8 +4510,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 
-                // التأكد من وجود عامل واحد على الأقل
-                if (empty($workersList)) {
+                // التحقق من وجود عامل واحد على الأقل حاضر (باستثناء المدير)
+                // فقط إذا كان جدول الحضور موجوداً
+                if (!empty($attendanceTableCheck) && empty($workersList)) {
+                    // لا يمكن إنشاء التشغيلة بدون عمال حاضرين
+                    $db->rollBack();
+                    $error = 'لا يمكن إنشاء التشغيلة بدون عمال حاضرين اليوم. يرجى تسجيل حضور عمال الإنتاج أولاً.';
+                    $redirectParams = ['page' => 'production'];
+                    preventDuplicateSubmission(null, $redirectParams, null, $currentUser['role'], $error);
+                }
+                
+                // إذا كان جدول الحضور غير موجود ولم يكن هناك عمال، أضف المستخدم الحالي
+                if (empty($attendanceTableCheck) && empty($workersList)) {
                     $workersList[] = $selectedUserId;
                 }
                 
@@ -4609,6 +4625,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $result = $db->execute($sql, $values);
                 $productionId = $result['insert_id'];
                 
+                // تسجيل debug للتأكد من تمرير honey_variety بشكل صحيح
+                error_log("Before createBatchNumber - honeyVariety: " . ($honeyVariety ?? 'NULL'));
+                foreach ($materialsConsumption['raw'] as $idx => $rawItem) {
+                    if (in_array($rawItem['material_type'] ?? '', ['honey_raw', 'honey_filtered', 'honey', 'honey_general', 'honey_main'], true)) {
+                        error_log("Raw material [{$idx}]: material_type={$rawItem['material_type']}, honey_variety=" . ($rawItem['honey_variety'] ?? 'NULL') . ", supplier_id=" . ($rawItem['supplier_id'] ?? 'NULL'));
+                    }
+                }
+                
                 // إنشاء رقم تشغيلة واحد لجميع المنتجات
                 $batchResult = createBatchNumber(
                     $productId,
@@ -4637,6 +4661,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 storeProductionMaterialsUsage($productionId, $materialsConsumption['raw'], $materialsConsumption['packaging']);
 
+                // الخصم من honey_stock يجب أن يحدث إذا لم يتم الخصم في batchCreationCreate
+                // (عندما stock_deducted = false)
+                // أو إذا كان الخصم من raw_materials وليس من honey_stock مباشرة
+                // في هذه الحالة، نحتاج للخصم من honey_stock بناءً على honey_variety
                 if (empty($batchResult['stock_deducted'])) {
                     try {
                         foreach ($materialsConsumption['raw'] as $rawItem) {
@@ -4654,12 +4682,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             case 'honey_filtered':
                                 if ($supplierForDeduction) {
                                     $stockColumn = $materialType === 'honey_raw' ? 'raw_honey_quantity' : 'filtered_honey_quantity';
-                                    $db->execute(
-                                        "UPDATE honey_stock 
-                                         SET {$stockColumn} = GREATEST({$stockColumn} - ?, 0), updated_at = NOW() 
-                                         WHERE supplier_id = ?",
-                                        [$deductQuantity, $supplierForDeduction]
-                                    );
+                                    $honeyVarietyForDeduction = $rawItem['honey_variety'] ?? null;
+                                    
+                                    // تسجيل معلومات الخصم
+                                    // تعطيل التسجيل الروتيني
+                                    // error_log("Deducting honey stock in production.php: material_type={$materialType}, honey_variety=" . ($honeyVarietyForDeduction ?? 'NULL') . ", supplier_id={$supplierForDeduction}, quantity={$deductQuantity}");
+                                    
+                                    // التحقق من وجود عمود honey_variety في جدول honey_stock
+                                    $hasHoneyVarietyColumn = false;
+                                    try {
+                                        $columnCheck = $db->queryOne("SHOW COLUMNS FROM honey_stock LIKE 'honey_variety'");
+                                        $hasHoneyVarietyColumn = !empty($columnCheck);
+                                    } catch (Exception $e) {
+                                        // تجاهل الخطأ
+                                    }
+                                    
+                                    // محاولات الخصم: أولاً مع supplier + variety، ثم supplier فقط، ثم بدون شروط
+                                    $attempts = [
+                                        ['supplier' => $supplierForDeduction, 'variety' => $honeyVarietyForDeduction],
+                                        ['supplier' => $supplierForDeduction, 'variety' => null],
+                                        ['supplier' => null, 'variety' => null],
+                                    ];
+                                    
+                                    $remaining = $deductQuantity;
+                                    
+                                    foreach ($attempts as $attempt) {
+                                        if ($remaining <= 0) {
+                                            break;
+                                        }
+                                        
+                                        $sql = "SELECT id, {$stockColumn} AS available FROM honey_stock WHERE {$stockColumn} > 0";
+                                        $params = [];
+                                        
+                                        if ($attempt['supplier']) {
+                                            $sql .= " AND supplier_id = ?";
+                                            $params[] = $attempt['supplier'];
+                                        }
+                                        
+                                        if ($attempt['variety'] !== null && $attempt['variety'] !== '' && $hasHoneyVarietyColumn) {
+                                            $sql .= " AND honey_variety = ?";
+                                            $params[] = $attempt['variety'];
+                                        }
+                                        
+                                        $sql .= " ORDER BY {$stockColumn} DESC";
+                                        $rows = $db->query($sql, $params);
+                                        
+                                        if (empty($rows)) {
+                                            continue;
+                                        }
+                                        
+                                        foreach ($rows as $row) {
+                                            if ($remaining <= 0) {
+                                                break;
+                                            }
+                                            
+                                            $available = (float)($row['available'] ?? 0);
+                                            if ($available <= 0) {
+                                                continue;
+                                            }
+                                            
+                                            $deduct = min($available, $remaining);
+                                            $db->execute(
+                                                "UPDATE honey_stock 
+                                                 SET {$stockColumn} = GREATEST({$stockColumn} - ?, 0), updated_at = NOW() 
+                                                 WHERE id = ?",
+                                                [$deduct, $row['id']]
+                                            );
+                                            error_log("Deducted {$deduct} from honey_stock id={$row['id']}, remaining={$remaining}");
+                                            $remaining -= $deduct;
+                                        }
+                                    }
+                                    
+                                    if ($remaining > 0.0001) {
+                                        error_log("Warning: Could not deduct full honey quantity. Required: {$deductQuantity}, Remaining: {$remaining}");
+                                    } else {
+                                        error_log("Successfully deducted full honey quantity: {$deductQuantity}");
+                                    }
                                 }
                                 break;
                             case 'olive_oil':
@@ -4789,7 +4887,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     ];
                                 }
                                 $packagingDeductionMap[$packMaterialId]['quantity'] += $packQuantity;
-                                error_log('Aggregating packaging item: material_id=' . $packMaterialId . ', quantity=' . $packQuantity . ' (total so far: ' . $packagingDeductionMap[$packMaterialId]['quantity'] . ')');
+                                // تعطيل التسجيل الروتيني
+                                // error_log('Aggregating packaging item: material_id=' . $packMaterialId . ', quantity=' . $packQuantity . ' (total so far: ' . $packagingDeductionMap[$packMaterialId]['quantity'] . ')');
                             }
                         }
                         unset($packItem);
@@ -4803,7 +4902,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             
                             // التحقق من أن هذا العنصر لم يتم خصمه بالفعل في هذه المعاملة
                             if (isset($deductedPackagingIds[$packMaterialId])) {
-                                error_log('WARNING: Packaging item ID=' . $packMaterialId . ' already deducted in this transaction! Skipping duplicate deduction.');
+                                // تعطيل التسجيل الروتيني - هذا تحذير روتيني
+                                // error_log('WARNING: Packaging item ID=' . $packMaterialId . ' already deducted in this transaction! Skipping duplicate deduction.');
                                 continue;
                             }
                             
@@ -4821,7 +4921,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     );
                                 
                                 if (!$currentQuantityCheck) {
-                                    error_log('WARNING: Packaging material ID=' . $packMaterialId . ' not found! Skipping deduction.');
+                                    // تعطيل التسجيل الروتيني - هذا تحذير روتيني
+                                    // error_log('WARNING: Packaging material ID=' . $packMaterialId . ' not found! Skipping deduction.');
                                     continue;
                                 }
                                 
@@ -4835,7 +4936,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 
                                 // التحقق من أن الكمية المتاحة كافية
                                 if ($actualQuantityBefore < $packQuantity) {
-                                    error_log('WARNING: Insufficient stock for packaging material ID=' . $packMaterialId . '. Available=' . $actualQuantityBefore . ', Required=' . $packQuantity);
+                                    // تعطيل التسجيل الروتيني - هذا تحذير روتيني
+                                    // error_log('WARNING: Insufficient stock for packaging material ID=' . $packMaterialId . '. Available=' . $actualQuantityBefore . ', Required=' . $packQuantity);
                                     // لا نوقف العملية، فقط نسجل تحذير
                                 }
                                 
@@ -5423,7 +5525,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // منع التكرار باستخدام إعادة التوجيه
                 $successMessage = 'تم إنشاء تشغيلة إنتاج بنجاح! رقم التشغيلة: ' . $batchNumber . ' (الكمية: ' . $quantity . ' قطعة)';
                 $redirectParams = ['page' => 'production', 'show_barcode_modal' => '1'];
+                
+                // تسجيل debug للتأكد من حفظ الرسالة
+                error_log("Setting success message before redirect: " . $successMessage);
+                error_log("Session before preventDuplicateSubmission: " . (isset($_SESSION['success_message']) ? $_SESSION['success_message'] : 'NOT SET'));
+                
                 preventDuplicateSubmission($successMessage, $redirectParams, null, $currentUser['role']);
+                
+                // تسجيل debug بعد preventDuplicateSubmission (لن يتم تنفيذه عادة بسبب exit)
+                error_log("Session after preventDuplicateSubmission: " . (isset($_SESSION['success_message']) ? $_SESSION['success_message'] : 'NOT SET'));
                 
             } catch (Exception $e) {
                 $db->rollBack();
@@ -5443,8 +5553,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 error_log("Error trace: " . $e->getTraceAsString());
                 error_log("=== END ERROR LOG ===");
                 
-                // حفظ رسالة الخطأ في الجلسة
-                $_SESSION['error_message'] = $error;
+                // استخدام preventDuplicateSubmission لإعادة التوجيه مع رسالة الخطأ
+                $redirectParams = ['page' => 'production'];
+                preventDuplicateSubmission(null, $redirectParams, null, $currentUser['role'], $error);
             }
         }
     }
@@ -6369,42 +6480,31 @@ $lang = isset($translations) ? $translations : [];
 </div>
 
 <?php if ($error): ?>
-    <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" data-auto-refresh="true">
+    <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" role="alert">
         <i class="bi bi-exclamation-triangle-fill me-2"></i>
-        <?php echo htmlspecialchars($error); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <strong>خطأ:</strong> <?php echo htmlspecialchars($error); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
     </div>
 <?php endif; ?>
 
 <?php if ($success): ?>
-    <div class="alert alert-success alert-dismissible fade show" id="successAlert" data-auto-refresh="true">
+    <div class="alert alert-success alert-dismissible fade show" id="successAlert" role="alert">
         <i class="bi bi-check-circle-fill me-2"></i>
-        <?php echo htmlspecialchars($success); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <strong>نجاح:</strong> <?php echo htmlspecialchars($success); ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
     </div>
 <?php endif; ?>
 
-<!-- إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات -->
+<!-- لا حاجة لإعادة التحميل التلقائي - preventDuplicateSubmission يتولى ذلك -->
 <script>
-// إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات
+// إزالة معاملات _t و _refresh من URL بعد التحميل
 (function() {
-    const successAlert = document.getElementById('successAlert');
-    const errorAlert = document.getElementById('errorAlert');
-    
-    // التحقق من وجود رسالة نجاح أو خطأ
-    const alertElement = successAlert || errorAlert;
-    
-    if (alertElement && alertElement.dataset.autoRefresh === 'true') {
-        // انتظار 3 ثوانٍ لإعطاء المستخدم وقتاً لرؤية الرسالة
-        setTimeout(function() {
-            // إعادة تحميل الصفحة بدون معاملات GET لمنع تكرار الطلبات
-            const currentUrl = new URL(window.location.href);
-            // إزالة معاملات success و error من URL
-            currentUrl.searchParams.delete('success');
-            currentUrl.searchParams.delete('error');
-            // إعادة تحميل الصفحة
-            window.location.href = currentUrl.toString();
-        }, 3000);
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('_t') || urlParams.has('_refresh')) {
+        urlParams.delete('_t');
+        urlParams.delete('_refresh');
+        const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+        window.history.replaceState({}, '', newUrl);
     }
 })();
 </script>
@@ -9522,8 +9622,13 @@ document.getElementById('createFromTemplateForm')?.addEventListener('submit', fu
     console.log('Template ID:', templateId);
     console.log('Quantity:', quantity);
 
+    // التحقق من أن قسم الموردين مرئي قبل التحقق من وجود selects
+    const suppliersWrapper = document.getElementById('templateSuppliersWrapper');
+    const isSuppliersSectionVisible = suppliersWrapper && !suppliersWrapper.classList.contains('d-none');
+    
     const supplierSelects = document.querySelectorAll('#templateSuppliersContainer select[data-role="component-supplier"]');
     console.log('Supplier selects found:', supplierSelects.length);
+    console.log('Suppliers section visible:', isSuppliersSectionVisible);
     
     // تسجيل جميع الموردين المحددين
     const suppliersData = [];
@@ -9537,58 +9642,64 @@ document.getElementById('createFromTemplateForm')?.addEventListener('submit', fu
     });
     console.log('Suppliers data:', suppliersData);
 
-    if (supplierSelects.length === 0) {
-        console.error('ERROR: No supplier selects found!');
+    // التحقق من وجود selects فقط إذا كان قسم الموردين مرئي
+    if (isSuppliersSectionVisible && supplierSelects.length === 0) {
+        console.error('ERROR: Suppliers section is visible but no supplier selects found!');
         e.preventDefault();
         alert('لا توجد مواد مرتبطة بالقالب، يرجى مراجعة القالب قبل إنشاء التشغيلة.');
         return false;
     }
 
-    for (let select of supplierSelects) {
-        if (!select.value || select.value.trim() === '') {
-            console.error('ERROR: Empty supplier value found:', select.name);
-            e.preventDefault();
-            alert('يرجى اختيار المورد المناسب لهذه المادة للمتابعة');
-            select.focus();
-            return false;
-        }
-    }
-    
-    console.log('All suppliers validated successfully');
-
-    const honeyVarietyFields = document.querySelectorAll('#templateSuppliersContainer [data-role="honey-variety"]');
-    for (let field of honeyVarietyFields) {
-        // إذا كان الحقل معطلاً، تحقق من أن له قيمة (محدد من القالب)
-        if (field.disabled) {
-            // إذا كان الحقل معطلاً ولديه قيمة، فهذا يعني أنه محدد تلقائياً من القالب - هذا جيد
-            if (field.value && field.value.trim()) {
-                continue; // الحقل معطل لكن له قيمة من القالب - هذا صحيح
-            }
-            // إذا كان الحقل معطلاً وليس له قيمة، تحقق من أن المورد محدد
-            const componentCard = field.closest('.component-card');
-            if (componentCard) {
-                const supplierSelect = componentCard.querySelector('select[name^="material_suppliers"]');
-                if (!supplierSelect || !supplierSelect.value || supplierSelect.value.trim() === '') {
-                    e.preventDefault();
-                    alert('يرجى اختيار مورد العسل أولاً');
-                    if (supplierSelect) {
-                        supplierSelect.focus();
-                    }
-                    return false;
-                }
-                // إذا كان المورد محدد لكن نوع العسل غير محدد، هذا خطأ
+    // التحقق من الموردين فقط إذا كان قسم الموردين مرئي
+    if (isSuppliersSectionVisible) {
+        for (let select of supplierSelects) {
+            if (!select.value || select.value.trim() === '') {
+                console.error('ERROR: Empty supplier value found:', select.name);
                 e.preventDefault();
-                alert('يرجى تحديد نوع العسل لدى المورد المختار');
-                field.focus();
+                alert('يرجى اختيار المورد المناسب لهذه المادة للمتابعة');
+                select.focus();
                 return false;
             }
         }
-        // إذا كان الحقل غير معطل، تحقق من أن له قيمة
-        if (!field.disabled && (!field.value || !field.value.trim())) {
-            e.preventDefault();
-            alert('يرجى إدخال نوع العسل لدى المورد المختار');
-            field.focus();
-            return false;
+        console.log('All suppliers validated successfully');
+    }
+
+    // التحقق من نوع العسل فقط إذا كان قسم الموردين مرئي
+    if (isSuppliersSectionVisible) {
+        const honeyVarietyFields = document.querySelectorAll('#templateSuppliersContainer [data-role="honey-variety"]');
+        for (let field of honeyVarietyFields) {
+            // إذا كان الحقل معطلاً، تحقق من أن له قيمة (محدد من القالب)
+            if (field.disabled) {
+                // إذا كان الحقل معطلاً ولديه قيمة، فهذا يعني أنه محدد تلقائياً من القالب - هذا جيد
+                if (field.value && field.value.trim()) {
+                    continue; // الحقل معطل لكن له قيمة من القالب - هذا صحيح
+                }
+                // إذا كان الحقل معطلاً وليس له قيمة، تحقق من أن المورد محدد
+                const componentCard = field.closest('.component-card');
+                if (componentCard) {
+                    const supplierSelect = componentCard.querySelector('select[name^="material_suppliers"]');
+                    if (!supplierSelect || !supplierSelect.value || supplierSelect.value.trim() === '') {
+                        e.preventDefault();
+                        alert('يرجى اختيار مورد العسل أولاً');
+                        if (supplierSelect) {
+                            supplierSelect.focus();
+                        }
+                        return false;
+                    }
+                    // إذا كان المورد محدد لكن نوع العسل غير محدد، هذا خطأ
+                    e.preventDefault();
+                    alert('يرجى تحديد نوع العسل لدى المورد المختار');
+                    field.focus();
+                    return false;
+                }
+            }
+            // إذا كان الحقل غير معطل، تحقق من أن له قيمة
+            if (!field.disabled && (!field.value || !field.value.trim())) {
+                e.preventDefault();
+                alert('يرجى إدخال نوع العسل لدى المورد المختار');
+                field.focus();
+                return false;
+            }
         }
     }
 

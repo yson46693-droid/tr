@@ -133,17 +133,52 @@
     
     // معالج أخطاء عام لالتقاط أخطاء classList وأخطاء الشبكة (ERR_FAILED)
     window.addEventListener('error', function(event) {
-        // التحقق من أخطاء الشبكة (ERR_FAILED)
+        // التحقق من أخطاء الشبكة (ERR_FAILED) - Error Code: -2
         if (event.message && typeof event.message === 'string') {
             const message = event.message.toLowerCase();
             if (message.includes('failed') || message.includes('network error') || 
-                message.includes('err_failed') || message.includes('load failed')) {
+                message.includes('err_failed') || message.includes('load failed') ||
+                message.includes('error code: -2') || message.includes('error code:-2')) {
                 // محاولة منع عرض صفحة الخطأ
                 event.preventDefault();
                 event.stopPropagation();
                 
+                console.error('Network error detected (ERR_FAILED / Error Code: -2):', event.message);
+                
                 const currentPath = window.location.pathname || '';
                 const isProfilePage = currentPath.includes('profile.php');
+                const isLoginPage = currentPath.includes('index.php');
+                
+                // إذا كنا في صفحة تسجيل الدخول، لا نعيد التوجيه
+                if (isLoginPage) {
+                    // إظهار رسالة خطأ واضحة للمستخدم
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    errorDiv.style.zIndex = '9999';
+                    errorDiv.style.maxWidth = '600px';
+                    errorDiv.innerHTML = `
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>خطأ في الاتصال بالخادم (Error Code: -2)</strong><br>
+                        <small>يرجى التحقق من:
+                        <ul class="mb-0 mt-2 text-start">
+                            <li>أن الخادم يعمل على المنفذ 8000</li>
+                            <li>أن لا يوجد جدار ناري يمنع الاتصال</li>
+                            <li>اتصال الإنترنت</li>
+                        </ul>
+                        </small>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.body.appendChild(errorDiv);
+                    
+                    // إزالة الرسالة بعد 10 ثوان
+                    setTimeout(() => {
+                        if (errorDiv.parentNode) {
+                            errorDiv.remove();
+                        }
+                    }, 10000);
+                    
+                    return true;
+                }
                 
                 if (!isProfilePage) {
                     // محاولة التوجيه إلى صفحة تسجيل الدخول
@@ -153,6 +188,40 @@
                             window.location.href = loginUrl;
                         }
                     }, 100);
+                }
+                
+                return true;
+            }
+        }
+        
+        // التحقق من error code -2 في event.error
+        if (event.error && typeof event.error === 'object') {
+            const errorCode = event.error.code || event.error.errorCode || event.error.errno;
+            if (errorCode === -2 || errorCode === '-2') {
+                event.preventDefault();
+                event.stopPropagation();
+                console.error('Error Code -2 detected:', event.error);
+                
+                const currentPath = window.location.pathname || '';
+                const isLoginPage = currentPath.includes('index.php');
+                
+                if (isLoginPage) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    errorDiv.style.zIndex = '9999';
+                    errorDiv.style.maxWidth = '600px';
+                    errorDiv.innerHTML = `
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>خطأ في الاتصال بالخادم (Error Code: -2)</strong><br>
+                        <small>يرجى التحقق من أن الخادم يعمل على المنفذ 8000</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.body.appendChild(errorDiv);
+                    setTimeout(() => {
+                        if (errorDiv.parentNode) {
+                            errorDiv.remove();
+                        }
+                    }, 10000);
                 }
                 
                 return true;
@@ -234,8 +303,88 @@
                     }, 100);
                 }
             }
+            
+            // التحقق من error code -2 في promise rejection
+            const errorCode = reason.code || reason.errorCode || reason.errno;
+            if (errorCode === -2 || errorCode === '-2') {
+                event.preventDefault();
+                console.error('Error Code -2 detected in promise rejection:', reason);
+                
+                const currentPath = window.location.pathname || '';
+                const isLoginPage = currentPath.includes('index.php');
+                
+                if (isLoginPage) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    errorDiv.style.zIndex = '9999';
+                    errorDiv.style.maxWidth = '600px';
+                    errorDiv.innerHTML = `
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>خطأ في الاتصال بالخادم (Error Code: -2)</strong><br>
+                        <small>يرجى التحقق من أن الخادم يعمل على المنفذ 8000</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.body.appendChild(errorDiv);
+                    setTimeout(() => {
+                        if (errorDiv.parentNode) {
+                            errorDiv.remove();
+                        }
+                    }, 10000);
+                }
+            }
         }
     });
+    
+    // معالج أخطاء تحميل الصفحة (page load errors) - Error Code: -2
+    window.addEventListener('error', function(event) {
+        // التحقق من error code -2 في event.target (للصور، scripts، etc.)
+        if (event.target && event.target.tagName) {
+            const targetTag = event.target.tagName.toLowerCase();
+            if (targetTag === 'script' || targetTag === 'link' || targetTag === 'img') {
+                const errorMessage = (event.message || '').toLowerCase();
+                if (errorMessage.includes('error code: -2') || errorMessage.includes('error code:-2') ||
+                    errorMessage.includes('err_failed') || errorMessage.includes('load failed')) {
+                    console.error('Error Code -2 detected in resource load:', {
+                        tag: targetTag,
+                        src: event.target.src || event.target.href,
+                        message: event.message
+                    });
+                    
+                    const currentPath = window.location.pathname || '';
+                    const isLoginPage = currentPath.includes('index.php');
+                    
+                    if (isLoginPage) {
+                        // إظهار رسالة خطأ واحدة فقط
+                        if (!document.querySelector('.alert-danger[data-error-code-2]')) {
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                            errorDiv.style.zIndex = '9999';
+                            errorDiv.style.maxWidth = '600px';
+                            errorDiv.setAttribute('data-error-code-2', 'true');
+                            errorDiv.innerHTML = `
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                <strong>خطأ في تحميل الموارد (Error Code: -2)</strong><br>
+                                <small>يرجى التحقق من:
+                                <ul class="mb-0 mt-2 text-start">
+                                    <li>أن الخادم يعمل على المنفذ 8000</li>
+                                    <li>أن جميع الملفات موجودة</li>
+                                    <li>اتصال الإنترنت</li>
+                                </ul>
+                                </small>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            `;
+                            document.body.appendChild(errorDiv);
+                            setTimeout(() => {
+                                if (errorDiv.parentNode) {
+                                    errorDiv.remove();
+                                }
+                            }, 10000);
+                        }
+                    }
+                }
+            }
+        }
+    }, true);
     
     // حماية querySelector و querySelectorAll من إرجاع null
     const originalQuerySelector = Element.prototype.querySelector;
@@ -325,7 +474,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (mobileReloadBtn) {
         mobileReloadBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            window.location.reload();
+            // استخدام طريقة آمنة للـ reload لمنع Error Code: -2
+            try {
+                const url = new URL(window.location.href);
+                url.searchParams.set('_refresh', Date.now().toString());
+                window.location.href = url.toString();
+            } catch (err) {
+                // في حالة الخطأ، استخدم reload عادي
+                window.location.reload();
+            }
         });
     }
     
@@ -464,9 +621,53 @@ function stopAutoRefresh() {
     }
 }
 
-    // إيقاف التحديث عند مغادرة الصفحة
+    // إيقاف التحديث عند مغادرة الصفحة - مع معالجة Refresh
 window.addEventListener('beforeunload', function() {
     stopAutoRefresh();
+    
+    // حفظ flag في sessionStorage أن المستخدم يقوم بـ Refresh
+    try {
+        sessionStorage.setItem('is_refreshing', 'true');
+        sessionStorage.setItem('refresh_timestamp', Date.now().toString());
+    } catch (e) {
+        // تجاهل إذا كان sessionStorage غير متاح
+    }
+});
+
+// معالجة Refresh لمنع Error Code: -2
+window.addEventListener('pageshow', function(event) {
+    try {
+        // التحقق من أن هذا refresh وليس navigation عادي
+        const isRefreshing = sessionStorage.getItem('is_refreshing') === 'true';
+        const refreshTimestamp = parseInt(sessionStorage.getItem('refresh_timestamp') || '0');
+        const timeSinceRefresh = Date.now() - refreshTimestamp;
+        
+        // إذا كان refresh حديث (أقل من 5 ثوان)، قد نحتاج لمعالجة خاصة
+        if (isRefreshing && timeSinceRefresh < 5000) {
+            // إزالة flag
+            sessionStorage.removeItem('is_refreshing');
+            sessionStorage.removeItem('refresh_timestamp');
+            
+            // إذا كانت الصفحة من cache وكان هناك مشكلة في الاتصال
+            if (event.persisted) {
+                // محاولة إعادة تحميل من السيرفر بطريقة آمنة
+                const url = new URL(window.location.href);
+                if (!url.searchParams.has('_refresh')) {
+                    url.searchParams.set('_refresh', Date.now().toString());
+                    setTimeout(function() {
+                        window.location.href = url.toString();
+                    }, 100);
+                }
+            }
+        } else {
+            // إزالة flag القديم
+            sessionStorage.removeItem('is_refreshing');
+            sessionStorage.removeItem('refresh_timestamp');
+        }
+    } catch (e) {
+        // تجاهل الأخطاء
+        console.warn('Error in pageshow handler:', e);
+    }
 });
 
 // معالجة البحث في التوب بار
@@ -748,16 +949,30 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function getLoginUrl(overlay) {
-        return '/index.php';
+        // حساب المسار الصحيح لصفحة تسجيل الدخول بناءً على المسار الحالي
+        const currentPath = window.location.pathname || '/';
+        const pathParts = currentPath.split('/').filter(p => p && p !== 'dashboard' && p !== 'modules' && !p.endsWith('.php'));
+        const basePath = pathParts.length > 0 ? '/' + pathParts[0] : '';
+        const loginUrl = (basePath + '/index.php').replace(/\/+/g, '/');
+        return loginUrl.startsWith('/') ? loginUrl : '/' + loginUrl;
     }
 
     function redirectToLogin(loginUrl) {
-        window.location.href = loginUrl || '/index.php';
+        // استخدام replace بدلاً من href لمنع إضافة الصفحة إلى التاريخ
+        // وإزالة أي query parameters من الرابط الحالي
+        const cleanLoginUrl = (loginUrl || '/index.php').split('?')[0];
+        // إزالة أي query parameters من الرابط الحالي قبل إعادة التوجيه
+        const currentUrl = new URL(window.location.href);
+        currentUrl.pathname = cleanLoginUrl;
+        currentUrl.search = ''; // إزالة جميع query parameters
+        currentUrl.hash = ''; // إزالة hash
+        window.location.replace(currentUrl.toString());
     }
 
     function showSessionOverlay(loginUrl) {
-        // إعادة التوجيه مباشرة إلى صفحة تسجيل الدخول
-        redirectToLogin(loginUrl);
+        // إعادة التوجيه مباشرة إلى صفحة تسجيل الدخول مع تنظيف الرابط
+        const finalLoginUrl = loginUrl || getLoginUrl();
+        redirectToLogin(finalLoginUrl);
     }
 
     function handleSessionStatus(status, responseUrl = null, requestUrl = null) {
@@ -832,52 +1047,82 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // فقط نعرض رسالة انتهاء الجلسة إذا كان الطلب فعلاً API call
+            // لكن أولاً نتحقق من أن الجلسة منتهية فعلياً في قاعدة البيانات
             if (isApiCall) {
-                // تسجيل سبب ظهور رسالة انتهاء الجلسة
-                const logData = {
-                    timestamp: new Date().toISOString(),
-                    status: numericStatus,
-                    requestUrl: requestUrl,
-                    responseUrl: responseUrl,
-                    currentPath: currentPath,
-                    userAgent: navigator.userAgent,
-                    sessionStorage: {
-                        hasSession: typeof sessionStorage !== 'undefined',
-                        keys: typeof sessionStorage !== 'undefined' ? Object.keys(sessionStorage) : []
+                // التحقق من حالة الجلسة في قاعدة البيانات قبل إعادة التوجيه
+                // لا نعيد التوجيه إلا إذا كانت الجلسة منتهية فعلياً
+                // حساب مسار API
+                const currentPath = window.location.pathname || '/';
+                const pathParts = currentPath.split('/').filter(p => p && p !== 'dashboard' && p !== 'modules' && !p.endsWith('.php'));
+                const basePath = pathParts.length > 0 ? '/' + pathParts[0] : '';
+                const checkSessionUrl = (basePath + '/api/check_session.php').replace(/\/+/g, '/');
+                
+                fetch(checkSessionUrl, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    cache: 'no-cache'
+                })
+                .then(function(response) {
+                    return response.json().catch(() => ({ success: false }));
+                })
+                .then(function(data) {
+                    // فقط إذا كانت الجلسة غير موجودة في قاعدة البيانات، نعيد التوجيه
+                    if (!data.success || !data.session_exists) {
+                        // تسجيل سبب ظهور رسالة انتهاء الجلسة
+                        const logData = {
+                            timestamp: new Date().toISOString(),
+                            status: numericStatus,
+                            requestUrl: requestUrl,
+                            responseUrl: responseUrl,
+                            currentPath: currentPath,
+                            userAgent: navigator.userAgent,
+                            sessionStorage: {
+                                hasSession: typeof sessionStorage !== 'undefined',
+                                keys: typeof sessionStorage !== 'undefined' ? Object.keys(sessionStorage) : []
+                            }
+                        };
+                        
+                        console.error('=== SESSION END OVERLAY TRIGGERED (Session verified as expired) ===');
+                        console.error('Status Code:', numericStatus);
+                        console.error('Request URL:', requestUrl);
+                        console.error('Response URL:', responseUrl);
+                        console.error('Current Path:', currentPath);
+                        console.error('Is API Call:', isApiCall);
+                        console.error('Full Log Data:', logData);
+                        
+                        // محاولة إرسال log إلى الخادم (اختياري)
+                        try {
+                            const basePath = window.location.pathname.split('/').slice(0, -1).join('/') || '';
+                            fetch((basePath || '') + '/api/session_debug_log.php', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    type: 'session_end_overlay',
+                                    data: logData
+                                }),
+                                credentials: 'same-origin'
+                            }).catch(() => {
+                                // تجاهل أخطاء إرسال log
+                            });
+                        } catch (e) {
+                            console.error('Error sending session debug log:', e);
+                        }
+                        
+                        const overlay = getOverlayElement();
+                        const loginUrl = getLoginUrl(overlay);
+                        showSessionOverlay(loginUrl);
+                    } else {
+                        // الجلسة لا تزال صالحة في قاعدة البيانات - لا نعيد التوجيه
+                        console.log('Session still valid in database, ignoring 401/419/440 status');
                     }
-                };
-                
-                console.error('=== SESSION END OVERLAY TRIGGERED ===');
-                console.error('Status Code:', numericStatus);
-                console.error('Request URL:', requestUrl);
-                console.error('Response URL:', responseUrl);
-                console.error('Current Path:', currentPath);
-                console.error('Is API Call:', isApiCall);
-                console.error('Full Log Data:', logData);
-                
-                // محاولة إرسال log إلى الخادم (اختياري)
-                try {
-                    const basePath = window.location.pathname.split('/').slice(0, -1).join('/') || '';
-                    fetch((basePath || '') + '/api/session_debug_log.php', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            type: 'session_end_overlay',
-                            data: logData
-                        }),
-                        credentials: 'same-origin'
-                    }).catch(() => {
-                        // تجاهل أخطاء إرسال log
-                    });
-                } catch (e) {
-                    console.error('Error sending session debug log:', e);
-                }
-                
-                const overlay = getOverlayElement();
-                const loginUrl = getLoginUrl(overlay);
-                showSessionOverlay(loginUrl);
+                })
+                .catch(function(error) {
+                    // في حالة خطأ في التحقق من الجلسة، لا نعيد التوجيه
+                    // نترك المستخدم في الصفحة الحالية
+                    console.warn('Error checking session status, not redirecting:', error);
+                });
             }
             // إذا لم يكن API call وليس لدينا responseUrl، نتجاهل (قد يكون redirect عادي أو form submission)
         }
@@ -924,8 +1169,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 return response;
             } catch (fetchError) {
-                // التعامل مع أخطاء الشبكة والأخطاء الأخرى (ERR_FAILED)
+                // التعامل مع أخطاء الشبكة والأخطاء الأخرى (ERR_FAILED / Error Code: -2)
                 console.error('Fetch error:', fetchError);
+                
+                // التحقق من error code -2
+                const errorMessage = (fetchError.message || '').toLowerCase();
+                const isErrorCodeMinus2 = errorMessage.includes('error code: -2') || 
+                                         errorMessage.includes('error code:-2') ||
+                                         errorMessage.includes('err_failed') ||
+                                         (fetchError.code === -2 || fetchError.errorCode === -2);
+                
+                if (isErrorCodeMinus2) {
+                    console.error('Error Code -2 (ERR_FAILED) detected in fetch:', fetchError);
+                }
                 
                 // إذا كان الخطأ بسبب انتهاء الجلسة أو خطأ في الاتصال
                 // محاولة التوجيه إلى صفحة تسجيل الدخول بدلاً من عرض ERR_FAILED
@@ -943,8 +1199,34 @@ document.addEventListener('DOMContentLoaded', function() {
                                        document.querySelector('body[data-page="profile"]') ||
                                        document.querySelector('body[data-page="attendance"]');
                 
+                // إذا كان error code -2 في صفحة تسجيل الدخول، أظهر رسالة واضحة
+                if (isErrorCodeMinus2 && currentPath.includes('index.php')) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    errorDiv.style.zIndex = '9999';
+                    errorDiv.style.maxWidth = '600px';
+                    errorDiv.innerHTML = `
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>خطأ في الاتصال بالخادم (Error Code: -2)</strong><br>
+                        <small>يرجى التحقق من:
+                        <ul class="mb-0 mt-2 text-start">
+                            <li>أن الخادم يعمل على المنفذ 8000</li>
+                            <li>أن لا يوجد جدار ناري يمنع الاتصال</li>
+                            <li>اتصال الإنترنت</li>
+                        </ul>
+                        </small>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.body.appendChild(errorDiv);
+                    setTimeout(() => {
+                        if (errorDiv.parentNode) {
+                            errorDiv.remove();
+                        }
+                    }, 10000);
+                }
+                
                 // منع إعادة التوجيه في الصفحات المحمية أو إذا لم يكن API call
-                if (!isProtectedPage && isApiCall) {
+                if (!isProtectedPage && isApiCall && !isErrorCodeMinus2) {
                     // محاولة تحديد URL تسجيل الدخول
                     const overlay = getOverlayElement();
                     const loginUrl = getLoginUrl(overlay);
@@ -964,7 +1246,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 // إرجاع استجابة خطأ بديلة لمنع عرض ERR_FAILED
                 return new Response(JSON.stringify({
                     success: false,
-                    message: 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.'
+                    message: isErrorCodeMinus2 ? 
+                        'خطأ في الاتصال بالخادم (Error Code: -2). يرجى التحقق من أن الخادم يعمل.' :
+                        'حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.',
+                    error_code: isErrorCodeMinus2 ? -2 : undefined
                 }), {
                     status: 500,
                     statusText: 'Network Error',

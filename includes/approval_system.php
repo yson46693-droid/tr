@@ -446,19 +446,25 @@ function approveRequest($approvalId, $approvedBy, $notes = null) {
         }
         
         // بناء استعلام التحديث بناءً على الأعمدة المتاحة
+        // التأكد من تسجيل البيانات في قاعدة البيانات مباشرة دون الحاجة لمسح الكاش
         if ($hasNotesColumn || $hasApprovalNotesColumn) {
             $db->execute(
-                "UPDATE approvals SET status = 'approved', approved_by = ?, {$notesColumn} = ? 
+                "UPDATE approvals SET status = 'approved', approved_by = ?, approved_at = NOW(), {$notesColumn} = ? 
                  WHERE id = ?",
                 [$approvedBy, $finalNotes, $approvalId]
             );
         } else {
             // إذا لم يكن هناك عمود ملاحظات، تحديث بدون ملاحظات
             $db->execute(
-                "UPDATE approvals SET status = 'approved', approved_by = ? 
+                "UPDATE approvals SET status = 'approved', approved_by = ?, approved_at = NOW() 
                  WHERE id = ?",
                 [$approvedBy, $approvalId]
             );
+        }
+        
+        // التأكد من حفظ التغييرات في قاعدة البيانات
+        if (method_exists($db->getConnection(), 'commit')) {
+            $db->getConnection()->commit();
         }
         
         // تحديث حالة الكيان
@@ -569,28 +575,33 @@ function rejectRequest($approvalId, $approvedBy, $rejectionReason) {
             }
         }
         
-        // تحديث حالة الموافقة
+        // تحديث حالة الموافقة - التأكد من حفظ البيانات مباشرة في قاعدة البيانات
         if ($hasRejectionReason) {
             // استخدام عمود rejection_reason إذا كان موجوداً
             $db->execute(
-                "UPDATE approvals SET status = 'rejected', approved_by = ?, rejection_reason = ? 
+                "UPDATE approvals SET status = 'rejected', approved_by = ?, rejected_at = NOW(), rejection_reason = ? 
                  WHERE id = ?",
                 [$approvedBy, $rejectionReason, $approvalId]
             );
         } elseif ($hasNotesColumn || $hasApprovalNotesColumn) {
             // استخدام عمود notes أو approval_notes إذا كان rejection_reason غير موجود
             $db->execute(
-                "UPDATE approvals SET status = 'rejected', approved_by = ?, {$notesColumn} = ? 
+                "UPDATE approvals SET status = 'rejected', approved_by = ?, rejected_at = NOW(), {$notesColumn} = ? 
                  WHERE id = ?",
                 [$approvedBy, $rejectionReason, $approvalId]
             );
         } else {
             // إذا لم يكن هناك أي عمود للملاحظات، تحديث بدون سبب الرفض
             $db->execute(
-                "UPDATE approvals SET status = 'rejected', approved_by = ? 
+                "UPDATE approvals SET status = 'rejected', approved_by = ?, rejected_at = NOW() 
                  WHERE id = ?",
                 [$approvedBy, $approvalId]
             );
+        }
+        
+        // التأكد من حفظ التغييرات في قاعدة البيانات
+        if (method_exists($db->getConnection(), 'commit')) {
+            $db->getConnection()->commit();
         }
         
         // تحديث حالة الكيان

@@ -10,44 +10,248 @@ require_once __DIR__ . '/db.php';
 
 /**
  * الحصول على اتصال PDO مهيأ.
+ * إذا كان PDO غير متاح، يستخدم mysqli كبديل.
  */
-function batchCreationGetPdo(): PDO
+function batchCreationGetPdo()
 {
     static $pdo = null;
 
-    if ($pdo instanceof PDO) {
+    if ($pdo !== null) {
         return $pdo;
     }
 
-    $dsn = sprintf(
-        'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
-        DB_HOST,
-        DB_PORT,
-        DB_NAME
-    );
+    // محاولة استخدام PDO أولاً
+    if (extension_loaded('pdo') && extension_loaded('pdo_mysql')) {
+        $dsn = sprintf(
+            'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
+            DB_HOST,
+            DB_PORT,
+            DB_NAME
+        );
 
-    try {
-        $pdo = new PDO($dsn, DB_USER, DB_PASS, [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-        ]);
-    } catch (PDOException $e) {
-        throw new RuntimeException('تعذر الاتصال بقاعدة البيانات: ' . $e->getMessage(), 0, $e);
+        try {
+            $pdo = new PDO($dsn, DB_USER, DB_PASS, [
+                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES   => false,
+            ]);
+            return $pdo;
+        } catch (PDOException $e) {
+            $errorMessage = $e->getMessage();
+            
+            // تحسين رسالة الخطأ
+            if (strpos($errorMessage, 'could not find driver') !== false) {
+                error_log('PDO MySQL driver not available, falling back to mysqli');
+                // سنستخدم mysqli كبديل
+            } else {
+                throw new RuntimeException('تعذر الاتصال بقاعدة البيانات: ' . $errorMessage, 0, $e);
+            }
+        }
     }
 
-    return $pdo;
+    // Fallback: استخدام mysqli إذا كان PDO غير متاح
+    if (extension_loaded('mysqli')) {
+        try {
+            $mysqli = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, (int)DB_PORT);
+            
+            if ($mysqli->connect_error) {
+                throw new RuntimeException('تعذر الاتصال بقاعدة البيانات: ' . $mysqli->connect_error);
+            }
+            
+            $mysqli->set_charset('utf8mb4');
+            
+            // إنشاء wrapper object لمحاكاة PDO
+            $pdo = new class($mysqli) {
+                private $mysqli;
+                private $inTransaction = false;
+                
+                public function __construct($mysqli) {
+                    $this->mysqli = $mysqli;
+                }
+                
+                public function query($sql) {
+                    $result = $this->mysqli->query($sql);
+                    if (!$result) {
+                        throw new RuntimeException('Query failed: ' . $this->mysqli->error);
+                    }
+                    return new class($result) {
+                        private $result;
+                        
+                        public function __construct($result) {
+                            $this->result = $result;
+                        }
+                        
+                        public function fetchColumn($column = 0) {
+                            if ($this->result instanceof mysqli_result) {
+                                $row = $this->result->fetch_array(MYSQLI_NUM);
+                                return $row ? ($row[$column] ?? false) : false;
+                            }
+                            return false;
+                        }
+                    };
+                }
+                
+                public function beginTransaction() {
+                    if ($this->inTransaction) {
+                        throw new RuntimeException('Transaction already started');
+                    }
+                    if (!$this->mysqli->begin_transaction()) {
+                        throw new RuntimeException('Failed to start transaction: ' . $this->mysqli->error);
+                    }
+                    $this->inTransaction = true;
+                    return true;
+                }
+                
+                public function commit() {
+                    if (!$this->inTransaction) {
+                        throw new RuntimeException('No active transaction to commit');
+                    }
+                    if (!$this->mysqli->commit()) {
+                        throw new RuntimeException('Failed to commit transaction: ' . $this->mysqli->error);
+                    }
+                    $this->inTransaction = false;
+                    return true;
+                }
+                
+                public function rollBack() {
+                    if (!$this->inTransaction) {
+                        return false; // لا يوجد transaction للتراجع عنه
+                    }
+                    if (!$this->mysqli->rollback()) {
+                        throw new RuntimeException('Failed to rollback transaction: ' . $this->mysqli->error);
+                    }
+                    $this->inTransaction = false;
+                    return true;
+                }
+                
+                public function inTransaction() {
+                    return $this->inTransaction;
+                }
+                
+                public function lastInsertId($name = null) {
+                    return $this->mysqli->insert_id;
+                }
+                
+                public function exec($sql) {
+                    $result = $this->mysqli->query($sql);
+                    if (!$result) {
+                        throw new RuntimeException('Exec failed: ' . $this->mysqli->error);
+                    }
+                    // exec في PDO يرجع عدد الصفوف المتأثرة
+                    return $this->mysqli->affected_rows;
+                }
+                
+                public function prepare($sql) {
+                    $stmt = $this->mysqli->prepare($sql);
+                    if (!$stmt) {
+                        throw new RuntimeException('Prepare failed: ' . $this->mysqli->error);
+                    }
+                    return new class($stmt, $this->mysqli) {
+                        private $stmt;
+                        private $mysqli;
+                        private $result = null;
+                        
+                        public function __construct($stmt, $mysqli) {
+                            $this->stmt = $stmt;
+                            $this->mysqli = $mysqli;
+                        }
+                        
+                        public function execute($params = []) {
+                            if (!empty($params)) {
+                                $types = '';
+                                $values = [];
+                                foreach ($params as $param) {
+                                    if (is_int($param)) {
+                                        $types .= 'i';
+                                    } elseif (is_float($param)) {
+                                        $types .= 'd';
+                                    } else {
+                                        $types .= 's';
+                                    }
+                                    $values[] = $param;
+                                }
+                                $this->stmt->bind_param($types, ...$values);
+                            }
+                            
+                            if (!$this->stmt->execute()) {
+                                throw new RuntimeException('Execute failed: ' . $this->stmt->error);
+                            }
+                            
+                            // الحصول على النتيجة إذا كان هناك SELECT
+                            $this->result = $this->stmt->get_result();
+                            
+                            return true;
+                        }
+                        
+                        public function fetchAll($fetchStyle = null) {
+                            if ($this->result === null) {
+                                $this->result = $this->stmt->get_result();
+                            }
+                            if (!$this->result) {
+                                return [];
+                            }
+                            $data = [];
+                            while ($row = $this->result->fetch_assoc()) {
+                                $data[] = $row;
+                            }
+                            return $data;
+                        }
+                        
+                        public function fetch($fetchStyle = null) {
+                            if ($this->result === null) {
+                                $this->result = $this->stmt->get_result();
+                            }
+                            if (!$this->result) {
+                                return false;
+                            }
+                            return $this->result->fetch_assoc();
+                        }
+                        
+                        public function fetchColumn($column = 0) {
+                            if ($this->result === null) {
+                                $this->result = $this->stmt->get_result();
+                            }
+                            if (!$this->result) {
+                                return false;
+                            }
+                            $row = $this->result->fetch_array(MYSQLI_NUM);
+                            return $row ? ($row[$column] ?? false) : false;
+                        }
+                    };
+                }
+                
+                public function getMysqli() {
+                    return $this->mysqli;
+                }
+            };
+            
+            return $pdo;
+        } catch (Exception $e) {
+            throw new RuntimeException('تعذر الاتصال بقاعدة البيانات: ' . $e->getMessage(), 0, $e);
+        }
+    }
+
+    throw new RuntimeException('لا يوجد driver متاح لقاعدة البيانات. يرجى تفعيل pdo_mysql أو mysqli extension في ملف php.ini.');
 }
 
 /**
  * التحقق من وجود جدول.
  */
-function batchCreationTableExists(PDO $pdo, string $tableName): bool
+function batchCreationTableExists($pdo, string $tableName): bool
 {
     if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
         throw new InvalidArgumentException('Invalid table name supplied.');
     }
 
+    // إذا كان mysqli wrapper
+    if (method_exists($pdo, 'getMysqli')) {
+        $mysqli = $pdo->getMysqli();
+        $sql = sprintf("SHOW TABLES LIKE '%s'", $mysqli->real_escape_string($tableName));
+        $result = $mysqli->query($sql);
+        return $result !== false && $result->num_rows > 0;
+    }
+
+    // استخدام PDO
     $sql = sprintf("SHOW TABLES LIKE '%s'", addslashes($tableName));
     $result = $pdo->query($sql);
 
@@ -57,7 +261,7 @@ function batchCreationTableExists(PDO $pdo, string $tableName): bool
 /**
  * التحقق من وجود عمود داخل جدول.
  */
-function batchCreationColumnExists(PDO $pdo, string $tableName, string $columnName): bool
+function batchCreationColumnExists($pdo, string $tableName, string $columnName): bool
 {
     if (
         !preg_match('/^[a-zA-Z0-9_]+$/', $tableName) ||
@@ -66,6 +270,21 @@ function batchCreationColumnExists(PDO $pdo, string $tableName, string $columnNa
         throw new InvalidArgumentException('Invalid identifier supplied.');
     }
 
+    // إذا كان mysqli wrapper
+    if (method_exists($pdo, 'getMysqli')) {
+        $mysqli = $pdo->getMysqli();
+        $tableNameEscaped = $mysqli->real_escape_string($tableName);
+        $columnNameEscaped = $mysqli->real_escape_string($columnName);
+        $sql = sprintf(
+            "SHOW COLUMNS FROM `%s` LIKE '%s'",
+            $tableNameEscaped,
+            $columnNameEscaped
+        );
+        $result = $mysqli->query($sql);
+        return $result !== false && $result->num_rows > 0;
+    }
+
+    // استخدام PDO
     $sql = sprintf(
         "SHOW COLUMNS FROM `%s` LIKE '%s'",
         $tableName,
@@ -83,7 +302,7 @@ function batchCreationColumnExists(PDO $pdo, string $tableName, string $columnNa
  * @throws RuntimeException
  */
 function batchCreationConsumeHoneyStock(
-    PDO $pdo,
+    $pdo,
     string $quantityColumn,
     float $quantityRequired,
     ?int $supplierId,
@@ -99,6 +318,12 @@ function batchCreationConsumeHoneyStock(
         throw new RuntimeException('عمود المخزون غير موجود في جدول العسل للمادة: ' . $materialName);
     }
 
+    // تسجيل معلومات الخصم
+    error_log("batchCreationConsumeHoneyStock called: quantityColumn={$quantityColumn}, quantityRequired={$quantityRequired}, supplierId=" . ($supplierId ?? 'NULL') . ", honeyVariety=" . ($honeyVariety ?? 'NULL') . ", materialName={$materialName}");
+
+    $hasHoneyVarietyColumn = batchCreationColumnExists($pdo, 'honey_stock', 'honey_variety');
+    error_log("honey_stock table has honey_variety column: " . ($hasHoneyVarietyColumn ? 'YES' : 'NO'));
+
     $attempts = [
         ['supplier' => $supplierId, 'variety' => $honeyVariety],
         ['supplier' => $supplierId, 'variety' => null],
@@ -108,12 +333,12 @@ function batchCreationConsumeHoneyStock(
     $remaining = $quantityRequired;
     $updateStmt = $pdo->prepare("UPDATE honey_stock SET {$quantityColumn} = GREATEST({$quantityColumn} - ?, 0) WHERE id = ?");
 
-    foreach ($attempts as $attempt) {
+    foreach ($attempts as $attemptIndex => $attempt) {
         if ($remaining <= 0) {
             break;
         }
 
-        $sql = "SELECT id, {$quantityColumn} AS available FROM honey_stock WHERE {$quantityColumn} > 0";
+        $sql = "SELECT id, {$quantityColumn} AS available" . ($hasHoneyVarietyColumn ? ", honey_variety" : "") . " FROM honey_stock WHERE {$quantityColumn} > 0";
         $params = [];
 
         if ($attempt['supplier']) {
@@ -121,10 +346,15 @@ function batchCreationConsumeHoneyStock(
             $params[] = $attempt['supplier'];
         }
 
-        if ($attempt['variety'] !== null && $attempt['variety'] !== '') {
-            if (batchCreationColumnExists($pdo, 'honey_stock', 'honey_variety')) {
-                $sql .= " AND honey_variety = ?";
-                $params[] = $attempt['variety'];
+        if ($attempt['variety'] !== null && $attempt['variety'] !== '' && $hasHoneyVarietyColumn) {
+            $sql .= " AND honey_variety = ?";
+            $params[] = $attempt['variety'];
+            error_log("Attempt {$attemptIndex}: Filtering by supplier_id={$attempt['supplier']} AND honey_variety={$attempt['variety']}");
+        } else {
+            if ($attempt['supplier']) {
+                error_log("Attempt {$attemptIndex}: Filtering by supplier_id={$attempt['supplier']} only (no variety filter)");
+            } else {
+                error_log("Attempt {$attemptIndex}: No filters (any supplier, any variety)");
             }
         }
 
@@ -132,6 +362,8 @@ function batchCreationConsumeHoneyStock(
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        error_log("Attempt {$attemptIndex}: Found " . count($rows) . " rows matching criteria");
 
         if (empty($rows)) {
             continue;
@@ -148,7 +380,10 @@ function batchCreationConsumeHoneyStock(
             }
 
             $deduct = min($available, $remaining);
-            $updateStmt->execute([$deduct, $row['id']]);
+            $rowId = $row['id'];
+            $rowVariety = $hasHoneyVarietyColumn ? ($row['honey_variety'] ?? 'NULL') : 'N/A';
+            error_log("Deducting {$deduct} from honey_stock id={$rowId}, variety={$rowVariety}, available={$available}, remaining={$remaining}");
+            $updateStmt->execute([$deduct, $rowId]);
             $remaining -= $deduct;
         }
     }
@@ -164,6 +399,8 @@ function batchCreationConsumeHoneyStock(
                 $unit
             )
         );
+    } else {
+        error_log("Successfully deducted all required honey quantity: {$quantityRequired}");
     }
 }
 
@@ -390,7 +627,7 @@ function batchCreationConsumeSimpleStock(
  *
  * @throws RuntimeException
  */
-function batchCreationDeductTypedStock(PDO $pdo, array $material, float $unitsMultiplier): void
+function batchCreationDeductTypedStock($pdo, array $material, float $unitsMultiplier): void
 {
     $quantityPerUnit = (float)($material['quantity_per_unit'] ?? 0);
     if ($quantityPerUnit <= 0 || $unitsMultiplier <= 0) {
@@ -804,7 +1041,7 @@ function batchCreationDeductTypedStock(PDO $pdo, array $material, float $unitsMu
 /**
  * التأكد من وجود الجداول المطلوبة للتشغيل.
  */
-function batchCreationEnsureTables(PDO $pdo): void
+function batchCreationEnsureTables($pdo): void
 {
     static $ensured = false;
 
@@ -1017,7 +1254,7 @@ function batchCreationEnsureTables(PDO $pdo): void
 /**
  * توليد رقم تشغيلة بالشكل YYMMDD-XXXXXX (ستة أرقام عشوائية).
  */
-function batchCreationGenerateNumber(PDO $pdo): string
+function batchCreationGenerateNumber($pdo): string
 {
     $datePrefix = date('ymd') . '-';
 
@@ -1596,18 +1833,63 @@ function batchCreationCreate(int $templateId, int $units, array $rawUsage = [], 
                         $stockMaterial['supplier_id'] = (int)$usageEntry['supplier_id'];
                     }
 
-                    // تحديث honey_variety من usageEntry إذا كان موجوداً، وإلا الحفاظ على القيمة الحالية
+                    // تحديث honey_variety من usageEntry إذا كان موجوداً (الأولوية لـ usageEntry لأنه يأتي من المستخدم)
                     $originalHoneyVariety = $stockMaterial['honey_variety'] ?? null;
                     if (!empty($usageEntry['honey_variety'])) {
                         $stockMaterial['honey_variety'] = trim((string)$usageEntry['honey_variety']);
                         error_log("Honey variety updated from usageEntry: template_item_id={$templateItemId}, old={$originalHoneyVariety}, new={$stockMaterial['honey_variety']}");
+                    } elseif ($originalHoneyVariety !== null && $originalHoneyVariety !== '') {
+                        // الحفاظ على القيمة الحالية من stockMaterial إذا كانت موجودة ولم يكن هناك usageEntry
+                        error_log("Honey variety preserved from stockMaterial: template_item_id={$templateItemId}, honey_variety={$originalHoneyVariety}");
                     } else {
-                        // الحفاظ على القيمة الحالية إذا كانت موجودة
-                        if ($originalHoneyVariety !== null) {
-                            error_log("Honey variety preserved from stockMaterial: template_item_id={$templateItemId}, honey_variety={$originalHoneyVariety}");
+                        // محاولة استخراج نوع العسل من اسم المادة إذا كان NULL
+                        $materialName = trim((string)($stockMaterial['material_name'] ?? ''));
+                        $extractedVariety = null;
+                        
+                        if (!empty($materialName) && (mb_stripos($materialName, 'عسل') !== false || stripos($materialName, 'honey') !== false)) {
+                            // 1. إذا كان الاسم يحتوي على " - " أو "-"، استخرج نوع العسل بعد الشرطة
+                            if (mb_strpos($materialName, ' - ') !== false) {
+                                $parts = explode(' - ', $materialName, 2);
+                                if (count($parts) === 2) {
+                                    $extractedVariety = trim($parts[1]);
+                                }
+                            } elseif (mb_strpos($materialName, '-') !== false) {
+                                $parts = explode('-', $materialName, 2);
+                                if (count($parts) === 2) {
+                                    $extractedVariety = trim($parts[1]);
+                                }
+                            }
+                            // 2. إذا كان الاسم يحتوي على "عسل " في البداية، استخرج الكلمة التالية
+                            elseif (mb_strpos($materialName, 'عسل ') !== false || mb_strpos($materialName, 'عسل-') !== false) {
+                                $honeyPos = mb_stripos($materialName, 'عسل');
+                                if ($honeyPos !== false) {
+                                    $afterHoney = mb_substr($materialName, $honeyPos + mb_strlen('عسل'));
+                                    $afterHoney = trim($afterHoney);
+                                    $afterHoney = preg_replace('/^[\s\-_]+/', '', $afterHoney);
+                                    if (!empty($afterHoney)) {
+                                        $words = preg_split('/[\s\-_]+/', $afterHoney, 2);
+                                        $extractedVariety = trim($words[0]);
+                                    }
+                                }
+                            }
+                            
+                            // تنظيف نوع العسل المستخرج
+                            if (!empty($extractedVariety)) {
+                                $extractedVariety = preg_replace('/\s*\([^)]*\)\s*/', '', $extractedVariety);
+                                $extractedVariety = preg_replace('/[\s\-_]+[A-Z0-9]+[\s\-_]*$/', '', $extractedVariety);
+                                $extractedVariety = trim($extractedVariety);
+                                
+                                if (!empty($extractedVariety) && mb_strlen($extractedVariety) > 1) {
+                                    $stockMaterial['honey_variety'] = $extractedVariety;
+                                    error_log("Honey variety extracted from material name: template_item_id={$templateItemId}, material_name={$materialName}, extracted_variety={$extractedVariety}");
+                                }
+                            }
+                        }
+                        
+                        if (empty($stockMaterial['honey_variety'])) {
+                            error_log("Honey variety is NULL for template_item_id={$templateItemId} - will not filter by variety during deduction");
                         }
                     }
-                    // إذا كان honey_variety موجوداً في stockMaterial ولكن غير موجود في usageEntry، نبقيه كما هو
 
                     if (!empty($usageEntry['material_type'])) {
                         $usageType = trim((string)$usageEntry['material_type']);
@@ -1915,11 +2197,22 @@ function batchCreationCreate(int $templateId, int $units, array $rawUsage = [], 
             foreach ($materialsForStockDeduction as $stockMaterial) {
                 // تسجيل معلومات المادة قبل الخصم
                 if (in_array($stockMaterial['material_type'] ?? '', ['honey_raw', 'honey_filtered', 'honey', 'honey_main', 'honey_general'], true)) {
-                    error_log("Deducting honey stock: material_type={$stockMaterial['material_type']}, honey_variety=" . ($stockMaterial['honey_variety'] ?? 'NULL') . ", supplier_id=" . ($stockMaterial['supplier_id'] ?? 'NULL') . ", quantity_per_unit={$stockMaterial['quantity_per_unit']}, units={$units}");
+                    $honeyVarietyValue = $stockMaterial['honey_variety'] ?? null;
+                    $supplierIdValue = $stockMaterial['supplier_id'] ?? null;
+                    $quantityPerUnit = $stockMaterial['quantity_per_unit'] ?? 0;
+                    $totalRequired = $quantityPerUnit * $units;
+                    error_log("=== DEDUCTING HONEY STOCK ===");
+                    error_log("material_type={$stockMaterial['material_type']}");
+                    error_log("honey_variety=" . ($honeyVarietyValue ?? 'NULL'));
+                    error_log("supplier_id=" . ($supplierIdValue ?? 'NULL'));
+                    error_log("quantity_per_unit={$quantityPerUnit}");
+                    error_log("units={$units}");
+                    error_log("total_required={$totalRequired}");
+                    error_log("material_name=" . ($stockMaterial['material_name'] ?? 'N/A'));
                 }
                 batchCreationDeductTypedStock($pdo, $stockMaterial, (float)$units);
 
-                if ($batchRawMaterialsExists && $batchRawInsertStatement instanceof PDOStatement) {
+                if ($batchRawMaterialsExists && $batchRawInsertStatement !== null) {
                     $qtyUsed = (float)($stockMaterial['quantity_per_unit'] ?? 0) * $units;
                     $pendingRawMaterialRows[] = [
                         'raw_material_id' => isset($stockMaterial['raw_id']) ? (int)$stockMaterial['raw_id'] : (isset($stockMaterial['material_id']) ? (int)$stockMaterial['material_id'] : null),
@@ -2124,7 +2417,7 @@ function batchCreationCreate(int $templateId, int $units, array $rawUsage = [], 
         }
 
         if ($canUpdateRawStock && !empty($materials)) {
-            if (!$batchRawMaterialsExists || !$batchRawInsertStatement instanceof PDOStatement) {
+            if (!$batchRawMaterialsExists || $batchRawInsertStatement === null) {
                 throw new RuntimeException('جدول تفاصيل المواد الخام غير موجود');
             }
 
@@ -2153,7 +2446,7 @@ function batchCreationCreate(int $templateId, int $units, array $rawUsage = [], 
             }
         }
 
-        if (!empty($pendingRawMaterialRows) && $batchRawMaterialsExists && $batchRawInsertStatement instanceof PDOStatement) {
+        if (!empty($pendingRawMaterialRows) && $batchRawMaterialsExists && $batchRawInsertStatement !== null) {
             foreach ($pendingRawMaterialRows as $pendingRow) {
                 $params = [$batchId, $pendingRow['raw_material_id'], $pendingRow['quantity_used']];
                 if ($batchRawHasNameColumn) {
@@ -2170,7 +2463,7 @@ function batchCreationCreate(int $templateId, int $units, array $rawUsage = [], 
         }
 
         if (!empty($packaging)) {
-            if (!$batchPackagingExists || !$batchPackagingInsertStatement instanceof PDOStatement) {
+            if (!$batchPackagingExists || $batchPackagingInsertStatement === null) {
                 throw new RuntimeException('جدول تفاصيل أدوات التعبئة غير موجود');
             }
 
@@ -2202,7 +2495,7 @@ function batchCreationCreate(int $templateId, int $units, array $rawUsage = [], 
             }
         }
 
-        if ($batchSuppliersExists && $batchSuppliersInsertStatement instanceof PDOStatement && !empty($supplierSnapshots)) {
+        if ($batchSuppliersExists && $batchSuppliersInsertStatement !== null && !empty($supplierSnapshots)) {
             foreach ($supplierSnapshots as $supplierId => $snapshot) {
                 $roles = isset($snapshot['roles']) && is_array($snapshot['roles'])
                     ? array_keys($snapshot['roles'])
@@ -2394,11 +2687,15 @@ function batchCreationCreate(int $templateId, int $units, array $rawUsage = [], 
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
+        
+        // تسجيل تفصيلي للخطأ
         error_log('Batch creation error: ' . $throwable->getMessage());
+        error_log('Batch creation error file: ' . $throwable->getFile() . ':' . $throwable->getLine());
+        error_log('Batch creation error trace: ' . $throwable->getTraceAsString());
 
         return [
             'success' => false,
-            'message' => 'حدث خطأ غير متوقع أثناء إنشاء التشغيله',
+            'message' => 'حدث خطأ غير متوقع أثناء إنشاء التشغيله: ' . $throwable->getMessage(),
             'stock_deducted' => false,
         ];
     }

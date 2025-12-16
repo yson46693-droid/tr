@@ -1,7 +1,7 @@
 (function () {
   const API_BASE = window.CHAT_API_BASE || '/api/chat';
   const PRESENCE_INTERVAL = 30000;
-  const POLLING_INTERVAL = 2500;
+  const POLLING_INTERVAL = 12000; // زيادة من 2.5 ثانية إلى 12 ثانية لتقليل الضغط على السيرفر
 
   const selectors = {
     app: '[data-chat-app]',

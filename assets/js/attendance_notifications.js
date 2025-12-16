@@ -554,6 +554,11 @@ class AttendanceNotificationManager {
         }
 
         this.dailyCheckInterval = setInterval(async () => {
+            // تخطي الاستدعاء إذا كانت الصفحة مخفية لتقليل الضغط
+            if (document.hidden) {
+                return;
+            }
+            
             const now = new Date();
             if (now.getHours() === 0 && now.getMinutes() === 0) {
                 this.invalidateTodayStatusCache();
@@ -564,7 +569,7 @@ class AttendanceNotificationManager {
             if (status.checked_in && !status.checked_out && status.past_work_end) {
                 this.showOverdueCheckoutReminder();
             }
-        }, 60000);
+        }, 90000); // زيادة من 60 ثانية إلى 90 ثانية لتقليل الضغط
     }
 
     /**

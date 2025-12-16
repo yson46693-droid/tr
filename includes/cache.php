@@ -162,21 +162,28 @@ class Cache {
     }
     
     /**
-     * حذف جميع قيم Cache
+     * حذف جميع قيم Cache بشكل فوري
+     * يتم المسح فوراً لضمان ظهور النتائج بشكل لحظي بعد أي تعديل
      * 
      * @return bool نجح أم لا
      */
     public static function flush() {
         self::init();
         
-        // مسح الذاكرة
+        // مسح الذاكرة فوراً (أولوية عالية)
         self::$memoryCache = [];
         
-        // حذف جميع الملفات
+        // حذف جميع الملفات بشكل فوري
         $files = glob(self::$cacheDir . '/*.cache');
-        foreach ($files as $file) {
-            @unlink($file);
+        if ($files && is_array($files)) {
+            foreach ($files as $file) {
+                // حذف فوري بدون انتظار
+                @unlink($file);
+            }
         }
+        
+        // التأكد من مسح الذاكرة مرة أخرى للتأكد
+        self::$memoryCache = [];
         
         return true;
     }

@@ -148,6 +148,11 @@ function showBrowserNotification(title, body, icon = null, tag = null) {
  * تحميل الإشعارات
  */
 async function loadNotifications() {
+    // تخطي الاستدعاء إذا كانت الصفحة مخفية لتقليل الضغط
+    if (document.hidden) {
+        return;
+    }
+    
     try {
         const apiPath = getApiPath('api/notifications.php');
         const limit = typeof NOTIFICATION_LIMIT !== 'undefined' ? NOTIFICATION_LIMIT : NOTIFICATION_DEFAULT_LIMIT;
@@ -611,10 +616,8 @@ async function deleteNotification(notificationId) {
             if (response.status === 401) {
                 // إذا كان Unauthorized، المستخدم قد سجل خروج - لا نعرض رسالة خطأ
                 console.warn('Unauthorized when deleting notification - user may have logged out');
-                // إعادة توجيه إلى صفحة تسجيل الدخول بدلاً من إظهار خطأ
-                if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
-                    window.location.href = '/index.php';
-                }
+                // لا نعيد التوجيه تلقائياً - نترك المستخدم في الصفحة الحالية
+                // إعادة التوجيه ستحدث فقط عند تسجيل الخروج الفعلي أو انتهاء الجلسة في قاعدة البيانات
                 return;
             }
             throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
@@ -667,10 +670,8 @@ async function deleteAllNotifications() {
             if (response.status === 401) {
                 // إذا كان Unauthorized، المستخدم قد سجل خروج - لا نعرض رسالة خطأ
                 console.warn('Unauthorized when deleting all notifications - user may have logged out');
-                // إعادة توجيه إلى صفحة تسجيل الدخول بدلاً من إظهار خطأ
-                if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
-                    window.location.href = '/index.php';
-                }
+                // لا نعيد التوجيه تلقائياً - نترك المستخدم في الصفحة الحالية
+                // إعادة التوجيه ستحدث فقط عند تسجيل الخروج الفعلي أو انتهاء الجلسة في قاعدة البيانات
                 return { success: false, loggedOut: true };
             }
             throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
@@ -713,10 +714,8 @@ async function deleteAllNotifications() {
         // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
         if (error.message && error.message.includes('Unauthorized')) {
             console.warn('Unauthorized when deleting all notifications - user may have logged out');
-            // إعادة توجيه إلى صفحة تسجيل الدخول بدلاً من إظهار خطأ
-            if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
-                window.location.href = '/index.php';
-            }
+            // لا نعيد التوجيه تلقائياً - نترك المستخدم في الصفحة الحالية
+            // إعادة التوجيه ستحدث فقط عند تسجيل الخروج الفعلي أو انتهاء الجلسة في قاعدة البيانات
             return { success: false, loggedOut: true };
         }
         console.error('Error deleting all notifications:', error);
@@ -809,7 +808,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadNotifications();
     
     // تحديث الإشعارات (زيادة الفترة لتقليل الاستهلاك بشكل كبير)
-    let pollInterval = 60000; // 60 ثانية كافتراضي بدلاً من 30 ثانية
+    let pollInterval = 90000; // 90 ثانية كافتراضي بدلاً من 60 ثانية لتقليل الضغط
     if (typeof window.NOTIFICATION_POLL_INTERVAL !== 'undefined') {
         const parsed = Number(window.NOTIFICATION_POLL_INTERVAL);
         if (Number.isFinite(parsed) && parsed > 0) {
@@ -817,9 +816,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // الحد الأدنى 30 ثانية (زيادة من 10 ثوان لتقليل الاستهلاك)
-    if (pollInterval < 30000) {
-        pollInterval = 30000;
+    // الحد الأدنى 60 ثانية (زيادة من 30 ثانية لتقليل الاستهلاك)
+    if (pollInterval < 60000) {
+        pollInterval = 60000;
     }
     const autoRefreshEnabled = (function () {
         if (typeof window.NOTIFICATION_AUTO_REFRESH_ENABLED === 'undefined') {
@@ -834,8 +833,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (autoRefreshEnabled) {
         if (window.currentUser && window.currentUser.role === 'production') {
-            // زيادة الفترة لعمال الإنتاج إلى 45 ثانية بدلاً من 15 ثانية
-            pollInterval = Math.min(pollInterval, 45000);
+            // زيادة الفترة لعمال الإنتاج إلى 90 ثانية لتقليل الضغط
+            pollInterval = Math.min(pollInterval, 90000);
             if (checkNotificationPermission() === 'default') {
                 const requestOnInteraction = () => {
                     requestNotificationPermission().catch(err => console.error('Error requesting notification permission:', err));

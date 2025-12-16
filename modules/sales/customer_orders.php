@@ -1170,7 +1170,7 @@ if (isset($_GET['id'])) {
 }
 
 .order-details-card .card-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, rgba(29, 51, 150, 1) 0%, rgba(20, 57, 204, 1) 100%);
     border: none;
     padding: 1rem 1.5rem;
 }

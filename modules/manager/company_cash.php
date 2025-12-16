@@ -383,7 +383,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        // إعداد URL مع مسح الكاش بعد تسجيل المصروف
         $redirectTarget = $_SERVER['REQUEST_URI'] ?? '';
+        $urlParts = parse_url($redirectTarget);
+        $queryParams = [];
+        if (isset($urlParts['query'])) {
+            parse_str($urlParts['query'], $queryParams);
+        }
+        
+        // إزالة معاملات cache القديمة
+        unset($queryParams['_nocache'], $queryParams['_refresh'], $queryParams['_cache_bust'], 
+              $queryParams['_t'], $queryParams['_r'], $queryParams['_auto_refresh']);
+        
+        // إضافة timestamp جديد لمسح الكاش
+        $queryParams['_nocache'] = time() * 1000 + rand(0, 999);
+        
+        // بناء URL جديد
+        $redirectTarget = $urlParts['path'] ?? '';
+        if (!empty($queryParams)) {
+            $redirectTarget .= '?' . http_build_query($queryParams);
+        }
+        if (isset($urlParts['fragment'])) {
+            $redirectTarget .= '#' . $urlParts['fragment'];
+        }
+        
         if (!headers_sent()) {
             header('Location: ' . $redirectTarget);
         } else {

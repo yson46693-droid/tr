@@ -34,11 +34,31 @@ if (!defined('ACCESS_ALLOWED')) {
     (function() {
         'use strict';
         
-        // منع تخزين الصفحة في cache عند عمل refresh
+        // منع تخزين الصفحة في cache عند عمل refresh - محسّن لمنع Error Code: -2
         window.addEventListener('pageshow', function(event) {
             if (event.persisted) {
                 // إذا كانت الصفحة من cache، أعد تحميلها من السيرفر
-                window.location.reload(true);
+                // استخدام طريقة آمنة لمنع Error Code: -2
+                try {
+                    // إضافة timestamp للـ URL لفرض reload من السيرفر
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('_refresh', Date.now().toString());
+                    
+                    // استخدام replaceState أولاً ثم reload
+                    window.history.replaceState({}, '', url.toString());
+                    
+                    // استخدام setTimeout لمنع مشاكل التوقيت
+                    setTimeout(function() {
+                        // استخدام location.href بدلاً من reload(true) لمنع Error Code: -2
+                        window.location.href = url.toString();
+                    }, 50);
+                } catch (e) {
+                    // في حالة الخطأ، استخدم reload عادي
+                    console.warn('Error in pageshow handler, using fallback:', e);
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 50);
+                }
             }
         });
         
@@ -182,8 +202,8 @@ if (!defined('ACCESS_ALLOWED')) {
         window.__sessionKeepAliveActive = true;
         
         let lastActivity = Date.now();
-        const SESSION_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 دقائق (تقليل الفترة لمنع الانتهاء)
-        const ACTIVITY_TIMEOUT = 10 * 60 * 1000; // 10 دقائق
+        const SESSION_REFRESH_INTERVAL = 8 * 60 * 1000; // 8 دقائق (زيادة من 5 دقائق لتقليل الضغط)
+        const ACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 دقائق (زيادة من 10 دقائق)
         
         // تتبع النشاط
         const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click', 'keydown'];
@@ -217,6 +237,9 @@ if (!defined('ACCESS_ALLOWED')) {
         }
         
         // تحديث الجلسة عبر API المخصص
+        let consecutiveFailures = 0;
+        const MAX_CONSECUTIVE_FAILURES = 3;
+        
         function refreshSession() {
             if (isRefreshing) {
                 return; // منع الطلبات المتزامنة
@@ -231,41 +254,113 @@ if (!defined('ACCESS_ALLOWED')) {
             isRefreshing = true;
             const apiPath = getApiPath('api/session_keepalive.php');
             
+            // إضافة timeout للطلب (5 ثواني فقط - يجب أن يكون سريعاً)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(function() {
+                controller.abort();
+            }, 5000);
+            
             fetch(apiPath, {
                 method: 'GET',
                 cache: 'no-cache',
                 credentials: 'same-origin',
+                signal: controller.signal,
                 headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Cache-Control': 'no-cache'
                 }
             })
             .then(function(response) {
+                clearTimeout(timeoutId);
                 if (!response.ok) {
                     return response.json().then(function(data) {
                         if (data && data.expired) {
-                            // الجلسة انتهت - إعادة توجيه
-                            const loginUrl = '/index.php';
-                            if (window.location.pathname !== loginUrl) {
-                                window.location.href = loginUrl;
+                            // الجلسة انتهت - إعادة توجيه مع تنظيف URL
+                            consecutiveFailures = 0;
+                            const loginUrl = getApiPath('index.php').split('?')[0];
+                            // إزالة جميع معاملات _nocache و _refresh من URL
+                            const cleanUrl = loginUrl.replace(/[?&](_nocache|_refresh|_cache_bust|_t|_r|_auto_refresh)=\d+/g, '');
+                            // استخدام replace بدلاً من href لتجنب ERR_FAILED
+                            if (window.location.pathname !== cleanUrl.split('?')[0]) {
+                                window.location.replace(cleanUrl);
                             }
+                            return;
                         }
-                        throw new Error('Session refresh failed');
+                        throw new Error('Session refresh failed: ' + (data.message || 'Unknown error'));
+                    }).catch(function() {
+                        throw new Error('Session refresh failed: HTTP ' + response.status);
                     });
                 }
                 return response.json();
             })
             .then(function(data) {
                 if (data && data.success) {
-                    // تحديث ناجح
+                    // تحديث ناجح - إعادة تعيين عداد الفشل
+                    consecutiveFailures = 0;
                     lastActivity = Date.now();
+                } else {
+                    consecutiveFailures++;
                 }
             })
             .catch(function(error) {
-                // تجاهل الأخطاء في تحديث الجلسة (لا نريد إزعاج المستخدم)
-                console.log('Session keep-alive:', error.message || 'refresh skipped');
+                clearTimeout(timeoutId);
+                consecutiveFailures++;
+                
+                // إذا فشل الطلب بسبب network error أو timeout
+                if (error.name === 'AbortError' || error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.message.includes('ERR_FAILED')) {
+                    // لا نسجل الخطأ في console لتقليل الضغط
+                    // console.log('Session keep-alive: Network error or timeout - ' + (error.message || 'Unknown'));
+                    
+                    // إذا فشل 3 مرات متتالية، تحقق من حالة الجلسة
+                    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                        console.warn('Session keep-alive: Multiple consecutive failures detected. Checking session status...');
+                        // محاولة تحميل صفحة بسيطة للتحقق من الاتصال
+                        checkConnection();
+                        
+                        // إعادة تعيين العداد بعد فحص الاتصال لمنع التكرار المفرط
+                        setTimeout(function() {
+                            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                                consecutiveFailures = Math.floor(MAX_CONSECUTIVE_FAILURES / 2); // تقليل العداد تدريجياً
+                            }
+                        }, 30000); // بعد 30 ثانية
+                    }
+                } else {
+                    // لا نسجل الأخطاء الروتينية
+                    // console.log('Session keep-alive error:', error.message || 'refresh skipped');
+                }
             })
             .finally(function() {
                 isRefreshing = false;
+            });
+        }
+        
+        // التحقق من الاتصال والجلسة
+        function checkConnection() {
+            const checkUrl = getApiPath('index.php').split('?')[0];
+            const controller = new AbortController();
+            const timeoutId = setTimeout(function() {
+                controller.abort();
+            }, 5000); // 5 ثواني timeout
+            
+            fetch(checkUrl, {
+                method: 'HEAD',
+                cache: 'no-cache',
+                credentials: 'same-origin',
+                signal: controller.signal
+            })
+            .then(function(response) {
+                clearTimeout(timeoutId);
+                // إذا نجح الطلب، إعادة تعيين العداد
+                consecutiveFailures = 0;
+            })
+            .catch(function(error) {
+                clearTimeout(timeoutId);
+                // إذا فشل الطلب، قد تكون هناك مشكلة في الاتصال
+                // لا نعيد التوجيه تلقائياً - فقط نسجل التحذير
+                // الجلسة ستبقى نشطة حتى لو فشلت طلبات keep-alive
+                console.warn('Connection check failed:', error.message);
+                // لا نعيد التوجيه - نترك الجلسة نشطة حتى لو فشلت طلبات keep-alive
+                // إعادة التوجيه ستحدث فقط عند تسجيل الخروج الفعلي أو انتهاء الجلسة في قاعدة البيانات
             });
         }
         
@@ -279,8 +374,8 @@ if (!defined('ACCESS_ALLOWED')) {
             refreshSession();
         }, SESSION_REFRESH_INTERVAL);
         
-        // تحديث أولي بعد تحميل الصفحة (بعد 30 ثانية)
-        setTimeout(refreshSession, 30000);
+        // تحديث أولي بعد تحميل الصفحة (بعد 60 ثانية - تقليل الضغط على السيرفر)
+        setTimeout(refreshSession, 60000);
         
         // تحديث قبل مغادرة الصفحة
         window.addEventListener('beforeunload', function() {
@@ -460,14 +555,14 @@ if (!defined('ACCESS_ALLOWED')) {
             // تحميل العمليات الخلفية بشكل غير متزامن (بعد تحميل الصفحة)
             // هذا يحسن الأداء عن طريق تأخير العمليات الثقيلة
             setTimeout(function() {
+                // تخطي الاستدعاء إذا كانت الصفحة مخفية لتقليل الضغط
+                if (document.hidden) {
+                    return;
+                }
+                
                 try {
-                    // حساب مسار API
-                    const currentPath = window.location.pathname;
-                    const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
-                    let apiPath = '/api/background-tasks.php';
-                    if (pathParts.length > 0) {
-                        apiPath = '/' + pathParts[0] + '/api/background-tasks.php';
-                    }
+                    // استخدام دالة getApiPath لحساب مسار API بشكل صحيح
+                    const apiPath = getApiPath('api/background-tasks.php');
                     
                     // استدعاء API للعمليات الخلفية (بدون انتظار النتيجة)
                     fetch(apiPath, {
@@ -485,7 +580,7 @@ if (!defined('ACCESS_ALLOWED')) {
                     // تجاهل الأخطاء
                     console.log('Background tasks error:', error.message);
                 }
-            }, 2000); // بعد ثانيتين من تحميل الصفحة
+            }, 5000); // زيادة من 2 ثانية إلى 5 ثوان لتقليل الضغط
             
             // إغلاق القائمة المنسدلة عند النقر على أي رابط
             const mainMenuDropdown = document.getElementById('mainMenuDropdown');
@@ -862,8 +957,14 @@ if (!defined('ACCESS_ALLOWED')) {
                 
                 requestIdleCallback(function() {
                     // الحصول على base URL من الصفحة الحالية
-                    const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
+                    let baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
                     const currentPath = window.location.pathname;
+                    
+                    // إزالة 'dashboard/' من baseUrl إذا كان موجوداً لمنع تكرار dashboard/dashboard
+                    if (baseUrl.endsWith('/dashboard/')) {
+                        baseUrl = baseUrl.replace(/\/dashboard\/$/, '/');
+                    }
+                    
                     let dashboardUrl = baseUrl;
                     
                     // تحديد dashboard URL بناءً على الصفحة الحالية
@@ -1037,6 +1138,81 @@ if (!defined('ACCESS_ALLOWED')) {
         }
         window.__errorHandlerActive = true;
         
+        // متغير لتتبع حالة التنقل
+        let isNavigating = false;
+        let navigationStartTime = 0;
+        const NAVIGATION_TIMEOUT = 10000; // 10 ثوانٍ
+        
+        // تتبع النقرات على روابط الشريط الجانبي
+        document.addEventListener('click', function(e) {
+            const link = e.target.closest('a');
+            if (link && link.href && !link.href.includes('#') && !link.href.includes('javascript:')) {
+                // التحقق من أن الرابط من نفس النطاق
+                try {
+                    const linkUrl = new URL(link.href, window.location.origin);
+                    const currentUrl = new URL(window.location.href);
+                    
+                    if (linkUrl.origin === currentUrl.origin && 
+                        !linkUrl.pathname.includes('/api/') &&
+                        (link.classList.contains('nav-link') || link.closest('.homeline-sidebar'))) {
+                        // هذا رابط من الشريط الجانبي - تعيين flag التنقل
+                        isNavigating = true;
+                        navigationStartTime = Date.now();
+                        
+                        // إزالة flag بعد timeout
+                        setTimeout(function() {
+                            if (Date.now() - navigationStartTime >= NAVIGATION_TIMEOUT) {
+                                isNavigating = false;
+                            }
+                        }, NAVIGATION_TIMEOUT);
+                    }
+                } catch (urlError) {
+                    // تجاهل أخطاء URL parsing
+                }
+            }
+        }, true);
+        
+        // إزالة flag عند اكتمال تحميل الصفحة
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                isNavigating = false;
+            }, 2000); // إزالة flag بعد ثانيتين من تحميل الصفحة
+        });
+        
+        // تتبع التنقل عبر أزرار المتصفح (back/forward)
+        window.addEventListener('popstate', function() {
+            isNavigating = true;
+            navigationStartTime = Date.now();
+            setTimeout(function() {
+                if (Date.now() - navigationStartTime >= NAVIGATION_TIMEOUT) {
+                    isNavigating = false;
+                }
+            }, NAVIGATION_TIMEOUT);
+        });
+        
+        // تتبع تغيير URL (للتنقل البرمجي)
+        let urlCheckInterval = setInterval(function() {
+            const currentUrl = window.location.href;
+            if (window.__lastCheckedUrl && window.__lastCheckedUrl !== currentUrl) {
+                // URL تغير - قد يكون تنقل
+                isNavigating = true;
+                navigationStartTime = Date.now();
+                setTimeout(function() {
+                    if (Date.now() - navigationStartTime >= NAVIGATION_TIMEOUT) {
+                        isNavigating = false;
+                    }
+                }, NAVIGATION_TIMEOUT);
+            }
+            window.__lastCheckedUrl = currentUrl;
+        }, 1000);
+        
+        // تنظيف عند إغلاق الصفحة
+        window.addEventListener('beforeunload', function() {
+            if (urlCheckInterval) {
+                clearInterval(urlCheckInterval);
+            }
+        });
+        
         // حساب مسار صفحة تسجيل الدخول
         function getLoginUrl() {
             const currentPath = window.location.pathname || '/';
@@ -1054,6 +1230,11 @@ if (!defined('ACCESS_ALLOWED')) {
         
         // التحقق من حالة الصفحة
         function checkPageStatus() {
+            // إذا كان التنقل قيد التقدم، لا نتحقق من حالة الصفحة
+            if (isNavigating) {
+                return;
+            }
+            
             // التحقق من أن الصفحة تم تحميلها بشكل صحيح
             if (document.readyState === 'complete') {
                 // استثناء صفحات معينة من التحقق (مثل tasks.php التي قد تستغرق وقتاً في التحميل)
@@ -1065,7 +1246,9 @@ if (!defined('ACCESS_ALLOWED')) {
                     'tasks.php',
                     'page=tasks',
                     'production.php?page=tasks',
-                    'manager.php?page=tasks'
+                    'manager.php?page=tasks',
+                    'index.php',
+                    'login'
                 ];
                 
                 // إذا كانت الصفحة الحالية في قائمة الاستثناءات، لا نتحقق منها
@@ -1092,8 +1275,11 @@ if (!defined('ACCESS_ALLOWED')) {
                 
                 if (!hasContent && document.body.innerHTML.trim().length < 500) {
                     // الصفحة فارغة أو لم يتم تحميلها - إعادة التوجيه
-                    console.warn('Page appears empty or failed to load - redirecting to login');
-                    redirectToLogin();
+                    // لكن فقط إذا لم يكن التنقل قيد التقدم
+                    if (!isNavigating) {
+                        console.warn('Page appears empty or failed to load - redirecting to login');
+                        redirectToLogin();
+                    }
                     return;
                 }
             }
@@ -1156,17 +1342,17 @@ if (!defined('ACCESS_ALLOWED')) {
         // زيادة التأخير لمنح الصفحات وقتاً أطول للتحميل (خاصة tasks.php)
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', function() {
-                // تأخير أطول (5 ثوانٍ بدلاً من 1 ثانية) لمنح الصفحات وقتاً للتحميل
-                setTimeout(checkPageStatus, 5000);
+                // تأخير أطول (8 ثوانٍ) لمنح الصفحات وقتاً كافياً للتحميل بعد التنقل
+                setTimeout(checkPageStatus, 8000);
             });
         } else {
-            setTimeout(checkPageStatus, 5000);
+            setTimeout(checkPageStatus, 8000);
         }
         
         // التحقق من حالة الصفحة بعد تحميلها بالكامل
         window.addEventListener('load', function() {
-            // تأخير أطول (3 ثوانٍ بدلاً من 500ms) لمنح الصفحات وقتاً للتحميل
-            setTimeout(checkPageStatus, 3000);
+            // تأخير أطول (5 ثوانٍ) لمنح الصفحات وقتاً كافياً للتحميل بعد التنقل
+            setTimeout(checkPageStatus, 5000);
         });
         
         // معالجة أخطاء fetch (للطلبات AJAX)
@@ -1209,6 +1395,11 @@ if (!defined('ACCESS_ALLOWED')) {
         // مراقبة تغييرات الصفحة (للتحقق من أخطاء التوجيه) - تقليل التكرار
         let lastUrl = window.location.href;
         setInterval(function() {
+            // إذا كان التنقل قيد التقدم، لا نتحقق
+            if (isNavigating) {
+                return;
+            }
+            
             const currentUrl = window.location.href;
             // إذا تغيرت الصفحة إلى صفحة خطأ أو ERR_FAILED
             if (currentUrl !== lastUrl) {
@@ -1223,11 +1414,12 @@ if (!defined('ACCESS_ALLOWED')) {
                     
                     if (!isTasksPage) {
                         // التحقق من أن الصفحة تم تحميلها بشكل صحيح (بعد تأخير أطول)
-                        setTimeout(checkPageStatus, 5000);
+                        // زيادة التأخير لمنح الصفحة وقتاً كافياً للتحميل
+                        setTimeout(checkPageStatus, 8000);
                     }
                 }
             }
-        }, 10000); // 10 ثوانٍ بدلاً من 3 ثوانٍ لتقليل الاستخدام
+        }, 15000); // 15 ثانية بدلاً من 10 ثوانٍ لتقليل الاستخدام
         
         // معالجة أخطاء XMLHttpRequest (للتوافق مع الكود القديم)
         if (window.XMLHttpRequest) {

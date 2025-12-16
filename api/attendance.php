@@ -78,6 +78,7 @@ try {
     if ($action === 'check_in') {
         // الحصول على الصورة من البيانات المرسلة
         $photoBase64 = $inputData['photo'] ?? null;
+        $delayReason = trim($inputData['delay_reason'] ?? '');
         
         // تسجيل تفاصيل الصورة المستلمة
         if ($photoBase64) {
@@ -86,12 +87,23 @@ try {
             error_log("Check-in: No photo received. POST keys: " . implode(', ', array_keys($_POST)));
         }
         
-        $result = recordAttendanceCheckIn($currentUser['id'], $photoBase64);
+        $result = recordAttendanceCheckIn($currentUser['id'], $photoBase64, $delayReason);
         
         if ($result['success']) {
             logAudit($currentUser['id'], 'check_in', 'attendance', $result['record_id'], null, [
                 'delay_minutes' => $result['delay_minutes']
             ]);
+            
+            // إضافة cache-busting headers لضمان تحديث البيانات مباشرة
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
+            header('Pragma: no-cache');
+            header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+            header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
+            header('ETag: "' . md5(time() . rand() . $result['record_id']) . '"');
+            
+            // إضافة timestamp للاستجابة لضمان تحديث البيانات في JavaScript
+            $result['cache_bust'] = time();
+            $result['timestamp'] = date('Y-m-d H:i:s');
         }
         
         echo json_encode($result, JSON_UNESCAPED_UNICODE);
@@ -113,6 +125,17 @@ try {
             logAudit($currentUser['id'], 'check_out', 'attendance', null, null, [
                 'work_hours' => $result['work_hours']
             ]);
+            
+            // إضافة cache-busting headers لضمان تحديث البيانات مباشرة
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
+            header('Pragma: no-cache');
+            header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+            header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
+            header('ETag: "' . md5(time() . rand() . $currentUser['id']) . '"');
+            
+            // إضافة timestamp للاستجابة لضمان تحديث البيانات في JavaScript
+            $result['cache_bust'] = time();
+            $result['timestamp'] = date('Y-m-d H:i:s');
         }
         
         echo json_encode($result, JSON_UNESCAPED_UNICODE);

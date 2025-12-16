@@ -114,6 +114,29 @@ RewriteRule ^(.*)$ index.php [QSA,L]
     php_value post_max_size 10M
     php_value max_execution_time 300
     php_value max_input_time 300
+    php_value default_socket_timeout 30
+    php_value memory_limit 128M
+</IfModule>
+
+# PHP Settings for PHP 8.x
+<IfModule mod_php8.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 10M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+    php_value default_socket_timeout 30
+    php_value memory_limit 128M
+</IfModule>
+
+# Apache Timeout Settings - منع توقف الخادم
+<IfModule mod_timeout.c>
+    Timeout 60
+</IfModule>
+
+# Keep-Alive Settings - تحسين الاتصال
+<IfModule mod_headers.c>
+    # إعدادات Keep-Alive
+    Header set Connection "keep-alive"
 </IfModule>
 
 # Cache Control for Static Assets

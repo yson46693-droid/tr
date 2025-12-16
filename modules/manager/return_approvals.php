@@ -428,8 +428,18 @@ function approveReturn(returnId, event) {
                 successMsg += '🔢 رقم المرتجع: ' + data.return_number;
             }
             
-            // إظهار رسالة النجاح مباشرة
-            alert(successMsg);
+            // إظهار رسالة النجاح باستخدام Toast
+            if (typeof showSuccessMessage === 'function') {
+                showSuccessMessage(
+                    successMsg,
+                    data.financial_note || null,
+                    data.items_returned || 0,
+                    data.return_number || null
+                );
+            } else {
+                // Fallback: استخدام alert
+                alert(successMsg);
+            }
             
             // تحديث حالة الزر لإظهار أنه تمت الموافقة
             if (btn) {
@@ -439,7 +449,7 @@ function approveReturn(returnId, event) {
                 btn.classList.add('btn-secondary');
             }
             
-            // إزالة الصف من الجدول بعد الموافقة (بدون إعادة تحميل)
+            // إزالة الصف من الجدول بعد الموافقة (بدون إعادة تحميل فورية)
             const row = btn ? btn.closest('tr') : null;
             if (row) {
                 // إضافة تأثير fade out
@@ -447,13 +457,27 @@ function approveReturn(returnId, event) {
                 row.style.opacity = '0';
                 setTimeout(() => {
                     row.remove();
+                    // التحقق من وجود صفوف أخرى
+                    const tbody = row.closest('tbody');
+                    if (tbody && tbody.querySelectorAll('tr').length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">لا توجد طلبات مرتجعات معلقة</td></tr>';
+                    }
                 }, 500);
             }
             
-            // إعادة تحميل الصفحة تلقائياً بعد 2.5 ثانية
+            // إعادة تحميل الصفحة بعد 2 ثانية لضمان تحديث البيانات مع مسح الكاش
             setTimeout(() => {
-                location.reload();
-            }, 2500);
+                const currentUrl = new URL(window.location.href);
+                // إزالة جميع معاملات cache السابقة قبل إضافة واحدة جديدة
+                currentUrl.searchParams.delete('_nocache');
+                currentUrl.searchParams.delete('_refresh');
+                currentUrl.searchParams.delete('_cache_bust');
+                currentUrl.searchParams.delete('_t');
+                currentUrl.searchParams.delete('_r');
+                currentUrl.searchParams.delete('_auto_refresh');
+                currentUrl.searchParams.set('_nocache', Date.now());
+                window.location.replace(currentUrl.toString());
+            }, 2000);
         } else {
             console.error('Approval failed:', data.message);
             if (btn) {
@@ -461,8 +485,18 @@ function approveReturn(returnId, event) {
                 btn.innerHTML = originalHTML;
             }
             
-            // إظهار رسالة الخطأ مباشرة
+            // إظهار رسالة الخطأ مباشرة ثم مسح الكاش
             alert('❌ خطأ: ' + (data.message || 'حدث خطأ غير معروف'));
+            const currentUrl = new URL(window.location.href);
+            // إزالة جميع معاملات cache السابقة قبل إضافة واحدة جديدة
+            currentUrl.searchParams.delete('_nocache');
+            currentUrl.searchParams.delete('_refresh');
+            currentUrl.searchParams.delete('_cache_bust');
+            currentUrl.searchParams.delete('_t');
+            currentUrl.searchParams.delete('_r');
+            currentUrl.searchParams.delete('_auto_refresh');
+            currentUrl.searchParams.set('_nocache', Date.now());
+            window.location.replace(currentUrl.toString());
         }
     })
     .catch(error => {
@@ -475,6 +509,17 @@ function approveReturn(returnId, event) {
             btn.disabled = false;
             btn.innerHTML = originalHTML;
         }
+        // مسح الكاش بعد ظهور رسالة الخطأ
+        const currentUrl = new URL(window.location.href);
+        // إزالة جميع معاملات cache السابقة قبل إضافة واحدة جديدة
+        currentUrl.searchParams.delete('_nocache');
+        currentUrl.searchParams.delete('_refresh');
+        currentUrl.searchParams.delete('_cache_bust');
+        currentUrl.searchParams.delete('_t');
+        currentUrl.searchParams.delete('_r');
+        currentUrl.searchParams.delete('_auto_refresh');
+        currentUrl.searchParams.set('_nocache', Date.now());
+        window.location.replace(currentUrl.toString());
         // محاولة استخدام Toast، ثم Alert كبديل
         try {
             if (typeof showErrorMessage === 'function') {
@@ -523,9 +568,18 @@ function rejectReturn(returnId, event) {
     .then(data => {
         if (data.success) {
             alert('تم رفض الطلب بنجاح');
-            // إعادة تحميل الصفحة تلقائياً بعد 2.5 ثانية
+            // إعادة تحميل الصفحة تلقائياً بعد 2.5 ثانية مع مسح الكاش
             setTimeout(() => {
-                location.reload();
+                const currentUrl = new URL(window.location.href);
+                // إزالة جميع معاملات cache السابقة قبل إضافة واحدة جديدة
+                currentUrl.searchParams.delete('_nocache');
+                currentUrl.searchParams.delete('_refresh');
+                currentUrl.searchParams.delete('_cache_bust');
+                currentUrl.searchParams.delete('_t');
+                currentUrl.searchParams.delete('_r');
+                currentUrl.searchParams.delete('_auto_refresh');
+                currentUrl.searchParams.set('_nocache', Date.now());
+                window.location.replace(currentUrl.toString());
             }, 2500);
         } else {
             if (btn) {
@@ -533,6 +587,17 @@ function rejectReturn(returnId, event) {
                 btn.innerHTML = originalHTML;
             }
             alert('خطأ: ' + (data.message || 'حدث خطأ غير معروف'));
+            // مسح الكاش بعد ظهور رسالة الخطأ
+            const currentUrl = new URL(window.location.href);
+            // إزالة جميع معاملات cache السابقة قبل إضافة واحدة جديدة
+            currentUrl.searchParams.delete('_nocache');
+            currentUrl.searchParams.delete('_refresh');
+            currentUrl.searchParams.delete('_cache_bust');
+            currentUrl.searchParams.delete('_t');
+            currentUrl.searchParams.delete('_r');
+            currentUrl.searchParams.delete('_auto_refresh');
+            currentUrl.searchParams.set('_nocache', Date.now());
+            window.location.replace(currentUrl.toString());
         }
     })
     .catch(error => {
@@ -541,6 +606,17 @@ function rejectReturn(returnId, event) {
             btn.disabled = false;
             btn.innerHTML = originalHTML;
         }
+        // مسح الكاش بعد ظهور رسالة الخطأ
+        const currentUrl = new URL(window.location.href);
+        // إزالة جميع معاملات cache السابقة قبل إضافة واحدة جديدة
+        currentUrl.searchParams.delete('_nocache');
+        currentUrl.searchParams.delete('_refresh');
+        currentUrl.searchParams.delete('_cache_bust');
+        currentUrl.searchParams.delete('_t');
+        currentUrl.searchParams.delete('_r');
+        currentUrl.searchParams.delete('_auto_refresh');
+        currentUrl.searchParams.set('_nocache', Date.now());
+        window.location.replace(currentUrl.toString());
         alert('حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
     });
 }
