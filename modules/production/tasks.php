@@ -417,12 +417,17 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 }
                 
                 // حفظ اسم المنتج/القالب مباشرة في حقل product_name في جدول tasks
-                // هذا الحل الجذري يضمن ظهور اسم القالب في الجدول مباشرة
-                // يجب حفظ product_name دائماً إذا كان موجوداً (حتى لو كان product_id null)
-                $displayProductName = $productName;
+                // نفس الطريقة المستخدمة في طلبات العملاء (السطر 448 في customer_orders.php):
+                // حفظ اسم القالب مباشرة في product_name حتى لو كان template_id أو product_id null
+                $displayProductName = '';
                 
+                // الأولوية: استخدام product_name المرسل من النموذج (اسم القالب)
+                // هذا هو نفس المنطق في customer_orders.php السطر 448: حفظ templateName مباشرة
+                if (!empty($productName) && trim($productName) !== '') {
+                    $displayProductName = trim($productName);
+                }
                 // إذا كان productName فارغاً ولكن productId موجود وموجب، جلب الاسم من قاعدة البيانات
-                if ($displayProductName === '' && $productId > 0) {
+                elseif ($productId > 0) {
                     $product = $db->queryOne('SELECT name FROM products WHERE id = ?', [$productId]);
                     if ($product && !empty($product['name'])) {
                         $displayProductName = trim($product['name']);
@@ -430,27 +435,21 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 }
                 
                 // حفظ اسم المنتج/القالب مباشرة في حقل product_name
-                // هذا مهم جداً - يجب حفظ product_name دائماً إذا كان موجوداً (حتى لو كان product_id null)
-                // حتى لو كان task_type ليس production، إذا كان product_name موجوداً يجب حفظه
-                // التحقق من أن product_name ليس فارغاً وليس null
-                if (!empty($displayProductName) && trim($displayProductName) !== '') {
-                    $displayProductName = trim($displayProductName);
+                // نفس الطريقة في طلبات العملاء (السطر 444-448): 
+                // INSERT INTO ... (product_name) VALUES (?, ...) - حفظ الاسم مباشرة
+                // حتى لو كان template_id أو product_id null، نحفظ الاسم في product_name
+                if (!empty($displayProductName)) {
                     $columns[] = 'product_name';
                     $values[] = $displayProductName;
                     $placeholders[] = '?';
-                    error_log("✓ Saving product_name directly to tasks table: '$displayProductName'");
-                    error_log("  - Column added: product_name");
-                    error_log("  - Value: '$displayProductName'");
-                    error_log("  - Value length: " . strlen($displayProductName));
-                    error_log("  - taskType: $taskType");
+                    error_log("✓ Saving product_name directly to tasks table (same as customer_orders): '$displayProductName'");
                 } else {
-                    error_log("⚠ Product name is empty - not saving to product_name column.");
+                    // في طلبات العملاء، إذا لم يكن هناك templateName، يتم حفظ NULL
+                    // لكن هنا نحاول جلب الاسم من product_id إذا كان موجوداً
+                    error_log("⚠ Product name is empty - will save NULL to product_name column.");
                     error_log("  - productName from input: '$productName'");
                     error_log("  - productId: $productId");
-                    error_log("  - displayProductName: '$displayProductName'");
                     error_log("  - taskType: $taskType");
-                    error_log("  - Raw input product_name: " . var_export($input['product_name'] ?? 'NOT SET', true));
-                    error_log("  - Raw productName before tasksSafeString: " . var_export($rawProductName ?? 'NOT SET', true));
                 }
                 
                 // حفظ معلومات المنتج في notes أيضاً للتوافق مع الكود القديم
@@ -865,15 +864,15 @@ foreach ($tasks as &$task) {
     }
     
     // استخدام اسم المنتج/القالب مباشرة من حقل product_name في جدول tasks
-    // هذا الحل الجذري يضمن عرض اسم القالب المدخل مباشرة بدون الحاجة لاستخراجه من notes
-    // الأولوية: 1) product_name من الجدول مباشرة (الحل الجذري)
+    // نفس الطريقة المستخدمة في طلبات العملاء: أولاً التحقق من product_name المحفوظ مباشرة
+    // الأولوية: 1) product_name من الجدول مباشرة (الحل الجذري - نفس طريقة طلبات العملاء)
     //           2) product_name_from_db من JOIN مع products (للتوافق مع المهام القديمة)
     //           3) استخراج من notes (للتوافق مع المهام القديمة جداً)
     
     $finalProductName = null;
     
-    // الأولوية الأولى: استخدام product_name من الجدول مباشرة
-    if (!empty($task['product_name'])) {
+    // الأولوية الأولى: استخدام product_name من الجدول مباشرة (نفس طريقة طلبات العملاء)
+    if (!empty($task['product_name']) && trim($task['product_name']) !== '') {
         $finalProductName = trim($task['product_name']);
     }
     // الأولوية الثانية: استخدام product_name_from_db من JOIN
