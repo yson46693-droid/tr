@@ -29,7 +29,6 @@ jobs:
           timeout: 120000
           log-level: standard
 
-          local-dir: ./public/
           server-dir: /httpdocs/
 
 
