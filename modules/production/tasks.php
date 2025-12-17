@@ -389,8 +389,8 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     error_log("  This means product was not found/created. productName was: '$productName'");
                 }
                 
-                // حفظ اسم المنتج في notes لضمان ظهوره في الجدول
-                // هذا مهم جداً خاصة للقوالب التي لها product_id سالب
+                // حفظ اسم المنتج/القالب مباشرة في حقل product_name في جدول tasks
+                // هذا الحل الجذري يضمن ظهور اسم القالب في الجدول مباشرة
                 $displayProductName = $productName;
                 
                 // إذا كان productName فارغاً ولكن productId موجود وموجب، جلب الاسم من قاعدة البيانات
@@ -401,8 +401,17 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     }
                 }
                 
-                // حفظ معلومات المنتج في notes دائماً إذا كان productName موجوداً (حتى لو كان product_id سالباً)
-                // هذا يضمن ظهور اسم المنتج في الجدول حتى للقوالب
+                // حفظ اسم المنتج/القالب مباشرة في حقل product_name
+                if ($displayProductName !== '') {
+                    $columns[] = 'product_name';
+                    $values[] = $displayProductName;
+                    $placeholders[] = '?';
+                    error_log("✓ Saving product_name directly to tasks table: '$displayProductName'");
+                } else {
+                    error_log("⚠ Product name is empty - not saving to product_name column. productName: '$productName', productId: $productId");
+                }
+                
+                // حفظ معلومات المنتج في notes أيضاً للتوافق مع الكود القديم
                 if ($displayProductName !== '') {
                     $productInfo = 'المنتج: ' . $displayProductName;
                     if ($quantity > 0) {
@@ -415,10 +424,6 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     } else {
                         $notes = $productInfo;
                     }
-                    
-                    error_log("Saved product name to notes: $displayProductName (product_id: $productId)");
-                } else {
-                    error_log("Product name is empty - not saved to notes. productName: '$productName', productId: $productId");
                 }
 
                 if ($quantity > 0) {
@@ -788,113 +793,45 @@ foreach ($tasks as &$task) {
         $allWorkers[] = $task['assigned_to_name'];
     }
     
-    // استخراج اسم المنتج من notes - إعطاء الأولوية لاسم المنتج المحفوظ في notes
-    // لأن المدير/المحاسب قد يدخل اسم منتج مختلف عن الاسم في جدول products
-    // هذا يضمن عرض نفس اسم المنتج الذي أدخله المدير/المحاسب
-    // الصيغة المتوقعة: "المنتج: [اسم المنتج] - الكمية: [الكمية]"
-    $extractedProductName = null;
+    // استخدام اسم المنتج/القالب مباشرة من حقل product_name في جدول tasks
+    // هذا الحل الجذري يضمن عرض اسم القالب المدخل مباشرة بدون الحاجة لاستخراجه من notes
+    // الأولوية: 1) product_name من الجدول مباشرة (الحل الجذري)
+    //           2) product_name_from_db من JOIN مع products (للتوافق مع المهام القديمة)
+    //           3) استخراج من notes (للتوافق مع المهام القديمة جداً)
     
-    // #region agent log
-    $logData = [
-        'sessionId' => 'debug-session',
-        'runId' => 'run1',
-        'hypothesisId' => 'D',
-        'location' => 'tasks.php:827',
-        'message' => 'Extracting product name from notes',
-        'data' => [
-            'task_id' => $task['id'] ?? null,
-            'notes_length' => strlen($notes ?? ''),
-            'notes_full' => $notes ?? '',
-            'notes_preview' => substr($notes ?? '', 0, 500),
-            'product_name_from_db' => $task['product_name_from_db'] ?? null,
-            'product_id' => $task['product_id'] ?? null
-        ],
-        'timestamp' => time() * 1000
-    ];
-    $debugLogPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
-    @file_put_contents($debugLogPath, json_encode($logData, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
-    // #endregion
+    $finalProductName = null;
     
-    if (!empty($notes)) {
+    // الأولوية الأولى: استخدام product_name من الجدول مباشرة
+    if (!empty($task['product_name'])) {
+        $finalProductName = trim($task['product_name']);
+    }
+    // الأولوية الثانية: استخدام product_name_from_db من JOIN
+    elseif (!empty($task['product_name_from_db'])) {
+        $finalProductName = trim($task['product_name_from_db']);
+    }
+    // الأولوية الثالثة: استخراج من notes (للتوافق مع المهام القديمة)
+    elseif (!empty($notes)) {
         // البحث عن "المنتج: " متبوعاً باسم المنتج
-        // محاولة 1: البحث عن "المنتج: [اسم] - الكمية:" (الصيغة القياسية)
-        // استخدام greedy match للبحث عن "- الكمية:" بدلاً من "-" فقط لتجنب التوقف عند "-" داخل اسم المنتج
         if (preg_match('/المنتج:\s*([^\n\r]+?)\s*-\s*الكمية:/i', $notes, $productMatches)) {
-            $extractedProductName = trim($productMatches[1] ?? '');
+            $finalProductName = trim($productMatches[1] ?? '');
+        } elseif (preg_match('/المنتج:\s*([^\n\r]+?)(?:\n|$)/i', $notes, $productMatches2)) {
+            $finalProductName = trim($productMatches2[1] ?? '');
+            $finalProductName = preg_replace('/\s*-\s*الكمية:.*$/i', '', $finalProductName);
+            $finalProductName = trim($finalProductName);
+        } elseif (preg_match('/المنتج:\s*([^\n\r]+)/i', $notes, $productMatches3)) {
+            $finalProductName = trim($productMatches3[1] ?? '');
+            $finalProductName = preg_replace('/\s*-\s*الكمية:.*$/i', '', $finalProductName);
+            $finalProductName = trim($finalProductName);
         }
         
-        // محاولة 2: إذا لم نجد "- الكمية:"، جرب البحث عن "المنتج: [اسم]" فقط حتى نهاية السطر أو سطر جديد
-        if (empty($extractedProductName) && preg_match('/المنتج:\s*([^\n\r]+?)(?:\n|$)/i', $notes, $productMatches2)) {
-            $extractedProductName = trim($productMatches2[1] ?? '');
-            // إزالة "- الكمية:" من النهاية إذا كانت موجودة
-            $extractedProductName = preg_replace('/\s*-\s*الكمية:.*$/i', '', $extractedProductName);
-            $extractedProductName = trim($extractedProductName);
-        }
-        
-        // محاولة 3: البحث عن "المنتج: [اسم]" حتى نهاية السطر (بدون شرط "-")
-        if (empty($extractedProductName) && preg_match('/المنتج:\s*([^\n\r]+)/i', $notes, $productMatches3)) {
-            $extractedProductName = trim($productMatches3[1] ?? '');
-            // إزالة "- الكمية:" من النهاية إذا كانت موجودة
-            $extractedProductName = preg_replace('/\s*-\s*الكمية:.*$/i', '', $extractedProductName);
-            $extractedProductName = trim($extractedProductName);
-        }
-        
-        // تنظيف اسم المنتج من أي أحرف زائدة
-        if (!empty($extractedProductName)) {
-            $extractedProductName = trim($extractedProductName);
-            // إزالة أي "-" في البداية أو النهاية فقط (وليس من المنتصف)
-            $extractedProductName = trim($extractedProductName, '-');
-            $extractedProductName = trim($extractedProductName);
+        if (!empty($finalProductName)) {
+            $finalProductName = trim($finalProductName, '-');
+            $finalProductName = trim($finalProductName);
         }
     }
     
-    // #region agent log
-    $logData = [
-        'sessionId' => 'debug-session',
-        'runId' => 'run1',
-        'hypothesisId' => 'D',
-        'location' => 'tasks.php:775',
-        'message' => 'After extracting product name from notes',
-        'data' => [
-            'task_id' => $task['id'] ?? null,
-            'extractedProductName' => $extractedProductName,
-            'product_name_from_db' => $task['product_name_from_db'] ?? null
-        ],
-        'timestamp' => time() * 1000
-    ];
-    $debugLogPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
-    @file_put_contents($debugLogPath, json_encode($logData, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
-    // #endregion
-    
-    // استخدام اسم المنتج من notes إذا كان موجوداً (الأولوية الأولى)
-    // وإلا استخدام اسم المنتج من JOIN مع جدول products
-    if (!empty($extractedProductName)) {
-        $task['product_name'] = $extractedProductName;
-    } elseif (!empty($task['product_name_from_db'])) {
-        $task['product_name'] = $task['product_name_from_db'];
-    } else {
-        // إذا لم يكن هناك اسم منتج في notes ولا في JOIN، اتركه فارغاً
-        $task['product_name'] = null;
-    }
-    
-    // #region agent log
-    $logData = [
-        'sessionId' => 'debug-session',
-        'runId' => 'run1',
-        'hypothesisId' => 'E',
-        'location' => 'tasks.php:785',
-        'message' => 'Final product_name assigned to task',
-        'data' => [
-            'task_id' => $task['id'] ?? null,
-            'final_product_name' => $task['product_name'] ?? null,
-            'extractedProductName' => $extractedProductName,
-            'product_name_from_db' => $task['product_name_from_db'] ?? null
-        ],
-        'timestamp' => time() * 1000
-    ];
-    $debugLogPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
-    @file_put_contents($debugLogPath, json_encode($logData, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
-    // #endregion
+    // تعيين اسم المنتج النهائي
+    $task['product_name'] = $finalProductName ?: null;
     
     // إزالة product_name_from_db لأنه لم يعد مطلوباً
     unset($task['product_name_from_db']);
