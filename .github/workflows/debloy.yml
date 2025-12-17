@@ -1,4 +1,4 @@
-name: Deploy to InfinityFree
+name: Deploy to Thamara Cloud
 
 on:
   push:
@@ -16,38 +16,41 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Upload via FTP
+      - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
-          server: ftpupload.net
-          username: if0_40673233
+          server: 213.239.220.209
+          username: albaraka
           password: ${{ secrets.FTP_PASSWORD }}
-
-          local-dir: ./
-          server-dir: /htdocs/v1/
 
           protocol: ftp
           port: 21
-          timeout: 50000
           security: loose
+          timeout: 120000
+          log-level: standard
+
+          local-dir: ./public/
+          server-dir: /httpdocs/
+
+
+          # مهم: لا يحذف ملفات السيرفر
+          dangerous-clean-slate: false
 
           exclude: |
             **/.git*
             **/.git*/**
+            **/.github/**
             **/node_modules/**
             **/.env
             **/.env.*
-            **/README.md
-            **/.github/**
             **/.vscode/**
             **/.idea/**
+            **/README.md
             **/*.log
             **/backups/**
             **/temp/**
             **/tmp/**
-            git-push.*
-            quick-push.*
+            **/.DS_Store
+            **/Thumbs.db
             .gitignore
             .editorconfig
-            .DS_Store
-            Thumbs.db
