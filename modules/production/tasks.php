@@ -417,7 +417,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 }
                 
                 // حفظ اسم المنتج/القالب مباشرة في حقل product_name في جدول tasks
-                // نفس الطريقة المستخدمة في طلبات العملاء (السطر 448 في customer_orders.php):
+                // نفس الطريقة المستخدمة في طلبات العملاء (السطر 448 في customer_orders.php): 
                 // حفظ اسم القالب مباشرة في product_name حتى لو كان template_id أو product_id null
                 $displayProductName = '';
                 
