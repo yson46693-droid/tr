@@ -17,6 +17,25 @@ require_once __DIR__ . '/../../includes/table_styles.php';
 
 requireRole(['production', 'accountant', 'manager']);
 
+// التحقق من وجود عمود product_name في جدول tasks وإضافته إذا لم يكن موجوداً
+try {
+    $db = db();
+    $productNameColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'product_name'");
+    if (empty($productNameColumn)) {
+        // محاولة إضافة الحقل بعد template_id إذا كان موجوداً
+        $templateIdColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'template_id'");
+        if (!empty($templateIdColumn)) {
+            $db->execute("ALTER TABLE tasks ADD COLUMN product_name VARCHAR(255) NULL AFTER template_id");
+        } else {
+            // إذا لم يكن template_id موجوداً، أضف بعد product_id
+            $db->execute("ALTER TABLE tasks ADD COLUMN product_name VARCHAR(255) NULL AFTER product_id");
+        }
+        error_log('Added product_name column to tasks table in production/tasks.php');
+    }
+} catch (Exception $e) {
+    error_log('Error checking/adding product_name column in production/tasks.php: ' . $e->getMessage());
+}
+
 // إضافة cache headers لمنع تخزين الصفحة والتأكد من جلب البيانات المحدثة
 // هذه headers ضرورية لمنع المتصفح من استخدام cached version
 if (!headers_sent()) {
@@ -402,13 +421,21 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 }
                 
                 // حفظ اسم المنتج/القالب مباشرة في حقل product_name
+                // هذا مهم جداً - يجب حفظ product_name دائماً إذا كان موجوداً (حتى لو كان product_id null)
                 if ($displayProductName !== '') {
                     $columns[] = 'product_name';
                     $values[] = $displayProductName;
                     $placeholders[] = '?';
                     error_log("✓ Saving product_name directly to tasks table: '$displayProductName'");
+                    error_log("  - Column added: product_name");
+                    error_log("  - Value: '$displayProductName'");
+                    error_log("  - Value length: " . strlen($displayProductName));
                 } else {
-                    error_log("⚠ Product name is empty - not saving to product_name column. productName: '$productName', productId: $productId");
+                    error_log("⚠ Product name is empty - not saving to product_name column.");
+                    error_log("  - productName from input: '$productName'");
+                    error_log("  - productId: $productId");
+                    error_log("  - displayProductName: '$displayProductName'");
+                    error_log("  - taskType: $taskType");
                 }
                 
                 // حفظ معلومات المنتج في notes أيضاً للتوافق مع الكود القديم
@@ -439,20 +466,49 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 }
 
                 // تسجيل نهائي قبل الإدراج
-                error_log("Final SQL columns: " . implode(', ', $columns));
-                error_log("Final values count: " . count($values));
-                error_log("Product info - productId: $productId, productName: '$productName', displayProductName: '$displayProductName'");
+                error_log("=== FINAL SQL PREPARATION ===");
+                error_log("Columns: " . implode(', ', $columns));
+                error_log("Values count: " . count($values));
+                error_log("Placeholders count: " . count($placeholders));
+                error_log("Product info:");
+                error_log("  - productId: $productId");
+                error_log("  - productName: '$productName'");
+                error_log("  - displayProductName: '$displayProductName'");
+                
+                // التحقق من وجود product_name في الأعمدة
+                $hasProductName = in_array('product_name', $columns);
+                error_log("  - product_name in columns: " . ($hasProductName ? 'YES' : 'NO'));
+                if ($hasProductName) {
+                    $productNameIndex = array_search('product_name', $columns);
+                    error_log("  - product_name index: $productNameIndex");
+                    error_log("  - product_name value at index: " . ($values[$productNameIndex] ?? 'NOT FOUND'));
+                }
                 
                 $sql = 'INSERT INTO tasks (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')';
+                error_log("SQL: $sql");
+                error_log("Values: " . json_encode($values, JSON_UNESCAPED_UNICODE));
+                
                 $insertResult = $db->execute($sql, $values);
                 $insertId = $insertResult['insert_id'] ?? 0;
 
                 if ($insertId <= 0) {
                     error_log("✗ Failed to create task. SQL: $sql");
+                    error_log("Values: " . json_encode($values, JSON_UNESCAPED_UNICODE));
                     throw new RuntimeException('تعذر إنشاء المهمة');
                 }
                 
                 error_log("✓ Task created successfully with ID: $insertId");
+                
+                // التحقق من القيم المحفوظة فعلياً
+                $savedTask = $db->queryOne('SELECT product_name, product_id FROM tasks WHERE id = ?', [$insertId]);
+                if ($savedTask) {
+                    error_log("✓ Saved task values:");
+                    error_log("  - product_name: " . var_export($savedTask['product_name'], true));
+                    error_log("  - product_id: " . var_export($savedTask['product_id'], true));
+                } else {
+                    error_log("✗ Could not retrieve saved task");
+                }
+                
                 error_log("=== END TASK CREATION DEBUG ===");
 
                 enforceTasksRetentionLimit($db, $retentionLimit);
@@ -1527,10 +1583,22 @@ function tasksHtml(string $value): string
             
             const productNameInput = document.getElementById('product_name');
             if (productNameInput) {
-                if (productName) {
-                    console.log('✓ Form submit - product_name updated:', productName, 'product_id:', productSelect.value);
+                // التأكد من أن product_name محدث قبل الإرسال
+                if (!productName && productSelect.value !== '0' && productSelect.value !== '') {
+                    // إذا كان productName فارغاً ولكن هناك منتج محدد، حاول تحديثه مرة أخرى
+                    const selectedOption = productSelect.options[productSelect.selectedIndex];
+                    if (selectedOption) {
+                        const finalProductName = selectedOption.getAttribute('data-product-name') || selectedOption.text.trim();
+                        productNameInput.value = finalProductName;
+                        console.log('✓ Re-updated product_name before submit:', finalProductName);
+                    }
+                }
+                
+                if (productNameInput.value) {
+                    console.log('✓ Form submit - product_name:', productNameInput.value, 'product_id:', productSelect.value);
                 } else {
                     console.warn('⚠ Form submit - productName is empty! product_id:', productSelect.value);
+                    console.warn('  Selected option:', productSelect.options[productSelect.selectedIndex]);
                 }
             } else {
                 console.error('✗ product_name input field not found during form submit!');
@@ -1543,6 +1611,16 @@ function tasksHtml(string $value): string
                 task_type: taskTypeSelect ? taskTypeSelect.value : 'NOT FOUND',
                 quantity: quantityInput ? quantityInput.value : 'NOT FOUND'
             });
+            
+            // التحقق النهائي - إذا كان product_name فارغاً ولكن task_type هو production، منع الإرسال
+            if (taskTypeSelect && taskTypeSelect.value === 'production') {
+                if (!productNameInput || !productNameInput.value || productNameInput.value.trim() === '') {
+                    console.error('✗ Cannot submit: product_name is required for production tasks!');
+                    e.preventDefault();
+                    alert('يجب اختيار منتج لمهمة الإنتاج');
+                    return false;
+                }
+            }
         });
     }
 
