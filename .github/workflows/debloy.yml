@@ -1,4 +1,4 @@
-name: Deploy to InfinityFree
+name: Deploy to tamara
 
 on:
   push:
@@ -19,12 +19,12 @@ jobs:
       - name: Upload via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
-          server: ftpupload.net
-          username: if0_40673233
+          server: 213.239.220.209
+          username: albaraka
           password: ${{ secrets.FTP_PASSWORD }}
 
           local-dir: ./
-          server-dir: /htdocs/v1/
+          server-dir: /httpdocs/
 
           protocol: ftp
           port: 21
