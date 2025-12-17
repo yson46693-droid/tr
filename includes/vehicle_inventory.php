@@ -3273,7 +3273,7 @@ function sendTransferInvoiceToTelegram($transferId, $transfer = null, $transferI
     // معلومات الشركة
     $companyName = COMPANY_NAME ?? 'شركة';
     
-    // بناء رابط الطباعة
+    // بناء رابط الطباعة1
     // التحقق من HTTPS - إجبار استخدام HTTPS في الإنتاج
     $isHttps = (
         (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
