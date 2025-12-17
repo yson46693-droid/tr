@@ -357,7 +357,24 @@ function getRelativeUrl($path) {
  * Get absolute URL (for use in templates)
  */
 function getAbsoluteUrl($path) {
-    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+    // التحقق من HTTPS - إجبار استخدام HTTPS في الإنتاج
+    $isHttps = (
+        (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+        (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443') ||
+        (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ||
+        (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] === 'on')
+    );
+    
+    // استخدام HTTPS دائماً في الإنتاج (على الاستضافة)
+    // فقط في localhost يمكن استخدام HTTP
+    $isLocalhost = (
+        $_SERVER['HTTP_HOST'] === 'localhost' ||
+        strpos($_SERVER['HTTP_HOST'], 'localhost:') === 0 ||
+        $_SERVER['HTTP_HOST'] === '127.0.0.1' ||
+        strpos($_SERVER['HTTP_HOST'], '127.0.0.1:') === 0
+    );
+    
+    $protocol = ($isHttps || !$isLocalhost) ? "https://" : "http://";
     $host = $_SERVER['HTTP_HOST'];
     $base = getBasePath();
     

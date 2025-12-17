@@ -1,6 +1,11 @@
 # Apache Configuration for InfinityFree
 RewriteEngine On
 
+# إعادة توجيه HTTP إلى HTTPS - إجبار استخدام HTTPS
+RewriteCond %{HTTPS} off
+RewriteCond %{HTTP:X-Forwarded-Proto} !https
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
 # إعادة توجيه manifest.json إلى manifest.php لضمان معالجة BOM
 RewriteCond %{REQUEST_URI} manifest\.json$ [NC]
 RewriteRule ^(.*)manifest\.json$ $1manifest.php [L]

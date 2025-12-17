@@ -373,7 +373,23 @@ define('TELEGRAM_CHAT_ID', '-1003293835035'); // ضع معرف المحادثة 
 // إعدادات WebAuthn
 define('WEBAUTHN_RP_NAME', 'نظام الإدارة المتكاملة');
 define('WEBAUTHN_RP_ID', isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost');
-define('WEBAUTHN_ORIGIN', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . (isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost'));
+
+// التحقق من HTTPS - إجبار استخدام HTTPS في الإنتاج
+$isHttps = (
+    (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+    (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443') ||
+    (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ||
+    (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] === 'on')
+);
+
+// استخدام HTTPS دائماً في الإنتاج (على الاستضافة)
+// فقط في localhost يمكن استخدام HTTP
+$isLocalhost = (
+    (isset($_SERVER['HTTP_HOST']) && ($_SERVER['HTTP_HOST'] === 'localhost' || strpos($_SERVER['HTTP_HOST'], 'localhost:') === 0 || $_SERVER['HTTP_HOST'] === '127.0.0.1' || strpos($_SERVER['HTTP_HOST'], '127.0.0.1:') === 0))
+);
+
+$webauthnProtocol = ($isHttps || !$isLocalhost) ? 'https' : 'http';
+define('WEBAUTHN_ORIGIN', $webauthnProtocol . '://' . (isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost'));
 
 // إعدادات التصميم
 define('PRIMARY_COLOR', '#1e3a5f');
