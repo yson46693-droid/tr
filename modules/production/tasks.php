@@ -1092,7 +1092,6 @@ function tasksHtml(string $value): string
                     <select class="form-select form-select-sm" name="priority">
                         <option value="">الكل</option>
                         <option value="urgent" <?php echo $priorityFilter === 'urgent' ? 'selected' : ''; ?>>عاجلة</option>
-                        <option value="high" <?php echo $priorityFilter === 'high' ? 'selected' : ''; ?>>عالية</option>
                         <option value="normal" <?php echo $priorityFilter === 'normal' ? 'selected' : ''; ?>>عادية</option>
                         <option value="low" <?php echo $priorityFilter === 'low' ? 'selected' : ''; ?>>منخفضة</option>
                     </select>
@@ -1334,7 +1333,7 @@ function tasksHtml(string $value): string
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">العنوان <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="title" id="task_title" required>
+                            <input type="text" class="form-control" name="title" id="task_title">
                         </div>
                         <div class="col-12">
                             <label class="form-label">الوصف</label>
@@ -1354,17 +1353,12 @@ function tasksHtml(string $value): string
                             <select class="form-select" name="priority">
                                 <option value="normal" selected>عادية</option>
                                 <option value="low">منخفضة</option>
-                                <option value="high">عالية</option>
                                 <option value="urgent">عاجلة</option>
                             </select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">تاريخ الاستحقاق</label>
                             <input type="date" class="form-control" name="due_date">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">ملاحظات إضافية</label>
-                            <textarea class="form-control" name="notes" rows="2"></textarea>
                         </div>
                     </div>
 

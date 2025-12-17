@@ -20,6 +20,7 @@
     search: '[data-chat-search]',
     emptyState: '[data-chat-empty]',
     sidebarToggle: '[data-chat-sidebar-toggle]',
+    membersToggle: '[data-chat-members-toggle]',
     sidebar: '[data-chat-sidebar]',
     sidebarOverlay: '[data-chat-sidebar-overlay]',
     themeToggle: '[data-chat-theme-toggle]',
@@ -67,6 +68,7 @@
     elements.search = app.querySelector(selectors.search);
     elements.emptyState = app.querySelector(selectors.emptyState);
     elements.sidebarToggle = document.querySelector(selectors.sidebarToggle);
+    elements.membersToggle = app.querySelector(selectors.membersToggle);
     elements.sidebar = app.querySelector(selectors.sidebar);
     elements.sidebarOverlay = document.querySelector(selectors.sidebarOverlay);
     elements.themeToggle = app.querySelector(selectors.themeToggle);
@@ -113,6 +115,10 @@
       elements.sidebarToggle.addEventListener('click', toggleSidebar);
     }
 
+    if (elements.membersToggle) {
+      elements.membersToggle.addEventListener('click', toggleSidebar);
+    }
+
     if (elements.sidebarOverlay) {
       elements.sidebarOverlay.addEventListener('click', closeSidebar);
     }
@@ -126,7 +132,8 @@
       if (window.innerWidth <= 1100) {
         if (elements.sidebar && elements.sidebar.classList.contains('active')) {
           if (!elements.sidebar.contains(e.target) && 
-              !elements.sidebarToggle.contains(e.target) &&
+              !elements.sidebarToggle?.contains(e.target) &&
+              !elements.membersToggle?.contains(e.target) &&
               !elements.sidebarOverlay.contains(e.target)) {
             closeSidebar();
           }

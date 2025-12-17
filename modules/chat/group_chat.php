@@ -83,6 +83,10 @@ $membersCount = count($onlineUsers);
                 <span data-chat-count><?php echo $onlineCount; ?> متصل / <?php echo $membersCount; ?> أعضاء</span>
             </div>
             <div class="chat-header-actions">
+                <button class="chat-button chat-members-toggle" type="button" data-chat-members-toggle aria-label="عرض الأعضاء">
+                    <span class="chat-members-icon">👥</span>
+                    <span class="chat-members-text">الأعضاء</span>
+                </button>
                 <button class="chat-button chat-theme-toggle" type="button" data-chat-theme-toggle aria-label="تبديل الوضع الليلي">
                     <span class="chat-theme-icon">🌙</span>
                     <span class="chat-theme-text">الوضع الليلي</span>
