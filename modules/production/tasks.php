@@ -241,10 +241,18 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 $relatedType = tasksSafeString($input['related_type'] ?? '');
                 $relatedId = isset($input['related_id']) ? (int) $input['related_id'] : 0;
                 $productId = isset($input['product_id']) ? (int) $input['product_id'] : 0;
-                $productName = tasksSafeString($input['product_name'] ?? '');
+                // قراءة product_name مباشرة من POST بدون tasksSafeString أولاً للتحقق
+                $rawProductName = $input['product_name'] ?? '';
+                $productName = tasksSafeString($rawProductName);
                 $quantity = isset($input['quantity']) ? (float) $input['quantity'] : 0.0;
                 $taskType = $input['task_type'] ?? 'general';
                 $notes = tasksSafeString($input['notes'] ?? '');
+                
+                // إذا كان productName فارغاً بعد tasksSafeString، جرب القراءة مباشرة
+                if ($productName === '' && $rawProductName !== '') {
+                    $productName = trim($rawProductName);
+                    error_log("⚠ product_name was empty after tasksSafeString, using raw value: '$productName'");
+                }
                 
                 // تسجيل للتشخيص - تسجيل جميع البيانات المستلمة
                 error_log("=== TASK CREATION DEBUG ===");
@@ -410,6 +418,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 
                 // حفظ اسم المنتج/القالب مباشرة في حقل product_name في جدول tasks
                 // هذا الحل الجذري يضمن ظهور اسم القالب في الجدول مباشرة
+                // يجب حفظ product_name دائماً إذا كان موجوداً (حتى لو كان product_id null)
                 $displayProductName = $productName;
                 
                 // إذا كان productName فارغاً ولكن productId موجود وموجب، جلب الاسم من قاعدة البيانات
@@ -422,7 +431,10 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 
                 // حفظ اسم المنتج/القالب مباشرة في حقل product_name
                 // هذا مهم جداً - يجب حفظ product_name دائماً إذا كان موجوداً (حتى لو كان product_id null)
-                if ($displayProductName !== '') {
+                // حتى لو كان task_type ليس production، إذا كان product_name موجوداً يجب حفظه
+                // التحقق من أن product_name ليس فارغاً وليس null
+                if (!empty($displayProductName) && trim($displayProductName) !== '') {
+                    $displayProductName = trim($displayProductName);
                     $columns[] = 'product_name';
                     $values[] = $displayProductName;
                     $placeholders[] = '?';
@@ -430,12 +442,15 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     error_log("  - Column added: product_name");
                     error_log("  - Value: '$displayProductName'");
                     error_log("  - Value length: " . strlen($displayProductName));
+                    error_log("  - taskType: $taskType");
                 } else {
                     error_log("⚠ Product name is empty - not saving to product_name column.");
                     error_log("  - productName from input: '$productName'");
                     error_log("  - productId: $productId");
                     error_log("  - displayProductName: '$displayProductName'");
                     error_log("  - taskType: $taskType");
+                    error_log("  - Raw input product_name: " . var_export($input['product_name'] ?? 'NOT SET', true));
+                    error_log("  - Raw productName before tasksSafeString: " . var_export($rawProductName ?? 'NOT SET', true));
                 }
                 
                 // حفظ معلومات المنتج في notes أيضاً للتوافق مع الكود القديم
@@ -1536,21 +1551,31 @@ function tasksHtml(string $value): string
     
     // دالة مساعدة لتحديث product_name
     function updateProductNameField() {
-        if (!productSelect) return;
+        if (!productSelect) {
+            console.warn('productSelect not found');
+            return '';
+        }
         
         const selectedOption = productSelect.options[productSelect.selectedIndex];
         // الحصول على اسم المنتج من data-product-name أو نص الخيار
         let productName = '';
-        if (selectedOption && selectedOption.value !== '0') {
-            productName = selectedOption.getAttribute('data-product-name') || selectedOption.text.trim();
+        if (selectedOption && selectedOption.value !== '0' && selectedOption.value !== '') {
+            // الأولوية لـ data-product-name
+            productName = selectedOption.getAttribute('data-product-name');
+            // إذا لم يكن موجوداً، استخدم نص الخيار
+            if (!productName || productName.trim() === '') {
+                productName = selectedOption.text.trim();
+            }
+            // تنظيف القيمة
+            productName = productName.trim();
         }
         
         const productNameInput = document.getElementById('product_name');
         if (productNameInput) {
             productNameInput.value = productName;
-            console.log('Updated product_name hidden field:', productName, 'product_id:', productSelect.value);
+            console.log('✓ Updated product_name hidden field:', productName, 'product_id:', productSelect.value);
         } else {
-            console.error('product_name input field not found!');
+            console.error('✗ product_name input field not found!');
         }
         
         return productName;
@@ -1579,42 +1604,64 @@ function tasksHtml(string $value): string
     if (taskForm && productSelect) {
         taskForm.addEventListener('submit', function(e) {
             // التأكد من تحديث product_name قبل الإرسال
-            const productName = updateProductNameField();
+            let productName = updateProductNameField();
             
             const productNameInput = document.getElementById('product_name');
             if (productNameInput) {
                 // التأكد من أن product_name محدث قبل الإرسال
-                if (!productName && productSelect.value !== '0' && productSelect.value !== '') {
-                    // إذا كان productName فارغاً ولكن هناك منتج محدد، حاول تحديثه مرة أخرى
-                    const selectedOption = productSelect.options[productSelect.selectedIndex];
-                    if (selectedOption) {
-                        const finalProductName = selectedOption.getAttribute('data-product-name') || selectedOption.text.trim();
-                        productNameInput.value = finalProductName;
-                        console.log('✓ Re-updated product_name before submit:', finalProductName);
+                if (!productName || productName.trim() === '') {
+                    if (productSelect.value !== '0' && productSelect.value !== '') {
+                        // إذا كان productName فارغاً ولكن هناك منتج محدد، حاول تحديثه مرة أخرى
+                        const selectedOption = productSelect.options[productSelect.selectedIndex];
+                        if (selectedOption) {
+                            // الأولوية لـ data-product-name
+                            productName = selectedOption.getAttribute('data-product-name');
+                            if (!productName || productName.trim() === '') {
+                                productName = selectedOption.text.trim();
+                            }
+                            productName = productName.trim();
+                            productNameInput.value = productName;
+                            console.log('✓ Re-updated product_name before submit:', productName);
+                        }
                     }
+                } else {
+                    // التأكد من أن القيمة محدثة في الحقل
+                    productNameInput.value = productName;
                 }
                 
-                if (productNameInput.value) {
-                    console.log('✓ Form submit - product_name:', productNameInput.value, 'product_id:', productSelect.value);
+                // التحقق النهائي من القيمة
+                const finalValue = productNameInput.value.trim();
+                if (finalValue) {
+                    console.log('✓ Form submit - product_name:', finalValue, 'product_id:', productSelect.value);
                 } else {
                     console.warn('⚠ Form submit - productName is empty! product_id:', productSelect.value);
-                    console.warn('  Selected option:', productSelect.options[productSelect.selectedIndex]);
+                    if (productSelect.selectedIndex >= 0) {
+                        const selectedOption = productSelect.options[productSelect.selectedIndex];
+                        console.warn('  Selected option:', {
+                            value: selectedOption.value,
+                            text: selectedOption.text,
+                            dataProductName: selectedOption.getAttribute('data-product-name')
+                        });
+                    }
                 }
             } else {
                 console.error('✗ product_name input field not found during form submit!');
             }
             
             // تسجيل نهائي قبل الإرسال للتشخيص
+            console.log('=== FORM SUBMIT DEBUG ===');
             console.log('Form data before submit:', {
                 product_id: productSelect.value,
                 product_name: productNameInput ? productNameInput.value : 'NOT FOUND',
                 task_type: taskTypeSelect ? taskTypeSelect.value : 'NOT FOUND',
                 quantity: quantityInput ? quantityInput.value : 'NOT FOUND'
             });
+            console.log('=== END FORM SUBMIT DEBUG ===');
             
             // التحقق النهائي - إذا كان product_name فارغاً ولكن task_type هو production، منع الإرسال
             if (taskTypeSelect && taskTypeSelect.value === 'production') {
-                if (!productNameInput || !productNameInput.value || productNameInput.value.trim() === '') {
+                const finalProductName = productNameInput ? productNameInput.value.trim() : '';
+                if (!finalProductName) {
                     console.error('✗ Cannot submit: product_name is required for production tasks!');
                     e.preventDefault();
                     alert('يجب اختيار منتج لمهمة الإنتاج');
