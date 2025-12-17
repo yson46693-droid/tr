@@ -3,7 +3,7 @@
  * إعدادات النظام العامة
  * نظام إدارة الشركات المتكامل
  */
-
+//th
 // منع الوصول المباشر
 if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
