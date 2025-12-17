@@ -9,11 +9,11 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
-define('DB_HOST', '127.0.0.1');
-define('DB_PORT', '3307');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_NAME', '1');
+define('DB_HOST', 'sql107.infinityfree.com');
+define('DB_PORT', '3306');
+define('DB_USER', 'if0_40673233');
+define('DB_PASS', 'Osama744');
+define('DB_NAME', 'if0_40673233_co_db');
 
 // إعدادات المنطقة الزمنية - مصر/القاهرة
 date_default_timezone_set('Africa/Cairo');
