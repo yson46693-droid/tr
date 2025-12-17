@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Deploy changes to Thamara via FTP
+      - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
           server: 213.239.220.209
@@ -26,13 +26,14 @@ jobs:
           protocol: ftp
           port: 21
           security: loose
-          timeout: 60000
-          passive: true
+          timeout: 120000
+          log-level: standard
 
-          local-dir: ./
+          local-dir: ./public/
           server-dir: /httpdocs/
 
-          # مهم: يرفع التعديلات فقط بدون حذف ملفات السيرفر
+
+          # مهم: لا يحذف ملفات السيرفر
           dangerous-clean-slate: false
 
           exclude: |
