@@ -227,29 +227,8 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 $taskType = $input['task_type'] ?? 'general';
                 $notes = tasksSafeString($input['notes'] ?? '');
                 
-                // #region agent log
-                $logData = [
-                    'sessionId' => 'debug-session',
-                    'runId' => 'run1',
-                    'hypothesisId' => 'A',
-                    'location' => 'tasks.php:225',
-                    'message' => 'Task creation - received POST data',
-                    'data' => [
-                        'productId' => $productId,
-                        'productName' => $productName,
-                        'quantity' => $quantity,
-                        'taskType' => $taskType,
-                        'raw_product_id' => $input['product_id'] ?? null,
-                        'raw_product_name' => $input['product_name'] ?? null
-                    ],
-                    'timestamp' => time() * 1000
-                ];
-                $debugLogPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
-                @file_put_contents($debugLogPath, json_encode($logData, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
-                // #endregion
-                
                 // تسجيل للتشخيص
-                error_log("Production task creation - productId: $productId, productName: $productName, taskType: $taskType");
+                error_log("Production task creation - productId: $productId, productName: '$productName', taskType: $taskType");
 
                 if ($title === '' && $taskType !== 'production') {
                     throw new RuntimeException('يجب إدخال عنوان المهمة');
@@ -265,9 +244,10 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     }
 
                     // إذا كان productId <= 0 أو سالب (قالب بدون product_id)، البحث عن product_id باستخدام product_name
+                    // هذا مهم للقوالب التي لها id = -999999
                     if (($productId <= 0 || $productId < 0) && $productName !== '') {
                         try {
-                            error_log("Searching for product_id by name: $productName");
+                            error_log("Searching for product_id by name: '$productName' (current productId: $productId)");
                             
                             // البحث بمطابقة دقيقة أولاً (مع status = 'active')
                             $product = $db->queryOne(
@@ -301,10 +281,11 @@ function tasksHandleAction(string $action, array $input, array $context): array
                             
                             if ($product && !empty($product['id'])) {
                                 $productId = (int)$product['id'];
-                                error_log("Found product_id: $productId for product_name: $productName");
+                                error_log("Found product_id: $productId for product_name: '$productName'");
                             } else {
                                 // إذا لم يتم العثور على المنتج، إنشاؤه تلقائياً في جدول products
-                                error_log("Product not found in products table for product_name: $productName, creating new product");
+                                // هذا يضمن أن القوالب التي لا تحتوي على product_id سيتم إنشاء product_id لها
+                                error_log("Product not found in products table for product_name: '$productName', creating new product");
                                 try {
                                     $insertResult = $db->execute(
                                         "INSERT INTO products (name, status, created_at) VALUES (?, 'active', NOW())",
@@ -312,14 +293,18 @@ function tasksHandleAction(string $action, array $input, array $context): array
                                     );
                                     if ($insertResult && !empty($insertResult['insert_id'])) {
                                         $productId = (int)$insertResult['insert_id'];
-                                        error_log("Created new product with product_id: $productId for product_name: $productName");
+                                        error_log("Created new product with product_id: $productId for product_name: '$productName'");
+                                    } else {
+                                        error_log("Failed to create product for product_name: '$productName'");
                                     }
                                 } catch (Exception $createError) {
                                     error_log('Error creating product: ' . $createError->getMessage());
+                                    // حتى لو فشل إنشاء المنتج، سنستمر في حفظ product_name في notes
                                 }
                             }
                         } catch (Exception $e) {
                             error_log('Error searching for product_id by name: ' . $e->getMessage());
+                            // حتى لو فشل البحث، سنستمر في حفظ product_name في notes
                         }
                     }
 
@@ -372,7 +357,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     $placeholders[] = '?';
                 }
 
-                // حفظ product_id إذا كان موجوداً
+                // حفظ product_id إذا كان موجوداً وموجباً
                 if ($productId > 0) {
                     $columns[] = 'product_id';
                     $values[] = $productId;
@@ -383,38 +368,23 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 }
                 
                 // حفظ اسم المنتج في notes لضمان ظهوره في الجدول
+                // هذا مهم جداً خاصة للقوالب التي لها product_id سالب
                 $displayProductName = $productName;
-                if ($productId > 0 && $displayProductName === '') {
+                
+                // إذا كان productName فارغاً ولكن productId موجود وموجب، جلب الاسم من قاعدة البيانات
+                if ($displayProductName === '' && $productId > 0) {
                     $product = $db->queryOne('SELECT name FROM products WHERE id = ?', [$productId]);
                     if ($product && !empty($product['name'])) {
                         $displayProductName = trim($product['name']);
                     }
                 }
                 
-                // #region agent log
-                $logData = [
-                    'sessionId' => 'debug-session',
-                    'runId' => 'run1',
-                    'hypothesisId' => 'B',
-                    'location' => 'tasks.php:365',
-                    'message' => 'Before saving product name to notes',
-                    'data' => [
-                        'displayProductName' => $displayProductName,
-                        'productName' => $productName,
-                        'productId' => $productId,
-                        'quantity' => $quantity,
-                        'notes_before' => $notes
-                    ],
-                    'timestamp' => time() * 1000
-                ];
-                $debugLogPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
-                @file_put_contents($debugLogPath, json_encode($logData, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
-                // #endregion
-                
+                // حفظ معلومات المنتج في notes دائماً إذا كان productName موجوداً (حتى لو كان product_id سالباً)
+                // هذا يضمن ظهور اسم المنتج في الجدول حتى للقوالب
                 if ($displayProductName !== '') {
                     $productInfo = 'المنتج: ' . $displayProductName;
                     if ($quantity > 0) {
-                        $productInfo .= ' - الكمية: ' . $quantity;
+                        $productInfo .= ' - الكمية: ' . number_format($quantity, 2);
                     }
                     
                     // إضافة معلومات المنتج إلى notes
@@ -424,40 +394,9 @@ function tasksHandleAction(string $action, array $input, array $context): array
                         $notes = $productInfo;
                     }
                     
-                    // #region agent log
-                    $logData = [
-                        'sessionId' => 'debug-session',
-                        'runId' => 'run1',
-                        'hypothesisId' => 'B',
-                        'location' => 'tasks.php:385',
-                        'message' => 'After saving product name to notes',
-                        'data' => [
-                            'productInfo' => $productInfo,
-                            'notes_after' => $notes
-                        ],
-                        'timestamp' => time() * 1000
-                    ];
-                    $debugLogPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
-                    @file_put_contents($debugLogPath, json_encode($logData, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
-                    // #endregion
+                    error_log("Saved product name to notes: $displayProductName (product_id: $productId)");
                 } else {
-                    // #region agent log
-                    $logData = [
-                        'sessionId' => 'debug-session',
-                        'runId' => 'run1',
-                        'hypothesisId' => 'C',
-                        'location' => 'tasks.php:385',
-                        'message' => 'Product name is empty - not saved to notes',
-                        'data' => [
-                            'displayProductName' => $displayProductName,
-                            'productName' => $productName,
-                            'productId' => $productId
-                        ],
-                        'timestamp' => time() * 1000
-                    ];
-                    $debugLogPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'debug.log';
-                    @file_put_contents($debugLogPath, json_encode($logData, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
-                    // #endregion
+                    error_log("Product name is empty - not saved to notes. productName: '$productName', productId: $productId");
                 }
 
                 if ($quantity > 0) {
@@ -1555,16 +1494,25 @@ function tasksHtml(string $value): string
         const productId = parseInt(productSelect.value, 10);
         const quantity = parseFloat(quantityInput.value);
         const selectedOption = productSelect.options[productSelect.selectedIndex];
-        const productName = selectedOption ? selectedOption.getAttribute('data-product-name') || selectedOption.text : '';
+        // الحصول على اسم المنتج من data-product-name أو نص الخيار
+        let productName = '';
+        if (selectedOption) {
+            productName = selectedOption.getAttribute('data-product-name') || selectedOption.text.trim();
+        }
 
-        // تحديث الحقل المخفي product_name
+        // تحديث الحقل المخفي product_name دائماً (حتى لو كان product_id سالباً)
         const productNameInput = document.getElementById('product_name');
-        if (productNameInput) {
+        if (productNameInput && productName) {
             productNameInput.value = productName;
         }
 
-        if (productId > 0 && quantity > 0 && productName) {
+        // تحديث العنوان إذا كان هناك منتج وكمية (حتى لو كان product_id سالباً)
+        if (productName && quantity > 0) {
             titleInput.value = 'إنتاج ' + sanitizeText(productName) + ' - ' + quantity.toFixed(2) + ' قطعة';
+        } else if (productName && quantity <= 0) {
+            titleInput.value = 'إنتاج ' + sanitizeText(productName);
+        } else if (!productName && quantity > 0) {
+            titleInput.value = '';
         }
     }
     
@@ -1572,34 +1520,16 @@ function tasksHtml(string $value): string
     if (productSelect) {
         productSelect.addEventListener('change', function() {
             const selectedOption = this.options[this.selectedIndex];
-            const productName = selectedOption ? (selectedOption.getAttribute('data-product-name') || selectedOption.text.trim()) : '';
+            // الحصول على اسم المنتج من data-product-name أو نص الخيار
+            let productName = '';
+            if (selectedOption) {
+                productName = selectedOption.getAttribute('data-product-name') || selectedOption.text.trim();
+            }
+            
             const productNameInput = document.getElementById('product_name');
-            
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/35d1bc17-d4bf-4d98-8adf-b388a32a7375', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    location: 'tasks.php:1431',
-                    message: 'Product select changed',
-                    data: {
-                        productId: this.value,
-                        productName: productName,
-                        selectedOptionText: selectedOption ? selectedOption.text : null,
-                        dataProductName: selectedOption ? selectedOption.getAttribute('data-product-name') : null,
-                        productNameInputExists: !!productNameInput
-                    },
-                    timestamp: Date.now(),
-                    sessionId: 'debug-session',
-                    runId: 'run1',
-                    hypothesisId: 'G'
-                })
-            }).catch(() => {});
-            // #endregion
-            
             if (productNameInput) {
                 productNameInput.value = productName;
-                console.log('Updated product_name hidden field:', productName);
+                console.log('Updated product_name hidden field:', productName, 'product_id:', this.value);
             } else {
                 console.error('product_name input field not found!');
             }
@@ -1609,9 +1539,12 @@ function tasksHtml(string $value): string
         // تحديث product_name عند تحميل الصفحة إذا كان هناك اختيار مسبق
         if (productSelect.value !== '0' && productSelect.value !== '') {
             const selectedOption = productSelect.options[productSelect.selectedIndex];
-            const productName = selectedOption ? (selectedOption.getAttribute('data-product-name') || selectedOption.text.trim()) : '';
+            let productName = '';
+            if (selectedOption) {
+                productName = selectedOption.getAttribute('data-product-name') || selectedOption.text.trim();
+            }
             const productNameInput = document.getElementById('product_name');
-            if (productNameInput) {
+            if (productNameInput && productName) {
                 productNameInput.value = productName;
             }
         }
@@ -1623,73 +1556,22 @@ function tasksHtml(string $value): string
     }
     
     // التأكد من تحديث product_name عند إرسال النموذج
-    const taskForm = document.querySelector('form[method="POST"]');
+    const taskForm = document.getElementById('addTaskForm');
     if (taskForm && productSelect) {
         taskForm.addEventListener('submit', function(e) {
             const selectedOption = productSelect.options[productSelect.selectedIndex];
-            const productName = selectedOption ? (selectedOption.getAttribute('data-product-name') || selectedOption.text.trim()) : '';
+            // الحصول على اسم المنتج من data-product-name أو نص الخيار
+            let productName = '';
+            if (selectedOption) {
+                productName = selectedOption.getAttribute('data-product-name') || selectedOption.text.trim();
+            }
+            
             const productNameInput = document.getElementById('product_name');
-            
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/35d1bc17-d4bf-4d98-8adf-b388a32a7375', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    location: 'tasks.php:1463',
-                    message: 'Form submit - updating product_name',
-                    data: {
-                        productId: productSelect.value,
-                        productName: productName,
-                        selectedOptionText: selectedOption ? selectedOption.text : null,
-                        dataProductName: selectedOption ? selectedOption.getAttribute('data-product-name') : null,
-                        productNameInputExists: !!productNameInput,
-                        productNameInputValueBefore: productNameInput ? productNameInput.value : null
-                    },
-                    timestamp: Date.now(),
-                    sessionId: 'debug-session',
-                    runId: 'run1',
-                    hypothesisId: 'F'
-                })
-            }).catch(() => {});
-            // #endregion
-            
-            if (productNameInput) {
+            if (productNameInput && productName) {
                 productNameInput.value = productName;
                 console.log('Form submit - product_name:', productName, 'product_id:', productSelect.value);
-                
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/35d1bc17-d4bf-4d98-8adf-b388a32a7375', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        location: 'tasks.php:1470',
-                        message: 'Form submit - product_name updated',
-                        data: {
-                            productNameInputValueAfter: productNameInput.value
-                        },
-                        timestamp: Date.now(),
-                        sessionId: 'debug-session',
-                        runId: 'run1',
-                        hypothesisId: 'F'
-                    })
-                }).catch(() => {});
-                // #endregion
-            } else {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/35d1bc17-d4bf-4d98-8adf-b388a32a7375', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        location: 'tasks.php:1475',
-                        message: 'Form submit - product_name input not found',
-                        data: {},
-                        timestamp: Date.now(),
-                        sessionId: 'debug-session',
-                        runId: 'run1',
-                        hypothesisId: 'F'
-                    })
-                }).catch(() => {});
-                // #endregion
+            } else if (!productNameInput) {
+                console.error('product_name input field not found during form submit!');
             }
         });
     }
