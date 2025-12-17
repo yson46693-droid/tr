@@ -1,4 +1,4 @@
-name: Deploy to tamara
+name: Deploy to Thamara Cloud
 
 on:
   push:
@@ -16,38 +16,40 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Upload via FTP
+      - name: Deploy changes to Thamara via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
           server: 213.239.220.209
           username: albaraka
           password: ${{ secrets.FTP_PASSWORD }}
 
+          protocol: ftp
+          port: 21
+          security: loose
+          timeout: 60000
+          passive: true
+
           local-dir: ./
           server-dir: /httpdocs/
 
-          protocol: ftp
-          port: 21
-          timeout: 50000
-          security: loose
+          # مهم: يرفع التعديلات فقط بدون حذف ملفات السيرفر
+          dangerous-clean-slate: false
 
           exclude: |
             **/.git*
             **/.git*/**
+            **/.github/**
             **/node_modules/**
             **/.env
             **/.env.*
-            **/README.md
-            **/.github/**
             **/.vscode/**
             **/.idea/**
+            **/README.md
             **/*.log
             **/backups/**
             **/temp/**
             **/tmp/**
-            git-push.*
-            quick-push.*
+            **/.DS_Store
+            **/Thumbs.db
             .gitignore
             .editorconfig
-            .DS_Store
-            Thumbs.db
