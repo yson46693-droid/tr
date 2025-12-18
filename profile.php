@@ -115,14 +115,80 @@ unset($_SESSION['error_message'], $_SESSION['success_message']);
 // === تحميل بيانات المستخدم - حل نهائي محسّن ===
 $currentUser = null;
 $user = null;
+$userId = null;
 
-// التأكد من وجود user_id في الجلسة
-if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
-    error_log("Profile page - Missing user_id in session");
+// التحقق 1: من $_SESSION مباشرة
+if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+    $userId = $_SESSION['user_id'];
+}
+
+// التحقق 2: إذا لم يكن موجوداً في $_SESSION، جرب البحث في قاعدة البيانات
+if (!$userId || empty($userId)) {
+    try {
+        $sessionId = session_id();
+        if (!empty($sessionId) && function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+            $db = db();
+            // البحث عن الجلسة حتى لو كانت منتهية الصلاحية (لإعطاء فرصة للتجديد)
+            $sessionRecord = $db->queryOne(
+                "SELECT user_id, expires_at FROM sessions WHERE session_id = ? ORDER BY last_activity DESC LIMIT 1",
+                [$sessionId]
+            );
+            if ($sessionRecord && isset($sessionRecord['user_id'])) {
+                $foundUserId = $sessionRecord['user_id'];
+                // التحقق من أن الجلسة لم تنتهِ أو تجديدها إذا كانت قريبة من الانتهاء
+                $expiresAt = $sessionRecord['expires_at'];
+                $isExpired = strtotime($expiresAt) < time();
+                
+                // إذا كانت الجلسة منتهية لكنها حديثة (أقل من ساعة)، نجددها
+                if ($isExpired && (time() - strtotime($expiresAt)) < 3600) {
+                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                    $db->execute(
+                        "UPDATE sessions SET expires_at = ?, last_activity = NOW() WHERE session_id = ?",
+                        [$newExpiresAt, $sessionId]
+                    );
+                    $expiresAt = $newExpiresAt;
+                }
+                
+                // إذا كانت الجلسة صالحة (أو تم تجديدها)، نستخدم user_id
+                if (strtotime($expiresAt) > time()) {
+                    $userId = $foundUserId;
+                    $_SESSION['user_id'] = $userId;
+                    $_SESSION['logged_in'] = true;
+                }
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Profile page - Session lookup from database failed: " . $e->getMessage());
+    }
+}
+
+// التحقق 3: إذا لم يكن موجوداً، جرب getCurrentUser()
+if (!$userId || empty($userId)) {
+    try {
+        $currentUser = getCurrentUser();
+        if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
+            $userId = $currentUser['id'];
+            $_SESSION['user_id'] = $userId;
+            if (!isset($_SESSION['username']) || $_SESSION['username'] !== $currentUser['username']) {
+                $_SESSION['username'] = $currentUser['username'];
+            }
+            if (!isset($_SESSION['role']) || $_SESSION['role'] !== $currentUser['role']) {
+                $_SESSION['role'] = $currentUser['role'];
+            }
+            $_SESSION['logged_in'] = true;
+        }
+    } catch (Exception $e) {
+        error_log("Profile page - getCurrentUser() failed: " . $e->getMessage());
+    }
+}
+
+// إذا لم نجد user_id بعد كل المحاولات
+if (!$userId || empty($userId)) {
+    error_log("Profile page - Missing user_id after all attempts. Session data: " . json_encode(array_keys($_SESSION ?? [])));
     $error = 'تعذر تحميل بيانات المستخدم. يرجى تسجيل الدخول مرة أخرى.';
 } else {
-    $userId = $_SESSION['user_id'];
-    
+    // الآن نحاول تحميل بيانات المستخدم الكاملة
     // الطريقة 1: محاولة استخدام getCurrentUser() أولاً
     try {
         $currentUser = getCurrentUser();
@@ -161,7 +227,7 @@ if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
             if (!isset($db)) {
                 $db = db();
             }
-            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$userId]);
+            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$userId]);
             if ($userFromDb && isset($userFromDb['id'])) {
                 $user = $userFromDb;
                 $currentUser = $userFromDb;

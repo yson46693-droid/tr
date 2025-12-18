@@ -958,15 +958,59 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function redirectToLogin(loginUrl) {
+        // تنظيف URL لضمان أنه مسار نسبي فقط (بدون بروتوكول أو hostname)
+        let cleanLoginUrl = (loginUrl || '/index.php').split('?')[0];
+        
+        // إزالة أي بروتوكول (http:// أو https://)
+        cleanLoginUrl = cleanLoginUrl.replace(/^https?:\/\//i, '');
+        
+        // إزالة // المكررة من البداية
+        cleanLoginUrl = cleanLoginUrl.replace(/^\/\/+/, '/');
+        
+        // إزالة hostname مع منفذ إذا كان موجوداً (مثل localhost:8000/)
+        cleanLoginUrl = cleanLoginUrl.replace(/^[^\/]+:[0-9]+\//, '/');
+        
+        // إزالة hostname بدون منفذ إذا كان موجوداً
+        if (!cleanLoginUrl.startsWith('/')) {
+            cleanLoginUrl = cleanLoginUrl.replace(/^[^\/]+\//, '/');
+        }
+        
+        // إزالة أي منفذ من منتصف المسار
+        cleanLoginUrl = cleanLoginUrl.replace(/:[0-9]+\//g, '/');
+        cleanLoginUrl = cleanLoginUrl.replace(/:[0-9]+$/g, '');
+        
+        // التأكد من أن المسار يبدأ بـ /
+        if (!cleanLoginUrl.startsWith('/')) {
+            cleanLoginUrl = '/' + cleanLoginUrl;
+        }
+        
+        // تنظيف المسارات المكررة
+        cleanLoginUrl = cleanLoginUrl.replace(/\/+/g, '/');
+        
+        // إزالة أي مسافات
+        cleanLoginUrl = cleanLoginUrl.trim();
+        
+        // التأكد من أن المسار لا يحتوي على بروتوكول أو hostname
+        if (cleanLoginUrl.includes('://')) {
+            // إذا كان يحتوي على بروتوكول، استخرج المسار فقط
+            try {
+                const urlObj = new URL(cleanLoginUrl, window.location.origin);
+                cleanLoginUrl = urlObj.pathname;
+            } catch (e) {
+                // في حالة الخطأ، استخدم المسار الافتراضي
+                cleanLoginUrl = '/index.php';
+            }
+        }
+        
         // استخدام replace بدلاً من href لمنع إضافة الصفحة إلى التاريخ
-        // وإزالة أي query parameters من الرابط الحالي
-        const cleanLoginUrl = (loginUrl || '/index.php').split('?')[0];
-        // إزالة أي query parameters من الرابط الحالي قبل إعادة التوجيه
-        const currentUrl = new URL(window.location.href);
-        currentUrl.pathname = cleanLoginUrl;
-        currentUrl.search = ''; // إزالة جميع query parameters
-        currentUrl.hash = ''; // إزالة hash
-        window.location.replace(currentUrl.toString());
+        // واستخدام مسار نسبي فقط لمنع ERR_FAILED
+        try {
+            window.location.replace(cleanLoginUrl);
+        } catch (e) {
+            // في حالة الخطأ، استخدم href كحل بديل
+            console.warn('Error using replace, trying href:', e);
+            window.location.href = cleanLoginUrl;
+        }
     }
 
     function showSessionOverlay(loginUrl) {

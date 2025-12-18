@@ -2148,8 +2148,24 @@ function requireLogin() {
         // إذا تم تضمين header.php أو كانت الـ headers قد أُرسلت، استخدم JavaScript redirect دائماً
         if ($headerIncluded || $headersSent) {
             // استخدام replace بدلاً من href لتجنب إضافة URL للتاريخ
+            // التأكد من أن loginUrl مسار نسبي فقط لمنع ERR_FAILED
+            $safeLoginUrl = htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8');
             echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
-            echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+            echo '<script>';
+            echo 'try {';
+            echo '  var loginUrl = ' . json_encode($loginUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
+            echo '  // تنظيف URL لضمان أنه مسار نسبي فقط';
+            echo '  loginUrl = loginUrl.replace(/^https?:\\/\\//i, "");';
+            echo '  loginUrl = loginUrl.replace(/^\\/\\/+/, "/");';
+            echo '  loginUrl = loginUrl.replace(/^[^\\/]+:[0-9]+\\//, "/");';
+            echo '  if (!loginUrl.startsWith("/")) loginUrl = "/" + loginUrl;';
+            echo '  loginUrl = loginUrl.replace(/\\/+/g, "/");';
+            echo '  window.location.replace(loginUrl);';
+            echo '} catch(e) {';
+            echo '  console.error("Redirect error:", e);';
+            echo '  window.location.href = "/index.php";';
+            echo '}';
+            echo '</script>';
             echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
             echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
             exit;
@@ -2165,7 +2181,21 @@ function requireLogin() {
         
         // إذا فشل header()، استخدم JavaScript redirect
         echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
-        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+        echo '<script>';
+        echo 'try {';
+        echo '  var loginUrl = ' . json_encode($loginUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
+        echo '  // تنظيف URL لضمان أنه مسار نسبي فقط';
+        echo '  loginUrl = loginUrl.replace(/^https?:\\/\\//i, "");';
+        echo '  loginUrl = loginUrl.replace(/^\\/\\/+/, "/");';
+        echo '  loginUrl = loginUrl.replace(/^[^\\/]+:[0-9]+\\//, "/");';
+        echo '  if (!loginUrl.startsWith("/")) loginUrl = "/" + loginUrl;';
+        echo '  loginUrl = loginUrl.replace(/\\/+/g, "/");';
+        echo '  window.location.replace(loginUrl);';
+        echo '} catch(e) {';
+        echo '  console.error("Redirect error:", e);';
+        echo '  window.location.href = "/index.php";';
+        echo '}';
+        echo '</script>';
         echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
         echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
         exit;
