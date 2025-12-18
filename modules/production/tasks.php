@@ -1459,16 +1459,21 @@ function tasksHtml(string $value): string
                         <h6 class="fw-bold mb-3">بيانات مهمة الإنتاج</h6>
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="form-label">المنتج <span class="text-danger">*</span></label>
+                                <label class="form-label">اختر من القوالب</label>
                                 <select class="form-select" name="product_id" id="product_id">
-                                    <option value="0">اختر المنتج</option>
+                                    <option value="0">اختر القالب</option>
                                     <?php foreach ($products as $product): ?>
                                         <option value="<?php echo (int) $product['id']; ?>" data-product-name="<?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?>">
                                             <?php echo tasksHtml($product['name']); ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <input type="hidden" name="product_name" id="product_name" value="">
+                                <div class="form-text mt-1">أو أدخل اسم المنتج يدوياً أدناه</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">اسم المنتج <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" name="product_name" id="product_name" placeholder="أدخل اسم المنتج أو اختر من القوالب أعلاه" value="">
+                                <div class="form-text mt-1">سيتم تحديث هذا الحقل تلقائياً عند اختيار قالب</div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">الكمية <span class="text-danger">*</span></label>
@@ -1587,27 +1592,36 @@ function tasksHtml(string $value): string
 
         const productId = parseInt(productSelect.value, 10);
         const quantity = quantityInput ? parseFloat(quantityInput.value) : 0;
-        const selectedOption = productSelect.options[productSelect.selectedIndex];
+        const productNameInput = document.getElementById('product_name');
         
-        // الحصول على اسم المنتج من data-product-name أو نص الخيار
+        // الحصول على اسم المنتج من الحقل النصي أولاً (إذا كان المستخدم أدخله يدوياً)
         let productName = '';
-        if (selectedOption && selectedOption.value !== '0' && selectedOption.value !== '') {
-            // الأولوية لـ data-product-name
-            productName = selectedOption.getAttribute('data-product-name');
-            // إذا لم يكن موجوداً، استخدم نص الخيار
-            if (!productName || productName.trim() === '') {
-                productName = selectedOption.text.trim();
+        if (productNameInput && productNameInput.value && productNameInput.value.trim() !== '') {
+            productName = productNameInput.value.trim();
+        } else {
+            // إذا لم يكن هناك إدخال يدوي، جلب من القائمة المنسدلة
+            const selectedOption = productSelect.options[productSelect.selectedIndex];
+            if (selectedOption && selectedOption.value !== '0' && selectedOption.value !== '') {
+                // الأولوية لـ data-product-name
+                productName = selectedOption.getAttribute('data-product-name');
+                // إذا لم يكن موجوداً، استخدم نص الخيار
+                if (!productName || productName.trim() === '') {
+                    productName = selectedOption.text.trim();
+                }
+                productName = productName.trim();
+                
+                // تحديث الحقل النصي بالقيمة من القائمة المنسدلة
+                if (productNameInput) {
+                    productNameInput.value = productName;
+                }
             }
-            productName = productName.trim();
         }
 
-        // تحديث الحقل المخفي product_name دائماً (حتى لو كان product_id سالباً)
-        const productNameInput = document.getElementById('product_name');
-        if (productNameInput) {
-            productNameInput.value = productName;
-            console.log('updateProductionTitle: Updated product_name to:', productName, 'product_id:', productId);
+        // تحديث الحقل النصي product_name دائماً (حتى لو كان product_id سالباً)
+        if (productNameInput && productName) {
+            console.log('updateProductionTitle: Using product_name:', productName, 'product_id:', productId);
         } else {
-            console.error('✗ product_name input field not found in updateProductionTitle!');
+            console.warn('updateProductionTitle: product_name is empty');
         }
 
         // تحديث العنوان إذا كان هناك منتج وكمية (حتى لو كان product_id سالباً)
@@ -1645,11 +1659,14 @@ function tasksHtml(string $value): string
         
         const productNameInput = document.getElementById('product_name');
         if (productNameInput) {
+            // تحديث الحقل النصي (الآن مرئي وليس مخفياً)
             productNameInput.value = productName;
-            console.log('✓ Updated product_name hidden field:', productName, 'product_id:', productSelect.value);
+            console.log('✓ Updated product_name text field:', productName, 'product_id:', productSelect.value);
             // التحقق من أن القيمة تم تحديثها بشكل صحيح
             if (productNameInput.value !== productName) {
                 console.error('✗ Failed to update product_name! Expected:', productName, 'Got:', productNameInput.value);
+            } else {
+                console.log('✓ product_name field updated successfully');
             }
             return productName;
         } else {
@@ -1676,6 +1693,15 @@ function tasksHtml(string $value): string
         quantityInput.addEventListener('input', updateProductionTitle);
     }
     
+    // إضافة event listener لتحديث العنوان عند تغيير اسم المنتج يدوياً
+    const productNameInput = document.getElementById('product_name');
+    if (productNameInput) {
+        productNameInput.addEventListener('input', function() {
+            // تحديث العنوان عند الإدخال اليدوي
+            updateProductionTitle();
+        });
+    }
+    
     // التأكد من تحديث product_name عند إرسال النموذج
     const taskForm = document.getElementById('addTaskForm');
     if (taskForm && productSelect) {
@@ -1687,24 +1713,33 @@ function tasksHtml(string $value): string
                 return;
             }
             
-            // الحصول على المنتج المحدد
-            const selectedOption = productSelect.options[productSelect.selectedIndex];
-            let productName = '';
             const productId = productSelect ? parseInt(productSelect.value, 10) : 0;
             const quantity = quantityInput ? parseFloat(quantityInput.value) : 0;
             
-            if (selectedOption && selectedOption.value !== '0' && selectedOption.value !== '') {
-                // الأولوية لـ data-product-name
-                productName = selectedOption.getAttribute('data-product-name');
-                // إذا لم يكن موجوداً، استخدم نص الخيار
-                if (!productName || productName.trim() === '') {
-                    productName = selectedOption.text.trim();
+            // الحصول على اسم المنتج من الحقل النصي أولاً (إذا كان المستخدم أدخله يدوياً)
+            let productName = productNameInput.value.trim();
+            
+            // إذا كان الحقل النصي فارغاً ولكن تم اختيار قالب، استخدم اسم القالب
+            if (!productName && productId > 0) {
+                const selectedOption = productSelect.options[productSelect.selectedIndex];
+                if (selectedOption && selectedOption.value !== '0' && selectedOption.value !== '') {
+                    // الأولوية لـ data-product-name
+                    productName = selectedOption.getAttribute('data-product-name');
+                    // إذا لم يكن موجوداً، استخدم نص الخيار
+                    if (!productName || productName.trim() === '') {
+                        productName = selectedOption.text.trim();
+                    }
+                    productName = productName.trim();
+                    
+                    // تحديث الحقل النصي بالقيمة من القائمة المنسدلة
+                    productNameInput.value = productName;
                 }
-                productName = productName.trim();
             }
             
-            // تحديث الحقل المخفي مباشرة قبل الإرسال - دائماً إذا كان هناك منتج محدد
-            productNameInput.value = productName;
+            // إذا كان الحقل النصي يحتوي على قيمة، استخدمها (الأولوية للإدخال اليدوي)
+            if (productNameInput.value && productNameInput.value.trim() !== '') {
+                productName = productNameInput.value.trim();
+            }
             
             console.log('=== FORM SUBMIT DEBUG ===');
             console.log('Product select value:', productSelect.value);
