@@ -1010,12 +1010,15 @@ try {
                 if ($existingCustomer) {
                     $customerId = $customerIdFromFile;
                     $isUpdate = true;
+                    logImport("Row $i - Will UPDATE existing customer ID=$customerIdFromFile");
                 } else {
-                    // إذا كان مندوب يحاول تحديث عميل لا ينتمي له، نتخطاه
+                    // إذا كان مندوب يحاول تحديث عميل لا ينتمي له، ننشئ عميل جديد بدلاً من التخطي
                     if (isset($currentUser['role']) && $currentUser['role'] === 'sales') {
-                        logImport("Row $i - Skipping customer ID=$customerIdFromFile (does not belong to sales rep)");
-                        $skipped++;
-                        continue;
+                        logImport("Row $i - Customer ID=$customerIdFromFile does not belong to sales rep. Creating new customer instead.");
+                        // سنستمر في العملية لإنشاء عميل جديد (isUpdate سيبقى false)
+                    } else {
+                        logImport("Row $i - Customer ID=$customerIdFromFile not found. Creating new customer.");
+                        // سنستمر في العملية لإنشاء عميل جديد
                     }
                 }
             }
