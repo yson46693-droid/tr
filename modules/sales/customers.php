@@ -4533,19 +4533,37 @@ document.addEventListener('DOMContentLoaded', function () {
     var importCustomersForm = document.getElementById('importCustomersForm');
     var importCustomersModal = document.getElementById('importCustomersModal');
     
+    console.log('Import form element:', importCustomersForm);
+    console.log('Import modal element:', importCustomersModal);
+    
     if (importCustomersForm) {
         importCustomersForm.addEventListener('submit', function(e) {
             e.preventDefault();
+            console.log('Import form submitted');
             
             var fileInput = document.getElementById('excelFileInput');
-            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+            if (!fileInput) {
+                console.error('File input not found');
+                alert('خطأ: لم يتم العثور على حقل اختيار الملف');
+                return;
+            }
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                console.warn('No file selected');
                 alert('يرجى اختيار ملف Excel');
                 return;
             }
             
             var file = fileInput.files[0];
+            console.log('Selected file:', file.name, 'Size:', file.size, 'Type:', file.type);
+            
             if (file.size > 10 * 1024 * 1024) {
                 alert('حجم الملف يجب ألا يتجاوز 10 ميجابايت');
+                return;
+            }
+            
+            if (file.size === 0) {
+                alert('الملف المحدد فارغ');
                 return;
             }
             
@@ -4568,16 +4586,54 @@ document.addEventListener('DOMContentLoaded', function () {
             if (statusDiv) statusDiv.textContent = 'جاري رفع الملف...';
             if (submitBtn) submitBtn.disabled = true;
             
-            fetch('<?php echo getRelativeUrl("api/import_customers.php"); ?>', {
+            // استخدام مسار مطلق لضمان الوصول الصحيح
+            var apiUrl = '<?php 
+                $apiPath = getRelativeUrl("api/import_customers.php");
+                // التأكد من أن المسار يبدأ بـ /
+                if (strpos($apiPath, '/') !== 0) {
+                    $apiPath = '/' . $apiPath;
+                }
+                echo $apiPath;
+            ?>';
+            
+            console.log('Import API URL:', apiUrl);
+            console.log('FormData entries:');
+            for (var pair of formData.entries()) {
+                console.log(pair[0] + ': ' + (pair[1] instanceof File ? pair[1].name : pair[1]));
+            }
+            
+            fetch(apiUrl, {
                 method: 'POST',
                 body: formData,
-                credentials: 'same-origin'
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
             })
             .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
                 if (!response.ok) {
-                    throw new Error('خطأ في الاتصال بالخادم: ' + response.status);
+                    // محاولة قراءة رسالة الخطأ من الاستجابة
+                    return response.text().then(text => {
+                        console.error('Error response:', text);
+                        try {
+                            var errorData = JSON.parse(text);
+                            throw new Error(errorData.message || 'خطأ في الاتصال بالخادم: ' + response.status);
+                        } catch (e) {
+                            throw new Error('خطأ في الاتصال بالخادم: ' + response.status + ' - ' + text.substring(0, 100));
+                        }
+                    });
                 }
-                return response.json();
+                
+                return response.json().catch(error => {
+                    console.error('JSON parse error:', error);
+                    return response.text().then(text => {
+                        console.error('Response text:', text);
+                        throw new Error('خطأ في قراءة الاستجابة من الخادم');
+                    });
+                });
             })
             .then(data => {
                 if (progressBar) progressBar.style.width = '100%';
@@ -4631,15 +4687,27 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .catch(error => {
                 console.error('Import error:', error);
+                console.error('Error stack:', error.stack);
+                
+                if (progressBar) progressBar.style.width = '100%';
+                
                 if (statusDiv) {
                     statusDiv.textContent = 'حدث خطأ في الاتصال بالخادم';
                     statusDiv.className = 'text-center text-danger';
                 }
-                if (errorsDiv) errorsDiv.classList.remove('d-none');
-                var errorsContent = document.getElementById('importErrorsContent');
-                if (errorsContent) {
-                    errorsContent.innerHTML = '<p>' + (error.message || 'حدث خطأ غير متوقع') + '</p>';
+                
+                if (errorsDiv) {
+                    errorsDiv.classList.remove('d-none');
+                    var errorsContent = document.getElementById('importErrorsContent');
+                    if (errorsContent) {
+                        var errorMessage = error.message || 'حدث خطأ غير متوقع';
+                        errorsContent.innerHTML = '<div class="alert alert-danger">' +
+                            '<strong>خطأ:</strong> ' + errorMessage + '<br>' +
+                            '<small>يرجى التحقق من: console.log في المتصفح لمزيد من التفاصيل</small>' +
+                            '</div>';
+                    }
                 }
+                
                 if (submitBtn) submitBtn.disabled = false;
             });
         });
