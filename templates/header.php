@@ -624,16 +624,26 @@ if (ob_get_level() > 0) {
     <!-- Modal Fix CSS -->
     <style>
         /* التأكد من أن الأزرار والعناصر التفاعلية قابلة للنقر */
-        .topbar-action,
-        .topbar-action *,
-        button,
-        input[type="checkbox"],
-        input[type="button"],
-        input[type="submit"],
-        a.topbar-action {
+        .topbar-action:not([style*="pointer-events: none"]),
+        .topbar-action:not([style*="pointer-events: none"]) *,
+        button:not([style*="pointer-events: none"]),
+        input[type="checkbox"]:not([style*="pointer-events: none"]),
+        input[type="button"]:not([style*="pointer-events: none"]),
+        input[type="submit"]:not([style*="pointer-events: none"]),
+        a.topbar-action:not([style*="pointer-events: none"]) {
             pointer-events: auto !important;
             z-index: auto !important;
             position: relative !important;
+        }
+        
+        /* منع التفاعل مع العناصر المعطلة */
+        .topbar-action.disabled-action,
+        .topbar-action.disabled-action *,
+        .dropdown-item.disabled-action,
+        .dropdown-item.disabled-action * {
+            pointer-events: none !important;
+            cursor: not-allowed !important;
+            user-select: none !important;
         }
         
         /* التأكد من أن topbar قابلة للنقر */
@@ -2987,11 +2997,11 @@ if (ob_get_level() > 0) {
             
             <div class="topbar-right">
                 <!-- Settings -->
-                <span class="topbar-action" 
+                <span class="topbar-action disabled-action" 
                       data-bs-toggle="tooltip" 
                       title="الصفحة تحت التطوير"
                       aria-label="الصفحة تحت التطوير"
-                      style="cursor: not-allowed; opacity: 0.5; pointer-events: none;">
+                      style="cursor: not-allowed; opacity: 0.5; pointer-events: none !important;">
                     <i class="bi bi-gear" aria-hidden="true"></i>
                     <span class="visually-hidden"><?php echo isset($lang['settings']) ? $lang['settings'] : 'الإعدادات'; ?></span>
                 </span>
@@ -3099,7 +3109,7 @@ if (ob_get_level() > 0) {
                             ?></small>
                         </li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><span class="dropdown-item" style="cursor: not-allowed; opacity: 0.5; pointer-events: none;"><i class="bi bi-person me-2"></i><?php echo isset($lang['profile']) ? $lang['profile'] : 'الملف الشخصي'; ?></span></li>
+                        <li><span class="dropdown-item disabled-action" style="cursor: not-allowed; opacity: 0.5; pointer-events: none !important;"><i class="bi bi-person me-2"></i><?php echo isset($lang['profile']) ? $lang['profile'] : 'الملف الشخصي'; ?></span></li>
                         <?php if ((isset($currentUser['role']) ? $currentUser['role'] : '') !== 'manager'): ?>
                         <li><a class="dropdown-item" href="<?php echo getRelativeUrl('attendance.php'); ?>"><i class="bi bi-calendar-check me-2"></i><?php echo isset($lang['attendance']) ? $lang['attendance'] : 'الحضور والانصراف'; ?></a></li>
                         <?php endif; ?>
@@ -3110,6 +3120,41 @@ if (ob_get_level() > 0) {
                 <?php endif; ?>
             </div>
         </div>
+        
+        <!-- منع التفاعل مع العناصر المعطلة -->
+        <script>
+        (function() {
+            'use strict';
+            // منع جميع الأحداث على العناصر المعطلة
+            document.addEventListener('DOMContentLoaded', function() {
+                // منع click على العناصر المعطلة
+                document.addEventListener('click', function(e) {
+                    const target = e.target;
+                    const disabledElement = target.closest('.disabled-action');
+                    if (disabledElement) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        return false;
+                    }
+                }, true); // استخدام capture phase لمنع الأحداث مبكراً
+                
+                // منع جميع الأحداث الأخرى
+                ['mousedown', 'mouseup', 'touchstart', 'touchend', 'keydown', 'keyup'].forEach(function(eventType) {
+                    document.addEventListener(eventType, function(e) {
+                        const target = e.target;
+                        const disabledElement = target.closest('.disabled-action');
+                        if (disabledElement) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                            return false;
+                        }
+                    }, true);
+                });
+            });
+        })();
+        </script>
         
         <!-- Main Content Area -->
         <main class="dashboard-main" id="main-content" role="main" aria-label="<?php echo isset($pageTitle) ? htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') : 'المحتوى الرئيسي'; ?>">
