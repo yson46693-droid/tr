@@ -12,30 +12,28 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/audit_log.php';
 
-// تنظيف أي output buffer قبل البدء
-if (ob_get_level() > 0) {
-    ob_clean();
+// تنظيف أي output سابق
+while (ob_get_level() > 0) {
+    ob_end_clean();
 }
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST');
-header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
 
 // التحقق من الصلاحيات
-try {
-    requireRole(['manager', 'accountant', 'sales']);
-} catch (Exception $authError) {
-    http_response_code(403);
-    echo json_encode([
-        'success' => false,
-        'message' => 'غير مصرح لك بالوصول إلى هذه الصفحة: ' . $authError->getMessage()
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
-}
+requireRole(['manager', 'accountant', 'sales']);
 
 $currentUser = getCurrentUser();
 $db = db();
+
+// التحقق من نوع الطلب
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode([
+        'success' => false,
+        'message' => 'طريقة الطلب غير مدعومة'
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 // دالة تسجيل مخصصة تكتب مباشرة في ملف السجلات
 // يتم تعريفها قبل أي استخدام
@@ -1308,13 +1306,13 @@ try {
         }
         
         echo json_encode([
-            'success' => $imported > 0 || $skipped > 0, // نجاح فقط إذا تم استيراد أو تخطي عملاء
+            'success' => true,
             'imported' => $imported,
             'skipped' => $skipped,
             'errors' => $errors,
-            'message' => $message,
-            'log_file' => 'storage/logs/import_customers.log'
+            'message' => $message
         ], JSON_UNESCAPED_UNICODE);
+        exit;
         
     } catch (Exception $e) {
         $db->rollBack();
@@ -1342,40 +1340,29 @@ try {
     error_log($errorTrace);
     
     // التأكد من عدم وجود output قبل JSON
-    if (ob_get_level() > 0) {
-        ob_clean();
+    while (ob_get_level() > 0) {
+        ob_end_clean();
     }
     
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'message' => 'حدث خطأ أثناء استيراد البيانات: ' . $e->getMessage(),
-        'error_details' => 'يرجى التحقق من ملف السجلات لمزيد من التفاصيل',
-        'log_file' => defined('PRIVATE_STORAGE_PATH') ? PRIVATE_STORAGE_PATH . '/logs/import_customers.log' : 'storage/logs/import_customers.log'
+        'message' => 'حدث خطأ أثناء استيراد البيانات: ' . $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
     exit;
 } catch (Throwable $e) {
-    $errorMsg = 'Import customers fatal error: ' . $e->getMessage();
-    $errorTrace = 'Stack trace: ' . $e->getTraceAsString();
-    
-    // تسجيل في logImport
-    logImport('✗ FATAL ERROR: ' . $errorMsg);
-    logImport('✗ STACK TRACE: ' . $errorTrace);
-    
-    // تسجيل في error_log
-    error_log($errorMsg);
-    error_log($errorTrace);
+    error_log('Import customers fatal error: ' . $e->getMessage());
+    error_log('Stack trace: ' . $e->getTraceAsString());
     
     // التأكد من عدم وجود output قبل JSON
-    if (ob_get_level() > 0) {
-        ob_clean();
+    while (ob_get_level() > 0) {
+        ob_end_clean();
     }
     
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'message' => 'حدث خطأ فادح أثناء استيراد البيانات. يرجى التحقق من ملف السجلات',
-        'log_file' => defined('PRIVATE_STORAGE_PATH') ? PRIVATE_STORAGE_PATH . '/logs/import_customers.log' : 'storage/logs/import_customers.log'
+        'message' => 'حدث خطأ فادح أثناء استيراد البيانات. يرجى التحقق من ملف error_log'
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
