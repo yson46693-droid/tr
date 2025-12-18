@@ -1196,6 +1196,8 @@ function requireLogin() {
     // تم إزالة نظام الجلسات - لا حاجة لحذف الجلسات
 
     // المستخدم غير مسجل دخول - إعادة التوجيه (إلا إذا كنا في صفحة محمية)
+    // ملاحظة: للصفحات المحمية مثل profile.php، إذا فشل التحقق تماماً، يجب إعادة التوجيه
+    // لكن إذا نجح getUserFromToken() في requireLogin()، نسمح بالوصول
     if (!$isProtectedPage) {
         // محاولة تحميل path_helper إذا لم يكن محملاً
         if (!function_exists('getRelativeUrl') && file_exists(__DIR__ . '/path_helper.php')) {
