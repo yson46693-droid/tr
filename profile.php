@@ -7,57 +7,49 @@ define('ACCESS_ALLOWED', true);
 // تعريف ثابت لمنع حذف الجلسة في profile.php
 define('PROFILE_PAGE_ACTIVE', true);
 
-// التأكد من بدء الجلسة قبل أي شيء
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/path_helper.php';
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/audit_log.php';
 
-// التحقق من تسجيل الدخول فقط - تحقق بسيط من $_SESSION
-if (session_status() !== PHP_SESSION_ACTIVE) {
+// التحقق من تسجيل الدخول - يعتمد على remember_token فقط
+// تم إزالة نظام الجلسات بالكامل
+if (!isLoggedIn()) {
+    // إعادة التوجيه إلى صفحة تسجيل الدخول
+    $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+    // تنظيف URL
+    $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
+    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+    if (strpos($loginUrl, '/') !== 0) {
+        $loginUrl = '/' . $loginUrl;
+    }
+    
     if (!headers_sent()) {
-        @session_start();
+        header('Location: ' . $loginUrl);
+        exit;
+    } else {
+        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+        exit;
     }
 }
 
-// التحقق البسيط من تسجيل الدخول
-if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || !isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
-    // إعادة التوجيه إلى صفحة تسجيل الدخول
-    header('Location: login.php');
-    exit;
-}
-
 // تهيئة متغيرات الرسائل
-$error = $_SESSION['error_message'] ?? '';
-$success = $_SESSION['success_message'] ?? '';
-unset($_SESSION['error_message'], $_SESSION['success_message']);
+// تم إزالة نظام الجلسات - يمكن استخدام query parameters للرسائل إذا لزم الأمر
+$error = $_GET['error'] ?? '';
+$success = $_GET['success'] ?? '';
 
 // === تحميل بيانات المستخدم ===
 $user = getCurrentUser();
 $currentUser = $user;
 
-// إذا لم يتم تحميل بيانات المستخدم، نحاول تحميلها مباشرة من قاعدة البيانات
+// إذا لم يتم تحميل بيانات المستخدم، محاولة تحميلها من remember_token
 if (!$user || !isset($user['id'])) {
-    $userId = $_SESSION['user_id'] ?? null;
-    if ($userId) {
-        try {
-            $db = db();
-            $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$userId]);
-            if ($user && isset($user['id'])) {
-                $currentUser = $user;
-            }
-        } catch (Exception $e) {
-            error_log("Profile page - Failed to load user from database: " . $e->getMessage());
-        }
-    }
+    $user = getUserFromToken();
+    $currentUser = $user;
 }
 
-$userId = $user['id'] ?? $_SESSION['user_id'] ?? null;
+$userId = $user['id'] ?? null;
 
 if (!$user || !isset($user['id'])) {
     $error = 'تعذر تحميل بيانات المستخدم. يرجى تسجيل الدخول مرة أخرى.';
@@ -163,8 +155,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $userId = $currentUser['id'];
                 } elseif ($user && isset($user['id'])) {
                     $userId = $user['id'];
-                } elseif (isset($_SESSION['user_id'])) {
-                    $userId = $_SESSION['user_id'];
+                } else {
+                    // محاولة الحصول على userId من remember_token
+                    $tokenUser = getUserFromToken();
+                    $userId = $tokenUser['id'] ?? null;
                 }
                 
                 if (!$userId) {
@@ -229,8 +223,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         if (!empty($error)) {
-            $_SESSION['error_message'] = $error;
-            header('Location: ' . $_SERVER['PHP_SELF']);
+            // تم إزالة نظام الجلسات - استخدام query parameter للرسالة
+            $errorMessage = urlencode($error);
+            $redirectUrl = $_SERVER['PHP_SELF'] . '?error=' . $errorMessage;
+            header('Location: ' . $redirectUrl);
             exit;
         }
     }
@@ -257,16 +253,16 @@ if (document.body) {
 
 <!-- القائمة الجانبية يتم تضمينها تلقائياً في header.php -->
 <?php
-// الحصول على role من $user أو $currentUser أو session
+// الحصول على role من $user أو $currentUser
 $userRole = null;
 if ($user && isset($user['role'])) {
     $userRole = $user['role'];
 } elseif ($currentUser && isset($currentUser['role'])) {
     $userRole = $currentUser['role'];
-} elseif (isset($_SESSION['role'])) {
-    $userRole = $_SESSION['role'];
 } else {
-    $userRole = 'accountant'; // قيمة افتراضية
+    // محاولة الحصول من remember_token
+    $tokenUser = getUserFromToken();
+    $userRole = $tokenUser['role'] ?? 'accountant';
 }
 
 $dashboardUrl = getDashboardUrl($userRole);
