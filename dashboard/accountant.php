@@ -29,7 +29,7 @@ require_once __DIR__ . '/../includes/approval_system.php';
 require_once __DIR__ . '/../includes/table_styles.php';
 require_once __DIR__ . '/../includes/production_reports.php';
 
-requireRole('accountant');
+requireRole(['accountant', 'developer']);
 
 $currentUser = getCurrentUser();
 $db = db();

@@ -112,7 +112,7 @@ if (!function_exists('enforceTasksRetentionLimit')) {
     }
 }
 
-requireRole(['manager', 'accountant']);
+requireRole(['manager', 'accountant', 'developer']);
 
 $db = db();
 $currentUser = getCurrentUser();

@@ -259,8 +259,8 @@ function generateShippingOrderNumber(Database $db): string
 }
 
 // السماح للمدير والمحاسب بالوصول إلى نقطة البيع
-if (!in_array(strtolower($currentUser['role'] ?? ''), ['manager', 'accountant'], true)) {
-    requireRole('manager');
+if (!in_array(strtolower($currentUser['role'] ?? ''), ['manager', 'developer', 'accountant'], true)) {
+    requireRole(['manager', 'developer']);
 }
 
 $currentUser = getCurrentUser();

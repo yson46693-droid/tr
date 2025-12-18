@@ -15,7 +15,7 @@ require_once __DIR__ . '/../../includes/path_helper.php';
 require_once __DIR__ . '/../../includes/notifications.php';
 require_once __DIR__ . '/../../includes/table_styles.php';
 
-requireRole(['production', 'accountant', 'manager']);
+requireRole(['production', 'accountant', 'manager', 'developer']);
 
 // التحقق من وجود عمود product_name في جدول tasks وإضافته إذا لم يكن موجوداً
 try {

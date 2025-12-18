@@ -1872,7 +1872,7 @@ $baseUrl = getRelativeUrl('dashboard/manager.php?page=product_templates');
                             <i class="bi bi-calendar3 me-1"></i>
                             <?php echo $createdAtLabel; ?>
                         </div>
-                        <?php if ($currentUser['role'] === 'manager'): ?>
+                        <?php if (in_array($currentUser['role'] ?? '', ['manager', 'developer'], true)): ?>
                             <div class="d-flex gap-2">
                                 <button class="btn btn-sm btn-outline-primary"
                                         data-template-id="<?php echo $template['id']; ?>"

@@ -14,7 +14,7 @@ require_once __DIR__ . '/../../includes/production_helper.php';
 require_once __DIR__ . '/../../includes/reports.php';
 require_once __DIR__ . '/../../includes/table_styles.php';
 
-requireRole(['production', 'accountant', 'manager']);
+requireRole(['production', 'accountant', 'manager', 'developer']);
 
 $currentUser = getCurrentUser();
 $db = db();

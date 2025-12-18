@@ -23,7 +23,7 @@ require_once __DIR__ . '/../../includes/security.php';
 require_once __DIR__ . '/../../includes/request_monitor.php';
 require_once __DIR__ . '/../../includes/table_styles.php';
 
-requireRole('manager');
+requireRole(['manager', 'developer']);
 
 $currentUser = getCurrentUser();
 $db = db();

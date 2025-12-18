@@ -17,16 +17,36 @@ $page = $_GET['page'] ?? 'overview';
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/path_helper.php';
+
+// المطور فقط يمكنه الوصول
+requireRole('developer');
+
+// معالجة redirects قبل أي output
+if ($page === 'backups') {
+    // تنظيف أي output buffer
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    $redirectUrl = getRelativeUrl('dashboard/developer.php?page=security&tab=backup');
+    if (!headers_sent()) {
+        header('Location: ' . $redirectUrl);
+        exit;
+    } else {
+        // Fallback: JavaScript redirect
+        echo '<script>window.location.replace("' . htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+        exit;
+    }
+}
+
+// تحميل باقي الملفات المطلوبة
 require_once __DIR__ . '/../includes/audit_log.php';
 require_once __DIR__ . '/../includes/backup.php';
 require_once __DIR__ . '/../includes/activity_summary.php';
 require_once __DIR__ . '/../includes/permissions.php';
 require_once __DIR__ . '/../includes/security.php';
-require_once __DIR__ . '/../includes/path_helper.php';
 require_once __DIR__ . '/../includes/table_styles.php';
-
-// المطور فقط يمكنه الوصول
-requireRole('developer');
 
 $currentUser = getCurrentUser();
 $db = db();
@@ -218,6 +238,8 @@ $pageDescription = 'لوحة تحكم المطور - إدارة النظام و�
 
             <?php elseif ($page === 'users'): ?>
                 <?php
+                // تعيين context للمطور
+                $usersModuleContext = 'users';
                 $modulePath = __DIR__ . '/../modules/manager/users.php';
                 if (file_exists($modulePath)) {
                     include $modulePath;
@@ -230,12 +252,6 @@ $pageDescription = 'لوحة تحكم المطور - إدارة النظام و�
                 if (file_exists($modulePath)) {
                     include $modulePath;
                 }
-                ?>
-
-            <?php elseif ($page === 'backups'): ?>
-                <?php
-                header('Location: developer.php?page=security&tab=backup');
-                exit;
                 ?>
 
             <?php else: ?>

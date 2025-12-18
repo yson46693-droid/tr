@@ -16,7 +16,7 @@ require_once __DIR__ . '/../../includes/approval_system.php';
 require_once __DIR__ . '/../../includes/table_styles.php';
 require_once __DIR__ . '/../../includes/salary_calculator.php';
 
-requireRole(['accountant', 'manager']);
+requireRole(['accountant', 'manager', 'developer']);
 
 $currentUser = getCurrentUser();
 $db = db();

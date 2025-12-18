@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * صفحة إدارة المستخدمين والأدوار للمدير
  */
@@ -15,7 +15,7 @@ require_once __DIR__ . '/../../includes/audit_log.php';
 require_once __DIR__ . '/../../includes/notifications.php';
 require_once __DIR__ . '/../../includes/table_styles.php';
 
-requireRole('manager');
+requireRole(['manager', 'developer']);
 
 $currentUser = getCurrentUser();
 $passwordMinLength = getPasswordMinLength();

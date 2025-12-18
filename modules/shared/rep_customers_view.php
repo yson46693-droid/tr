@@ -14,7 +14,7 @@ require_once __DIR__ . '/../../includes/components/customers/section_header.php'
 require_once __DIR__ . '/../../includes/components/customers/customer_table.php';
 require_once __DIR__ . '/../sales/table_styles.php';
 
-requireRole(['manager', 'accountant']);
+requireRole(['manager', 'accountant', 'developer']);
 
 $currentUser = getCurrentUser();
 $currentRole = strtolower((string)($currentUser['role'] ?? 'manager'));

@@ -1687,6 +1687,64 @@ function hasRole($role) {
 }
 
 /**
+ * التحقق إذا كان المستخدم مطور أو مدير (لديهم صلاحيات كاملة)
+ */
+function isAdminOrDeveloper() {
+    if (!isLoggedIn()) {
+        return false;
+    }
+    
+    $currentRole = strtolower($_SESSION['role'] ?? '');
+    return in_array($currentRole, ['manager', 'developer'], true);
+}
+
+/**
+ * التحقق إذا كان المستخدم يمكنه التعديل (مدير، مطور، أو أدوار أخرى حسب السياق)
+ */
+function canEdit($allowedRoles = ['manager', 'developer']) {
+    if (!isLoggedIn()) {
+        return false;
+    }
+    
+    $currentRole = strtolower($_SESSION['role'] ?? '');
+    
+    // المطور دائماً يمكنه التعديل
+    if ($currentRole === 'developer') {
+        return true;
+    }
+    
+    // التحقق من الأدوار المسموحة
+    if (is_array($allowedRoles)) {
+        return in_array($currentRole, $allowedRoles, true);
+    }
+    
+    return $currentRole === strtolower($allowedRoles);
+}
+
+/**
+ * التحقق إذا كان المستخدم يمكنه الحذف (مدير، مطور، أو أدوار أخرى حسب السياق)
+ */
+function canDelete($allowedRoles = ['manager', 'developer']) {
+    if (!isLoggedIn()) {
+        return false;
+    }
+    
+    $currentRole = strtolower($_SESSION['role'] ?? '');
+    
+    // المطور دائماً يمكنه الحذف
+    if ($currentRole === 'developer') {
+        return true;
+    }
+    
+    // التحقق من الأدوار المسموحة
+    if (is_array($allowedRoles)) {
+        return in_array($currentRole, $allowedRoles, true);
+    }
+    
+    return $currentRole === strtolower($allowedRoles);
+}
+
+/**
  * التحقق من أي دور من الأدوار المحددة
  */
 function hasAnyRole($roles) {

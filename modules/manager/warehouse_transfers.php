@@ -30,7 +30,7 @@ $buildWarehouseTransfersUrl = static function (array $params = []) use ($warehou
 };
 
 // السماح للمديرين والمندوبين والمحاسبين بالوصول
-requireRole(['manager', 'sales', 'accountant']);
+requireRole(['manager', 'sales', 'accountant', 'developer']);
 
 $approvalsEntityColumn = getApprovalsEntityColumn();
 

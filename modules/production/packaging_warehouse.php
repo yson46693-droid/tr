@@ -2311,7 +2311,7 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
     <h2 class="mb-0"><i class="bi bi-box-seam me-2"></i>مخزن أدوات التعبئة</h2>
     <div class="d-flex flex-wrap gap-2">
-        <?php if (($currentUser['role'] ?? '') === 'manager'): ?>
+        <?php if (in_array($currentUser['role'] ?? '', ['manager', 'developer'], true)): ?>
             <button
                 type="button"
                 class="btn btn-primary"
@@ -2554,7 +2554,7 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
                                                 style="padding: 0.2rem 0.4rem; font-size: 0.75rem;">
                                             <i class="bi bi-exclamation-octagon"></i>
                                         </button>
-                                        <?php if ($currentUser['role'] === 'manager'): ?>
+                                        <?php if (in_array($currentUser['role'] ?? '', ['manager', 'developer'], true)): ?>
                                             <button class="btn btn-warning btn-sm" 
                                                     onclick="editMaterial(<?php echo $material['id']; ?>)"
                                                     title="تعديل"
@@ -2734,7 +2734,7 @@ $packagingReportGeneratedAt = $packagingReport['generated_at'] ?? date('Y-m-d H:
     </div>
 </div>
 
-<?php if (($currentUser['role'] ?? '') === 'manager'): ?>
+        <?php if (in_array($currentUser['role'] ?? '', ['manager', 'developer'], true)): ?>
 <div class="modal fade" id="createMaterialModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">

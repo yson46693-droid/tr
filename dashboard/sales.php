@@ -111,7 +111,7 @@ require_once __DIR__ . '/../includes/audit_log.php';
 require_once __DIR__ . '/../includes/notifications.php';
 require_once __DIR__ . '/../includes/path_helper.php';
 
-requireRole('sales');
+requireRole(['sales', 'developer']);
 
 // تحميل $currentUser قبل header.php لضمان أنه متاح في جميع الملفات
 if (!isset($currentUser) || $currentUser === null) {

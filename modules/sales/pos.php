@@ -139,7 +139,7 @@ if (!function_exists('storeSalesInvoiceDocument')) {
     }
 }
 
-requireRole(['sales', 'manager']);
+requireRole(['sales', 'manager', 'developer']);
 
 $currentUser = getCurrentUser();
 $pageDirection = getDirection();

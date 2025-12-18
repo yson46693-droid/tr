@@ -19,7 +19,7 @@ require_once __DIR__ . '/../sales/table_styles.php';
 
 // التحقق من الصلاحيات فقط إذا لم نكن في وضع معالجة POST
 if (!defined('COLLECTION_POST_PROCESSING')) {
-    requireRole(['manager', 'accountant']);
+    requireRole(['manager', 'accountant', 'developer']);
 }
 
 $currentUser = getCurrentUser();
@@ -369,8 +369,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_P
                 $canEdit = false;
                 $allowedFields = [];
                 
-                if ($currentRole === 'manager') {
-                    // المدير يعدل جميع البيانات ما عدا اسم العميل
+                if (in_array($currentRole, ['manager', 'developer'], true)) {
+                    // المدير والمطور يعدلون جميع البيانات ما عدا اسم العميل
                     $canEdit = true;
                     $allowedFields = ['phone', 'address', 'region_id', 'balance'];
                 } elseif (in_array($currentRole, ['accountant', 'sales'], true)) {
@@ -1063,7 +1063,7 @@ try {
                                     $rawBalance = number_format($customerBalance, 2, '.', '');
                                     ?>
                                     <div class="d-flex flex-wrap align-items-center gap-2">
-                                        <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
+                                        <?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?>
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-warning edit-rep-customer-btn"
@@ -3290,7 +3290,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <input type="text" class="form-control" id="editRepCustomerName" disabled>
                         <small class="text-muted">لا يمكن تعديل اسم العميل</small>
                     </div>
-                    <?php if ($currentRole === 'manager'): ?>
+                    <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
                     <div class="mb-3">
                         <label class="form-label">ديون العميل / رصيد العميل</label>
                         <input type="number" class="form-control" name="balance" id="editRepCustomerBalance" step="0.01" placeholder="مثال: 0 أو -500">

@@ -1907,7 +1907,7 @@ $salaries = array_values(array_filter($salaries, function ($salary) {
 
 // الحصول على طلبات تعديل الرواتب المعلقة (للمدير فقط)
 $pendingModifications = [];
-if ($currentUser['role'] === 'manager') {
+if (in_array($currentUser['role'] ?? '', ['manager', 'developer'], true)) {
     try {
         $entityColumn = getApprovalsEntityColumn();
         
@@ -1935,7 +1935,7 @@ $advanceStats = [
     'pending_amount' => 0
 ];
 
-if ($view === 'advances' || $currentUser['role'] === 'accountant' || $currentUser['role'] === 'manager') {
+if ($view === 'advances' || in_array($currentUser['role'] ?? '', ['accountant', 'manager', 'developer'], true)) {
     // الفلاتر
     $advanceStatusFilter = $_GET['advance_status'] ?? 'all';
     $advanceMonthFilter = isset($_GET['advance_month']) ? intval($_GET['advance_month']) : 0;
@@ -4518,7 +4518,7 @@ $advanceStatusLabels = [
                                         </div>
                                     <?php 
                                     // للمدير: يمكنه الموافقة مباشرة على الطلبات المعلقة (pending) أو الموافق عليها من المحاسب (accountant_approved)
-                                    elseif ($currentUser['role'] === 'manager' && in_array($request['status'], ['pending', 'accountant_approved'])): 
+                                    elseif (in_array($currentUser['role'] ?? '', ['manager', 'developer'], true) && in_array($request['status'], ['pending', 'accountant_approved'])): 
                                     ?>
                                         <div class="d-flex flex-wrap gap-2">
                                             <form method="POST" onsubmit="return confirm('<?php echo $request['status'] === 'pending' ? 'تأكيد الموافقة المباشرة على السلفة وخصمها من الراتب؟ (سيتم تجاوز موافقة المحاسب)' : 'تأكيد الموافقة النهائية على السلفة؟'; ?>');">

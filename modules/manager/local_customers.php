@@ -24,7 +24,7 @@ if (!defined('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED')) {
     require_once __DIR__ . '/../../includes/audit_log.php';
     require_once __DIR__ . '/../../includes/path_helper.php';
 
-    requireRole(['accountant', 'manager']);
+    requireRole(['accountant', 'manager', 'developer']);
 }
 
 if (!defined('LOCAL_CUSTOMERS_PURCHASE_HISTORY_AJAX')) {
@@ -756,8 +756,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $canEdit = false;
                     $allowedFields = [];
                     
-                    if ($currentRole === 'manager') {
-                        // المدير يعدل جميع البيانات ما عدا اسم العميل
+                    if (in_array($currentRole, ['manager', 'developer'], true)) {
+                        // المدير والمطور يعدلون جميع البيانات ما عدا اسم العميل
                         $canEdit = true;
                         $allowedFields = ['phone', 'address', 'region_id', 'balance'];
                     } elseif (in_array($currentRole, ['accountant', 'sales'], true)) {
@@ -1440,7 +1440,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                     $rawBalance = number_format($customerBalance, 2, '.', '');
                                     ?>
                                     <div class="d-flex flex-wrap align-items-center gap-2">
-                                        <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
+                                        <?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?>
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-warning edit-local-customer-btn"
@@ -1636,7 +1636,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                     <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <?php if ($currentRole === 'manager'): ?>
+                            <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
                             <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRegionFromLocalCustomerModal">
                                 <i class="bi bi-plus-circle"></i>
                             </button>
@@ -3519,7 +3519,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <input type="text" class="form-control" id="editLocalCustomerName" disabled>
                         <small class="text-muted">لا يمكن تعديل اسم العميل</small>
                     </div>
-                    <?php if ($currentRole === 'manager'): ?>
+                    <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
                     <div class="mb-3">
                         <label class="form-label">ديون العميل / رصيد العميل</label>
                         <input type="number" class="form-control" name="balance" id="editLocalCustomerBalance" step="0.01" placeholder="مثال: 0 أو -500">
@@ -3559,7 +3559,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <?php if ($currentRole === 'manager'): ?>
+                            <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
                             <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRegionFromLocalCustomerModal">
                                 <i class="bi bi-plus-circle"></i>
                             </button>
@@ -3578,7 +3578,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php endif; ?>
 
 <!-- Modal إضافة منطقة جديدة (من نموذج العميل المحلي) -->
-<?php if ($currentRole === 'manager'): ?>
+<?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
 <div class="modal fade" id="addRegionFromLocalCustomerModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
