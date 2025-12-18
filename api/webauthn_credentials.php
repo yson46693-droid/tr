@@ -124,21 +124,36 @@ if (!$isAuthenticated) {
     }
 }
 
-// التحقق 3: إذا فشل، جرب requireLogin() (لكن لا نعتمد عليه فقط)
+// التحقق 3: إذا فشل، جرب البحث عن الجلسة في قاعدة البيانات
 if (!$isAuthenticated) {
     try {
-        requireLogin();
-        // إذا نجح requireLogin()، تحقق من $_SESSION مرة أخرى
-        if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id']) && 
-            isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-            $isAuthenticated = true;
+        $sessionId = session_id();
+        if (!empty($sessionId) && function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+            $db = db();
+            $sessionRecord = $db->queryOne(
+                "SELECT user_id FROM sessions WHERE session_id = ? AND expires_at > NOW()",
+                [$sessionId]
+            );
+            if ($sessionRecord && isset($sessionRecord['user_id'])) {
+                $userId = $sessionRecord['user_id'];
+                // تحميل بيانات المستخدم
+                $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$userId]);
+                if ($userFromDb && isset($userFromDb['id'])) {
+                    // تحديث الجلسة ببيانات المستخدم
+                    $_SESSION['user_id'] = $userFromDb['id'];
+                    $_SESSION['username'] = $userFromDb['username'];
+                    $_SESSION['role'] = $userFromDb['role'];
+                    $_SESSION['logged_in'] = true;
+                    $isAuthenticated = true;
+                }
+            }
         }
     } catch (Exception $e) {
-        error_log("WebAuthn API - requireLogin() failed: " . $e->getMessage());
+        error_log("WebAuthn API - Session lookup from database failed: " . $e->getMessage());
     }
 }
 
-// التحقق 4: محاولة أخيرة - تحميل مباشر من قاعدة البيانات
+// التحقق 4: محاولة أخيرة - تحميل مباشر من قاعدة البيانات باستخدام user_id من الجلسة
 if (!$isAuthenticated && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
     try {
         $db = db();
@@ -184,16 +199,13 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {
     try {
-        // === التحقق من user_id - مع معالجة محسّنة ===
-        $userId = null;
+        // === استخدام user_id من التحقق الأولي ===
+        // إذا نجح التحقق الأولي، يجب أن يكون $_SESSION['user_id'] موجوداً
+        $userId = $_SESSION['user_id'] ?? null;
         
-        // الطريقة 1: من $_SESSION مباشرة
-        if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-            $userId = $_SESSION['user_id'];
-        }
-        
-        // الطريقة 2: إذا فشل، جرب getCurrentUser()
-        if (!$userId) {
+        // إذا لم يكن موجوداً، جرب التحقق مرة أخرى (لكن هذا يجب ألا يحدث عادة)
+        if (!$userId || empty($userId)) {
+            // محاولة استعادة من getCurrentUser()
             try {
                 $currentUser = getCurrentUser();
                 if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
@@ -212,8 +224,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {
             }
         }
         
-        // الطريقة 3: إذا فشل، جرب مباشرة من قاعدة البيانات
-        if (!$userId) {
+        // إذا فشل، جرب البحث في قاعدة البيانات
+        if (!$userId || empty($userId)) {
             try {
                 $db = db();
                 $sessionId = session_id();
@@ -234,11 +246,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {
         }
         
         // إذا فشلت جميع المحاولات
-        if (!$userId) {
+        if (!$userId || empty($userId)) {
             http_response_code(401);
             echo json_encode([
                 'success' => false,
-                'error' => 'غير مصرح به - تعذر تحميل بيانات المستخدم'
+                'error' => 'غير مصرح به - تعذر تحميل بيانات المستخدم',
+                'debug' => [
+                    'session_user_id' => $_SESSION['user_id'] ?? 'not set',
+                    'session_logged_in' => $_SESSION['logged_in'] ?? 'not set',
+                    'session_id' => session_id()
+                ]
             ], JSON_UNESCAPED_UNICODE);
             exit;
         }
