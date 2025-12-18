@@ -93,35 +93,78 @@ try {
     error_log("WebAuthn API load - Error updating session in database: " . $e->getMessage());
 }
 
-// التحقق من تسجيل الدخول - مع معالجة خاصة لـ API endpoints
-try {
-    requireLogin();
-} catch (Exception $e) {
-    // في حالة فشل requireLogin() في API endpoint، نعيد JSON response
+// === التحقق من تسجيل الدخول - مع معالجة محسّنة ===
+// في API endpoints المحمية، نتحقق من $_SESSION مباشرة أولاً
+$isAuthenticated = false;
+
+// التحقق 1: من $_SESSION مباشرة
+if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id']) && 
+    isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+    $isAuthenticated = true;
+}
+
+// التحقق 2: إذا فشل التحقق من $_SESSION، جرب getCurrentUser()
+if (!$isAuthenticated) {
+    try {
+        $currentUser = getCurrentUser();
+        if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
+            // تحديث $_SESSION ببيانات المستخدم المستعادة
+            $_SESSION['user_id'] = $currentUser['id'];
+            if (!isset($_SESSION['username']) || $_SESSION['username'] !== $currentUser['username']) {
+                $_SESSION['username'] = $currentUser['username'];
+            }
+            if (!isset($_SESSION['role']) || $_SESSION['role'] !== $currentUser['role']) {
+                $_SESSION['role'] = $currentUser['role'];
+            }
+            $_SESSION['logged_in'] = true;
+            $isAuthenticated = true;
+        }
+    } catch (Exception $e) {
+        error_log("WebAuthn API - getCurrentUser() failed: " . $e->getMessage());
+    }
+}
+
+// التحقق 3: إذا فشل، جرب requireLogin() (لكن لا نعتمد عليه فقط)
+if (!$isAuthenticated) {
+    try {
+        requireLogin();
+        // إذا نجح requireLogin()، تحقق من $_SESSION مرة أخرى
+        if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id']) && 
+            isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+            $isAuthenticated = true;
+        }
+    } catch (Exception $e) {
+        error_log("WebAuthn API - requireLogin() failed: " . $e->getMessage());
+    }
+}
+
+// التحقق 4: محاولة أخيرة - تحميل مباشر من قاعدة البيانات
+if (!$isAuthenticated && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+    try {
+        $db = db();
+        $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$_SESSION['user_id']]);
+        if ($userFromDb && isset($userFromDb['id'])) {
+            // تحديث الجلسة ببيانات المستخدم
+            $_SESSION['user_id'] = $userFromDb['id'];
+            $_SESSION['username'] = $userFromDb['username'];
+            $_SESSION['role'] = $userFromDb['role'];
+            $_SESSION['logged_in'] = true;
+            $isAuthenticated = true;
+        }
+    } catch (Exception $e) {
+        error_log("WebAuthn API - Direct database query failed: " . $e->getMessage());
+    }
+}
+
+// إذا فشلت جميع محاولات التحقق
+if (!$isAuthenticated) {
     header('Content-Type: application/json; charset=utf-8');
     http_response_code(401);
     echo json_encode([
         'success' => false,
-        'error' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول',
-        'debug' => $e->getMessage()
+        'error' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول'
     ], JSON_UNESCAPED_UNICODE);
     exit;
-}
-
-// التحقق مرة أخرى من أن المستخدم مسجل دخول
-// ملاحظة: في API endpoints المحمية (WEBAUTHN_API_ACTIVE)، نتحقق من $_SESSION مباشرة
-// بدلاً من isLoggedIn() لأن isLoggedIn() قد يعيد false حتى لو كانت الجلسة صالحة
-if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id']) || !isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-    // محاولة أخيرة: التحقق من isLoggedIn() فقط إذا فشل التحقق من $_SESSION
-    if (!isLoggedIn()) {
-        header('Content-Type: application/json; charset=utf-8');
-        http_response_code(401);
-        echo json_encode([
-            'success' => false,
-            'error' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول'
-        ], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
 }
 
 header('Content-Type: application/json; charset=utf-8');
@@ -141,36 +184,72 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {
     try {
-        // التحقق من أن المستخدم مسجل دخول - التحقق بعد requireLogin()
-        // requireLogin() يجب أن يكون قد تحقق من الجلسة بالفعل
-        // في API endpoints المحمية، نتحقق من $_SESSION مباشرة
-        if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id']) || !isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-            // محاولة أخيرة: التحقق من isLoggedIn() فقط إذا فشل التحقق من $_SESSION
-            if (!isLoggedIn()) {
-                http_response_code(401);
-                echo json_encode(['success' => false, 'error' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول']);
-                exit;
+        // === التحقق من user_id - مع معالجة محسّنة ===
+        $userId = null;
+        
+        // الطريقة 1: من $_SESSION مباشرة
+        if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+            $userId = $_SESSION['user_id'];
+        }
+        
+        // الطريقة 2: إذا فشل، جرب getCurrentUser()
+        if (!$userId) {
+            try {
+                $currentUser = getCurrentUser();
+                if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
+                    $userId = $currentUser['id'];
+                    $_SESSION['user_id'] = $userId;
+                    if (!isset($_SESSION['username']) || $_SESSION['username'] !== $currentUser['username']) {
+                        $_SESSION['username'] = $currentUser['username'];
+                    }
+                    if (!isset($_SESSION['role']) || $_SESSION['role'] !== $currentUser['role']) {
+                        $_SESSION['role'] = $currentUser['role'];
+                    }
+                    $_SESSION['logged_in'] = true;
+                }
+            } catch (Exception $e) {
+                error_log("WebAuthn credentials list - getCurrentUser() failed: " . $e->getMessage());
             }
         }
         
-        // الحصول على قائمة الاعتماديات للمستخدم
-        if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
-            // محاولة استعادة user_id من الجلسة
-            $currentUser = getCurrentUser();
-            if (!$currentUser || !isset($currentUser['id'])) {
-                http_response_code(401);
-                echo json_encode(['success' => false, 'error' => 'غير مصرح به - تعذر تحميل بيانات المستخدم']);
-                exit;
+        // الطريقة 3: إذا فشل، جرب مباشرة من قاعدة البيانات
+        if (!$userId) {
+            try {
+                $db = db();
+                $sessionId = session_id();
+                if (!empty($sessionId) && function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+                    $sessionRecord = $db->queryOne(
+                        "SELECT user_id FROM sessions WHERE session_id = ? AND expires_at > NOW()",
+                        [$sessionId]
+                    );
+                    if ($sessionRecord && isset($sessionRecord['user_id'])) {
+                        $userId = $sessionRecord['user_id'];
+                        $_SESSION['user_id'] = $userId;
+                        $_SESSION['logged_in'] = true;
+                    }
+                }
+            } catch (Exception $e) {
+                error_log("WebAuthn credentials list - Session lookup failed: " . $e->getMessage());
             }
-            $_SESSION['user_id'] = $currentUser['id'];
         }
         
-        $userId = $_SESSION['user_id'];
-        $db = db();
+        // إذا فشلت جميع المحاولات
+        if (!$userId) {
+            http_response_code(401);
+            echo json_encode([
+                'success' => false,
+                'error' => 'غير مصرح به - تعذر تحميل بيانات المستخدم'
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
         
         // === تحديث الجلسة في قاعدة البيانات ===
         try {
-            if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+            if (!isset($db)) {
+                $db = db();
+            }
+            
+            if ($db && function_exists('ensureSessionsTable') && ensureSessionsTable()) {
                 $sessionId = session_id();
                 if (!empty($sessionId) && !empty($userId)) {
                     $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
@@ -186,6 +265,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {
         } catch (Exception $e) {
             // لا نوقف العملية إذا فشل تحديث الجلسة
             error_log("WebAuthn credentials list - Error updating session: " . $e->getMessage());
+        }
+        
+        // التأكد من وجود اتصال بقاعدة البيانات
+        if (!isset($db)) {
+            $db = db();
         }
         
         if (!$db) {
