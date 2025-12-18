@@ -851,6 +851,20 @@ $totalPages = max(1, (int) ceil($totalTasks / $perPage));
 // التحقق من وجود جداول القوالب قبل إضافة JOIN
 $unifiedTemplatesExists = !empty($db->queryOne("SHOW TABLES LIKE 'unified_product_templates'"));
 $productTemplatesExists = !empty($db->queryOne("SHOW TABLES LIKE 'product_templates'"));
+// #region agent log
+file_put_contents('c:\\xampp\\htdocs\\v1\\.cursor\\debug.log', json_encode([
+    'timestamp' => time() * 1000,
+    'location' => 'tasks.php:' . __LINE__,
+    'message' => 'Template tables check',
+    'data' => [
+        'unifiedTemplatesExists' => $unifiedTemplatesExists,
+        'productTemplatesExists' => $productTemplatesExists
+    ],
+    'sessionId' => 'debug-session',
+    'runId' => 'run1',
+    'hypothesisId' => 'B'
+]) . "\n", FILE_APPEND);
+// #endregion
 
 // SQL query لجلب المهام مع استخدام t.product_name مباشرة من الجدول (نفس طريقة طلبات العملاء)
 // استخدام t.product_name مباشرة قبل t.* لتجنب أي تعارض
@@ -898,10 +912,43 @@ ORDER BY
 LIMIT ? OFFSET ?";
 
 $queryParams = array_merge($params, [$perPage, $offset]);
+// #region agent log
+file_put_contents('c:\\xampp\\htdocs\\v1\\.cursor\\debug.log', json_encode([
+    'timestamp' => time() * 1000,
+    'location' => 'tasks.php:' . __LINE__,
+    'message' => 'SQL query with template joins',
+    'data' => [
+        'templateSelect' => $templateSelect,
+        'templateJoins' => $templateJoins,
+        'sql_preview' => substr($taskSql, 0, 200) . '...'
+    ],
+    'sessionId' => 'debug-session',
+    'runId' => 'run1',
+    'hypothesisId' => 'B'
+]) . "\n", FILE_APPEND);
+// #endregion
 $tasks = $db->query($taskSql, $queryParams);
 
 // استخراج جميع العمال من notes لكل مهمة واستخراج اسم المنتج من notes إذا لم يكن موجوداً
 foreach ($tasks as &$task) {
+    // #region agent log
+    file_put_contents('c:\\xampp\\htdocs\\v1\\.cursor\\debug.log', json_encode([
+        'timestamp' => time() * 1000,
+        'location' => 'tasks.php:' . __LINE__,
+        'message' => 'Task raw data from database',
+        'data' => [
+            'task_id' => $task['id'] ?? 0,
+            'template_id' => $task['template_id'] ?? null,
+            'template_name' => $task['template_name'] ?? null,
+            'product_name' => $task['product_name'] ?? null,
+            'product_id' => $task['product_id'] ?? null,
+            'has_template_name_key' => isset($task['template_name'])
+        ],
+        'sessionId' => 'debug-session',
+        'runId' => 'run1',
+        'hypothesisId' => 'B'
+    ]) . "\n", FILE_APPEND);
+    // #endregion
     $notes = $task['notes'] ?? '';
     $allWorkers = [];
     
