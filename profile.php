@@ -227,7 +227,9 @@ if (!$userId || empty($userId)) {
             if (!isset($db)) {
                 $db = db();
             }
-            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$userId]);
+            // لا نتحقق من status هنا لأن getUserById() و getCurrentUser() لا يتحققان منه أيضاً
+            // في profile.php نريد عرض بيانات المستخدم حتى لو كان status غير active
+            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$userId]);
             if ($userFromDb && isset($userFromDb['id'])) {
                 $user = $userFromDb;
                 $currentUser = $userFromDb;
@@ -241,6 +243,9 @@ if (!$userId || empty($userId)) {
                 if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
                     $_SESSION['logged_in'] = true;
                 }
+            } else {
+                // المستخدم غير موجود في قاعدة البيانات
+                error_log("Profile page - User ID {$userId} not found in database");
             }
         } catch (Exception $e) {
             error_log("Profile page - Direct database query failed: " . $e->getMessage());
@@ -250,7 +255,10 @@ if (!$userId || empty($userId)) {
     // إذا فشلت جميع المحاولات
     if (!$user || !isset($user['id']) || empty($user['id'])) {
         error_log("Profile page - Failed to load user. user_id: " . $userId . ", Session data: " . json_encode(array_keys($_SESSION ?? [])));
-        $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى أو تحديث الصفحة.';
+        // لا نضيف رسالة خطأ هنا إذا كانت موجودة بالفعل من السطر 189
+        if (empty($error)) {
+            $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى أو تحديث الصفحة.';
+        }
     }
 }
 
@@ -670,14 +678,15 @@ if (!$user || !is_array($user) || !isset($user['id']) || empty($user['id'])) {
         }
     }
     
-    // إذا استمرت المشكلة بعد جميع المحاولات، عرض رسالة خطأ
+    // إذا استمرت المشكلة بعد جميع المحاولات، عرض رسالة خطأ واحدة فقط
     if (!$user || !is_array($user) || !isset($user['id']) || empty($user['id'])) {
-        echo '<div class="alert alert-danger">';
-        echo '<i class="bi bi-exclamation-triangle-fill me-2"></i>';
-        echo 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . htmlspecialchars($dashboardUrl) . '">العودة</a> والمحاولة مرة أخرى.';
-        echo '</div>';
-        include __DIR__ . '/templates/footer.php';
-        exit;
+        // إذا كانت هناك رسالة خطأ موجودة بالفعل من الكود السابق، نستخدمها
+        // وإلا نعرض رسالة خطأ نهائية
+        if (empty($error)) {
+            $error = 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . htmlspecialchars($dashboardUrl) . '">العودة</a> والمحاولة مرة أخرى.';
+        }
+        // عرض رسالة الخطأ في مكان واحد فقط (في قسم عرض الرسائل)
+        // لا نعرض رسالة منفصلة هنا لتجنب التكرار
     }
 }
 ?>
