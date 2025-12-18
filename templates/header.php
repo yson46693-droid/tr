@@ -639,6 +639,8 @@ if (ob_get_level() > 0) {
         /* منع التفاعل مع العناصر المعطلة */
         .topbar-action.disabled-action,
         .topbar-action.disabled-action *,
+        .topbar-user.disabled-action,
+        .topbar-user.disabled-action *,
         .dropdown-item.disabled-action,
         .dropdown-item.disabled-action * {
             pointer-events: none !important;
@@ -650,6 +652,12 @@ if (ob_get_level() > 0) {
         .homeline-topbar,
         .homeline-topbar * {
             pointer-events: auto !important;
+        }
+        
+        /* استثناء العناصر المعطلة من topbar */
+        .homeline-topbar .disabled-action,
+        .homeline-topbar .disabled-action * {
+            pointer-events: none !important;
         }
         
         /* إصلاح Modal - قيم z-index صحيحة */
@@ -3081,13 +3089,13 @@ if (ob_get_level() > 0) {
                     $userFullName = htmlspecialchars($currentUser['full_name'] ?? $currentUser['username'] ?? '');
                 ?>
                 <div class="topbar-dropdown">
-                    <div class="topbar-user dropdown-toggle" 
+                    <div class="topbar-user dropdown-toggle disabled-action" 
                          id="userDropdown" 
-                         data-bs-toggle="dropdown" 
                          role="button"
                          aria-label="<?php echo isset($lang['user_menu']) ? $lang['user_menu'] : 'قائمة المستخدم'; ?>"
                          aria-expanded="false"
-                         aria-haspopup="true">
+                         aria-haspopup="true"
+                         style="cursor: not-allowed; opacity: 0.5; pointer-events: none !important;">
                         <?php if (isset($currentUser['profile_photo']) && !empty($currentUser['profile_photo'])): ?>
                             <img src="<?php echo htmlspecialchars($currentUser['profile_photo'], ENT_QUOTES, 'UTF-8'); ?>" 
                                  alt="<?php echo $userFullName; ?>"
@@ -3127,6 +3135,19 @@ if (ob_get_level() > 0) {
             'use strict';
             // منع جميع الأحداث على العناصر المعطلة
             document.addEventListener('DOMContentLoaded', function() {
+                // منع Bootstrap dropdown من العمل على العناصر المعطلة
+                const userDropdown = document.getElementById('userDropdown');
+                if (userDropdown && userDropdown.classList.contains('disabled-action')) {
+                    // إزالة data-bs-toggle لمنع Bootstrap من التعامل معه
+                    userDropdown.removeAttribute('data-bs-toggle');
+                    userDropdown.setAttribute('aria-expanded', 'false');
+                    // إغلاق القائمة إذا كانت مفتوحة
+                    const dropdownMenu = userDropdown.nextElementSibling;
+                    if (dropdownMenu && dropdownMenu.classList.contains('dropdown-menu')) {
+                        dropdownMenu.classList.remove('show');
+                    }
+                }
+                
                 // منع click على العناصر المعطلة
                 document.addEventListener('click', function(e) {
                     const target = e.target;
