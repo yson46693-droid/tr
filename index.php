@@ -397,69 +397,42 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
         // حذف الجلسة القديمة من قاعدة البيانات أولاً
         try {
             require_once __DIR__ . '/includes/db.php';
-            require_once __DIR__ . '/includes/auth.php';
-            $db = db();
-            $userId = $_SESSION['user_id'] ?? 0;
-            $oldSessionId = session_id();
-            
-            if ($userId > 0 && ensureSessionsTable()) {
-                // حذف جميع الجلسات للمستخدم (لتأكيد حذف الجلسة القديمة)
-                $db->execute("DELETE FROM sessions WHERE user_id = ?", [$userId]);
-                // تعطيل التسجيل لتقليل الضغط على السيرفر
-                // error_log("Login from new device: All sessions deleted for user_id: {$userId}");
-            }
+            // تم إزالة نظام الجلسات - لا حاجة لأي كود متعلق بالجلسات
         } catch (Exception $e) {
             // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
-            // error_log("Login from new device: Error deleting old session: " . $e->getMessage());
         }
-        
-        // حذف الجلسة PHP الحالية بشكل كامل
-        $sessionName = session_name();
-        
-        // حذف جميع بيانات الجلسة
-        $_SESSION = [];
-        @session_unset();
-        @session_destroy();
-        
-        // حذف session cookie من جميع المسارات
-        if (isset($_COOKIE[$sessionName])) {
-            setcookie($sessionName, '', time() - 3600, '/');
-            setcookie($sessionName, '', time() - 3600, '/', '');
-            unset($_COOKIE[$sessionName]);
-        }
-        
-        // التأكد من إنشاء جلسة جديدة تماماً (سيتم ذلك في login())
-        // تعطيل التسجيل لتقليل الضغط على السيرفر
-        // error_log("Login from new device: Old session completely cleared, allowing new login for: {$loginUsername}");
     } else {
-        // محاولة تسجيل دخول بحساب مختلف - منع ذلك وإعادة التوجيه
-        $userRole = $_SESSION['role'] ?? 'accountant';
-        $basePath = getBasePath();
-        $basePath = rtrim($basePath, '/');
-        $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
-        $dashboardUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $dashboardUrl);
-        if (strpos($dashboardUrl, '/') !== 0) {
-            $dashboardUrl = '/' . $dashboardUrl;
-        }
-        
-        // إرجاع رسالة خطأ
-        if (isset($_POST['ajax_login']) && $_POST['ajax_login'] == '1') {
-            while (ob_get_level() > 0) {
-                ob_end_clean();
+        // محاولة تسجيل دخول بحساب مختلف - التحقق من remember_token
+        $currentUser = getCurrentUser();
+        if ($currentUser) {
+            $userRole = $currentUser['role'] ?? 'accountant';
+            $basePath = getBasePath();
+            $basePath = rtrim($basePath, '/');
+            $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
+            $dashboardUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $dashboardUrl);
+            if (strpos($dashboardUrl, '/') !== 0) {
+                $dashboardUrl = '/' . $dashboardUrl;
             }
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode([
-                'success' => false,
-                'message' => 'يوجد جلسة نشطة لحساب آخر. يرجى تسجيل الخروج أولاً.',
-                'redirect_url' => $dashboardUrl
-            ], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        
-        // إعادة التوجيه إلى الداشبورد
-        if (!headers_sent()) {
-            header('Location: ' . $dashboardUrl, true, 303);
-            exit;
+            
+            // إرجاع رسالة خطأ
+            if (isset($_POST['ajax_login']) && $_POST['ajax_login'] == '1') {
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'يوجد حساب نشط آخر. يرجى تسجيل الخروج أولاً.',
+                    'redirect_url' => $dashboardUrl
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            
+            // إعادة التوجيه إلى الداشبورد
+            if (!headers_sent()) {
+                header('Location: ' . $dashboardUrl, true, 303);
+                exit;
+            }
         }
     }
 }
@@ -467,16 +440,8 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
 $error = '';
 $success = '';
 
-// التحقق من وجود رسالة خطأ الجلسة من requireLogin()
-if (isset($_SESSION['session_error']) && !empty($_SESSION['session_error'])) {
-    $error = $_SESSION['session_error'];
-    unset($_SESSION['session_error']);
-    unset($_SESSION['session_failed']);
-    // تنظيف session_expired أيضاً
-    if (isset($_SESSION['session_expired'])) {
-        unset($_SESSION['session_expired']);
-    }
-}
+// تم إزالة نظام الجلسات - لا حاجة لرسائل الجلسة
+// يمكن استخدام query parameters أو cookies للرسائل إذا لزم الأمر
 
 // التحقق من وجود session_expired في sessionStorage (من JavaScript redirect)
 // سيتم عرض الرسالة في JavaScript
@@ -557,119 +522,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             // error_log("Rate limiter reset error: " . $e->getMessage());
                         }
                     }
-                    // تجديد معرف الجلسة
-                    if (function_exists('regenerateSessionAfterLogin')) {
-                        regenerateSessionAfterLogin();
-                    }
-                    
+                    // تم إزالة نظام الجلسات - النظام يعتمد فقط على remember_token
                     $userRole = $result['user']['role'] ?? 'accountant';
                     
                     // استخدام دالة getDashboardUrl() للحصول على المسار الصحيح
                     if (!function_exists('getDashboardUrl')) {
                         require_once __DIR__ . '/includes/path_helper.php';
-                    }
-                    
-                    // التأكد من أن الجلسة محفوظة في قاعدة البيانات قبل إعادة التوجيه
-                    $sessionId = session_id();
-                    $userId = $_SESSION['user_id'] ?? 0;
-                    if ($sessionId && $userId > 0) {
-                        try {
-                            $db = db();
-                            // التحقق من وجود الجلسة في قاعدة البيانات مع إعادة المحاولة
-                            // البحث بدون شرط expires_at - لا نهي الجلسة أبداً بناءً على الخمول
-                            $maxRetries = 5;
-                            $sessionCheck = null;
-                            for ($retry = 0; $retry < $maxRetries; $retry++) {
-                                $sessionCheck = $db->queryOne(
-                                    "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
-                                    [$userId, $sessionId]
-                                );
-                                
-                                if ($sessionCheck) {
-                                    // إذا وُجدت الجلسة لكنها منتهية الصلاحية، نمددها دائماً (لا نهي الجلسة أبداً)
-                                    if (strtotime($sessionCheck['expires_at']) < time()) {
-                                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                                        $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                                        $db->execute(
-                                            "UPDATE sessions SET expires_at = ?, last_activity = NOW() WHERE id = ?",
-                                            [$newExpiresAt, $sessionCheck['id']]
-                                        );
-                                        $sessionCheck['expires_at'] = $newExpiresAt;
-                                        // تعطيل التسجيل لتقليل الضغط على السيرفر
-                                        // error_log("Login: Session expired but extended for user_id: {$userId}");
-                                    } else {
-                                        // تحديث expires_at دائماً لضمان بقاء الجلسة صالحة - لا نهي الجلسة أبداً بناءً على الخمول
-                                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                                        $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                                        $db->execute(
-                                            "UPDATE sessions SET expires_at = ?, last_activity = NOW() WHERE id = ?",
-                                            [$newExpiresAt, $sessionCheck['id']]
-                                        );
-                                    }
-                                    break; // الجلسة موجودة، توقف عن إعادة المحاولة
-                                }
-                                
-                                if ($retry < $maxRetries - 1) {
-                                    // انتظار قصير قبل إعادة المحاولة
-                                    usleep(100000); // 0.1 ثانية
-                                    // تعطيل التسجيل لتقليل الضغط على السيرفر
-                                    // error_log("Login: Retry {$retry} - Session not found in DB before redirect, waiting...");
-                                }
-                            }
-                            
-                            if ($sessionCheck) {
-                                // تعطيل التسجيل لتقليل الضغط على السيرفر
-                                // error_log("Login: Session verified in database before redirect");
-                            } else {
-                                // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
-                                // error_log("Login ERROR: Session not found in database after {$maxRetries} retries before redirect");
-                                // محاولة إعادة حفظ الجلسة كحل أخير
-                                try {
-                                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                                    $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                                    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-                                    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
-                                    
-                                    $db->execute(
-                                        "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                                         VALUES (?, ?, ?, ?, ?, NOW())
-                                         ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?",
-                                        [$userId, $sessionId, $ipAddress, $userAgent, $expiresAt, $expiresAt]
-                                    );
-                                    // تعطيل التسجيل لتقليل الضغط على السيرفر
-                                    // error_log("Login: Re-saved session to database as last resort");
-                                } catch (Exception $saveError) {
-                                    // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
-                                    // error_log("Login ERROR: Failed to re-save session: " . $saveError->getMessage());
-                                }
-                            }
-                        } catch (Exception $e) {
-                            // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
-                            // error_log("Login: Error checking session before redirect: " . $e->getMessage());
-                        }
-                    }
-                    
-                    // التأكد من أن session cookie موجود في $_COOKIE
-                    $sessionName = session_name();
-                    if (!isset($_COOKIE[$sessionName]) || $_COOKIE[$sessionName] !== $sessionId) {
-                        // تعطيل التسجيل لتقليل الضغط على السيرفر
-                        // error_log("Login WARNING: Session cookie mismatch - setting cookie again");
-                        if (!headers_sent()) {
-                            $isHttps = (
-                                (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-                                (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
-                            );
-                            $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                            setcookie($sessionName, $sessionId, [
-                                'expires' => time() + $sessionLifetime,
-                                'path' => '/',
-                                'domain' => '',
-                                'secure' => $isHttps,
-                                'httponly' => true,
-                                'samesite' => $isHttps ? 'None' : 'Lax',
-                            ]);
-                            $_COOKIE[$sessionName] = $sessionId;
-                        }
                     }
                     
                     $dashboardUrl = getDashboardUrl($userRole);
@@ -1665,23 +1523,48 @@ $lang = $translations;
                         throw new Error(loginResult.message || 'فشل تسجيل الدخول');
                     }
                     
-                    // انتظار 5 ثواني للسماح بإنشاء الجلسة
-                    let countdown = 5;
-                    loadingMessage.textContent = `جاري تسجيل الدخول... يرجى الانتظار ${countdown} ثواني`;
-                    
-                    const countdownInterval = setInterval(() => {
-                        countdown--;
-                        if (countdown > 0) {
-                            loadingMessage.textContent = `جاري تسجيل الدخول... يرجى الانتظار ${countdown} ثواني`;
-                        } else {
-                            clearInterval(countdownInterval);
-                            loadingMessage.textContent = 'جاري التحقق من الجلسة...';
+                    // إذا كان تسجيل الدخول ناجحاً، توجه مباشرة بدون انتظار
+                    // النظام يعتمد على remember_token الذي يتم إنشاؤه فوراً عند تسجيل الدخول
+                    if (loginResult.success) {
+                        loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                        
+                        // الحصول على URL الداشبورد
+                        // استخدام role من loginResult.user أو افتراضي 'accountant'
+                        const userRole = loginResult.user?.role || loginResult.role || 'accountant';
+                        const currentPath = window.location.pathname || '/';
+                        const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                        const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                        let dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                        // تنظيف URL للتأكد من أنه نسبي فقط
+                        dashboardUrl = cleanUrl(dashboardUrl);
+                        
+                        // فحص نهائي: التأكد من أن المسار يحتوي على /dashboard/
+                        if (userRole && !dashboardUrl.includes('/dashboard/')) {
+                            console.warn('Dashboard URL missing /dashboard/, fixing:', dashboardUrl);
+                            dashboardUrl = `/dashboard/${userRole}.php`;
                         }
-                    }, 1000);
+                        
+                        console.log('Login successful, redirecting to:', dashboardUrl, 'User role:', userRole);
+                        
+                        // التوجيه مباشرة بعد 500ms
+                        setTimeout(() => {
+                            console.log('Executing redirect to:', dashboardUrl);
+                            // استخدام replace بدلاً من href لتجنب إضافة URL للتاريخ
+                            try {
+                                window.location.replace(dashboardUrl);
+                            } catch (e) {
+                                // إذا فشل replace، استخدم href
+                                console.warn('window.location.replace failed, using href:', e);
+                                window.location.href = dashboardUrl;
+                            }
+                        }, 500);
+                        return;
+                    }
                     
-                    // انتظار 5 ثواني
-                    await new Promise(resolve => setTimeout(resolve, 5000));
-                    clearInterval(countdownInterval);
+                    // كود احتياطي - لا يجب الوصول إليه عادة
+                    // انتظار قصير ثم التحقق من الجلسة
+                    loadingMessage.textContent = 'جاري التحقق من الجلسة...';
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                     
                     // التحقق من وجود الجلسة في قاعدة البيانات
                     const apiPath = getApiPath('api/check_session.php');
@@ -1726,6 +1609,7 @@ $lang = $translations;
                         }
                         
                         setTimeout(() => {
+                            console.log('Redirecting to:', dashboardUrl);
                             window.location.href = dashboardUrl;
                         }, 500);
                     } else {

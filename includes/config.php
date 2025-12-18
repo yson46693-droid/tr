@@ -106,11 +106,7 @@ function handleException($exception) {
         return false;
     }
     
-    // حفظ معلومات الخطأ في session
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        $_SESSION['session_error'] = 'حدث خطأ في النظام. يرجى تسجيل الدخول مرة أخرى.';
-        $_SESSION['session_failed'] = true;
-    }
+    // تم إزالة نظام الجلسات - لا حاجة لحفظ معلومات الخطأ في session
     
     // تنظيف output buffer
     while (ob_get_level() > 0) {

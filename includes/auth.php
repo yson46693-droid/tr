@@ -91,87 +91,28 @@ function ensureRememberTokensTable() {
     return true;
 }
 
+// === تم إزالة نظام الجلسات (sessions) بالكامل ===
+// النظام يعتمد فقط على remember_token
+// لا حاجة لجدول sessions أو أي كود متعلق بالجلسات
+
 /**
- * إنشاء جدول sessions إذا لم يكن موجوداً
- * لتخزين جلسات تسجيل الدخول النشطة في قاعدة البيانات
+ * دالة فارغة للتوافق مع الملفات القديمة
+ * تم إزالة نظام الجلسات - ترجع false دائماً
  */
 function ensureSessionsTable() {
-    $db = db();
-    $tableCheck = $db->queryOne("SHOW TABLES LIKE 'sessions'");
-    
-    if (empty($tableCheck)) {
-        try {
-            $db->execute("
-                CREATE TABLE IF NOT EXISTS `sessions` (
-                  `id` int(11) NOT NULL AUTO_INCREMENT,
-                  `user_id` int(11) NOT NULL,
-                  `session_id` varchar(128) NOT NULL,
-                  `ip_address` varchar(45) DEFAULT NULL,
-                  `user_agent` text DEFAULT NULL,
-                  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                  `expires_at` datetime NOT NULL,
-                  `last_activity` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                  PRIMARY KEY (`id`),
-                  UNIQUE KEY `session_id` (`session_id`),
-                  KEY `user_id` (`user_id`),
-                  KEY `expires_at` (`expires_at`),
-                  KEY `last_activity` (`last_activity`),
-                  CONSTRAINT `sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            ");
-        } catch (Exception $e) {
-            error_log("Error creating sessions table: " . $e->getMessage());
-            return false;
-        }
-    }
-    return true;
+    return false; // تم إزالة نظام الجلسات
 }
 
 /**
- * تنظيف الجلسات القديمة جداً من قاعدة البيانات
- * يمكن استدعاء هذه الدالة من cron job لتنظيف الجلسات القديمة جداً فقط
- * 
- * ملاحظة: هذه الدالة تحذف فقط الجلسات التي لم يتم تحديثها لأكثر من 30 يوم
- * ولا تحذف الجلسات النشطة أو التي انتهت مؤخراً
- * 
- * @param int $days عدد الأيام - الجلسات التي لم يتم تحديثها لأكثر من هذا العدد سيتم حذفها (افتراضي 30 يوم)
- * @return array إحصائيات عملية التنظيف
+ * دالة فارغة للتوافق مع الملفات القديمة
+ * تم إزالة نظام الجلسات - ترجع array فارغ
  */
 function cleanupExpiredSessions($days = 30) {
-    try {
-        if (!ensureSessionsTable()) {
-            return [
-                'success' => false,
-                'deleted' => 0,
-                'message' => 'جدول sessions غير موجود'
-            ];
-        }
-        
-        $db = db();
-        
-        // حذف فقط الجلسات التي لم يتم تحديثها لأكثر من 30 يوم (أو العدد المحدد)
-        // هذا يضمن عدم حذف الجلسات النشطة أو التي انتهت مؤخراً
-        // نستخدم last_activity بدلاً من expires_at لأن expires_at يتم تحديثه دائماً
-        $result = $db->execute(
-            "DELETE FROM sessions WHERE last_activity < DATE_SUB(NOW(), INTERVAL ? DAY)",
-            [$days]
-        );
-        
-        $deletedCount = intval($result['affected_rows'] ?? 0);
-        
-        return [
-            'success' => true,
-            'deleted' => $deletedCount,
-            'message' => "تم حذف {$deletedCount} جلسة قديمة جداً (أكثر من {$days} يوم بدون نشاط)"
-        ];
-    } catch (Exception $e) {
-        error_log("Error cleaning up old sessions: " . $e->getMessage());
-        return [
-            'success' => false,
-            'deleted' => 0,
-            'message' => 'حدث خطأ أثناء تنظيف الجلسات: ' . $e->getMessage()
-        ];
-    }
+    return [
+        'success' => false,
+        'deleted' => 0,
+        'message' => 'تم إزالة نظام الجلسات'
+    ];
 }
 
 /**
@@ -1085,20 +1026,8 @@ function requireLogin() {
         // التحقق من وضع الصيانة بعد التحقق من تسجيل الدخول
         $maintenanceCheck = checkMaintenanceMode();
         if (!$maintenanceCheck['allowed']) {
-            // حفظ رسالة وضع الصيانة في session فقط للمستخدمين غير المطورين
-            if (session_status() === PHP_SESSION_ACTIVE && !isDeveloper()) {
-                $_SESSION['maintenance_mode'] = true;
-                $_SESSION['maintenance_message'] = $maintenanceCheck['message'] ?? 'التطبيق تحت الصيانة في الوقت الحالي برجاء إعادة المحاولة في وقت لاحق';
-            }
-            
-            // السماح للصفحة بالتحميل ولكن وضع علامة في session
-            // سيتم عرض Modal في JavaScript بناءً على $_SESSION['maintenance_mode']
-            // نتابع التنفيذ ولكن الصفحة ستقوم بعرض Modal وتمنع التفاعلات
-        } else {
-            // إزالة علامة وضع الصيانة إذا كان الوضع معطلاً أو إذا كان المستخدم مطوراً
-            if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['maintenance_mode'])) {
-                unset($_SESSION['maintenance_mode'], $_SESSION['maintenance_message']);
-            }
+            // تم إزالة نظام الجلسات - يمكن استخدام cookies أو JavaScript للتعامل مع وضع الصيانة
+            // السماح للصفحة بالتحميل - سيتم التعامل مع وضع الصيانة في JavaScript
         }
         
         // المستخدم مسجل دخول - المتابعة (سواء كان في وضع الصيانة أم لا - سيتم التعامل معه في JavaScript)
@@ -1132,17 +1061,7 @@ function requireLogin() {
         exit;
     }
     
-    // حذف أي جلسة PHP متبقية (فقط إذا لم نكن في صفحة محمية)
-    if (!$isProtectedPage) {
-        $_SESSION = [];
-        @session_unset();
-        @session_destroy();
-        
-        // حذف cookies (فقط إذا لم يتم إرسال headers بعد)
-        if (isset($_COOKIE[session_name()]) && !headers_sent()) {
-            setcookie(session_name(), '', time() - 3600, '/');
-        }
-    }
+    // تم إزالة نظام الجلسات - لا حاجة لحذف الجلسات
 
     // المستخدم غير مسجل دخول - إعادة التوجيه (إلا إذا كنا في صفحة محمية)
     if (!$isProtectedPage) {
@@ -1156,13 +1075,7 @@ function requireLogin() {
         $loginUrl = preg_replace('/[?&](_nocache|_refresh|_cache_bust|_t|_r|_auto_refresh)=\d+/', '', $loginUrl);
         $loginUrl = rtrim($loginUrl, '?&');
         
-        // إضافة رسالة تنبيه للمستخدم عن فشل الجلسة
-        // حفظ الرسالة في session لتظهر في صفحة تسجيل الدخول
-        if (session_status() === PHP_SESSION_ACTIVE) {
-            $_SESSION['session_error'] = 'انتهت الجلسة أو حدث خطأ. يرجى تسجيل الدخول مرة أخرى.';
-            $_SESSION['session_failed'] = true;
-            $_SESSION['session_expired'] = true;
-        }
+        // تم إزالة نظام الجلسات - لا حاجة لحفظ رسائل في session
         
         // تنظيف output buffer قبل إعادة التوجيه
         while (ob_get_level() > 0) {
@@ -1259,12 +1172,7 @@ function requireRole($role) {
         }
         $loginUrl = preg_replace('/\/+/', '/', $loginUrl);
         
-        // حفظ رسالة الخطأ
-        if (session_status() === PHP_SESSION_ACTIVE) {
-            $_SESSION['session_error'] = 'حدث خطأ في النظام. يرجى تسجيل الدخول مرة أخرى.';
-            $_SESSION['session_failed'] = true;
-            $_SESSION['session_expired'] = true;
-        }
+        // تم إزالة نظام الجلسات - لا حاجة لحفظ رسائل في session
         
         // تنظيف output buffer
         while (ob_get_level() > 0) {
@@ -1302,12 +1210,7 @@ function requireRole($role) {
         }
         $loginUrl = preg_replace('/\/+/', '/', $loginUrl);
         
-        // حفظ رسالة الخطأ
-        if (session_status() === PHP_SESSION_ACTIVE) {
-            $_SESSION['session_error'] = 'انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.';
-            $_SESSION['session_failed'] = true;
-            $_SESSION['session_expired'] = true;
-        }
+        // تم إزالة نظام الجلسات - لا حاجة لحفظ رسائل في session
         
         // تنظيف output buffer
         while (ob_get_level() > 0) {

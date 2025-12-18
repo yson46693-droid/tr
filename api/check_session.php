@@ -1,6 +1,7 @@
 <?php
 /**
- * API للتحقق من وجود الجلسة في قاعدة البيانات
+ * API للتحقق من وجود remember_token (تم إزالة نظام الجلسات بالكامل)
+ * النظام يعتمد فقط على remember_token
  */
 
 define('ACCESS_ALLOWED', true);
@@ -35,8 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// التحقق من تسجيل الدخول - يعتمد على remember_token بدلاً من $_SESSION
-// النظام يعتمد على remember_token فقط بدون جلسات PHP
+// التحقق من تسجيل الدخول - يعتمد فقط على remember_token
+// تم إزالة نظام الجلسات بالكامل
 $user = null;
 $userId = null;
 
@@ -52,20 +53,12 @@ try {
     error_log("Check Session API - Error checking login: " . $e->getMessage());
 }
 
-// إذا لم نجد المستخدم من remember_token، جرب $_SESSION كبديل (للتوافق مع الأنظمة القديمة)
-if (!$userId) {
-    if (session_status() === PHP_SESSION_NONE) {
-        @session_start();
-    }
-    $userId = $_SESSION['user_id'] ?? null;
-}
-
 if (!$userId) {
     echo json_encode(['success' => false, 'session_exists' => false]);
     exit;
 }
 
-// التحقق من وجود remember_token في قاعدة البيانات (الطريقة الأساسية)
+// التحقق من وجود remember_token في قاعدة البيانات
 try {
     if (isset($_COOKIE['remember_token']) && ensureRememberTokensTable()) {
         $db = db();
@@ -105,56 +98,7 @@ try {
     error_log("Check Session API - Remember token check error: " . $e->getMessage());
 }
 
-// التحقق من وجود الجلسة في قاعدة البيانات (للتوافق مع الأنظمة القديمة)
-try {
-    if (ensureSessionsTable()) {
-        if (session_status() === PHP_SESSION_NONE) {
-            @session_start();
-        }
-        $sessionId = session_id();
-        
-        if ($sessionId) {
-            $db = db();
-            // البحث عن الجلسة بدون شرط expires_at - لا نهي الجلسة أبداً بناءً على الخمول
-            $sessionRecord = $db->queryOne(
-                "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
-                [$userId, $sessionId]
-            );
-            
-            if ($sessionRecord) {
-                // إذا وُجدت الجلسة لكنها منتهية الصلاحية، نمددها دائماً (لا نهي الجلسة أبداً)
-                if (strtotime($sessionRecord['expires_at']) < time()) {
-                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                    $db->execute(
-                        "UPDATE sessions SET expires_at = ?, last_activity = NOW() WHERE id = ?",
-                        [$newExpiresAt, $sessionRecord['id']]
-                    );
-                } else {
-                    // تحديث expires_at دائماً لضمان بقاء الجلسة صالحة - لا نهي الجلسة أبداً بناءً على الخمول
-                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                    $db->execute(
-                        "UPDATE sessions SET expires_at = ?, last_activity = NOW() WHERE id = ? LIMIT 1",
-                        [$newExpiresAt, $sessionRecord['id']]
-                    );
-                }
-                
-                echo json_encode([
-                    'success' => true,
-                    'session_exists' => true,
-                    'user_id' => $userId,
-                    'method' => 'session'
-                ]);
-                exit;
-            }
-        }
-    }
-} catch (Exception $e) {
-    error_log("Check Session API - Session check error: " . $e->getMessage());
-}
-
-// إذا لم نجد جلسة أو remember_token، نرجع false
+// إذا لم نجد remember_token، نرجع false
 echo json_encode([
     'success' => true,
     'session_exists' => false,
