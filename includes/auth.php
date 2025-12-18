@@ -2018,16 +2018,32 @@ function requireLogin() {
 
     // === المستخدم غير مسجل دخول - الجلسة غير موجودة في قاعدة البيانات ===
     // تسجيل محاولة الوصول غير المصرح به
-    error_log("requireLogin() FAILED: User attempted to access protected page without valid session | Script: " . ($_SERVER['SCRIPT_NAME'] ?? 'unknown'));
+    error_log("requireLogin() FAILED: User attempted to access protected page without valid session | Script: " . ($_SERVER['SCRIPT_NAME'] ?? 'unknown') . " | IsProtectedPage: " . ($isProtectedPage ? 'true' : 'false'));
     
-    // حذف أي جلسة PHP متبقية
-    $_SESSION = [];
-    @session_unset();
-    @session_destroy();
+    // في الصفحات المحمية (API endpoints)، نعيد JSON response بدلاً من حذف الجلسة
+    if ($isProtectedPage && ($isNotificationsAPI || $isWebAuthnAPI)) {
+        // API endpoint - إرجاع JSON response
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        http_response_code(401);
+        echo json_encode([
+            'success' => false,
+            'error' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     
-    // حذف cookies (فقط إذا لم يتم إرسال headers بعد)
-    if (isset($_COOKIE[session_name()]) && !headers_sent()) {
-        setcookie(session_name(), '', time() - 3600, '/');
+    // حذف أي جلسة PHP متبقية (فقط إذا لم نكن في صفحة محمية)
+    if (!$isProtectedPage) {
+        $_SESSION = [];
+        @session_unset();
+        @session_destroy();
+        
+        // حذف cookies (فقط إذا لم يتم إرسال headers بعد)
+        if (isset($_COOKIE[session_name()]) && !headers_sent()) {
+            setcookie(session_name(), '', time() - 3600, '/');
+        }
     }
 
     // المستخدم غير مسجل دخول - إعادة التوجيه (إلا إذا كنا في صفحة محمية)

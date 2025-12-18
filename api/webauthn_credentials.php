@@ -93,7 +93,31 @@ try {
     error_log("WebAuthn API load - Error updating session in database: " . $e->getMessage());
 }
 
-requireLogin();
+// التحقق من تسجيل الدخول - مع معالجة خاصة لـ API endpoints
+try {
+    requireLogin();
+} catch (Exception $e) {
+    // في حالة فشل requireLogin() في API endpoint، نعيد JSON response
+    header('Content-Type: application/json; charset=utf-8');
+    http_response_code(401);
+    echo json_encode([
+        'success' => false,
+        'error' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول',
+        'debug' => $e->getMessage()
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// التحقق مرة أخرى من أن المستخدم مسجل دخول
+if (!isLoggedIn()) {
+    header('Content-Type: application/json; charset=utf-8');
+    http_response_code(401);
+    echo json_encode([
+        'success' => false,
+        'error' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول'
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 header('Content-Type: application/json; charset=utf-8');
 // CORS headers
@@ -112,11 +136,24 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {
     try {
-        // الحصول على قائمة الاعتماديات للمستخدم
-        if (!isset($_SESSION['user_id'])) {
+        // التحقق من أن المستخدم مسجل دخول - التحقق بعد requireLogin()
+        // requireLogin() يجب أن يكون قد تحقق من الجلسة بالفعل
+        if (!isLoggedIn()) {
             http_response_code(401);
-            echo json_encode(['success' => false, 'error' => 'غير مصرح به']);
+            echo json_encode(['success' => false, 'error' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول']);
             exit;
+        }
+        
+        // الحصول على قائمة الاعتماديات للمستخدم
+        if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
+            // محاولة استعادة user_id من الجلسة
+            $currentUser = getCurrentUser();
+            if (!$currentUser || !isset($currentUser['id'])) {
+                http_response_code(401);
+                echo json_encode(['success' => false, 'error' => 'غير مصرح به - تعذر تحميل بيانات المستخدم']);
+                exit;
+            }
+            $_SESSION['user_id'] = $currentUser['id'];
         }
         
         $userId = $_SESSION['user_id'];
