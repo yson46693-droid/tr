@@ -78,6 +78,39 @@ try {
     $action = $input['action'] ?? 'challenge';
 
     if ($action === 'challenge') {
+        // === تحديث الجلسة في قاعدة البيانات قبل إنشاء challenge ===
+        try {
+            if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+                $sessionId = session_id();
+                if (!empty($sessionId) && !empty($userId)) {
+                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                    
+                    // محاولة تحديث الجلسة الموجودة
+                    $sessionUpdated = $db->execute(
+                        "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
+                        [$newExpiresAt, $userId, $sessionId]
+                    );
+                    
+                    // إذا لم توجد جلسة، إنشاء واحدة جديدة
+                    if (!$sessionUpdated || ($sessionUpdated['affected_rows'] ?? 0) === 0) {
+                        $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                        $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                        
+                        $db->execute(
+                            "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                             VALUES (?, ?, ?, ?, ?, NOW())
+                             ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?",
+                            [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt]
+                        );
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            // لا نوقف العملية إذا فشل تحديث الجلسة، فقط نسجل الخطأ
+            error_log("WebAuthn challenge - Error updating session in database: " . $e->getMessage());
+        }
+        
         // إنشاء challenge للتسجيل
         $user = getUserById($userId);
         
@@ -118,6 +151,39 @@ try {
         if ($result) {
             // تحديث حالة المستخدم
             $db->execute("UPDATE users SET webauthn_enabled = 1, updated_at = NOW() WHERE id = ?", [$userId]);
+            
+            // === تحديث الجلسة في قاعدة البيانات لضمان بقائها نشطة ===
+            try {
+                if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+                    $sessionId = session_id();
+                    if (!empty($sessionId) && !empty($userId)) {
+                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                        $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                        
+                        // محاولة تحديث الجلسة الموجودة
+                        $sessionUpdated = $db->execute(
+                            "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
+                            [$newExpiresAt, $userId, $sessionId]
+                        );
+                        
+                        // إذا لم توجد جلسة، إنشاء واحدة جديدة
+                        if (!$sessionUpdated || ($sessionUpdated['affected_rows'] ?? 0) === 0) {
+                            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                            $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                            
+                            $db->execute(
+                                "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                                 VALUES (?, ?, ?, ?, ?, NOW())
+                                 ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?",
+                                [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt]
+                            );
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                // لا نوقف العملية إذا فشل تحديث الجلسة، فقط نسجل الخطأ
+                error_log("WebAuthn register - Error updating session in database: " . $e->getMessage());
+            }
             
             echo json_encode([
                 'success' => true,

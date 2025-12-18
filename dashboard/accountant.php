@@ -20,8 +20,102 @@ if (!headers_sent()) {
 }
 
 require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/db.php';
-require_once __DIR__ . '/../includes/auth.php';
+
+// التحقق من الجلسة قبل تحميل باقي الملفات (لتجنب الأخطاء في قاعدة البيانات)
+try {
+    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/auth.php';
+    
+    // التحقق من الجلسة أولاً
+    if (!function_exists('isLoggedIn')) {
+        // إذا لم يتم تحميل الدالة، نعتبر أن هناك مشكلة ونعيد التوجيه
+        $loginUrl = '/index.php';
+        // محاولة بناء URL نسبي
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+        $pathParts = explode('/', trim(parse_url($requestUri, PHP_URL_PATH), '/'));
+        $basePath = '';
+        foreach ($pathParts as $part) {
+            if (in_array($part, ['dashboard', 'modules', 'api', 'assets', 'includes']) || strpos($part, '.php') !== false) {
+                break;
+            }
+            if (!empty($part)) {
+                $basePath .= '/' . $part;
+            }
+        }
+        if (!empty($basePath)) {
+            $loginUrl = $basePath . '/index.php';
+        }
+        $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
+        $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+        if (strpos($loginUrl, '/') !== 0) {
+            $loginUrl = '/' . $loginUrl;
+        }
+        
+        // تنظيف output buffer
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+        
+        if (!@headers_sent()) {
+            @header('Location: ' . $loginUrl, true, 303);
+            exit;
+        } else {
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+            echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+            echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+            echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
+            exit;
+        }
+    }
+} catch (Throwable $e) {
+    // إذا حدث خطأ في تحميل الملفات، نعيد التوجيه إلى تسجيل الدخول
+    error_log("Accountant dashboard ERROR: Failed to load required files: " . $e->getMessage());
+    
+    $loginUrl = '/index.php';
+    $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+    $pathParts = explode('/', trim(parse_url($requestUri, PHP_URL_PATH), '/'));
+    $basePath = '';
+    foreach ($pathParts as $part) {
+        if (in_array($part, ['dashboard', 'modules', 'api', 'assets', 'includes']) || strpos($part, '.php') !== false) {
+            break;
+        }
+        if (!empty($part)) {
+            $basePath .= '/' . $part;
+        }
+    }
+    if (!empty($basePath)) {
+        $loginUrl = $basePath . '/index.php';
+    }
+    $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
+    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+    if (strpos($loginUrl, '/') !== 0) {
+        $loginUrl = '/' . $loginUrl;
+    }
+    
+    // حفظ رسالة الخطأ
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['session_error'] = 'حدث خطأ في النظام. يرجى تسجيل الدخول مرة أخرى.';
+        $_SESSION['session_failed'] = true;
+        $_SESSION['session_expired'] = true;
+    }
+    
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    
+    if (!@headers_sent()) {
+        @header('Location: ' . $loginUrl, true, 303);
+        exit;
+    } else {
+        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+        echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
+        exit;
+    }
+}
+
 require_once __DIR__ . '/../includes/path_helper.php';
 require_once __DIR__ . '/../includes/audit_log.php';
 require_once __DIR__ . '/../includes/notifications.php';
@@ -29,7 +123,44 @@ require_once __DIR__ . '/../includes/approval_system.php';
 require_once __DIR__ . '/../includes/table_styles.php';
 require_once __DIR__ . '/../includes/production_reports.php';
 
-requireRole(['accountant', 'developer']);
+// التحقق من الجلسة والأدوار - مع معالجة الأخطاء
+try {
+    requireRole(['accountant', 'developer']);
+} catch (Throwable $e) {
+    // إذا حدث خطأ في requireRole، نعيد التوجيه إلى تسجيل الدخول
+    error_log("Accountant dashboard ERROR: requireRole failed: " . $e->getMessage());
+    
+    $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+    $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
+    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+    if (strpos($loginUrl, '/') !== 0) {
+        $loginUrl = '/' . $loginUrl;
+    }
+    $loginUrl = preg_replace('/\/+/', '/', $loginUrl);
+    
+    // حفظ رسالة الخطأ
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['session_error'] = 'انتهت الجلسة أو حدث خطأ. يرجى تسجيل الدخول مرة أخرى.';
+        $_SESSION['session_failed'] = true;
+        $_SESSION['session_expired'] = true;
+    }
+    
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    
+    if (!@headers_sent()) {
+        @header('Location: ' . $loginUrl, true, 303);
+        exit;
+    } else {
+        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+        echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
+        exit;
+    }
+}
 
 $currentUser = getCurrentUser();
 $db = db();

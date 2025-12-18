@@ -28,6 +28,41 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 
 requireLogin();
 
+// === تحديث الجلسة في قاعدة البيانات عند تحميل الصفحة ===
+try {
+    if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+        $sessionId = session_id();
+        $userId = $_SESSION['user_id'] ?? null;
+        if (!empty($sessionId) && !empty($userId)) {
+            $db = db();
+            $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+            $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+            
+            // محاولة تحديث الجلسة الموجودة
+            $sessionUpdated = $db->execute(
+                "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
+                [$newExpiresAt, $userId, $sessionId]
+            );
+            
+            // إذا لم توجد جلسة، إنشاء واحدة جديدة
+            if (!$sessionUpdated || ($sessionUpdated['affected_rows'] ?? 0) === 0) {
+                $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                
+                $db->execute(
+                    "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                     VALUES (?, ?, ?, ?, ?, NOW())
+                     ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?",
+                    [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt]
+                );
+            }
+        }
+    }
+} catch (Exception $e) {
+    // لا نوقف العملية إذا فشل تحديث الجلسة، فقط نسجل الخطأ
+    error_log("Profile page load - Error updating session in database: " . $e->getMessage());
+}
+
 // تهيئة متغيرات الرسائل
 $error = $_SESSION['error_message'] ?? '';
 $success = $_SESSION['success_message'] ?? '';
@@ -327,6 +362,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             );
                             
                             logAudit($userId, 'change_password', 'user', $userId, null, null);
+                            
+                            // === تحديث الجلسة في قاعدة البيانات بعد تغيير كلمة المرور ===
+                            try {
+                                if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+                                    $sessionId = session_id();
+                                    if (!empty($sessionId) && !empty($userId)) {
+                                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                                        $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                                        
+                                        // محاولة تحديث الجلسة الموجودة
+                                        $sessionUpdated = $db->execute(
+                                            "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
+                                            [$newExpiresAt, $userId, $sessionId]
+                                        );
+                                        
+                                        // إذا لم توجد جلسة، إنشاء واحدة جديدة
+                                        if (!$sessionUpdated || ($sessionUpdated['affected_rows'] ?? 0) === 0) {
+                                            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                                            $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                                            
+                                            $db->execute(
+                                                "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                                                 VALUES (?, ?, ?, ?, ?, NOW())
+                                                 ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?",
+                                                [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt]
+                                            );
+                                        }
+                                    }
+                                }
+                            } catch (Exception $e) {
+                                error_log("Profile password change - Error updating session in database: " . $e->getMessage());
+                            }
                         }
                     }
                     
@@ -349,6 +416,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $_SESSION['role'] = $user['role'];
                         }
                         $_SESSION['logged_in'] = true;
+                        $_SESSION['last_activity'] = time();
+                    }
+                    
+                    // === تحديث الجلسة في قاعدة البيانات لضمان بقائها نشطة ===
+                    try {
+                        if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+                            $sessionId = session_id();
+                            if (!empty($sessionId) && !empty($userId)) {
+                                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                                $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                                
+                                // محاولة تحديث الجلسة الموجودة
+                                $sessionUpdated = $db->execute(
+                                    "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
+                                    [$newExpiresAt, $userId, $sessionId]
+                                );
+                                
+                                // إذا لم توجد جلسة، إنشاء واحدة جديدة
+                                if (!$sessionUpdated || ($sessionUpdated['affected_rows'] ?? 0) === 0) {
+                                    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                                    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                                    
+                                    $db->execute(
+                                        "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                                         VALUES (?, ?, ?, ?, ?, NOW())
+                                         ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?",
+                                        [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt]
+                                    );
+                                }
+                            }
+                        }
+                    } catch (Exception $e) {
+                        // لا نوقف العملية إذا فشل تحديث الجلسة، فقط نسجل الخطأ
+                        error_log("Profile update - Error updating session in database: " . $e->getMessage());
                     }
                     
                     $_SESSION['success_message'] = 'تم تحديث البروفايل بنجاح';
@@ -950,6 +1051,22 @@ function initWebAuthn() {
     }
 })();
 
+// دالة مساعدة لتحديث الجلسة قبل إرسال أي طلب API
+async function refreshSession() {
+    try {
+        // إرسال طلب بسيط لتحديث الجلسة
+        const response = await fetch(window.location.href, {
+            method: 'HEAD',
+            credentials: 'same-origin',
+            cache: 'no-cache'
+        });
+        return response.ok;
+    } catch (error) {
+        console.warn('Failed to refresh session:', error);
+        return false;
+    }
+}
+
 // تسجيل بصمة جديدة - نظام جديد مبسط
 async function registerNewCredential() {
     const btn = document.getElementById('registerWebAuthnBtn');
@@ -970,6 +1087,9 @@ async function registerNewCredential() {
             statusLoader.style.display = 'block';
             statusLoader.style.visibility = 'visible';
         }
+        
+        // تحديث الجلسة قبل البدء
+        await refreshSession();
         
         // استخدام النظام الجديد المبسط
         if (typeof simpleWebAuthn === 'undefined') {

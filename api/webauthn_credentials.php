@@ -38,6 +38,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {
         $userId = $_SESSION['user_id'];
         $db = db();
         
+        // === تحديث الجلسة في قاعدة البيانات ===
+        try {
+            if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+                $sessionId = session_id();
+                if (!empty($sessionId) && !empty($userId)) {
+                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                    
+                    // محاولة تحديث الجلسة الموجودة
+                    $db->execute(
+                        "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
+                        [$newExpiresAt, $userId, $sessionId]
+                    );
+                }
+            }
+        } catch (Exception $e) {
+            // لا نوقف العملية إذا فشل تحديث الجلسة
+            error_log("WebAuthn credentials list - Error updating session: " . $e->getMessage());
+        }
+        
         if (!$db) {
             throw new Exception('فشل الاتصال بقاعدة البيانات');
         }
@@ -122,6 +142,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {
     
     // تسجيل في سجل التدقيق
     logAudit($userId, 'delete_webauthn_credential', 'webauthn_credentials', $credentialId, null, null);
+    
+    // === تحديث الجلسة في قاعدة البيانات ===
+    try {
+        if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+            $sessionId = session_id();
+            if (!empty($sessionId) && !empty($userId)) {
+                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                
+                // محاولة تحديث الجلسة الموجودة
+                $db->execute(
+                    "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
+                    [$newExpiresAt, $userId, $sessionId]
+                );
+            }
+        }
+    } catch (Exception $e) {
+        // لا نوقف العملية إذا فشل تحديث الجلسة
+        error_log("WebAuthn credentials delete - Error updating session: " . $e->getMessage());
+    }
     
     echo json_encode([
         'success' => true,

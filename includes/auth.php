@@ -115,6 +115,29 @@ function isLoggedIn() {
     // === التحقق الإجباري من الجلسة في قاعدة البيانات (المصدر الوحيد الموثوق) ===
     // لا يمكن الاعتماد على $_SESSION['logged_in'] فقط - يجب التحقق من قاعدة البيانات دائماً
     
+    // === في profile.php، نحدث الجلسة تلقائياً قبل التحقق ===
+    if ($isProtectedPage && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+        try {
+            if (ensureSessionsTable()) {
+                $sessionId = session_id();
+                if (!empty($sessionId)) {
+                    $db = db();
+                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                    
+                    // محاولة تحديث الجلسة الموجودة
+                    $db->execute(
+                        "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
+                        [$newExpiresAt, $_SESSION['user_id'], $sessionId]
+                    );
+                }
+            }
+        } catch (Exception $e) {
+            // لا نوقف العملية إذا فشل تحديث الجلسة
+            error_log("isLoggedIn() - Error pre-updating session in protected page: " . $e->getMessage());
+        }
+    }
+    
     // إذا كانت الجلسة نشطة لكن user_id مفقود، نحاول استعادته من قاعدة البيانات
     if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && (!isset($_SESSION['user_id']) || empty($_SESSION['user_id']))) {
         $sessionId = session_id();
@@ -177,7 +200,16 @@ function isLoggedIn() {
         $sessionRecord = null; // تخزين سجل الجلسة خارج try block للوصول إليه لاحقاً
         try {
             if (ensureSessionsTable()) {
-                $db = db();
+                try {
+                    $db = db();
+                } catch (Throwable $dbError) {
+                    // إذا فشل الاتصال بقاعدة البيانات، نعتبر الجلسة غير صالحة
+                    error_log("isLoggedIn() ERROR: Database connection failed: " . $dbError->getMessage());
+                    $_SESSION = [];
+                    @session_unset();
+                    @session_destroy();
+                    return false;
+                }
                 
                 // البحث عن الجلسة في قاعدة البيانات - يجب أن تطابق session_id تماماً
                 // لا نحاول "إصلاح" الجلسة لأن ذلك سيسمح للجهاز القديم بإعادة إنشاء الجلسة بعد حذفها
@@ -1865,7 +1897,16 @@ function requireLogin() {
     
     // التحقق من تسجيل الدخول - المصدر الوحيد للتحقق
     // isLoggedIn() يتحقق من قاعدة البيانات أولاً
-    $loginCheckResult = isLoggedIn();
+    // معالجة الأخطاء: إذا فشل التحقق من الجلسة (مثلاً بسبب خطأ في قاعدة البيانات)، نعتبر الجلسة منتهية
+    try {
+        $loginCheckResult = isLoggedIn();
+    } catch (Throwable $e) {
+        // إذا حدث خطأ في التحقق من الجلسة (مثلاً فشل الاتصال بقاعدة البيانات)
+        // نعتبر الجلسة منتهية ونعيد التوجيه إلى تسجيل الدخول
+        error_log("requireLogin() ERROR: Failed to check login status: " . $e->getMessage());
+        $loginCheckResult = false;
+    }
+    
     if ($loginCheckResult) {
         // التحقق من وضع الصيانة بعد التحقق من تسجيل الدخول
         $maintenanceCheck = checkMaintenanceMode();
@@ -1982,18 +2023,85 @@ function requireLogin() {
  * يدعم string أو array من الأدوار
  */
 function requireRole($role) {
-    requireLogin();
+    // معالجة الأخطاء: إذا فشل requireLogin()، نعيد التوجيه
+    try {
+        requireLogin();
+    } catch (Throwable $e) {
+        // إذا حدث خطأ في requireLogin() (مثلاً فشل الاتصال بقاعدة البيانات)
+        // نعيد التوجيه مباشرة إلى تسجيل الدخول
+        error_log("requireRole() ERROR: Failed in requireLogin(): " . $e->getMessage());
+        
+        $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+        $loginUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $loginUrl);
+        $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+        if (strpos($loginUrl, '/') !== 0) {
+            $loginUrl = '/' . $loginUrl;
+        }
+        $loginUrl = preg_replace('/\/+/', '/', $loginUrl);
+        
+        // حفظ رسالة الخطأ
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION['session_error'] = 'حدث خطأ في النظام. يرجى تسجيل الدخول مرة أخرى.';
+            $_SESSION['session_failed'] = true;
+            $_SESSION['session_expired'] = true;
+        }
+        
+        // تنظيف output buffer
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+        
+        if (!@headers_sent()) {
+            @header('Location: ' . $loginUrl, true, 303);
+            exit;
+        } else {
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+            echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+            echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+            echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
+            exit;
+        }
+    }
     
     // فحص أمني: التأكد من أن المستخدم موجود في قاعدة البيانات
-    $currentUser = getCurrentUser();
+    try {
+        $currentUser = getCurrentUser();
+    } catch (Throwable $e) {
+        // إذا فشل getCurrentUser()، نعيد التوجيه
+        error_log("requireRole() ERROR: Failed to get current user: " . $e->getMessage());
+        $currentUser = null;
+    }
+    
     if (!$currentUser || !is_array($currentUser) || empty($currentUser)) {
         // المستخدم محذوف أو غير موجود - تم إلغاء تسجيل الدخول تلقائياً من getCurrentUser()
         $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+        $loginUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $loginUrl);
+        $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+        if (strpos($loginUrl, '/') !== 0) {
+            $loginUrl = '/' . $loginUrl;
+        }
+        $loginUrl = preg_replace('/\/+/', '/', $loginUrl);
+        
+        // حفظ رسالة الخطأ
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION['session_error'] = 'انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.';
+            $_SESSION['session_failed'] = true;
+            $_SESSION['session_expired'] = true;
+        }
+        
+        // تنظيف output buffer
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+        
         if (!headers_sent()) {
-            header('Location: ' . $loginUrl);
+            header('Location: ' . $loginUrl, true, 303);
             exit;
         } else {
-            echo '<script>window.location.href = "' . htmlspecialchars($loginUrl) . '";</script>';
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+            echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+            echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+            echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
             exit;
         }
     }
