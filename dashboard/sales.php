@@ -4,6 +4,8 @@
  */
 
 define('ACCESS_ALLOWED', true);
+// تعريف ثابت لمنع حذف الجلسة في sales.php
+define('SALES_PAGE_ACTIVE', true);
 
 // تنظيف أي output buffer سابق قبل أي شيء - لتحسين الأداء
 while (ob_get_level() > 0) {
