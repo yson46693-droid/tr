@@ -1007,6 +1007,14 @@ async function registerNewCredential() {
         // معالجة أفضل للأخطاء على الموبايل
         let errorMessage = error.message || 'حدث خطأ أثناء تسجيل البصمة';
         
+        // معالجة خاصة لخطأ 401 (انتهت الجلسة)
+        if (errorMessage.includes('انتهت جلسة العمل') || errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+            if (confirm('انتهت جلسة العمل. هل تريد إعادة تحميل الصفحة لتسجيل الدخول مرة أخرى؟')) {
+                window.location.reload();
+            }
+            return;
+        }
+        
         // إذا كانت الرسالة تحتوي على نص عربي مفصل، استخدمها مباشرة
         if (errorMessage.includes('تم إلغاء العملية') || errorMessage.includes('تأكد من:')) {
             alert(errorMessage);

@@ -144,27 +144,38 @@ if (file_exists(__DIR__ . '/session_logger.php')) {
 if (session_status() === PHP_SESSION_ACTIVE) {
     // إذا كان المستخدم مسجل دخول، تحديث وقت آخر نشاط
     if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        // التحقق من أننا في profile.php أو attendance.php - منع حذف الجلسة
+        // التحقق من أننا في profile.php أو attendance.php أو sales.php - منع حذف الجلسة
         $isProfilePage = defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true;
         $isAttendancePage = defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true;
-        if (!$isProfilePage && !$isAttendancePage) {
+        $isSalesPage = defined('SALES_PAGE_ACTIVE') && SALES_PAGE_ACTIVE === true;
+        if (!$isProfilePage && !$isAttendancePage && !$isSalesPage) {
             $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
             if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
                 $isProfilePage = true;
             } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
                 $isAttendancePage = true;
+            } elseif (strpos($currentScript, 'sales.php') !== false || basename($currentScript) === 'sales.php' || strpos($currentScript, 'dashboard/sales.php') !== false || strpos($currentScript, 'modules/sales') !== false) {
+                $isSalesPage = true;
             }
         }
-        if (!$isProfilePage && !$isAttendancePage) {
+        if (!$isProfilePage && !$isAttendancePage && !$isSalesPage) {
             $requestUri = $_SERVER['REQUEST_URI'] ?? '';
             if (strpos($requestUri, 'profile.php') !== false) {
                 $isProfilePage = true;
             } elseif (strpos($requestUri, 'attendance.php') !== false) {
                 $isAttendancePage = true;
+            } elseif (strpos($requestUri, 'sales.php') !== false || strpos($requestUri, 'dashboard/sales') !== false || strpos($requestUri, 'modules/sales') !== false) {
+                $isSalesPage = true;
             }
         }
         
-        $isProtectedPage = $isProfilePage || $isAttendancePage;
+        // التحقق من الدور في الجلسة - حماية شاملة للمندوبين
+        $isSalesUser = false;
+        if (isset($_SESSION['role']) && strtolower($_SESSION['role']) === 'sales') {
+            $isSalesUser = true;
+        }
+        
+        $isProtectedPage = $isProfilePage || $isAttendancePage || $isSalesPage || $isSalesUser;
         
         // التحقق من طلب keep-alive API - عدم حذف الجلسة أبداً في هذا الحالة
         $isKeepAliveRequest = false;

@@ -977,15 +977,21 @@ function getCurrentUserFromDatabase($userId) {
             $isProfilePage = true;
         } elseif (strpos($requestUri, 'attendance.php') !== false) {
             $isAttendancePage = true;
-        } elseif (strpos($requestUri, 'sales.php') !== false || strpos($requestUri, 'dashboard/sales') !== false) {
+        } elseif (strpos($requestUri, 'sales.php') !== false || strpos($requestUri, 'dashboard/sales') !== false || strpos($requestUri, 'modules/sales') !== false) {
             $isSalesPage = true;
         } elseif (strpos($requestUri, 'notifications.php') !== false || strpos($requestUri, '/api/notifications') !== false) {
             $isNotificationsAPI = true;
         }
     }
     
-    // تحديد إذا كان الصفحة محمية (profile أو attendance أو sales أو notifications API)
-    $isProtectedPage = $isProfilePage || $isAttendancePage || $isSalesPage || $isNotificationsAPI;
+    // الطريقة 5: التحقق من الدور في الجلسة - حماية شاملة للمندوبين
+    $isSalesUser = false;
+    if (isset($_SESSION['role']) && strtolower($_SESSION['role']) === 'sales') {
+        $isSalesUser = true;
+    }
+    
+    // تحديد إذا كان الصفحة محمية (profile أو attendance أو sales أو notifications API أو مستخدم مندوب)
+    $isProtectedPage = $isProfilePage || $isAttendancePage || $isSalesPage || $isNotificationsAPI || $isSalesUser;
     
     // جلب جميع بيانات المستخدم من قاعدة البيانات
     try {
@@ -1003,9 +1009,9 @@ function getCurrentUserFromDatabase($userId) {
     
     // إذا كان المستخدم غير موجود أو محذوف من قاعدة البيانات
     if (!$user) {
-        // منع حذف الجلسة إذا كان الطلب من profile.php أو attendance.php أو sales.php
+        // منع حذف الجلسة إذا كان الطلب من profile.php أو attendance.php أو sales.php أو إذا كان المستخدم مندوب
         if ($isProtectedPage) {
-            $pageName = $isProfilePage ? 'profile.php' : ($isAttendancePage ? 'attendance.php' : ($isSalesPage ? 'sales.php' : 'notifications.php'));
+            $pageName = $isProfilePage ? 'profile.php' : ($isAttendancePage ? 'attendance.php' : ($isSalesPage ? 'sales.php' : ($isSalesUser ? 'sales user' : 'notifications.php')));
             error_log("Security: User ID {$userId} not found in database - Skipping session destruction in {$pageName}");
             return null;
         }
@@ -1041,9 +1047,9 @@ function getCurrentUserFromDatabase($userId) {
     
     // التحقق من حالة المستخدم - إذا كان غير مفعّل
     if (isset($user['status']) && $user['status'] !== 'active') {
-        // منع حذف الجلسة إذا كان الطلب من profile.php أو attendance.php أو sales.php
+        // منع حذف الجلسة إذا كان الطلب من profile.php أو attendance.php أو sales.php أو إذا كان المستخدم مندوب
         if ($isProtectedPage) {
-            $pageName = $isProfilePage ? 'profile.php' : ($isAttendancePage ? 'attendance.php' : ($isSalesPage ? 'sales.php' : 'notifications.php'));
+            $pageName = $isProfilePage ? 'profile.php' : ($isAttendancePage ? 'attendance.php' : ($isSalesPage ? 'sales.php' : ($isSalesUser ? 'sales user' : 'notifications.php')));
             error_log("Security: User ID {$userId} status is '{$user['status']}' - Skipping session destruction in {$pageName}");
             return $user; // إرجاع بيانات المستخدم حتى لو كان غير مفعّل
         }
@@ -1825,7 +1831,7 @@ function requireLogin() {
             $isProfilePage = true;
         } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
             $isAttendancePage = true;
-        } elseif (strpos($currentScript, 'sales.php') !== false || basename($currentScript) === 'sales.php' || strpos($currentScript, 'dashboard/sales.php') !== false) {
+        } elseif (strpos($currentScript, 'sales.php') !== false || basename($currentScript) === 'sales.php' || strpos($currentScript, 'dashboard/sales.php') !== false || strpos($currentScript, 'modules/sales') !== false) {
             $isSalesPage = true;
         }
     }
@@ -1837,12 +1843,18 @@ function requireLogin() {
             $isProfilePage = true;
         } elseif (strpos($requestUri, 'attendance.php') !== false) {
             $isAttendancePage = true;
-        } elseif (strpos($requestUri, 'sales.php') !== false || strpos($requestUri, 'dashboard/sales') !== false) {
+        } elseif (strpos($requestUri, 'sales.php') !== false || strpos($requestUri, 'dashboard/sales') !== false || strpos($requestUri, 'modules/sales') !== false) {
             $isSalesPage = true;
         }
     }
     
-    $isProtectedPage = $isProfilePage || $isAttendancePage || $isSalesPage;
+    // الطريقة 4: التحقق من الدور في الجلسة - حماية شاملة للمندوبين
+    $isSalesUser = false;
+    if (isset($_SESSION['role']) && strtolower($_SESSION['role']) === 'sales') {
+        $isSalesUser = true;
+    }
+    
+    $isProtectedPage = $isProfilePage || $isAttendancePage || $isSalesPage || $isSalesUser;
     
     // التأكد من أن الجلسة نشطة قبل أي فحص
     if (session_status() === PHP_SESSION_NONE) {

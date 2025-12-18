@@ -10,6 +10,17 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/webauthn.php';
 
 header('Content-Type: application/json; charset=utf-8');
+// CORS headers لضمان إرسال credentials بشكل صحيح
+header('Access-Control-Allow-Origin: ' . (isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '*'));
+header('Access-Control-Allow-Credentials: true');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+// Handle preflight OPTIONS request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -17,10 +28,38 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// التحقق من تسجيل الدخول
-if (!isLoggedIn()) {
+// التحقق من تسجيل الدخول مع معالجة أفضل للأخطاء
+$loginCheck = isLoggedIn();
+if (!$loginCheck) {
+    // تسجيل مفصل للمساعدة في التشخيص
+    $sessionId = session_id();
+    $hasSession = session_status() === PHP_SESSION_ACTIVE;
+    $hasUserId = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
+    $hasLoggedIn = isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true;
+    
+    error_log("WebAuthn Register 401: isLoggedIn() returned false. Session ID: " . ($sessionId ? substr($sessionId, 0, 20) . "..." : "none") . 
+              ", Session Active: " . ($hasSession ? "yes" : "no") . 
+              ", Has user_id: " . ($hasUserId ? "yes" : "no") . 
+              ", Has logged_in: " . ($hasLoggedIn ? "yes" : "no"));
+    
     http_response_code(401);
-    echo json_encode(['success' => false, 'message' => 'غير مصرح']);
+    echo json_encode([
+        'success' => false, 
+        'message' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول',
+        'error' => 'Unauthorized'
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// التأكد من وجود user_id
+if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
+    error_log("WebAuthn Register ERROR: isLoggedIn() returned true but user_id is missing");
+    http_response_code(401);
+    echo json_encode([
+        'success' => false, 
+        'message' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول',
+        'error' => 'Session invalid'
+    ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
