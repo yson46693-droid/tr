@@ -919,17 +919,39 @@ try {
             
             // إذا كان هناك ايدي عميل في الملف، حاول التحديث
             if ($customerIdFromFile && $customerIdFromFile > 0) {
-                $existingCustomer = $db->queryOne("SELECT id FROM customers WHERE id = ?", [$customerIdFromFile]);
+                // للمندوبين: التحقق من أن العميل ينتمي لهم
+                if (isset($currentUser['role']) && $currentUser['role'] === 'sales') {
+                    $existingCustomer = $db->queryOne(
+                        "SELECT id FROM customers WHERE id = ? AND (created_by = ? OR rep_id = ?)",
+                        [$customerIdFromFile, $currentUser['id'], $currentUser['id']]
+                    );
+                } else {
+                    $existingCustomer = $db->queryOne("SELECT id FROM customers WHERE id = ?", [$customerIdFromFile]);
+                }
+                
                 if ($existingCustomer) {
                     $customerId = $customerIdFromFile;
                     $isUpdate = true;
+                } else {
+                    // إذا كان مندوب يحاول تحديث عميل لا ينتمي له، نتخطاه
+                    if (isset($currentUser['role']) && $currentUser['role'] === 'sales') {
+                        logImport("Row $i - Skipping customer ID=$customerIdFromFile (does not belong to sales rep)");
+                        $skipped++;
+                        continue;
+                    }
                 }
             }
             
             // إذا لم يكن هناك تحديث، تحقق من التكرار
             if (!$isUpdate) {
-                $duplicateCheck = "SELECT id FROM customers WHERE name = ?";
-                $duplicateParams = [$name];
+                // للمندوبين: التحقق من التكرار فقط في عملائهم
+                if (isset($currentUser['role']) && $currentUser['role'] === 'sales') {
+                    $duplicateCheck = "SELECT id FROM customers WHERE name = ? AND (created_by = ? OR rep_id = ?)";
+                    $duplicateParams = [$name, $currentUser['id'], $currentUser['id']];
+                } else {
+                    $duplicateCheck = "SELECT id FROM customers WHERE name = ?";
+                    $duplicateParams = [$name];
+                }
                 
                 if ($phone) {
                     $duplicateCheck .= " AND (phone = ? OR phone IS NULL)";

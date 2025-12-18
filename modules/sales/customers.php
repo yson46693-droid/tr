@@ -1543,18 +1543,18 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
     <h2 class="mb-2 mb-md-0">
         <i class="bi bi-people me-2"></i><?php echo $isSalesUser ? 'عملائي' : 'العملاء'; ?>
     </h2>
-    <?php if ($section === 'company'): ?>
     <div class="d-flex gap-2">
-        <?php if (in_array($currentRole, ['manager', 'accountant'], true)): ?>
+        <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
         <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#importCustomersModal">
             <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد من CSV
         </button>
         <?php endif; ?>
+        <?php if ($section === 'company' || $isSalesUser): ?>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
             <i class="bi bi-person-plus me-2"></i>إضافة عميل جديد
         </button>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
 </div>
 
 <?php if (!$isSalesUser): ?>
@@ -5390,7 +5390,10 @@ document.addEventListener('DOMContentLoaded', function () {
                             <li>يجب أن يكون الصف الأول هو رؤوس الأعمدة</li>
                             <li>الملفات المدعومة: .csv, .xlsx, .xls</li>
                             <li>سيتم تخطي العملاء المكررين (بناءً على الاسم ورقم الهاتف)</li>
-                            <li>يمكن استخدام عمود <strong>ايدي العميل</strong> لتحديث العملاء الموجودين</li>
+                            <?php if ($isSalesUser): ?>
+                            <li class="text-warning"><strong>ملاحظة:</strong> سيتم ربط جميع العملاء المستوردين بك بصفتك مندوب المبيعات</li>
+                            <?php endif; ?>
+                            <li>يمكن استخدام عمود <strong>ايدي العميل</strong> لتحديث العملاء الموجودين<?php if ($isSalesUser): ?> (فقط عملائك)<?php endif; ?></li>
                             <li>الهاتف الثالث سيُحفظ مع عنوان "2" في قاعدة البيانات</li>
                         </ul>
                     </div>
