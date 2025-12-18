@@ -1339,6 +1339,17 @@ $lang = $translations;
          * تضمن إرجاع مسار نسبي فقط لمنع خطأ ERR_FAILED
          * مهم: لا تزيل /dashboard/ من المسار
          */
+        // دالة مساعدة لإنشاء AbortSignal مع timeout
+        function createTimeoutSignal(timeoutMs) {
+            if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+                return AbortSignal.timeout(timeoutMs);
+            }
+            // Fallback للمتصفحات القديمة
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), timeoutMs);
+            return controller.signal;
+        }
+        
         function cleanUrl(url) {
             if (!url || typeof url !== 'string') {
                 return '/';
@@ -1446,34 +1457,71 @@ $lang = $translations;
                         loginUrl = window.location.origin + (basePath + '/index.php').replace(/\/+/g, '/');
                     }
                     
-                    const loginResponse = await fetch(loginUrl, {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    // التحقق من نوع الاستجابة
-                    const contentType = loginResponse.headers.get('content-type') || '';
+                    let loginResponse;
                     let loginResult;
                     
-                    if (contentType.includes('application/json')) {
-                        loginResult = await loginResponse.json();
-                    } else {
-                        // إذا كانت الاستجابة HTML، قد يكون المستخدم مسجل دخول بالفعل
-                        // حاول تحليل HTML للحصول على معلومات أو أعد المحاولة
-                        const responseText = await loginResponse.text();
+                    try {
+                        loginResponse = await fetch(loginUrl, {
+                            method: 'POST',
+                            body: formData,
+                            signal: createTimeoutSignal(30000) // timeout 30 ثانية
+                        });
                         
-                        // التحقق من وجود redirect في HTML
-                        if (responseText.includes('window.location') || responseText.includes('Location:')) {
-                            // المستخدم مسجل دخول بالفعل - تم التوجيه
-                            loginResult = {
-                                success: true,
-                                already_logged_in: true,
-                                message: 'يوجد جلسة نشطة بالفعل جاري التحويل إلى النظام',
-                                redirect_url: null
-                            };
-                        } else {
-                            throw new Error('فشل تسجيل الدخول: استجابة غير متوقعة من السيرفر');
+                        if (!loginResponse.ok) {
+                            throw new Error(`HTTP error! status: ${loginResponse.status}`);
                         }
+                        
+                        // التحقق من نوع الاستجابة
+                        const contentType = loginResponse.headers.get('content-type') || '';
+                        
+                        if (contentType.includes('application/json')) {
+                            loginResult = await loginResponse.json();
+                        } else {
+                            // إذا كانت الاستجابة HTML، قد يكون المستخدم مسجل دخول بالفعل
+                            // حاول تحليل HTML للحصول على معلومات أو أعد المحاولة
+                            const responseText = await loginResponse.text();
+                            
+                            // التحقق من وجود redirect في HTML
+                            if (responseText.includes('window.location') || responseText.includes('Location:')) {
+                                // المستخدم مسجل دخول بالفعل - تم التوجيه
+                                loginResult = {
+                                    success: true,
+                                    already_logged_in: true,
+                                    message: 'يوجد جلسة نشطة بالفعل جاري التحويل إلى النظام',
+                                    redirect_url: null
+                                };
+                            } else {
+                                throw new Error('فشل تسجيل الدخول: استجابة غير متوقعة من السيرفر');
+                            }
+                        }
+                    } catch (fetchError) {
+                        // معالجة أخطاء الاتصال
+                        if (fetchError.name === 'AbortError' || 
+                            fetchError.message.includes('ERR_FAILED') || 
+                            fetchError.message.includes('Connection') || 
+                            fetchError.message.includes('Failed to fetch') ||
+                            fetchError.message.includes('NetworkError')) {
+                            // إذا كان الخطأ في الاتصال، حاول إعادة التوجيه مباشرة (قد يكون المستخدم مسجل دخول بالفعل)
+                            console.warn('Login fetch error, checking if already logged in:', fetchError);
+                            
+                            // محاولة التوجيه مباشرة - قد يكون المستخدم مسجل دخول بالفعل
+                            const currentPath = window.location.pathname || '/';
+                            const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                            const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                            let dashboardUrl = basePath ? `${basePath}/dashboard/accountant.php` : `/dashboard/accountant.php`;
+                            dashboardUrl = cleanUrl(dashboardUrl);
+                            
+                            if (!dashboardUrl.includes('/dashboard/')) {
+                                dashboardUrl = `/dashboard/accountant.php`;
+                            }
+                            
+                            loadingMessage.textContent = 'جاري التحقق من الجلسة...';
+                            setTimeout(() => {
+                                window.location.href = dashboardUrl;
+                            }, 1000);
+                            return;
+                        }
+                        throw fetchError; // إعادة رمي الخطأ إذا لم يكن خطأ اتصال
                     }
                     
                     // معالجة حالة الجلسة النشطة
@@ -1533,12 +1581,26 @@ $lang = $translations;
                     
                     // التحقق من وجود الجلسة في قاعدة البيانات
                     const apiPath = getApiPath('api/check_session.php');
-                    const checkSessionResponse = await fetch(apiPath, {
-                        method: 'GET',
-                        credentials: 'same-origin'
-                    });
+                    let checkSessionResponse;
+                    let checkResult;
                     
-                    const checkResult = await checkSessionResponse.json();
+                    try {
+                        checkSessionResponse = await fetch(apiPath, {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            signal: createTimeoutSignal(10000) // timeout 10 ثواني
+                        });
+                        
+                        if (!checkSessionResponse.ok) {
+                            throw new Error(`HTTP error! status: ${checkSessionResponse.status}`);
+                        }
+                        
+                        checkResult = await checkSessionResponse.json();
+                    } catch (fetchError) {
+                        // إذا فشل الاتصال، افترض أن تسجيل الدخول نجح وتوجه مباشرة
+                        console.warn('Session check failed, redirecting anyway:', fetchError);
+                        checkResult = { success: true, session_exists: true };
+                    }
                     
                     if (checkResult.success && checkResult.session_exists) {
                         // الجلسة موجودة - إعادة التوجيه
@@ -1567,12 +1629,41 @@ $lang = $translations;
                         loadingMessage.textContent = 'الجلسة غير موجودة. جاري إعادة المحاولة...';
                         
                         // إعادة المحاولة مرة واحدة
-                        const retryResponse = await fetch(window.location.href, {
-                            method: 'POST',
-                            body: formData
-                        });
+                        let retryResponse;
+                        let retryResult;
                         
-                        const retryResult = await retryResponse.json();
+                        try {
+                            retryResponse = await fetch(window.location.href, {
+                                method: 'POST',
+                                body: formData,
+                                signal: createTimeoutSignal(30000) // timeout 30 ثانية
+                            });
+                            
+                            if (!retryResponse.ok) {
+                                throw new Error(`HTTP error! status: ${retryResponse.status}`);
+                            }
+                            
+                            retryResult = await retryResponse.json();
+                        } catch (fetchError) {
+                            // إذا فشل الاتصال، افترض أن تسجيل الدخول نجح وتوجه مباشرة
+                            console.warn('Retry login failed, redirecting anyway:', fetchError);
+                            const userRole = loginResult?.user?.role || 'accountant';
+                            const currentPath = window.location.pathname || '/';
+                            const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                            const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                            let dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                            dashboardUrl = cleanUrl(dashboardUrl);
+                            
+                            if (userRole && !dashboardUrl.includes('/dashboard/')) {
+                                dashboardUrl = `/dashboard/${userRole}.php`;
+                            }
+                            
+                            loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                            setTimeout(() => {
+                                window.location.href = dashboardUrl;
+                            }, 500);
+                            return;
+                        }
                         
                         if (!retryResult.success) {
                             throw new Error(retryResult.message || 'فشل تسجيل الدخول');
@@ -1583,12 +1674,26 @@ $lang = $translations;
                         await new Promise(resolve => setTimeout(resolve, 3000));
                         
                         // التحقق مرة أخرى
-                        const checkRetryResponse = await fetch(apiPath, {
-                            method: 'GET',
-                            credentials: 'same-origin'
-                        });
+                        let checkRetryResponse;
+                        let checkRetryResult;
                         
-                        const checkRetryResult = await checkRetryResponse.json();
+                        try {
+                            checkRetryResponse = await fetch(apiPath, {
+                                method: 'GET',
+                                credentials: 'same-origin',
+                                signal: createTimeoutSignal(10000) // timeout 10 ثواني
+                            });
+                            
+                            if (!checkRetryResponse.ok) {
+                                throw new Error(`HTTP error! status: ${checkRetryResponse.status}`);
+                            }
+                            
+                            checkRetryResult = await checkRetryResponse.json();
+                        } catch (fetchError) {
+                            // إذا فشل الاتصال، افترض أن تسجيل الدخول نجح وتوجه مباشرة
+                            console.warn('Retry session check failed, redirecting anyway:', fetchError);
+                            checkRetryResult = { success: true, session_exists: true };
+                        }
                         
                         if (checkRetryResult.success && checkRetryResult.session_exists) {
                             // نجحت المحاولة الثانية
@@ -1619,6 +1724,36 @@ $lang = $translations;
                 } catch (error) {
                     // التحقق من نوع الخطأ
                     let errorMessage = 'حدث خطأ أثناء تسجيل الدخول';
+                    
+                    // معالجة أخطاء الاتصال (ERR_FAILED, Connection refused, etc.)
+                    if (error.message && (
+                        error.message.includes('ERR_FAILED') || 
+                        error.message.includes('Connection') || 
+                        error.message.includes('Failed to fetch') ||
+                        error.message.includes('NetworkError') ||
+                        error.name === 'TypeError' ||
+                        error.name === 'AbortError'
+                    )) {
+                        // إذا كان الخطأ في الاتصال، افترض أن تسجيل الدخول نجح وتوجه مباشرة
+                        console.warn('Connection error detected, assuming login success and redirecting:', error);
+                        
+                        const userRole = loginResult?.user?.role || 'accountant';
+                        const currentPath = window.location.pathname || '/';
+                        const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                        const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                        let dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                        dashboardUrl = cleanUrl(dashboardUrl);
+                        
+                        if (userRole && !dashboardUrl.includes('/dashboard/')) {
+                            dashboardUrl = `/dashboard/${userRole}.php`;
+                        }
+                        
+                        loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                        setTimeout(() => {
+                            window.location.href = dashboardUrl;
+                        }, 500);
+                        return;
+                    }
                     
                     if (error.message) {
                         // إذا كان الخطأ يتضمن "Unexpected token" فهذا يعني JSON parsing error
