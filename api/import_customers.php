@@ -251,9 +251,20 @@ try {
     }
     
     // قراءة رؤوس الأعمدة من الصف الأول
+    $originalHeaders = $rows[0]; // حفظ النسخة الأصلية للتسجيل
     $headers = array_map(function($header) {
+        // تنظيف من BOM
+        if (substr($header, 0, 3) === "\xEF\xBB\xBF") {
+            $header = substr($header, 3);
+        }
         return mb_strtolower(trim($header), 'UTF-8');
     }, $rows[0]);
+    
+    // تسجيل رؤوس الأعمدة الأصلية
+    error_log('=== ORIGINAL CSV HEADERS ===');
+    error_log(json_encode($originalHeaders, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    error_log('=== NORMALIZED HEADERS ===');
+    error_log(json_encode($headers, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
     
     // البحث عن أعمدة البيانات المطلوبة
     $customerIdIndex = -1;
@@ -400,12 +411,36 @@ try {
     error_log(json_encode($foundColumns, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
     error_log('Headers (all): ' . json_encode($headers, JSON_UNESCAPED_UNICODE));
     
+    // تسجيل تفصيلي لكل عمود
+    foreach ($headers as $idx => $hdr) {
+        error_log("Column $idx: '$hdr' (original: '{$originalHeaders[$idx]}')");
+    }
+    
     // التحقق من أن الأعمدة المهمة موجودة
     if ($balanceIndex === -1) {
-        error_log('WARNING: balanceIndex not found! Available headers: ' . implode(', ', $headers));
+        error_log('WARNING: balanceIndex not found! Available headers: ' . implode(' | ', $headers));
+        error_log('WARNING: Original headers: ' . implode(' | ', $originalHeaders));
+        // محاولة البحث بطريقة أكثر مرونة
+        foreach ($headers as $idx => $hdr) {
+            if (preg_match('/رصيد|مبلغ|balance|debt|مستحق|ديون/i', $hdr)) {
+                $balanceIndex = $idx;
+                error_log("FOUND balance column by flexible search at index $idx: '$hdr'");
+                break;
+            }
+        }
     }
     if ($phoneIndex === -1) {
-        error_log('WARNING: phoneIndex not found! Available headers: ' . implode(', ', $headers));
+        error_log('WARNING: phoneIndex not found! Available headers: ' . implode(' | ', $headers));
+        error_log('WARNING: Original headers: ' . implode(' | ', $originalHeaders));
+        // محاولة البحث بطريقة أكثر مرونة
+        foreach ($headers as $idx => $hdr) {
+            if (preg_match('/هاتف|تليفون|تلفون|phone|mobile|tel/i', $hdr) && 
+                !preg_match('/ثاني|2|second/i', $hdr)) {
+                $phoneIndex = $idx;
+                error_log("FOUND phone column by flexible search at index $idx: '$hdr'");
+                break;
+            }
+        }
     }
     
     // معالجة البيانات
@@ -451,6 +486,10 @@ try {
             $phone = null;
             if ($phoneIndex !== -1 && isset($row[$phoneIndex])) {
                 $rawPhone = trim((string)$row[$phoneIndex]);
+                // تسجيل القيمة الأصلية
+                if ($i <= 5) {
+                    error_log("Row $i - Raw phone value from CSV: '" . var_export($rawPhone, true) . "' (type: " . gettype($row[$phoneIndex]) . ")");
+                }
                 // إزالة أي مسافات أو أحرف غير ضرورية
                 $rawPhone = str_replace([' ', '-', '_', '(', ')', '.', '/'], '', $rawPhone);
                 // إزالة BOM إذا كان موجوداً
@@ -459,10 +498,17 @@ try {
                 }
                 if ($rawPhone !== '' && strlen($rawPhone) > 0) {
                     $phone = $rawPhone;
+                    if ($i <= 5) {
+                        error_log("Row $i - Cleaned phone: '$phone'");
+                    }
                 }
             } else {
                 if ($i <= 5) {
                     error_log("WARNING: Row $i - phoneIndex is -1 or row[$phoneIndex] not set. phoneIndex=$phoneIndex, row length=" . count($row));
+                    if ($phoneIndex !== -1) {
+                        error_log("  - Row[$phoneIndex] exists: " . (isset($row[$phoneIndex]) ? 'YES' : 'NO'));
+                        error_log("  - Row[$phoneIndex] value: " . (isset($row[$phoneIndex]) ? var_export($row[$phoneIndex], true) : 'NOT_SET'));
+                    }
                 }
             }
             
@@ -498,6 +544,10 @@ try {
             $balance = 0.0;
             if ($balanceIndex !== -1 && isset($row[$balanceIndex])) {
                 $rawBalance = $row[$balanceIndex];
+                // تسجيل القيمة الأصلية
+                if ($i <= 5) {
+                    error_log("Row $i - Raw balance value from CSV: '" . var_export($rawBalance, true) . "' (type: " . gettype($rawBalance) . ")");
+                }
                 // تحويل إلى نص وإزالة المسافات
                 $rawBalance = trim((string)$rawBalance);
                 // إزالة BOM إذا كان موجوداً
@@ -559,13 +609,20 @@ try {
                         'addressIndex' => $addressIndex
                     ],
                     'raw_values' => [
-                        'balance' => isset($row[$balanceIndex]) ? $row[$balanceIndex] : 'NOT_SET',
-                        'phone' => isset($row[$phoneIndex]) ? $row[$phoneIndex] : 'NOT_SET',
-                        'phone2' => isset($row[$phone2Index]) ? $row[$phone2Index] : 'NOT_SET'
+                        'balance' => ($balanceIndex !== -1 && isset($row[$balanceIndex])) ? $row[$balanceIndex] : 'NOT_SET',
+                        'phone' => ($phoneIndex !== -1 && isset($row[$phoneIndex])) ? $row[$phoneIndex] : 'NOT_SET',
+                        'phone2' => ($phone2Index !== -1 && isset($row[$phone2Index])) ? $row[$phone2Index] : 'NOT_SET'
                     ],
                     'row_length' => count($row),
-                    'full_row' => $row
+                    'all_row_values' => $row,
+                    'headers_mapping' => []
                 ];
+                
+                // إضافة م mapping بين الأعمدة والقيم
+                foreach ($originalHeaders as $colIdx => $colName) {
+                    $rowData['headers_mapping'][$colName] = isset($row[$colIdx]) ? $row[$colIdx] : '';
+                }
+                
                 error_log("=== ROW $i DATA ===");
                 error_log(json_encode($rowData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
             }
@@ -644,7 +701,13 @@ try {
                         "UPDATE customers SET " . implode(', ', $updateFields) . " WHERE id = ?",
                         $updateValues
                     );
-                    error_log("✓ Customer updated: ID=$customerId, Name=$name, Balance=" . ($balanceIndex !== -1 ? $balance : 'NOT_UPDATED') . ", Phone=" . ($phone ?? 'NULL') . ", Phone2=" . ($phone2 ?? 'NULL') . ", Address=" . ($address ?? 'NULL'));
+                    error_log("✓ Customer updated: ID=$customerId, Name=$name, Balance=" . ($balanceIndex !== -1 ? $balance : 'NOT_UPDATED') . " (from index $balanceIndex), Phone=" . ($phone ?? 'NULL') . " (from index $phoneIndex), Phone2=" . ($phone2 ?? 'NULL') . " (from index $phone2Index), Address=" . ($address ?? 'NULL'));
+                    
+                    // التحقق من البيانات المحفوظة
+                    $savedCustomer = $db->queryOne("SELECT name, phone, balance, address FROM customers WHERE id = ?", [$customerId]);
+                    if ($savedCustomer) {
+                        error_log("✓ Verified saved data - Name: {$savedCustomer['name']}, Phone: {$savedCustomer['phone']}, Balance: {$savedCustomer['balance']}, Address: {$savedCustomer['address']}");
+                    }
                     
                     // حذف أرقام الهواتف القديمة
                     $db->execute("DELETE FROM customer_phones WHERE customer_id = ?", [$customerId]);
@@ -684,7 +747,13 @@ try {
                     );
                     
                     $customerId = $db->getLastInsertId();
-                    error_log("✓ Customer inserted: ID=$customerId, Name=$name, Balance=$balance, Phone=" . ($phone ?? 'NULL') . ", Phone2=" . ($phone2 ?? 'NULL') . ", Address=" . ($address ?? 'NULL'));
+                    error_log("✓ Customer inserted: ID=$customerId, Name=$name, Balance=$balance (from index $balanceIndex), Phone=" . ($phone ?? 'NULL') . " (from index $phoneIndex), Phone2=" . ($phone2 ?? 'NULL') . " (from index $phone2Index), Address=" . ($address ?? 'NULL'));
+                    
+                    // التحقق من البيانات المحفوظة
+                    $savedCustomer = $db->queryOne("SELECT name, phone, balance, address FROM customers WHERE id = ?", [$customerId]);
+                    if ($savedCustomer) {
+                        error_log("✓ Verified saved data - Name: {$savedCustomer['name']}, Phone: {$savedCustomer['phone']}, Balance: {$savedCustomer['balance']}, Address: {$savedCustomer['address']}");
+                    }
                     
                     logAudit($currentUser['id'], 'import_customer', 'customer', $customerId, null, [
                         'name' => $name,
@@ -703,6 +772,8 @@ try {
                     }
                     
                     error_log("Customer $customerId ($name) - Phones to save: " . json_encode($phonesToSave, JSON_UNESCAPED_UNICODE));
+                    error_log("  - Phone1 (index $phoneIndex): " . ($phone ?? 'NULL'));
+                    error_log("  - Phone2 (index $phone2Index): " . ($phone2 ?? 'NULL'));
                     
                     if (!empty($phonesToSave)) {
                         // حذف أرقام الهواتف القديمة أولاً (في حالة التحديث)
@@ -742,8 +813,12 @@ try {
                             }
                         }
                         error_log("Total phones saved for customer $customerId: $savedCount");
+                        
+                        // التحقق من الأرقام المحفوظة
+                        $savedPhones = $db->query("SELECT phone, is_primary FROM customer_phones WHERE customer_id = ?", [$customerId]);
+                        error_log("✓ Verified saved phones for customer $customerId: " . json_encode($savedPhones, JSON_UNESCAPED_UNICODE));
                     } else {
-                        error_log("⚠ No phones to save for customer: $name (ID: $customerId) - Phone1: " . ($phone ?? 'NULL') . ", Phone2: " . ($phone2 ?? 'NULL'));
+                        error_log("⚠ No phones to save for customer: $name (ID: $customerId) - Phone1: " . ($phone ?? 'NULL') . " (index: $phoneIndex), Phone2: " . ($phone2 ?? 'NULL') . " (index: $phone2Index)");
                     }
                 } catch (Exception $phonesError) {
                     // تسجيل الخطأ ولكن لا نوقف العملية

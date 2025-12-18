@@ -412,7 +412,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 }
                 
                 // حفظ اسم المنتج/القالب مباشرة في حقل product_name في جدول tasks
-                // نفس الطريقة المستخدمة في طلبات العملاء (السطر 448 في customer_orders.php): 
+                // نفس الطريقة المستخدمة في طلبات العملاء (السطر 448 في customer_orders.php):
                 // حفظ اسم القالب مباشرة في product_name حتى لو كان template_id أو product_id null
                 $displayProductName = '';
                 
@@ -429,32 +429,44 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     }
                 }
                 
-                // حفظ اسم المنتج/القالب مباشرة في حقل product_name
-                // نفس الطريقة في طلبات العملاء (السطر 444-448): 
-                // INSERT INTO ... (product_name) VALUES (?, ...) - حفظ الاسم مباشرة
-                // حتى لو كان template_id أو product_id null، نحفظ الاسم في product_name
-                // IMPORTANT: يجب حفظ product_name دائماً إذا كان task_type هو production
+                // إذا كان task_type هو production، يجب أن يكون لدينا product_name
                 if ($taskType === 'production' && empty($displayProductName)) {
-                    // إذا كان task_type هو production ولكن product_name فارغ، هذا خطأ
-                    error_log("✗ ERROR: task_type is production but product_name is empty!");
-                    error_log("  - productName: '$productName'");
-                    error_log("  - rawProductName: '$rawProductName'");
-                    error_log("  - productId: $productId");
+                    // محاولة أخيرة: جلب الاسم من product_id إذا كان موجوداً
+                    if ($productId > 0) {
+                        $product = $db->queryOne('SELECT name FROM products WHERE id = ?', [$productId]);
+                        if ($product && !empty($product['name'])) {
+                            $displayProductName = trim($product['name']);
+                        }
+                    }
+                    
+                    // إذا كان لا يزال فارغاً، هذا خطأ - لكن سنحاول الاستمرار
+                    if (empty($displayProductName)) {
+                        error_log("✗ ERROR: task_type is production but product_name is empty!");
+                        error_log("  - productName: '$productName'");
+                        error_log("  - rawProductName: '$rawProductName'");
+                        error_log("  - productId: $productId");
+                        error_log("  - POST data: " . json_encode(['product_name' => $rawProductName, 'product_id' => $productId]));
+                    }
                 }
                 
                 // حفظ product_name مباشرة في حقل product_name (نفس طريقة طلبات العملاء - السطر 444-448)
-                // IMPORTANT: نحفظ product_name دائماً (حتى لو كان NULL)
+                // IMPORTANT: نحفظ product_name دائماً - حتى لو كان NULL لمهام الإنتاج، نحفظه للتوافق
                 // نفس الكود في customer_orders.php: INSERT INTO ... (product_name) VALUES (?, ...)
+                $columns[] = 'product_name';
                 if (!empty($displayProductName)) {
-                    $columns[] = 'product_name';
                     $values[] = $displayProductName;
-                    $placeholders[] = '?';
+                    error_log("✓ Saving product_name: '$displayProductName' to tasks table (task_type: $taskType)");
                 } else {
                     // حتى لو كان فارغاً، نحفظ NULL (مثل customer_orders)
-                    $columns[] = 'product_name';
+                    // لكن لمهام الإنتاج، يجب أن يكون لدينا product_name
+                    if ($taskType === 'production') {
+                        error_log("⚠ WARNING: Saving product_name as NULL for production task!");
+                        error_log("  This should not happen for production tasks. productName was: '$productName'");
+                    }
                     $values[] = null;
-                    $placeholders[] = '?';
+                    error_log("⚠ Saving product_name as NULL (empty displayProductName)");
                 }
+                $placeholders[] = '?';
                 
                 // حفظ معلومات المنتج في notes أيضاً للتوافق مع الكود القديم
                 if ($displayProductName !== '') {
@@ -841,15 +853,24 @@ foreach ($tasks as &$task) {
     
     // الأولوية الأولى: استخدام product_name من الجدول مباشرة (نفس طريقة طلبات العملاء)
     // نفس الكود في customer_orders.php السطر 1107: if (!empty($item['product_name']))
-    if (!empty($task['product_name']) && trim($task['product_name']) !== '') {
-        $finalProductName = trim($task['product_name']);
+    // التحقق من وجود القيمة وعدم كونها NULL أو فارغة
+    if (isset($task['product_name']) && $task['product_name'] !== null && $task['product_name'] !== '') {
+        $trimmedName = trim((string)$task['product_name']);
+        if ($trimmedName !== '') {
+            $finalProductName = $trimmedName;
+        }
     }
+    
     // الأولوية الثانية: استخدام product_name_from_db من JOIN مع products (للتوافق مع المهام القديمة)
-    elseif (!empty($task['product_name_from_db'])) {
-        $finalProductName = trim($task['product_name_from_db']);
+    if (empty($finalProductName) && !empty($task['product_name_from_db'])) {
+        $trimmedName = trim((string)$task['product_name_from_db']);
+        if ($trimmedName !== '') {
+            $finalProductName = $trimmedName;
+        }
     }
+    
     // الأولوية الثالثة: استخراج من notes (للتوافق مع المهام القديمة جداً)
-    elseif (!empty($notes)) {
+    if (empty($finalProductName) && !empty($notes)) {
         // البحث عن "المنتج: " متبوعاً باسم المنتج
         if (preg_match('/المنتج:\s*([^\n\r]+?)\s*-\s*الكمية:/i', $notes, $productMatches)) {
             $finalProductName = trim($productMatches[1] ?? '');
@@ -871,7 +892,8 @@ foreach ($tasks as &$task) {
     
     // تعيين اسم المنتج النهائي (نفس طريقة طلبات العملاء - السطر 1971)
     // في customer_orders.php: echo htmlspecialchars($item['product_name'] ?? '-');
-    $task['product_name'] = $finalProductName ?: null;
+    // استخدام القيمة الفارغة بدلاً من null لضمان العرض الصحيح
+    $task['product_name'] = !empty($finalProductName) ? $finalProductName : '';
     
     // إزالة product_name_from_db لأنه لم يعد مطلوباً
     unset($task['product_name_from_db']);
@@ -1201,7 +1223,14 @@ function tasksHtml(string $value): string
                                             <span class="badge bg-danger ms-1">متأخرة</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td><?php echo isset($task['product_name']) && $task['product_name'] !== null ? tasksHtml($task['product_name']) : '<span class="text-muted">-</span>'; ?></td>
+                                    <td><?php 
+                                        $productName = $task['product_name'] ?? '';
+                                        if (!empty($productName) && trim($productName) !== '') {
+                                            echo tasksHtml(trim($productName));
+                                        } else {
+                                            echo '<span class="text-muted">-</span>';
+                                        }
+                                    ?></td>
                                     <td><?php echo isset($task['quantity']) && $task['quantity'] !== null ? number_format((float) $task['quantity'], 2) . ' قطعة' : '<span class="text-muted">-</span>'; ?></td>
                                     <td>
                                         <?php 
@@ -1480,33 +1509,49 @@ function tasksHtml(string $value): string
             if (productSelect) productSelect.required = false;
             if (quantityInput) quantityInput.required = false;
             titleInput.value = '';
+            // مسح product_name عند تغيير نوع المهمة إلى غير production
+            const productNameInput = document.getElementById('product_name');
+            if (productNameInput) {
+                productNameInput.value = '';
+            }
             return;
         }
 
         if (productSelect) productSelect.required = true;
         if (quantityInput) quantityInput.required = true;
+        // تحديث product_name عند تغيير نوع المهمة إلى production
+        updateProductNameField();
         updateProductionTitle();
     }
 
     function updateProductionTitle() {
-        if (!productSelect || !quantityInput || !titleInput) {
+        if (!productSelect || !titleInput) {
             return;
         }
 
         const productId = parseInt(productSelect.value, 10);
-        const quantity = parseFloat(quantityInput.value);
+        const quantity = quantityInput ? parseFloat(quantityInput.value) : 0;
         const selectedOption = productSelect.options[productSelect.selectedIndex];
+        
         // الحصول على اسم المنتج من data-product-name أو نص الخيار
         let productName = '';
-        if (selectedOption && selectedOption.value !== '0') {
-            productName = selectedOption.getAttribute('data-product-name') || selectedOption.text.trim();
+        if (selectedOption && selectedOption.value !== '0' && selectedOption.value !== '') {
+            // الأولوية لـ data-product-name
+            productName = selectedOption.getAttribute('data-product-name');
+            // إذا لم يكن موجوداً، استخدم نص الخيار
+            if (!productName || productName.trim() === '') {
+                productName = selectedOption.text.trim();
+            }
+            productName = productName.trim();
         }
 
         // تحديث الحقل المخفي product_name دائماً (حتى لو كان product_id سالباً)
         const productNameInput = document.getElementById('product_name');
-        if (productNameInput && productName) {
+        if (productNameInput) {
             productNameInput.value = productName;
-            console.log('updateProductionTitle: Updated product_name to:', productName);
+            console.log('updateProductionTitle: Updated product_name to:', productName, 'product_id:', productId);
+        } else {
+            console.error('✗ product_name input field not found in updateProductionTitle!');
         }
 
         // تحديث العنوان إذا كان هناك منتج وكمية (حتى لو كان product_id سالباً)
@@ -1515,6 +1560,8 @@ function tasksHtml(string $value): string
         } else if (productName && quantity <= 0) {
             titleInput.value = 'إنتاج ' + sanitizeText(productName);
         } else if (!productName && quantity > 0) {
+            titleInput.value = '';
+        } else if (!productName) {
             titleInput.value = '';
         }
     }
@@ -1544,6 +1591,10 @@ function tasksHtml(string $value): string
         if (productNameInput) {
             productNameInput.value = productName;
             console.log('✓ Updated product_name hidden field:', productName, 'product_id:', productSelect.value);
+            // التحقق من أن القيمة تم تحديثها بشكل صحيح
+            if (productNameInput.value !== productName) {
+                console.error('✗ Failed to update product_name! Expected:', productName, 'Got:', productNameInput.value);
+            }
             return productName;
         } else {
             console.error('✗ product_name input field not found!');
@@ -1600,20 +1651,26 @@ function tasksHtml(string $value): string
             console.log('=== FORM SUBMIT DEBUG ===');
             console.log('Product select value:', productSelect.value);
             console.log('Product name from option:', productName);
-            console.log('Product name input value:', productNameInput.value);
+            console.log('Product name input value (before):', productNameInput.value);
             console.log('Task type:', taskTypeSelect ? taskTypeSelect.value : 'NOT FOUND');
-            console.log('=== END FORM SUBMIT DEBUG ===');
             
             // التحقق النهائي - إذا كان product_name فارغاً ولكن task_type هو production، منع الإرسال
             if (taskTypeSelect && taskTypeSelect.value === 'production') {
                 const finalProductName = productNameInput.value.trim();
                 if (!finalProductName) {
                     console.error('✗ Cannot submit: product_name is required for production tasks!');
+                    console.error('  - Selected option:', selectedOption ? selectedOption.text : 'NONE');
+                    console.error('  - data-product-name:', selectedOption ? selectedOption.getAttribute('data-product-name') : 'NONE');
                     e.preventDefault();
                     alert('يجب اختيار منتج لمهمة الإنتاج');
                     return false;
+                } else {
+                    console.log('✓ product_name is valid:', finalProductName);
                 }
             }
+            
+            console.log('Product name input value (after):', productNameInput.value);
+            console.log('=== END FORM SUBMIT DEBUG ===');
         });
     }
 
