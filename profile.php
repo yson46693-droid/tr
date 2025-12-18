@@ -60,99 +60,94 @@ if (isset($_COOKIE['remember_token'])) {
 }
 
 // === تحميل بيانات المستخدم ===
-// استخدام getUserFromToken() مباشرة - لا نعتمد على getCurrentUser() لأنه يعتمد على isLoggedIn()
+// requireLogin() نجح بالفعل، لذلك يجب أن يكون هناك token صالح
+// نستخدم getUserFromToken() مباشرة - نفس الدالة التي يستخدمها requireLogin()
 $user = null;
 $currentUser = null;
 $userId = null;
 
-// المحاولة 1: استخدام getUserFromToken()
+// المحاولة 1: استخدام getUserFromToken() - نفس الدالة المستخدمة في requireLogin()
 $user = getUserFromToken();
 if ($user && isset($user['id']) && !empty($user['id'])) {
     $currentUser = $user;
     $userId = $user['id'];
-}
-
-// المحاولة 2: إذا فشلت، محاولة الحصول من remember_token مباشرة
-if (!$user || !isset($user['id']) || empty($user['id'])) {
-    if (isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
-        try {
-            if (ensureRememberTokensTable()) {
-                $db = db();
-                $decoded = base64_decode($_COOKIE['remember_token'], true);
-                if ($decoded) {
-                    $parts = explode(':', $decoded);
-                    if (count($parts) === 2) {
-                        $tokenUserId = intval($parts[0]);
-                        $token = trim($parts[1]);
-                        
-                        if ($tokenUserId > 0 && !empty($token)) {
-                            $tokenRecord = $db->queryOne(
-                                "SELECT rt.*, u.* FROM remember_tokens rt
-                                 INNER JOIN users u ON rt.user_id = u.id
-                                 WHERE rt.user_id = ? AND rt.token = ? AND rt.expires_at > NOW() AND u.status = 'active'",
-                                [$tokenUserId, $token]
-                            );
-                            
-                            if ($tokenRecord) {
-                                $user = [
-                                    'id' => $tokenRecord['user_id'],
-                                    'username' => $tokenRecord['username'],
-                                    'email' => $tokenRecord['email'] ?? null,
-                                    'full_name' => $tokenRecord['full_name'] ?? null,
-                                    'role' => $tokenRecord['role'],
-                                    'status' => $tokenRecord['status'],
-                                    'phone' => $tokenRecord['phone'] ?? null,
-                                    'created_at' => $tokenRecord['created_at'] ?? null,
-                                    'updated_at' => $tokenRecord['updated_at'] ?? null,
-                                    'profile_photo' => $tokenRecord['profile_photo'] ?? null,
-                                    'webauthn_enabled' => $tokenRecord['webauthn_enabled'] ?? false,
-                                ];
-                                $currentUser = $user;
-                                $userId = $user['id'];
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception $e) {
-            error_log("Profile.php - Failed to load user from remember_token: " . $e->getMessage());
-        }
-    }
-}
-
-// المحاولة 3: إذا فشلت، محاولة استخدام getCurrentUser() كحل أخير
-if (!$user || !isset($user['id']) || empty($user['id'])) {
+    error_log("Profile.php - Successfully loaded user from getUserFromToken()");
+} else {
+    // إذا فشلت getUserFromToken()، نحاول getCurrentUser() كبديل
+    error_log("Profile.php - getUserFromToken() failed, trying getCurrentUser()...");
     $user = getCurrentUser();
     if ($user && isset($user['id']) && !empty($user['id'])) {
         $currentUser = $user;
         $userId = $user['id'];
+        error_log("Profile.php - Successfully loaded user from getCurrentUser()");
+    } else {
+        // إذا فشلت كل المحاولات، نحاول تحميل المستخدم مباشرة من remember_token
+        error_log("Profile.php - Both getUserFromToken() and getCurrentUser() failed, trying direct token load...");
+        
+        if (isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
+            try {
+                if (ensureRememberTokensTable()) {
+                    $db = db();
+                    $decoded = base64_decode($_COOKIE['remember_token'], true);
+                    if ($decoded !== false && !empty($decoded)) {
+                        $parts = explode(':', $decoded);
+                        if (count($parts) === 2) {
+                            $tokenUserId = intval($parts[0]);
+                            $token = trim($parts[1]);
+                            
+                            if ($tokenUserId > 0 && !empty($token)) {
+                                $tokenRecord = $db->queryOne(
+                                    "SELECT rt.*, u.* FROM remember_tokens rt
+                                     INNER JOIN users u ON rt.user_id = u.id
+                                     WHERE rt.user_id = ? AND rt.token = ? AND rt.expires_at > NOW() AND u.status = 'active'",
+                                    [$tokenUserId, $token]
+                                );
+                                
+                                if ($tokenRecord) {
+                                    $user = [
+                                        'id' => $tokenRecord['user_id'],
+                                        'username' => $tokenRecord['username'],
+                                        'email' => $tokenRecord['email'] ?? null,
+                                        'full_name' => $tokenRecord['full_name'] ?? null,
+                                        'role' => $tokenRecord['role'],
+                                        'status' => $tokenRecord['status'],
+                                        'phone' => $tokenRecord['phone'] ?? null,
+                                        'created_at' => $tokenRecord['created_at'] ?? null,
+                                        'updated_at' => $tokenRecord['updated_at'] ?? null,
+                                        'profile_photo' => $tokenRecord['profile_photo'] ?? null,
+                                        'webauthn_enabled' => $tokenRecord['webauthn_enabled'] ?? false,
+                                    ];
+                                    $currentUser = $user;
+                                    $userId = $user['id'];
+                                    error_log("Profile.php - Successfully loaded user from direct token query");
+                                } else {
+                                    error_log("Profile.php - Token record not found in database for user_id: {$tokenUserId}");
+                                }
+                            } else {
+                                error_log("Profile.php - Invalid tokenUserId ({$tokenUserId}) or empty token");
+                            }
+                        } else {
+                            error_log("Profile.php - Invalid token format (parts count: " . count($parts) . ")");
+                        }
+                    } else {
+                        error_log("Profile.php - Failed to decode remember_token cookie");
+                    }
+                } else {
+                    error_log("Profile.php - ensureRememberTokensTable() failed");
+                }
+            } catch (Exception $e) {
+                error_log("Profile.php - Exception during direct token load: " . $e->getMessage());
+            }
+        } else {
+            error_log("Profile.php - No remember_token cookie found");
+        }
     }
 }
 
-// ========================================
-// الحل 2: تحسين منطق التحقق
-// ========================================
-// ملاحظة: requireLogin() في السطر 21 يتحقق بالفعل من تسجيل الدخول
-// إذا وصلنا إلى هنا، يعني أن requireLogin() نجح وسمح بالوصول
-// لذلك لا نعيد التوجيه مرة أخرى، بل نحاول فقط تحميل بيانات المستخدم
-
+// إذا فشل تحميل المستخدم بعد كل المحاولات
 if (!$user || !isset($user['id']) || empty($user['id'])) {
-    // تسجيل السبب
-    error_log("Profile.php - User data not loaded. Attempting to reload from token...");
-    
-    // محاولة إضافية: إعادة تحميل المستخدم من token
-    // requireLogin() نجح بالفعل، لذلك يجب أن يكون هناك token صالح
-    $user = getUserFromToken();
-    if ($user && isset($user['id']) && !empty($user['id'])) {
-        $currentUser = $user;
-        $userId = $user['id'];
-        error_log("Profile.php - Successfully reloaded user from token");
-    } else {
-        // إذا فشل تحميل المستخدم بعد requireLogin()، هذا خطأ غير متوقع
-        // لكن لا نعيد التوجيه لأن requireLogin() نجح بالفعل
-        error_log("Profile.php - WARNING: requireLogin() succeeded but getUserFromToken() failed");
-        $error = 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . $_SERVER['PHP_SELF'] . '">إعادة تحميل الصفحة</a> أو <a href="logout.php">تسجيل الخروج</a> والدخول مرة أخرى.';
-    }
+    error_log("Profile.php - CRITICAL: All attempts to load user data failed. requireLogin() succeeded but user data cannot be loaded.");
+    $error = 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . $_SERVER['PHP_SELF'] . '">إعادة تحميل الصفحة</a> أو <a href="logout.php">تسجيل الخروج</a> والدخول مرة أخرى.';
 }
 
 // ========================================
@@ -450,8 +445,11 @@ exit;
 // التحقق من وجود بيانات المستخدم
 if (!$user || !is_array($user) || !isset($user['id']) || empty($user['id'])) {
     if (empty($error)) {
+        // إذا لم يتم تحميل المستخدم، نعرض رسالة خطأ
         $error = 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . htmlspecialchars($dashboardUrl) . '">العودة</a> والمحاولة مرة أخرى.';
     }
+    // لا نعرض الصفحة إذا لم يتم تحميل المستخدم
+    // سيتم إيقاف الصفحة في الكود أعلاه (السطر 415-434)
 }
 ?>
 

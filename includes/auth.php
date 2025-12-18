@@ -240,78 +240,124 @@ function getUserFromToken() {
         return null;
     }
     
-    try {
-        if (!ensureRememberTokensTable()) {
-            error_log("getUserFromToken() ERROR: ensureRememberTokensTable() failed");
-            return null;
-        }
-        
-        $cookieValue = $_COOKIE['remember_token'];
-        $decoded = base64_decode($cookieValue, true); // strict mode
-        if ($decoded === false || empty($decoded)) {
-            error_log("getUserFromToken() ERROR: base64_decode failed");
-            return null;
-        }
-        
-        $parts = explode(':', $decoded);
-        if (count($parts) !== 2) {
-            error_log("getUserFromToken() ERROR: Invalid token format (parts: " . count($parts) . ")");
-            return null;
-        }
-        
-        $userId = intval($parts[0]);
-        $token = trim($parts[1]);
-        
-        if ($userId <= 0 || empty($token)) {
-            error_log("getUserFromToken() ERROR: Invalid userId ({$userId}) or empty token");
-            return null;
-        }
-        
-        $db = db();
-        $tokenRecord = $db->queryOne(
-            "SELECT rt.*, u.* FROM remember_tokens rt
-             INNER JOIN users u ON rt.user_id = u.id
-             WHERE rt.user_id = ? AND rt.token = ? AND rt.expires_at > NOW() AND u.status = 'active'",
-            [$userId, $token]
-        );
-        
-        if (!$tokenRecord) {
-            error_log("getUserFromToken() ERROR: Token not found or expired for user_id: {$userId}");
-            return null;
-        }
-        
-        // تحديث last_used
+    // محاولة مع retry logic لضمان الموثوقية
+    $maxRetries = 2;
+    $retryDelay = 100000; // 100ms في microseconds
+    
+    for ($attempt = 0; $attempt <= $maxRetries; $attempt++) {
         try {
-            $db->execute(
-                "UPDATE remember_tokens SET last_used = NOW() WHERE id = ?",
-                [$tokenRecord['id']]
-            );
+            if (!ensureRememberTokensTable()) {
+                error_log("getUserFromToken() ERROR (attempt " . ($attempt + 1) . "): ensureRememberTokensTable() failed");
+                if ($attempt < $maxRetries) {
+                    usleep($retryDelay);
+                    continue;
+                }
+                return null;
+            }
+            
+            $cookieValue = $_COOKIE['remember_token'];
+            $decoded = base64_decode($cookieValue, true); // strict mode
+            if ($decoded === false || empty($decoded)) {
+                error_log("getUserFromToken() ERROR (attempt " . ($attempt + 1) . "): base64_decode failed");
+                return null; // لا معنى لإعادة المحاولة هنا
+            }
+            
+            $parts = explode(':', $decoded);
+            if (count($parts) !== 2) {
+                error_log("getUserFromToken() ERROR (attempt " . ($attempt + 1) . "): Invalid token format (parts: " . count($parts) . ")");
+                return null; // لا معنى لإعادة المحاولة هنا
+            }
+            
+            $userId = intval($parts[0]);
+            $token = trim($parts[1]);
+            
+            if ($userId <= 0 || empty($token)) {
+                error_log("getUserFromToken() ERROR (attempt " . ($attempt + 1) . "): Invalid userId ({$userId}) or empty token");
+                return null; // لا معنى لإعادة المحاولة هنا
+            }
+            
+            $db = db();
+            
+            // محاولة الاستعلام مع retry
+            $tokenRecord = null;
+            try {
+                $tokenRecord = $db->queryOne(
+                    "SELECT rt.*, u.* FROM remember_tokens rt
+                     INNER JOIN users u ON rt.user_id = u.id
+                     WHERE rt.user_id = ? AND rt.token = ? AND rt.expires_at > NOW() AND u.status = 'active'",
+                    [$userId, $token]
+                );
+            } catch (Exception $dbException) {
+                error_log("getUserFromToken() DB ERROR (attempt " . ($attempt + 1) . "): " . $dbException->getMessage());
+                if ($attempt < $maxRetries) {
+                    usleep($retryDelay);
+                    continue; // إعادة المحاولة
+                }
+                throw $dbException; // إذا فشلت كل المحاولات، أعد الخطأ
+            }
+            
+            if (!$tokenRecord) {
+                // إذا لم نجد السجل، قد يكون هناك تأخير في قاعدة البيانات
+                // نحاول مرة أخرى فقط إذا لم نكن في المحاولة الأخيرة
+                if ($attempt < $maxRetries) {
+                    error_log("getUserFromToken() WARNING (attempt " . ($attempt + 1) . "): Token not found, retrying...");
+                    usleep($retryDelay);
+                    continue;
+                }
+                error_log("getUserFromToken() ERROR: Token not found or expired for user_id: {$userId} after " . ($maxRetries + 1) . " attempts");
+                return null;
+            }
+            
+            // تحديث last_used
+            try {
+                $db->execute(
+                    "UPDATE remember_tokens SET last_used = NOW() WHERE id = ?",
+                    [$tokenRecord['id']]
+                );
+            } catch (Exception $e) {
+                // لا نعتبر هذا خطأ حرج
+                error_log("getUserFromToken() WARNING: Failed to update last_used: " . $e->getMessage());
+            }
+            
+            // إرجاع بيانات المستخدم
+            $userData = [
+                'id' => $tokenRecord['user_id'],
+                'username' => $tokenRecord['username'],
+                'email' => $tokenRecord['email'] ?? null,
+                'full_name' => $tokenRecord['full_name'] ?? null,
+                'role' => $tokenRecord['role'],
+                'status' => $tokenRecord['status'],
+                'phone' => $tokenRecord['phone'] ?? null,
+                'created_at' => $tokenRecord['created_at'] ?? null,
+                'updated_at' => $tokenRecord['updated_at'] ?? null,
+                'profile_photo' => $tokenRecord['profile_photo'] ?? null,
+                'webauthn_enabled' => $tokenRecord['webauthn_enabled'] ?? false,
+            ];
+            
+            if ($attempt > 0) {
+                error_log("getUserFromToken() SUCCESS: Loaded user data after " . ($attempt + 1) . " attempts");
+            }
+            
+            return $userData;
+            
         } catch (Exception $e) {
-            // لا نعتبر هذا خطأ حرج
-            error_log("getUserFromToken() WARNING: Failed to update last_used: " . $e->getMessage());
+            error_log("getUserFromToken() ERROR (attempt " . ($attempt + 1) . "): " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
+            if ($attempt < $maxRetries) {
+                usleep($retryDelay);
+                continue; // إعادة المحاولة
+            }
+            return null;
+        } catch (Throwable $e) {
+            error_log("getUserFromToken() THROWABLE (attempt " . ($attempt + 1) . "): " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
+            if ($attempt < $maxRetries) {
+                usleep($retryDelay);
+                continue; // إعادة المحاولة
+            }
+            return null;
         }
-        
-        // إرجاع بيانات المستخدم
-        return [
-            'id' => $tokenRecord['user_id'],
-            'username' => $tokenRecord['username'],
-            'email' => $tokenRecord['email'] ?? null,
-            'full_name' => $tokenRecord['full_name'] ?? null,
-            'role' => $tokenRecord['role'],
-            'status' => $tokenRecord['status'],
-            'phone' => $tokenRecord['phone'] ?? null,
-            'created_at' => $tokenRecord['created_at'] ?? null,
-            'updated_at' => $tokenRecord['updated_at'] ?? null,
-            'profile_photo' => $tokenRecord['profile_photo'] ?? null,
-            'webauthn_enabled' => $tokenRecord['webauthn_enabled'] ?? false,
-        ];
-    } catch (Exception $e) {
-        error_log("getUserFromToken() ERROR: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
-        return null;
-    } catch (Throwable $e) {
-        error_log("getUserFromToken() THROWABLE: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
-        return null;
     }
+    
+    return null;
 }
 
 /**
