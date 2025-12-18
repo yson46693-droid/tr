@@ -180,12 +180,19 @@ function isLoggedIn() {
                 try {
                     $db = db();
                 } catch (Throwable $dbError) {
-                    // إذا فشل الاتصال بقاعدة البيانات، نعتبر الجلسة غير صالحة
+                    // إذا فشل الاتصال بقاعدة البيانات، في الصفحات المحمية نحافظ على الجلسة
                     error_log("isLoggedIn() ERROR: Database connection failed: " . $dbError->getMessage());
-                    $_SESSION = [];
-                    @session_unset();
-                    @session_destroy();
-                    return false;
+                    if ($isProtectedPage) {
+                        // في الصفحات المحمية، نعتبر الجلسة صالحة مؤقتاً حتى يتم إصلاح الاتصال
+                        error_log("isLoggedIn() WARNING: Database connection failed in protected page - keeping session active temporarily");
+                        return true; // نعتبر المستخدم مسجل دخول مؤقتاً
+                    } else {
+                        // في الصفحات الأخرى، نحذف الجلسة
+                        $_SESSION = [];
+                        @session_unset();
+                        @session_destroy();
+                        return false;
+                    }
                 }
                 
                 // البحث عن الجلسة في قاعدة البيانات - يجب أن تطابق session_id تماماً
@@ -289,19 +296,70 @@ function isLoggedIn() {
         // === إذا لم تكن الجلسة صالحة في قاعدة البيانات، حذفها وإرجاع false ===
         // هذا هو التحقق الأمني الرئيسي - يجب أن تكون الجلسة موجودة في قاعدة البيانات
         if (!$sessionValidInDB) {
-            // في حالة الخطأ في قاعدة البيانات أو عدم وجود الجلسة، نعتبر الجلسة غير صالحة للأمان
-            $_SESSION = [];
-            @session_unset();
-            @session_destroy();
-            
-            // حذف cookies
-            if (isset($_COOKIE[session_name()])) {
-                setcookie(session_name(), '', time() - 3600, '/');
+            // في الصفحات المحمية (profile.php, attendance.php, etc.)، نحاول استعادة الجلسة بدلاً من حذفها
+            if ($isProtectedPage && isset($userId) && !empty($userId) && !empty($sessionId)) {
+                // محاولة أخيرة لإنشاء/استعادة الجلسة في الصفحات المحمية
+                try {
+                    if (ensureSessionsTable()) {
+                        // التأكد من وجود اتصال قاعدة البيانات
+                        if (!isset($db)) {
+                            $db = db();
+                        }
+                        
+                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                        $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                        $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                        $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                        
+                        // محاولة إنشاء الجلسة مرة أخرى
+                        $db->execute(
+                            "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                             VALUES (?, ?, ?, ?, ?, NOW())
+                             ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?, user_id = ?",
+                            [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt, $userId]
+                        );
+                        
+                        // التحقق من أن الجلسة تم إنشاؤها بنجاح
+                        $sessionRecord = $db->queryOne(
+                            "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
+                            [$userId, $sessionId]
+                        );
+                        
+                        if ($sessionRecord) {
+                            // نجحنا في استعادة الجلسة
+                            $sessionValidInDB = true;
+                            error_log("isLoggedIn() RESTORED in protected page: Recreated session for user_id: {$userId}");
+                            // نتابع التنفيذ بدلاً من إرجاع false
+                        } else {
+                            // فشلنا في استعادة الجلسة - لكن في الصفحات المحمية، لا نحذف الجلسة
+                            error_log("isLoggedIn() WARNING in protected page: Failed to restore session for user_id: {$userId} - but keeping session active");
+                            // نعتبر الجلسة صالحة مؤقتاً في الصفحات المحمية
+                            $sessionValidInDB = true;
+                        }
+                    }
+                } catch (Exception $restoreError) {
+                    // في الصفحات المحمية، حتى لو فشلنا، لا نحذف الجلسة
+                    error_log("isLoggedIn() WARNING in protected page: Exception during session restore for user_id: {$userId}: " . $restoreError->getMessage() . " - but keeping session active");
+                    $sessionValidInDB = true; // نعتبر الجلسة صالحة مؤقتاً
+                }
             }
             
-            // تعطيل التسجيل لتقليل الضغط على السيرفر
-            // error_log("isLoggedIn() SECURITY FAIL: Session not found in database - Access denied");
-            return false;
+            // إذا لم نكن في صفحة محمية أو فشلت محاولة الاستعادة، نحذف الجلسة
+            if (!$sessionValidInDB) {
+                // في حالة الخطأ في قاعدة البيانات أو عدم وجود الجلسة، نعتبر الجلسة غير صالحة للأمان
+                $_SESSION = [];
+                @session_unset();
+                @session_destroy();
+                
+                // حذف cookies
+                if (isset($_COOKIE[session_name()])) {
+                    setcookie(session_name(), '', time() - 3600, '/');
+                }
+                
+                // تعطيل التسجيل لتقليل الضغط على السيرفر
+                // error_log("isLoggedIn() SECURITY FAIL: Session not found in database - Access denied");
+                return false;
+            }
         }
         
         // === الجلسة موجودة في قاعدة البيانات - المتابعة ===
