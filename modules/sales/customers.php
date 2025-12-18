@@ -4529,41 +4529,23 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // معالج استيراد العملاء من Excel
+    // معالج استيراد العملاء من CSV
     var importCustomersForm = document.getElementById('importCustomersForm');
     var importCustomersModal = document.getElementById('importCustomersModal');
-    
-    console.log('Import form element:', importCustomersForm);
-    console.log('Import modal element:', importCustomersModal);
     
     if (importCustomersForm) {
         importCustomersForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            console.log('Import form submitted');
             
             var fileInput = document.getElementById('excelFileInput');
-            if (!fileInput) {
-                console.error('File input not found');
-                alert('خطأ: لم يتم العثور على حقل اختيار الملف');
-                return;
-            }
-            
-            if (!fileInput.files || fileInput.files.length === 0) {
-                console.warn('No file selected');
-                alert('يرجى اختيار ملف Excel');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                alert('يرجى اختيار ملف CSV أو Excel');
                 return;
             }
             
             var file = fileInput.files[0];
-            console.log('Selected file:', file.name, 'Size:', file.size, 'Type:', file.type);
-            
             if (file.size > 10 * 1024 * 1024) {
                 alert('حجم الملف يجب ألا يتجاوز 10 ميجابايت');
-                return;
-            }
-            
-            if (file.size === 0) {
-                alert('الملف المحدد فارغ');
                 return;
             }
             
@@ -4573,99 +4555,32 @@ document.addEventListener('DOMContentLoaded', function () {
             
             // إظهار شريط التقدم
             var progressDiv = document.getElementById('importProgress');
-            var progressBar = progressDiv ? progressDiv.querySelector('.progress-bar') : null;
+            var progressBar = progressDiv.querySelector('.progress-bar');
             var statusDiv = document.getElementById('importStatus');
             var resultsDiv = document.getElementById('importResults');
             var errorsDiv = document.getElementById('importErrors');
             var submitBtn = document.getElementById('importSubmitBtn');
             
-            if (progressDiv) progressDiv.classList.remove('d-none');
-            if (resultsDiv) resultsDiv.classList.add('d-none');
-            if (errorsDiv) errorsDiv.classList.add('d-none');
-            if (progressBar) progressBar.style.width = '0%';
-            if (statusDiv) statusDiv.textContent = 'جاري رفع الملف...';
-            if (submitBtn) submitBtn.disabled = true;
+            progressDiv.classList.remove('d-none');
+            resultsDiv.classList.add('d-none');
+            errorsDiv.classList.add('d-none');
+            progressBar.style.width = '0%';
+            statusDiv.textContent = 'جاري رفع الملف...';
+            submitBtn.disabled = true;
             
-            // استخدام مسار مباشر لضمان الوصول الصحيح
-            // محاولة استخدام مسار نسبي من الصفحة الحالية
-            var apiUrl = 'api/import_customers.php';
-            
-            // إذا كان المسار الحالي يحتوي على dashboard، استخدم مسار مطلق
-            if (window.location.pathname.includes('/dashboard/')) {
-                // استخراج المسار الأساسي
-                var basePath = window.location.pathname.split('/dashboard/')[0];
-                apiUrl = basePath + '/api/import_customers.php';
-            } else {
-                // استخدام مسار نسبي
-                var currentPath = window.location.pathname;
-                var pathParts = currentPath.split('/').filter(function(p) { return p; });
-                // إزالة آخر جزء (اسم الملف)
-                if (pathParts.length > 0) {
-                    pathParts.pop();
-                }
-                // بناء المسار
-                if (pathParts.length > 0) {
-                    apiUrl = '/' + pathParts.join('/') + '/api/import_customers.php';
-                } else {
-                    apiUrl = '/api/import_customers.php';
-                }
-            }
-            
-            console.log('Current pathname:', window.location.pathname);
-            console.log('Import API URL:', apiUrl);
-            console.log('FormData entries:');
-            for (var pair of formData.entries()) {
-                console.log(pair[0] + ': ' + (pair[1] instanceof File ? pair[1].name + ' (' + pair[1].size + ' bytes)' : pair[1]));
-            }
-            
-            // إضافة timeout للطلب
-            var controller = new AbortController();
-            var timeoutId = setTimeout(() => controller.abort(), 300000); // 5 دقائق
-            
-            fetch(apiUrl, {
+            fetch('<?php echo getRelativeUrl("api/import_customers.php"); ?>', {
                 method: 'POST',
                 body: formData,
-                credentials: 'same-origin',
-                signal: controller.signal,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                credentials: 'same-origin'
             })
             .then(response => {
-                clearTimeout(timeoutId);
-                console.log('Response status:', response.status);
-                console.log('Response statusText:', response.statusText);
-                console.log('Response Content-Type:', response.headers.get('Content-Type'));
-                
-                // قراءة النص أولاً للتحقق من نوع الاستجابة
-                return response.text().then(text => {
-                    console.log('Response text (first 500 chars):', text.substring(0, 500));
-                    
-                    if (!response.ok) {
-                        console.error('Error response (full):', text);
-                        try {
-                            var errorData = JSON.parse(text);
-                            throw new Error(errorData.message || 'خطأ في الاتصال بالخادم: ' + response.status);
-                        } catch (parseError) {
-                            if (parseError instanceof Error && parseError.message.includes('خطأ في الاتصال')) {
-                                throw parseError;
-                            }
-                            // إذا لم يكن JSON، استخدم النص مباشرة
-                            throw new Error('خطأ في الاتصال بالخادم: ' + response.status + ' - ' + (text.substring(0, 200) || response.statusText));
-                        }
-                    }
-                    
-                    // محاولة تحليل JSON
-                    try {
-                        var data = JSON.parse(text);
-                        console.log('Parsed JSON data:', data);
-                        return data;
-                    } catch (jsonError) {
-                        console.error('JSON parse error:', jsonError);
-                        console.error('Response text (full):', text);
-                        throw new Error('خطأ في قراءة الاستجابة من الخادم. الاستجابة ليست JSON صحيح.');
-                    }
-                });
+                // التحقق من حالة الاستجابة
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error('خطأ في الخادم: ' + response.status + ' ' + response.statusText + (text ? ' - ' + text.substring(0, 200) : ''));
+                    });
+                }
+                return response.json();
             })
             .then(data => {
                 if (progressBar) progressBar.style.width = '100%';
@@ -4685,14 +4600,13 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                         if (data.errors && data.errors.length > 0) {
                             html += '<li>أخطاء: <strong>' + data.errors.length + '</strong> سطر</li>';
-                            if (data.errors.length <= 10) {
-                                html += '<li><small>' + data.errors.join('<br>') + '</small></li>';
-                            }
                         }
                         html += '</ul>';
                         resultsContent.innerHTML = html;
                     }
-                    if (resultsDiv) resultsDiv.classList.remove('d-none');
+                    if (resultsDiv) {
+                        resultsDiv.classList.remove('d-none');
+                    }
                     
                     // إعادة تحميل الصفحة بعد 2 ثانية
                     setTimeout(function() {
@@ -4712,51 +4626,33 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                         errorsContent.innerHTML = html;
                     }
-                    if (errorsDiv) errorsDiv.classList.remove('d-none');
+                    if (errorsDiv) {
+                        errorsDiv.classList.remove('d-none');
+                    }
                 }
                 
                 if (submitBtn) submitBtn.disabled = false;
             })
             .catch(error => {
-                clearTimeout(timeoutId);
                 console.error('Import error:', error);
-                console.error('Error name:', error.name);
-                console.error('Error message:', error.message);
-                console.error('Error stack:', error.stack);
-                
-                if (progressBar) progressBar.style.width = '100%';
-                
-                var errorMessage = 'حدث خطأ غير متوقع';
-                
-                if (error.name === 'AbortError') {
-                    errorMessage = 'انتهت مهلة الاتصال. يرجى المحاولة مرة أخرى أو اختيار ملف أصغر.';
-                } else if (error.message) {
-                    errorMessage = error.message;
-                } else if (error.toString) {
-                    errorMessage = error.toString();
-                }
-                
                 if (statusDiv) {
                     statusDiv.textContent = 'حدث خطأ في الاتصال بالخادم';
                     statusDiv.className = 'text-center text-danger';
                 }
-                
                 if (errorsDiv) {
                     errorsDiv.classList.remove('d-none');
-                    var errorsContent = document.getElementById('importErrorsContent');
-                    if (errorsContent) {
-                        errorsContent.innerHTML = '<div class="alert alert-danger">' +
-                            '<strong>خطأ:</strong> ' + errorMessage + '<br><br>' +
-                            '<small><strong>تفاصيل تقنية:</strong><br>' +
-                            'اسم الخطأ: ' + (error.name || 'غير معروف') + '<br>' +
-                            'يرجى التحقق من: console.log في المتصفح (F12) لمزيد من التفاصيل<br>' +
-                            'أو تحقق من ملف السجلات: storage/logs/import_customers.log' +
-                            '</small>' +
-                            '</div>';
-                    }
                 }
-                
-                if (submitBtn) submitBtn.disabled = false;
+                var errorMessage = error.message || 'حدث خطأ غير معروف';
+                var errorsContent = document.getElementById('importErrorsContent');
+                if (errorsContent) {
+                    errorsContent.innerHTML = '<p>' + errorMessage + '</p><p class="text-muted small mt-2">يرجى التحقق من ملف error_log في الخادم لمزيد من التفاصيل</p>';
+                } else {
+                    console.error('importErrorsContent element not found');
+                    alert('حدث خطأ: ' + errorMessage);
+                }
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                }
             });
         });
     }
@@ -4770,19 +4666,9 @@ document.addEventListener('DOMContentLoaded', function () {
             var progressDiv = document.getElementById('importProgress');
             var resultsDiv = document.getElementById('importResults');
             var errorsDiv = document.getElementById('importErrors');
-            var statusDiv = document.getElementById('importStatus');
-            var progressBar = progressDiv ? progressDiv.querySelector('.progress-bar') : null;
-            var submitBtn = document.getElementById('importSubmitBtn');
-            
             if (progressDiv) progressDiv.classList.add('d-none');
             if (resultsDiv) resultsDiv.classList.add('d-none');
             if (errorsDiv) errorsDiv.classList.add('d-none');
-            if (statusDiv) {
-                statusDiv.textContent = '';
-                statusDiv.className = 'text-center';
-            }
-            if (progressBar) progressBar.style.width = '0%';
-            if (submitBtn) submitBtn.disabled = false;
         });
     }
     
@@ -5502,21 +5388,20 @@ document.addEventListener('DOMContentLoaded', function () {
                         <i class="bi bi-info-circle me-2"></i>
                         <strong>تعليمات الاستيراد:</strong>
                         <ul class="mb-0 mt-2">
-                            <li>يجب أن يحتوي ملف CSV/Excel على الأعمدة التالية: <strong>اسم العميل</strong> (مطلوب)، <strong>رقم الهاتف</strong>، <strong>رقم الهاتف (الثاني)</strong>، <strong>رقم الهاتف (الثالث)</strong>، <strong>العنوان</strong>، <strong>الرصيد</strong>، <strong>المنطقة</strong></li>
+                            <li>يجب أن يحتوي الملف على الأعمدة التالية في الصف الأول: <strong>اسم العميل</strong> (مطلوب)، <strong>رقم الهاتف</strong>، <strong>رقم الهاتف (الثاني)</strong>، <strong>رقم الهاتف (الثالث)</strong>، <strong>العنوان</strong>، <strong>الرصيد</strong>، <strong>المنطقة</strong></li>
                             <li>يجب أن يكون الصف الأول هو رؤوس الأعمدة</li>
-                            <li>الملفات المدعومة: .csv, .xlsx, .xls</li>
+                            <li><strong>الملفات المدعومة:</strong> <strong>.csv</strong> (مفضّل - بدون مكتبات)، .xlsx, .xls (يتطلب مكتبة إضافية)</li>
+                            <li>لتصدير Excel كـ CSV: في Excel اختر <strong>ملف > حفظ باسم > CSV UTF-8</strong></li>
                             <li>سيتم تخطي العملاء المكررين (بناءً على الاسم ورقم الهاتف)</li>
                             <?php if ($isSalesUser): ?>
-                            <li class="text-warning"><strong>ملاحظة:</strong> سيتم ربط جميع العملاء المستوردين بك بصفتك مندوب المبيعات</li>
+                            <li class="text-warning"><strong>ملاحظة:</strong> سيتم ربط جميع العملاء المستوردين بك بصفتك مندوب المبيعات فقط</li>
                             <?php endif; ?>
-                            <li>يمكن استخدام عمود <strong>ايدي العميل</strong> لتحديث العملاء الموجودين<?php if ($isSalesUser): ?> (فقط عملائك)<?php endif; ?></li>
-                            <li>الهاتف الثالث سيُحفظ مع عنوان "2" في قاعدة البيانات</li>
                         </ul>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">اختر ملف Excel <span class="text-danger">*</span></label>
+                        <label class="form-label">اختر ملف CSV أو Excel <span class="text-danger">*</span></label>
                         <input type="file" class="form-control" name="excel_file" id="excelFileInput" accept=".csv,.xlsx,.xls" required>
-                        <small class="text-muted">الحجم الأقصى: 10 ميجابايت</small>
+                        <small class="text-muted">الحجم الأقصى: 10 ميجابايت | يُفضل استخدام ملف CSV</small>
                     </div>
                     <div id="importProgress" class="d-none">
                         <div class="progress mb-3">
