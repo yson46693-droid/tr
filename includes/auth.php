@@ -604,63 +604,69 @@ function login($username, $password, $rememberMe = true) { // جعل rememberMe 
     
     // === إنشاء remember_token دائماً (مطلوب للنظام بدون جلسات) ===
     // في النظام الجديد، remember_token مطلوب دائماً لأنه الطريقة الوحيدة للمصادقة
-    if ($rememberMe) {
-        // التأكد من وجود الجدول
-        if (!ensureRememberTokensTable()) {
-            // إذا فشل إنشاء الجدول، متابعة بدون "تذكرني"
-            error_log("Failed to create remember_tokens table, continuing without remember me");
-        } else {
-            // توليد token آمن
-            $token = bin2hex(random_bytes(32));
-            
-            // حفظ token في قاعدة البيانات
-            $db = db();
-            $expiresAt = date('Y-m-d H:i:s', strtotime('+30 days')); // 30 يوم
-            
-            // حذف أي token موجود لنفس المستخدم
-            try {
-                $db->execute("DELETE FROM remember_tokens WHERE user_id = ?", [$user['id']]);
-            } catch (Exception $e) {
-                error_log("Error deleting remember token: " . $e->getMessage());
-            }
-            
-            // إضافة token جديد
-            try {
-                $db->execute(
-                    "INSERT INTO remember_tokens (user_id, token, expires_at, ip_address, user_agent) 
-                     VALUES (?, ?, ?, ?, ?)",
-                    [
-                        $user['id'], 
-                        $token, 
-                        $expiresAt, 
-                        $ipAddress, 
-                        $_SERVER['HTTP_USER_AGENT'] ?? ''
-                    ]
-                );
-            } catch (Exception $e) {
-                error_log("Error inserting remember token: " . $e->getMessage());
-                // متابعة بدون إنشاء cookie
-                $rememberMe = false;
-            }
-            
-            // إنشاء cookie آمن
-            if ($rememberMe) {
-                $cookieValue = base64_encode($user['id'] . ':' . $token);
-                setcookie(
-                    'remember_token',
-                    $cookieValue,
-                    [
-                        'expires' => time() + (30 * 24 * 60 * 60), // 30 يوم
-                        'path' => '/',
-                        'domain' => '',
-                        'secure' => $isHttps,
-                        'httponly' => true, // منع JavaScript من الوصول
-                        'samesite' => 'Lax'
-                    ]
-                );
-            }
-        }
+    // يجب إنشاؤه دائماً بغض النظر عن قيمة $rememberMe
+    // التأكد من وجود الجدول
+    if (!ensureRememberTokensTable()) {
+        // إذا فشل إنشاء الجدول، هذا خطأ حرج
+        error_log("CRITICAL: Failed to create remember_tokens table - login will fail without it");
+        return ['success' => false, 'message' => 'خطأ في النظام. يرجى المحاولة مرة أخرى.'];
     }
+    
+    // توليد token آمن
+    $token = bin2hex(random_bytes(32));
+    
+    // حفظ token في قاعدة البيانات
+    $db = db();
+    // تحديد مدة الصلاحية بناءً على rememberMe
+    $expiresDays = $rememberMe ? 30 : 1; // 30 يوم إذا كان rememberMe، يوم واحد إذا لم يكن
+    $expiresAt = date('Y-m-d H:i:s', strtotime("+{$expiresDays} days"));
+    
+    // حذف أي token موجود لنفس المستخدم
+    try {
+        $db->execute("DELETE FROM remember_tokens WHERE user_id = ?", [$user['id']]);
+    } catch (Exception $e) {
+        error_log("Error deleting remember token: " . $e->getMessage());
+    }
+    
+    // إضافة token جديد
+    try {
+        $db->execute(
+            "INSERT INTO remember_tokens (user_id, token, expires_at, ip_address, user_agent) 
+             VALUES (?, ?, ?, ?, ?)",
+            [
+                $user['id'], 
+                $token, 
+                $expiresAt, 
+                $ipAddress, 
+                $_SERVER['HTTP_USER_AGENT'] ?? ''
+            ]
+        );
+    } catch (Exception $e) {
+        error_log("CRITICAL: Error inserting remember token: " . $e->getMessage());
+        return ['success' => false, 'message' => 'خطأ في حفظ جلسة العمل. يرجى المحاولة مرة أخرى.'];
+    }
+    
+    // إنشاء cookie آمن - دائماً مطلوب
+    $cookieValue = base64_encode($user['id'] . ':' . $token);
+    $cookieSet = setcookie(
+        'remember_token',
+        $cookieValue,
+        [
+            'expires' => time() + ($expiresDays * 24 * 60 * 60),
+            'path' => '/',
+            'domain' => '',
+            'secure' => $isHttps,
+            'httponly' => true, // منع JavaScript من الوصول
+            'samesite' => 'Lax'
+        ]
+    );
+    
+    if (!$cookieSet) {
+        error_log("WARNING: Failed to set remember_token cookie");
+    }
+    
+    // التأكد من أن cookie موجود في $_COOKIE للطلبات اللاحقة في نفس الطلب
+    $_COOKIE['remember_token'] = $cookieValue;
     
     // تسجيل محاولة ناجحة
     logLoginAttempt($username, true);
