@@ -1928,9 +1928,23 @@ function requireLogin() {
         // إضافة رسالة تنبيه للمستخدم عن فشل الجلسة
         // حفظ الرسالة في session لتظهر في صفحة تسجيل الدخول
         if (session_status() === PHP_SESSION_ACTIVE) {
-            $_SESSION['session_error'] = 'انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.';
+            $_SESSION['session_error'] = 'انتهت الجلسة أو حدث خطأ. يرجى تسجيل الدخول مرة أخرى.';
             $_SESSION['session_failed'] = true;
+            $_SESSION['session_expired'] = true;
         }
+        
+        // تنظيف output buffer قبل إعادة التوجيه
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+        
+        // التأكد من تنظيف URL من أي بروتوكول أو hostname
+        $loginUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $loginUrl);
+        $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+        if (strpos($loginUrl, '/') !== 0) {
+            $loginUrl = '/' . $loginUrl;
+        }
+        $loginUrl = preg_replace('/\/+/', '/', $loginUrl);
         
         // التحقق من إرسال الـ headers أو تضمين header.php
         $headersSent = @headers_sent($file, $line);
@@ -1939,8 +1953,10 @@ function requireLogin() {
         // إذا تم تضمين header.php أو كانت الـ headers قد أُرسلت، استخدم JavaScript redirect دائماً
         if ($headerIncluded || $headersSent) {
             // استخدام replace بدلاً من href لتجنب إضافة URL للتاريخ
+            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
             echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
             echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+            echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
             exit;
         }
         
@@ -1953,8 +1969,10 @@ function requireLogin() {
         }
         
         // إذا فشل header()، استخدم JavaScript redirect
+        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
         echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
         echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+        echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
         exit;
     }
 }

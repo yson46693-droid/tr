@@ -9,6 +9,154 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
+/**
+ * معالج الأخطاء الشامل - يمنع ظهور رسائل خطأ المتصفح ويرسل المستخدم لتسجيل الدخول
+ */
+function handleErrorAndRedirect($errno, $errstr, $errfile, $errline, $context = null) {
+    // تجاهل الأخطاء التي تم إيقافها باستخدام @
+    if (!(error_reporting() & $errno)) {
+        return false;
+    }
+    
+    // تجاهل بعض الأخطاء غير الحرجة
+    $nonCriticalErrors = [E_NOTICE, E_WARNING, E_DEPRECATED, E_STRICT];
+    if (in_array($errno, $nonCriticalErrors, true)) {
+        return false; // استمر التنفيذ للأخطاء غير الحرجة
+    }
+    
+    // للأخطاء الحرجة (Fatal Errors، Parse Errors، إلخ) - إعادة التوجيه
+    // تجنب الحلقات اللانهائية من خلال التحقق من أننا لسنا في صفحة تسجيل الدخول
+    $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+    if (strpos($currentScript, 'index.php') !== false && basename($currentScript) === 'index.php') {
+        return false; // لا نعيد التوجيه إذا كنا بالفعل في صفحة تسجيل الدخول
+    }
+    
+    // حفظ معلومات الخطأ في session (إن أمكن)
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['session_error'] = 'حدث خطأ في النظام. يرجى تسجيل الدخول مرة أخرى.';
+        $_SESSION['session_failed'] = true;
+    }
+    
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    
+    // محاولة إعادة التوجيه إلى صفحة تسجيل الدخول
+    $loginUrl = '/index.php';
+    if (function_exists('getRelativeUrl')) {
+        $loginUrl = getRelativeUrl('index.php');
+    } else {
+        // محاولة بناء URL نسبي بناءً على المسار الحالي
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+        $pathParts = explode('/', trim(parse_url($requestUri, PHP_URL_PATH), '/'));
+        $basePath = '';
+        foreach ($pathParts as $part) {
+            if (in_array($part, ['dashboard', 'modules', 'api', 'assets', 'includes']) || strpos($part, '.php') !== false) {
+                break;
+            }
+            if (!empty($part)) {
+                $basePath .= '/' . $part;
+            }
+        }
+        if (!empty($basePath)) {
+            $loginUrl = $basePath . '/index.php';
+        }
+    }
+    
+    // تنظيف URL
+    $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
+    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+    if (strpos($loginUrl, '/') !== 0) {
+        $loginUrl = '/' . $loginUrl;
+    }
+    
+    // إرسال header redirect إذا أمكن
+    if (!@headers_sent()) {
+        @header('Location: ' . $loginUrl, true, 303);
+        exit;
+    } else {
+        // استخدام JavaScript redirect إذا تم إرسال headers بالفعل
+        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+        echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
+        exit;
+    }
+}
+
+/**
+ * معالج الأخطاء القاتلة (Fatal Errors)
+ */
+function handleFatalError() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_PARSE, E_RECOVERABLE_ERROR], true)) {
+        handleErrorAndRedirect($error['type'], $error['message'], $error['file'], $error['line']);
+    }
+}
+
+/**
+ * معالج الاستثناءات (Exceptions)
+ */
+function handleException($exception) {
+    // تجنب الحلقات اللانهائية
+    $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+    if (strpos($currentScript, 'index.php') !== false && basename($currentScript) === 'index.php') {
+        // إذا كنا في صفحة تسجيل الدخول، اعرض الخطأ بشكل طبيعي
+        return false;
+    }
+    
+    // حفظ معلومات الخطأ في session
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['session_error'] = 'حدث خطأ في النظام. يرجى تسجيل الدخول مرة أخرى.';
+        $_SESSION['session_failed'] = true;
+    }
+    
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    
+    // إعادة التوجيه إلى صفحة تسجيل الدخول
+    $loginUrl = '/index.php';
+    if (function_exists('getRelativeUrl')) {
+        $loginUrl = getRelativeUrl('index.php');
+    }
+    
+    // تنظيف URL
+    $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
+    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+    if (strpos($loginUrl, '/') !== 0) {
+        $loginUrl = '/' . $loginUrl;
+    }
+    
+    if (!@headers_sent()) {
+        @header('Location: ' . $loginUrl, true, 303);
+        exit;
+    } else {
+        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+        echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
+        exit;
+    }
+}
+
+// تسجيل معالجات الأخطاء (فقط إذا لم نكن في صفحة تسجيل الدخول)
+$currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+$isLoginPage = (strpos($currentScript, 'index.php') !== false && basename($currentScript) === 'index.php');
+
+if (!$isLoginPage) {
+    // تسجيل معالج الأخطاء
+    set_error_handler('handleErrorAndRedirect', E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED & ~E_STRICT);
+    
+    // تسجيل معالج الأخطاء القاتلة
+    register_shutdown_function('handleFatalError');
+    
+    // تسجيل معالج الاستثناءات
+    set_exception_handler('handleException');
+}
+
 define('DB_HOST', 'localhost');
 define('DB_PORT', '3306');
 define('DB_USER', 'co_db');

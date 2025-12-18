@@ -444,7 +444,14 @@ if (isset($_SESSION['session_error']) && !empty($_SESSION['session_error'])) {
     $error = $_SESSION['session_error'];
     unset($_SESSION['session_error']);
     unset($_SESSION['session_failed']);
+    // تنظيف session_expired أيضاً
+    if (isset($_SESSION['session_expired'])) {
+        unset($_SESSION['session_expired']);
+    }
 }
+
+// التحقق من وجود session_expired في sessionStorage (من JavaScript redirect)
+// سيتم عرض الرسالة في JavaScript
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = $_POST['username'] ?? '';
@@ -994,12 +1001,19 @@ $lang = $translations;
                         </div>
                         
                         <?php if ($error): ?>
-                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <div class="alert alert-warning alert-dismissible fade show" role="alert" id="sessionErrorAlert">
                                 <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                                <?php echo htmlspecialchars($error); ?>
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                <strong>تنبيه:</strong> <?php echo htmlspecialchars($error); ?>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
                             </div>
                         <?php endif; ?>
+                        
+                        <!-- رسالة تنبيه من JavaScript (عند ERR_FAILED أو أخطاء الاتصال) -->
+                        <div class="alert alert-warning alert-dismissible fade show d-none" role="alert" id="jsSessionErrorAlert">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>تنبيه:</strong> <span id="jsSessionErrorText">انتهت الجلسة أو حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.</span>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
                         
                         <?php if ($success): ?>
                             <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -1294,6 +1308,34 @@ $lang = $translations;
                 // لا تظهر splash screen - إخفاء فوري
                 clearTimeout(splashCheckTimeout);
                 hideSplashScreen();
+            }
+        })();
+        
+        // التحقق من رسائل الخطأ من sessionStorage (عند إعادة التوجيه من JavaScript)
+        (function() {
+            try {
+                const sessionExpired = sessionStorage.getItem('session_expired');
+                const redirectReason = sessionStorage.getItem('redirect_reason');
+                
+                if (sessionExpired === 'true') {
+                    // إظهار رسالة التنبيه
+                    const alertElement = document.getElementById('jsSessionErrorAlert');
+                    const errorTextElement = document.getElementById('jsSessionErrorText');
+                    
+                    if (alertElement && errorTextElement) {
+                        if (redirectReason) {
+                            errorTextElement.textContent = redirectReason;
+                        }
+                        alertElement.classList.remove('d-none');
+                        alertElement.classList.add('show');
+                        
+                        // إزالة العناصر من sessionStorage بعد عرضها
+                        sessionStorage.removeItem('session_expired');
+                        sessionStorage.removeItem('redirect_reason');
+                    }
+                }
+            } catch (e) {
+                // تجاهل الأخطاء في sessionStorage (مثلاً في وضع الخصوصية)
             }
         })();
         

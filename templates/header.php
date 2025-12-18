@@ -2746,6 +2746,110 @@ if (ob_get_level() > 0) {
         }
     })();
     </script>
+    
+    <!-- معالج الأخطاء JavaScript - منع ظهور رسائل خطأ المتصفح (ERR_FAILED) -->
+    <script>
+    (function() {
+        'use strict';
+        
+        // دالة للحصول على URL صفحة تسجيل الدخول
+        function getLoginUrl() {
+            const currentPath = window.location.pathname || '/';
+            const pathParts = currentPath.split('/').filter(p => p && p !== 'dashboard' && p !== 'modules' && !p.endsWith('.php'));
+            const basePath = pathParts.length > 0 ? '/' + pathParts[0] : '';
+            return (basePath ? basePath : '') + '/index.php';
+        }
+        
+        // دالة لإعادة التوجيه إلى صفحة تسجيل الدخول مع رسالة تنبيه
+        function redirectToLogin(reason) {
+            const loginUrl = getLoginUrl();
+            
+            // حفظ سبب إعادة التوجيه في sessionStorage
+            try {
+                sessionStorage.setItem('session_expired', 'true');
+                sessionStorage.setItem('redirect_reason', reason || 'انتهت الجلسة أو حدث خطأ في الاتصال');
+            } catch (e) {
+                // تجاهل الأخطاء في sessionStorage
+            }
+            
+            // إعادة التوجيه
+            window.location.replace(loginUrl);
+        }
+        
+        // معالج أخطاء JavaScript العامة
+        window.addEventListener('error', function(event) {
+            // تجاهل الأخطاء من مصادر خارجية (CDN، إلخ)
+            if (event.filename && (
+                event.filename.includes('cdn.jsdelivr.net') ||
+                event.filename.includes('code.jquery.com') ||
+                event.filename.includes('googleapis.com')
+            )) {
+                return;
+            }
+            
+            // معالجة أخطاء الاتصال (ERR_FAILED، NetworkError، إلخ)
+            const errorMessage = (event.message || '').toLowerCase();
+            if (errorMessage.includes('failed to fetch') ||
+                errorMessage.includes('networkerror') ||
+                errorMessage.includes('err_failed') ||
+                errorMessage.includes('connection') ||
+                errorMessage.includes('network')) {
+                
+                // إذا كان الخطأ متعلقاً بالاتصال، أعد التوجيه إلى تسجيل الدخول
+                redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
+                event.preventDefault();
+                return true;
+            }
+        }, true);
+        
+        // معالج رفض Promise (unhandledrejection) - للأخطاء غير المعالجة في Promises
+        window.addEventListener('unhandledrejection', function(event) {
+            const reason = event.reason;
+            
+            // التحقق من أن الخطأ متعلق بالاتصال
+            if (reason && typeof reason === 'object') {
+                const errorMessage = (reason.message || reason.toString() || '').toLowerCase();
+                if (errorMessage.includes('failed to fetch') ||
+                    errorMessage.includes('networkerror') ||
+                    errorMessage.includes('err_failed') ||
+                    errorMessage.includes('connection') ||
+                    errorMessage.includes('network')) {
+                    
+                    redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
+                    event.preventDefault();
+                    return;
+                }
+            }
+        });
+        
+        // اعتراض طلبات fetch للتحقق من الأخطاء
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+            return originalFetch.apply(this, args).catch(function(error) {
+                const errorMessage = (error.message || error.toString() || '').toLowerCase();
+                
+                // التحقق من أخطاء الاتصال
+                if (errorMessage.includes('failed to fetch') ||
+                    errorMessage.includes('networkerror') ||
+                    errorMessage.includes('err_failed') ||
+                    errorMessage.includes('connection') ||
+                    errorMessage.includes('network') ||
+                    error.name === 'TypeError' ||
+                    error.name === 'NetworkError') {
+                    
+                    // التحقق من أن الطلب ليس لصفحة تسجيل الدخول نفسها
+                    const url = args[0];
+                    if (url && typeof url === 'string' && !url.includes('index.php')) {
+                        redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
+                    }
+                }
+                
+                // إعادة رمي الخطأ للتعامل معه بشكل طبيعي
+                throw error;
+            });
+        };
+    })();
+    </script>
 </head>
 <body class="dashboard-body<?php echo isset($pageBodyClass) ? ' ' . htmlspecialchars($pageBodyClass) : ''; ?>"
       data-user-role="<?php echo htmlspecialchars(isset($currentUser['role']) ? $currentUser['role'] : ''); ?>"
