@@ -2823,68 +2823,6 @@ if (ob_get_level() > 0) {
         </div>
         <?php endif; ?>
         
-        <!-- Developer Quick Access Bar -->
-        <?php if (isLoggedIn() && isDeveloper()): ?>
-        <div class="developer-quick-access-bar" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 8px 0; border-bottom: 2px solid #5568d3; position: sticky; top: 0; z-index: 1030; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <div class="container-fluid">
-                <div class="row align-items-center">
-                    <div class="col-12">
-                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="bi bi-code-slash"></i>
-                                <strong>وصول سريع للمطور:</strong>
-                            </div>
-                            <div class="d-flex align-items-center flex-wrap gap-2" style="flex: 1; justify-content: flex-end;">
-                                <a href="<?php echo getRelativeUrl('dashboard/developer.php'); ?>" class="btn btn-sm btn-light" style="white-space: nowrap;">
-                                    <i class="bi bi-code-slash"></i> لوحة المطور
-                                </a>
-                                <a href="<?php echo getRelativeUrl('dashboard/manager.php'); ?>" class="btn btn-sm btn-light" style="white-space: nowrap;">
-                                    <i class="bi bi-speedometer2"></i> لوحة المدير
-                                </a>
-                                <a href="<?php echo getRelativeUrl('dashboard/developer.php?page=system_settings'); ?>" class="btn btn-sm btn-light" style="white-space: nowrap;">
-                                    <i class="bi bi-gear"></i> إعدادات النظام
-                                </a>
-                                <a href="<?php echo getRelativeUrl('dashboard/sales.php'); ?>" class="btn btn-sm btn-light" style="white-space: nowrap;">
-                                    <i class="bi bi-cart"></i> لوحة المبيعات
-                                </a>
-                                <a href="<?php echo getRelativeUrl('dashboard/accountant.php'); ?>" class="btn btn-sm btn-light" style="white-space: nowrap;">
-                                    <i class="bi bi-calculator"></i> لوحة المحاسبة
-                                </a>
-                                <a href="<?php echo getRelativeUrl('dashboard/production.php'); ?>" class="btn btn-sm btn-light" style="white-space: nowrap;">
-                                    <i class="bi bi-gear-wide"></i> لوحة الإنتاج
-                                </a>
-                                <div class="dropdown" style="display: inline-block;">
-                                    <button class="btn btn-sm btn-light dropdown-toggle" type="button" id="developerQuickAccessDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="white-space: nowrap;">
-                                        <i class="bi bi-three-dots-vertical"></i> المزيد
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="developerQuickAccessDropdown">
-                                        <li><h6 class="dropdown-header">صفحات المدير</h6></li>
-                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/manager.php?page=users'); ?>"><i class="bi bi-people me-2"></i>المستخدمين</a></li>
-                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/manager.php?page=security'); ?>"><i class="bi bi-shield-lock me-2"></i>الأمان</a></li>
-                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/manager.php?page=company_products'); ?>"><i class="bi bi-box-seam me-2"></i>منتجات الشركة</a></li>
-                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/manager.php?page=approvals'); ?>"><i class="bi bi-check-circle me-2"></i>الموافقات</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li><h6 class="dropdown-header">صفحات المبيعات</h6></li>
-                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/sales.php?page=customers'); ?>"><i class="bi bi-people me-2"></i>العملاء</a></li>
-                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/sales.php?page=orders'); ?>"><i class="bi bi-cart-check me-2"></i>الطلبات</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li><h6 class="dropdown-header">صفحات المحاسبة</h6></li>
-                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/accountant.php?page=financial'); ?>"><i class="bi bi-safe me-2"></i>الخزنة</a></li>
-                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/accountant.php?page=invoices'); ?>"><i class="bi bi-receipt me-2"></i>الفواتير</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li><h6 class="dropdown-header">صفحات الإنتاج</h6></li>
-                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/production.php?page=production'); ?>"><i class="bi bi-gear-wide me-2"></i>الإنتاج</a></li>
-                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/production.php?page=tasks'); ?>"><i class="bi bi-list-task me-2"></i>المهام</a></li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <?php endif; ?>
-        
         <!-- Top Bar -->
         <div class="homeline-topbar">
             <div class="topbar-left">

@@ -19,7 +19,7 @@ requireRole(['production', 'accountant', 'manager', 'developer']);
 
 $currentUser = getCurrentUser();
 $db = db();
-$isManager = isset($currentUser['role']) && $currentUser['role'] === 'manager';
+$isManager = isset($currentUser['role']) && in_array($currentUser['role'], ['manager', 'developer'], true);
 $managerInventoryUrl = getRelativeUrl('manager.php?page=final_products');
 $productionInventoryUrl = getRelativeUrl('production.php?page=inventory');
 $finalProductsUrl = getRelativeUrl('production.php?page=final_products');
@@ -1117,7 +1117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // إذا كان الطلب تم إنشاؤه بنجاح (يوجد transfer_id و transfer_number)
                 if (!empty($transferId) && !empty($transferNumber)) {
-                    $isManagerInitiator = isset($currentUser['role']) && $currentUser['role'] === 'manager';
+                    $isManagerInitiator = isset($currentUser['role']) && in_array($currentUser['role'], ['manager', 'developer'], true);
 
                     if ($isManagerInitiator && !empty($transferId)) {
                         try {

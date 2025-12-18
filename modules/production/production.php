@@ -6516,8 +6516,8 @@ $lang = isset($translations) ? $translations : [];
     $reportsSection = $_GET['section'] ?? '';
     $currentPage = $_GET['page'] ?? '';
     $isReportsMode = $isReportsMode 
-        || ($reportsSection === 'reports' && ($currentUser['role'] ?? '') === 'manager')
-        || ($currentPage === 'reports' && ($currentUser['role'] ?? '') === 'manager');
+        || ($reportsSection === 'reports' && in_array($currentUser['role'] ?? '', ['manager', 'developer'], true))
+        || ($currentPage === 'reports' && in_array($currentUser['role'] ?? '', ['manager', 'developer'], true));
     ?>
     
     <?php if (!$isReportsMode): ?>

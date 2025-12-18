@@ -1935,7 +1935,7 @@ $advanceStats = [
     'pending_amount' => 0
 ];
 
-if ($view === 'advances' || in_array($currentUser['role'] ?? '', ['accountant', 'manager', 'developer'], true)) {
+if ($view === 'advances' || $currentUser['role'] === 'accountant' || $currentUser['role'] === 'manager') {
     // الفلاتر
     $advanceStatusFilter = $_GET['advance_status'] ?? 'all';
     $advanceMonthFilter = isset($_GET['advance_month']) ? intval($_GET['advance_month']) : 0;
@@ -3026,7 +3026,7 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
             <i class="bi bi-list-ul me-2"></i>قائمة الرواتب
         </a>
     </li>
-    <?php if ($currentUser['role'] === 'manager' && !empty($pendingModifications)): ?>
+    <?php if (in_array($currentUser['role'] ?? '', ['manager', 'developer'], true) && !empty($pendingModifications)): ?>
     <li class="nav-item" role="presentation">
         <a class="nav-link <?php echo $view === 'pending' ? 'active' : ''; ?>" 
            href="<?php echo htmlspecialchars($buildViewUrl('pending')); ?>">
@@ -4565,7 +4565,7 @@ $advanceStatusLabels = [
             <form method="POST">
                 <input type="hidden" name="action" value="request_advance">
                 <div class="modal-body">
-                    <?php if ($currentUser['role'] === 'accountant' || $currentUser['role'] === 'manager'): ?>
+                    <?php if (in_array($currentUser['role'] ?? '', ['accountant', 'manager', 'developer'], true)): ?>
                     <div class="mb-3">
                         <label class="form-label">الموظف <span class="text-danger">*</span></label>
                         <select name="user_id" class="form-select" required>
