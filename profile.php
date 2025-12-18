@@ -4,110 +4,15 @@
  */
 
 define('ACCESS_ALLOWED', true);
-// تعريف ثابت لمنع حذف الجلسة في profile.php
-define('PROFILE_PAGE_ACTIVE', true);
-
-// التأكد من بدء الجلسة قبل أي شيء
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/path_helper.php';
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/audit_log.php';
 
-// التحقق من تسجيل الدخول فقط
-// التأكد من أن الجلسة نشطة قبل التحقق
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    if (!headers_sent()) {
-        @session_start();
-    }
-}
-
 requireLogin();
 
-// تهيئة متغيرات الرسائل
-$error = $_SESSION['error_message'] ?? '';
-$success = $_SESSION['success_message'] ?? '';
-unset($_SESSION['error_message'], $_SESSION['success_message']);
-
-// محاولة متعددة لتحميل المستخدم - حل نهائي للأجهزة الغريبة
-$currentUser = null;
-$maxAttempts = 3;
-
-for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-    // الطريقة 1: استخدام getCurrentUser()
-    $currentUser = getCurrentUser();
-    
-    if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
-        break; // نجح التحميل
-    }
-    
-    // الطريقة 2: إذا فشلت، جرب مباشرة من قاعدة البيانات
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            $db = db();
-            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$_SESSION['user_id']]);
-            if ($userFromDb && isset($userFromDb['id'])) {
-                $currentUser = $userFromDb;
-                // تحديث الجلسة ببيانات المستخدم
-                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
-                    $_SESSION['username'] = $userFromDb['username'];
-                }
-                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
-                    $_SESSION['role'] = $userFromDb['role'];
-                }
-                if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
-                    $_SESSION['logged_in'] = true;
-                }
-                break; // نجح التحميل
-            }
-        } catch (Exception $e) {
-            error_log("Profile page - Error loading user from database (attempt $attempt): " . $e->getMessage());
-        }
-    }
-    
-    // الطريقة 3: إذا فشلت، جرب بدون التحقق من status
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            if (!isset($db)) {
-                $db = db();
-            }
-            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
-            if ($userFromDb && isset($userFromDb['id'])) {
-                $currentUser = $userFromDb;
-                // تحديث الجلسة ببيانات المستخدم
-                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
-                    $_SESSION['username'] = $userFromDb['username'];
-                }
-                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
-                    $_SESSION['role'] = $userFromDb['role'];
-                }
-                if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
-                    $_SESSION['logged_in'] = true;
-                }
-                break; // نجح التحميل
-            }
-        } catch (Exception $e) {
-            error_log("Profile page - Error loading user without status check (attempt $attempt): " . $e->getMessage());
-        }
-    }
-    
-    // إذا كانت المحاولة الأخيرة، انتظر قليلاً قبل المحاولة التالية
-    if ($attempt < $maxAttempts) {
-        usleep(100000); // انتظر 0.1 ثانية
-    }
-}
-
-// إذا فشلت جميع المحاولات
-if (!$currentUser || !isset($currentUser['id']) || empty($currentUser['id'])) {
-    // لا نعيد التوجيه - نعرض رسالة خطأ في الصفحة
-    $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى أو تحديث الصفحة.';
-    error_log("Profile page - Failed to load user after $maxAttempts attempts. Session user_id: " . ($_SESSION['user_id'] ?? 'not set'));
-}
-
+$currentUser = getCurrentUser();
 $db = db();
 $passwordMinLength = getPasswordMinLength();
 
@@ -121,53 +26,13 @@ try {
     $profilePhotoSupported = false;
 }
 
-// الحصول على بيانات المستخدم الكاملة - حل محسّن للأجهزة الغريبة
-$user = null;
+// استلام رسائل النجاح أو الخطأ من session (بعد redirect)
+$error = $_SESSION['error_message'] ?? '';
+$success = $_SESSION['success_message'] ?? '';
+unset($_SESSION['error_message'], $_SESSION['success_message']);
 
-if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
-    // محاولة الحصول على بيانات محدثة من قاعدة البيانات
-    try {
-        $user = getUserById($currentUser['id']);
-        // إذا لم يتم العثور على المستخدم من getUserById، استخدم $currentUser
-        if (!$user || !isset($user['id'])) {
-            $user = $currentUser;
-        }
-    } catch (Exception $e) {
-        error_log("Profile page - Error in getUserById: " . $e->getMessage());
-        // في حالة الخطأ، استخدم $currentUser
-        $user = $currentUser;
-    }
-} else {
-    // إذا لم يكن هناك currentUser، استخدم بيانات الجلسة
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            $user = getUserById($_SESSION['user_id']);
-            // إذا نجح التحميل، احفظه في $currentUser أيضاً
-            if ($user && isset($user['id'])) {
-                $currentUser = $user;
-            }
-        } catch (Exception $e) {
-            error_log("Profile page - Error loading user from session: " . $e->getMessage());
-        }
-    }
-}
-
-// إذا لم يتم تحميل المستخدم بعد، جرب مباشرة من قاعدة البيانات
-if (!$user || !isset($user['id'])) {
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            if (!isset($db)) {
-                $db = db();
-            }
-            $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
-            if ($user && isset($user['id'])) {
-                $currentUser = $user;
-            }
-        } catch (Exception $e) {
-            error_log("Profile page - Final fallback error: " . $e->getMessage());
-        }
-    }
-}
+// الحصول على بيانات المستخدم الكاملة
+$user = getUserById($currentUser['id']);
 
 // معالجة تحديث البروفايل
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -229,100 +94,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'يجب إدخال الاسم الكامل';
         } elseif (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'البريد الإلكتروني غير صحيح';
-        } elseif (!$user || !is_array($user) || !isset($user['id'])) {
-            $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.';
         } else {
             // التحقق من البريد الإلكتروني إذا تغير
-            if (isset($user['email']) && $email !== $user['email']) {
+            if ($email !== $user['email']) {
                 $existingUser = getUserByUsername($email);
-                $userId = ($currentUser && isset($currentUser['id'])) ? $currentUser['id'] : ($user && isset($user['id']) ? $user['id'] : ($_SESSION['user_id'] ?? null));
-                if ($existingUser && $existingUser['id'] != $userId) {
+                if ($existingUser && $existingUser['id'] != $currentUser['id']) {
                     $error = 'البريد الإلكتروني مستخدم بالفعل';
                 }
             }
             
             // تحديث البيانات الأساسية
             if (empty($error)) {
-                // الحصول على user_id من $currentUser أو $user أو session
-                $userId = null;
-                if ($currentUser && isset($currentUser['id'])) {
-                    $userId = $currentUser['id'];
-                } elseif ($user && isset($user['id'])) {
-                    $userId = $user['id'];
-                } elseif (isset($_SESSION['user_id'])) {
-                    $userId = $_SESSION['user_id'];
+                $updateFields = "full_name = ?, email = ?, phone = ?, updated_at = NOW()";
+                $params = [$fullName, $email, $phone];
+                if ($profilePhotoSupported && $profilePhotoData !== null) {
+                    $updateFields .= ", profile_photo = ?";
+                    $params[] = $profilePhotoData;
+                } elseif ($profilePhotoSupported && $removePhoto) {
+                    $updateFields .= ", profile_photo = NULL";
+                }
+                $params[] = $currentUser['id'];
+                $db->execute(
+                    "UPDATE users SET $updateFields WHERE id = ?",
+                    $params
+                );
+                
+                // تنظيف Cache للمستخدم بعد التحديث
+                if (function_exists('clearUserCache')) {
+                    clearUserCache($currentUser['id']);
                 }
                 
-                if (!$userId) {
-                    $error = 'تعذر تحديد معرف المستخدم';
-                } else {
-                    $updateFields = "full_name = ?, email = ?, phone = ?, updated_at = NOW()";
-                    $params = [$fullName, $email, $phone];
-                    if ($profilePhotoSupported && $profilePhotoData !== null) {
-                        $updateFields .= ", profile_photo = ?";
-                        $params[] = $profilePhotoData;
-                    } elseif ($profilePhotoSupported && $removePhoto) {
-                        $updateFields .= ", profile_photo = NULL";
-                    }
-                    $params[] = $userId;
-                    $db->execute(
-                        "UPDATE users SET $updateFields WHERE id = ?",
-                        $params
-                    );
-                    
-                    // تنظيف Cache للمستخدم بعد التحديث
-                    if (function_exists('clearUserCache')) {
-                        clearUserCache($userId);
-                    }
-                    
-                    // تحديث كلمة المرور إذا تم إدخالها
-                    if (!empty($newPassword)) {
-                        if (empty($currentPassword)) {
-                            $error = 'يجب إدخال كلمة المرور الحالية';
-                        } elseif (!$user || !isset($user['password_hash']) || !verifyPassword($currentPassword, $user['password_hash'])) {
-                            $error = 'كلمة المرور الحالية غير صحيحة';
-                        } elseif ($newPassword !== $confirmPassword) {
-                            $error = 'كلمة المرور الجديدة غير متطابقة';
-                        } elseif (strlen($newPassword) < $passwordMinLength) {
-                            $error = 'كلمة المرور يجب أن تكون على الأقل ' . $passwordMinLength . ' أحرف';
-                        } else {
-                            $newPasswordHash = hashPassword($newPassword);
-                            $db->execute(
-                                "UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?",
-                                [$newPasswordHash, $userId]
-                            );
-                            
-                            logAudit($userId, 'change_password', 'user', $userId, null, null);
-                        }
-                    }
-                    
-                    if (empty($error)) {
-                        logAudit($userId, 'update_profile', 'user', $userId, null, ['full_name' => $fullName, 'email' => $email]);
+                // تحديث كلمة المرور إذا تم إدخالها
+                if (!empty($newPassword)) {
+                    if (empty($currentPassword)) {
+                        $error = 'يجب إدخال كلمة المرور الحالية';
+                    } elseif (!verifyPassword($currentPassword, $user['password_hash'])) {
+                        $error = 'كلمة المرور الحالية غير صحيحة';
+                    } elseif ($newPassword !== $confirmPassword) {
+                        $error = 'كلمة المرور الجديدة غير متطابقة';
+                    } elseif (strlen($newPassword) < $passwordMinLength) {
+                        $error = 'كلمة المرور يجب أن تكون على الأقل ' . $passwordMinLength . ' أحرف';
+                    } else {
+                        $newPasswordHash = hashPassword($newPassword);
+                        $db->execute(
+                            "UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?",
+                            [$newPasswordHash, $currentUser['id']]
+                        );
                         
+                        logAudit($currentUser['id'], 'change_password', 'user', $currentUser['id'], null, null);
+                    }
+                }
+                
+                if (empty($error)) {
+                    logAudit($currentUser['id'], 'update_profile', 'user', $currentUser['id'], null, ['full_name' => $fullName, 'email' => $email]);
+                    
                     // إعادة تحميل بيانات المستخدم المحدثة من قاعدة البيانات
-                    $updatedUser = getUserById($userId);
-                    if ($updatedUser) {
-                        $user = $updatedUser;
-                        
-                        // تحديث بيانات الجلسة
-                        if (isset($user['username'])) {
-                            $_SESSION['username'] = $user['username'];
-                        }
-                        if (isset($user['id'])) {
-                            $_SESSION['user_id'] = $user['id'];
-                        }
-                        if (isset($user['role'])) {
-                            $_SESSION['role'] = $user['role'];
-                        }
-                        $_SESSION['logged_in'] = true;
-                    }
+                    $user = getUserById($currentUser['id']);
+                    
+                    // تحديث بيانات الجلسة
+                    $_SESSION['username'] = $user['username'];
                     
                     $_SESSION['success_message'] = 'تم تحديث البروفايل بنجاح';
                     
                     // Redirect لتجنب إعادة إرسال الطلب
                     header('Location: ' . $_SERVER['PHP_SELF']);
                     exit;
-                    }
                 }
             }
         }
@@ -340,34 +176,9 @@ $pageTitle = isset($lang['profile']) ? $lang['profile'] : 'الملف الشخص
 ?>
 <?php include __DIR__ . '/templates/header.php'; ?>
 
-<script>
-// تعيين data attribute للجسم لمساعدة JavaScript في التعرف على profile.php
-if (document.body) {
-    document.body.setAttribute('data-page', 'profile');
-} else {
-    document.addEventListener('DOMContentLoaded', function() {
-        if (document.body) {
-            document.body.setAttribute('data-page', 'profile');
-        }
-    });
-}
-</script>
-
 <!-- القائمة الجانبية يتم تضمينها تلقائياً في header.php -->
 <?php
-// الحصول على role من $user أو $currentUser أو session
-$userRole = null;
-if ($user && isset($user['role'])) {
-    $userRole = $user['role'];
-} elseif ($currentUser && isset($currentUser['role'])) {
-    $userRole = $currentUser['role'];
-} elseif (isset($_SESSION['role'])) {
-    $userRole = $_SESSION['role'];
-} else {
-    $userRole = 'accountant'; // قيمة افتراضية
-}
-
-$dashboardUrl = getDashboardUrl($userRole);
+$dashboardUrl = getDashboardUrl($currentUser['role']);
 ?>
 <div class="page-header mb-4 d-flex justify-content-between align-items-center">
     <h2 class="mb-0"><i class="bi bi-person-circle me-2"></i><?php echo isset($lang['profile']) ? $lang['profile'] : 'الملف الشخصي'; ?></h2>
@@ -392,26 +203,6 @@ $dashboardUrl = getDashboardUrl($userRole);
     </div>
 <?php endif; ?>
 
-<?php
-// التأكد من أن $user موجود قبل عرض النموذج
-if (!$user || !is_array($user) || !isset($user['id'])) {
-    // محاولة إعادة تحميل المستخدم
-    if (isset($_SESSION['user_id'])) {
-        $user = getUserById($_SESSION['user_id']);
-    }
-    
-    // إذا استمرت المشكلة، عرض رسالة خطأ
-    if (!$user || !is_array($user) || !isset($user['id'])) {
-        echo '<div class="alert alert-danger">';
-        echo '<i class="bi bi-exclamation-triangle-fill me-2"></i>';
-        echo 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . htmlspecialchars($dashboardUrl) . '">العودة</a> والمحاولة مرة أخرى.';
-        echo '</div>';
-        include __DIR__ . '/templates/footer.php';
-        exit;
-    }
-}
-?>
-
 <div class="row g-4">
     <!-- معلومات البروفايل -->
     <div class="col-lg-8">
@@ -429,7 +220,7 @@ if (!$user || !is_array($user) || !isset($user['id'])) {
                                             <i class="bi bi-person-badge me-2"></i>اسم المستخدم
                                         </label>
                                         <input type="text" class="form-control" id="username" 
-                                               value="<?php echo htmlspecialchars($user['username'] ?? ''); ?>" disabled>
+                                               value="<?php echo htmlspecialchars($user['username']); ?>" disabled>
                                         <small class="text-muted">لا يمكن تغيير اسم المستخدم</small>
                                     </div>
                                     
@@ -457,7 +248,7 @@ if (!$user || !is_array($user) || !isset($user['id'])) {
                                     <img src="<?php echo htmlspecialchars($user['profile_photo']); ?>" alt="Profile" style="width:100%;height:100%;object-fit:cover;">
                                 <?php else: ?>
                                     <span class="text-white fw-bold" style="font-size:24px;">
-                                        <?php echo htmlspecialchars(mb_substr(($user['username'] ?? ''), 0, 1)); ?>
+                                        <?php echo htmlspecialchars(mb_substr($user['username'] ?? '', 0, 1)); ?>
                                     </span>
                                 <?php endif; ?>
                             </div>
@@ -512,7 +303,7 @@ if (!$user || !is_array($user) || !isset($user['id'])) {
                                         <i class="bi bi-calendar me-2"></i>تاريخ التسجيل
                                     </label>
                                     <input type="text" class="form-control" 
-                                           value="<?php echo isset($user['created_at']) ? formatDateTime($user['created_at']) : '-'; ?>" disabled>
+                                           value="<?php echo formatDateTime($user['created_at']); ?>" disabled>
                                 </div>
                                 
                                 <div class="d-grid">
@@ -705,21 +496,19 @@ async function loadCredentials() {
             return;
         }
         
-        // الحصول على المسار الصحيح لـ API - استخدام getRelativeUrl من PHP
-        let apiPath = '<?php echo getRelativeUrl("api/webauthn_credentials.php"); ?>';
+        // الحصول على المسار الصحيح لـ API - استخدام مسار مطلق
+        const pathParts = window.location.pathname.split('/').filter(p => p && !p.endsWith('.php'));
+        let apiPath;
         
-        // التحقق من أن المسار صحيح
-        if (!apiPath || apiPath === '') {
-            // Fallback: حساب المسار يدوياً
-            const pathParts = window.location.pathname.split('/').filter(p => p && !p.endsWith('.php'));
-            if (pathParts.length === 0) {
-                apiPath = 'api/webauthn_credentials.php';
-            } else {
-                apiPath = '/' + pathParts[0] + '/api/webauthn_credentials.php';
-            }
+        if (pathParts.length === 0) {
+            // في الجذر
+            apiPath = 'api/webauthn_credentials.php';
+        } else {
+            // في مجلد فرعي - استخدام مسار مطلق
+            apiPath = '/' + pathParts[0] + '/api/webauthn_credentials.php';
         }
         
-        console.log('Loading credentials from:', apiPath);
+        console.log('Loading credentials from:', apiPath, 'Path parts:', pathParts);
         
         // إنشاء AbortController للتحكم في timeout
         const controller = new AbortController();
@@ -990,18 +779,16 @@ async function deleteCredential(credentialId, deviceName) {
     }
     
     try {
-        // الحصول على المسار الصحيح لـ API - استخدام getRelativeUrl من PHP
-        let apiPath = '<?php echo getRelativeUrl("api/webauthn_credentials.php"); ?>';
+        // الحصول على المسار الصحيح لـ API - استخدام مسار مطلق
+        const pathParts = window.location.pathname.split('/').filter(p => p && !p.endsWith('.php'));
+        let apiPath;
         
-        // التحقق من أن المسار صحيح
-        if (!apiPath || apiPath === '') {
-            // Fallback: حساب المسار يدوياً
-            const pathParts = window.location.pathname.split('/').filter(p => p && !p.endsWith('.php'));
-            if (pathParts.length === 0) {
-                apiPath = 'api/webauthn_credentials.php';
-            } else {
-                apiPath = '/' + pathParts[0] + '/api/webauthn_credentials.php';
-            }
+        if (pathParts.length === 0) {
+            // في الجذر
+            apiPath = 'api/webauthn_credentials.php';
+        } else {
+            // في مجلد فرعي - استخدام مسار مطلق
+            apiPath = '/' + pathParts[0] + '/api/webauthn_credentials.php';
         }
         
         console.log('Deleting credential, API path:', apiPath);
