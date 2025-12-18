@@ -220,29 +220,34 @@ function checkRememberToken($cookieValue, $createSession = true) {
  * الحصول على بيانات المستخدم من remember_token مباشرة
  */
 function getUserFromToken() {
-    if (!isset($_COOKIE['remember_token'])) {
+    if (!isset($_COOKIE['remember_token']) || empty($_COOKIE['remember_token'])) {
         return null;
     }
     
     try {
         if (!ensureRememberTokensTable()) {
+            error_log("getUserFromToken() ERROR: ensureRememberTokensTable() failed");
             return null;
         }
         
-        $decoded = base64_decode($_COOKIE['remember_token']);
-        if (!$decoded) {
+        $cookieValue = $_COOKIE['remember_token'];
+        $decoded = base64_decode($cookieValue, true); // strict mode
+        if ($decoded === false || empty($decoded)) {
+            error_log("getUserFromToken() ERROR: base64_decode failed");
             return null;
         }
         
         $parts = explode(':', $decoded);
         if (count($parts) !== 2) {
+            error_log("getUserFromToken() ERROR: Invalid token format (parts: " . count($parts) . ")");
             return null;
         }
         
         $userId = intval($parts[0]);
-        $token = $parts[1];
+        $token = trim($parts[1]);
         
         if ($userId <= 0 || empty($token)) {
+            error_log("getUserFromToken() ERROR: Invalid userId ({$userId}) or empty token");
             return null;
         }
         
@@ -255,7 +260,19 @@ function getUserFromToken() {
         );
         
         if (!$tokenRecord) {
+            error_log("getUserFromToken() ERROR: Token not found or expired for user_id: {$userId}");
             return null;
+        }
+        
+        // تحديث last_used
+        try {
+            $db->execute(
+                "UPDATE remember_tokens SET last_used = NOW() WHERE id = ?",
+                [$tokenRecord['id']]
+            );
+        } catch (Exception $e) {
+            // لا نعتبر هذا خطأ حرج
+            error_log("getUserFromToken() WARNING: Failed to update last_used: " . $e->getMessage());
         }
         
         // إرجاع بيانات المستخدم
@@ -273,7 +290,10 @@ function getUserFromToken() {
             'webauthn_enabled' => $tokenRecord['webauthn_enabled'] ?? false,
         ];
     } catch (Exception $e) {
-        error_log("getUserFromToken() ERROR: " . $e->getMessage());
+        error_log("getUserFromToken() ERROR: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
+        return null;
+    } catch (Throwable $e) {
+        error_log("getUserFromToken() THROWABLE: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
         return null;
     }
 }
@@ -283,19 +303,15 @@ function getUserFromToken() {
  * تم إزالة الاعتماد على $_SESSION تماماً
  */
 function getCurrentUser() {
-    // التحقق من isLoggedIn() أولاً
-    if (!isLoggedIn()) {
-        return null;
-    }
-    
-    // الحصول على بيانات المستخدم من remember_token
+    // الحصول على بيانات المستخدم من remember_token مباشرة
+    // لا نعتمد على isLoggedIn() لأنه قد يفشل في بعض الحالات
     $user = getUserFromToken();
     if (!$user) {
         return null;
     }
     
     // التحقق من أن المستخدم مفعّل
-    if ($user['status'] !== 'active') {
+    if (isset($user['status']) && $user['status'] !== 'active') {
         return null;
     }
     

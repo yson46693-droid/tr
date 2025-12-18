@@ -26,28 +26,12 @@ $error = $_GET['error'] ?? '';
 $success = $_GET['success'] ?? '';
 
 // === تحميل بيانات المستخدم ===
-// محاولة متعددة للحصول على بيانات المستخدم
-$user = null;
-$currentUser = null;
-$userId = null;
+// استخدام getUserFromToken() مباشرة - لا نعتمد على getCurrentUser() لأنه يعتمد على isLoggedIn()
+$user = getUserFromToken();
+$currentUser = $user;
+$userId = $user['id'] ?? null;
 
-// المحاولة 1: استخدام getCurrentUser()
-$user = getCurrentUser();
-if ($user && isset($user['id']) && !empty($user['id'])) {
-    $currentUser = $user;
-    $userId = $user['id'];
-}
-
-// المحاولة 2: إذا فشلت، استخدام getUserFromToken()
-if (!$user || !isset($user['id']) || empty($user['id'])) {
-    $user = getUserFromToken();
-    if ($user && isset($user['id']) && !empty($user['id'])) {
-        $currentUser = $user;
-        $userId = $user['id'];
-    }
-}
-
-// المحاولة 3: إذا فشلت، محاولة الحصول من remember_token مباشرة
+// إذا فشلت المحاولة الأولى، محاولة الحصول من remember_token مباشرة
 if (!$user || !isset($user['id']) || empty($user['id'])) {
     if (isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
         try {
@@ -80,6 +64,7 @@ if (!$user || !isset($user['id']) || empty($user['id'])) {
                                     'created_at' => $tokenRecord['created_at'] ?? null,
                                     'updated_at' => $tokenRecord['updated_at'] ?? null,
                                     'profile_photo' => $tokenRecord['profile_photo'] ?? null,
+                                    'webauthn_enabled' => $tokenRecord['webauthn_enabled'] ?? false,
                                 ];
                                 $currentUser = $user;
                                 $userId = $user['id'];
@@ -94,10 +79,23 @@ if (!$user || !isset($user['id']) || empty($user['id'])) {
     }
 }
 
-// إذا فشلت جميع المحاولات
+// إذا فشلت جميع المحاولات، إعادة التوجيه لتسجيل الدخول
 if (!$user || !isset($user['id']) || empty($user['id'])) {
-    $error = 'تعذر تحميل بيانات المستخدم. يرجى تسجيل الدخول مرة أخرى.';
-    error_log("Profile.php - CRITICAL: Failed to load user data after all attempts");
+    error_log("Profile.php - CRITICAL: Failed to load user data. Redirecting to login.");
+    $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+    $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
+    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+    if (strpos($loginUrl, '/') !== 0) {
+        $loginUrl = '/' . $loginUrl;
+    }
+    
+    if (!headers_sent()) {
+        header('Location: ' . $loginUrl);
+        exit;
+    } else {
+        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+        exit;
+    }
 }
 
 $db = db();
