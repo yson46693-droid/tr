@@ -15,7 +15,7 @@ require_once __DIR__ . '/../includes/audit_log.php';
 header('Content-Type: application/json; charset=utf-8');
 
 // التحقق من الصلاحيات
-requireRole(['manager', 'accountant']);
+requireRole(['manager', 'accountant', 'sales']);
 
 $currentUser = getCurrentUser();
 $db = db();
@@ -1031,6 +1031,12 @@ try {
                     logImport("  - balance: " . var_export($balance, true) . " (index: $balanceIndex, type: " . gettype($balance) . ")");
                     logImport("  - address: " . var_export($address, true));
                     
+                    // تحديد rep_id بناءً على دور المستخدم
+                    $repId = null;
+                    if (isset($currentUser['role']) && $currentUser['role'] === 'sales') {
+                        $repId = $currentUser['id'];
+                    }
+                    
                     $customerColumns = ['name', 'phone', 'balance', 'address', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
                     $customerValues = [
                         $name,
@@ -1039,9 +1045,9 @@ try {
                         $address, // قد يكون null
                         'active',
                         $currentUser['id'],
-                        null,
+                        $repId, // تعيين rep_id للمندوبين
                         0,
-                        1
+                        ($currentUser['role'] === 'sales' ? 0 : 1) // created_by_admin = 0 للمندوبين، 1 للمدير/المحاسب
                     ];
                     $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?', '?', '?'];
                     
