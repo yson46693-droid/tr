@@ -93,6 +93,11 @@ function getBasePath() {
  * تضمن إرجاع مسار نسبي فقط بدون أي بروتوكول أو hostname أو منفذ
  */
 function getDashboardUrl($role = null) {
+    // المطور يستخدم لوحة المدير
+    if ($role && strtolower($role) === 'developer') {
+        $role = 'manager';
+    }
+    
     $base = getBasePath();
     
     // التأكد من أن base يبدأ بـ / أو يكون فارغاً

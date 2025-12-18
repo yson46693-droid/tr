@@ -349,7 +349,7 @@ define('COMPANY_NAME', 'شركة البركة');
 // إعدادات وضع الصيانة
 // تغيير هذا إلى true لتفعيل وضع الصيانة
 if (!defined('MAINTENANCE_MODE')) {
-    define('MAINTENANCE_MODE', false);
+    define('MAINTENANCE_MODE', true);
 }
 
 // إعدادات التقارير

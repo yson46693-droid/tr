@@ -1903,7 +1903,9 @@ function requireRole($role) {
         if (!function_exists('getDashboardUrl') && file_exists(__DIR__ . '/path_helper.php')) {
             require_once __DIR__ . '/path_helper.php';
         }
-        $dashboardUrl = function_exists('getDashboardUrl') ? getDashboardUrl($userRole) : '/dashboard/' . $userRole . '.php';
+        // المطور يستخدم لوحة المدير
+        $dashboardRole = (strtolower($userRole) === 'developer') ? 'manager' : $userRole;
+        $dashboardUrl = function_exists('getDashboardUrl') ? getDashboardUrl($dashboardRole) : '/dashboard/' . $dashboardRole . '.php';
         
         // تنظيف شامل للمسار لضمان عدم تكرار الخطأ
         // 1. إزالة أي بروتوكول مع hostname ومنفذ
@@ -1990,7 +1992,9 @@ function requireAnyRole($roles) {
         if (!function_exists('getDashboardUrl') && file_exists(__DIR__ . '/path_helper.php')) {
             require_once __DIR__ . '/path_helper.php';
         }
-        $dashboardUrl = function_exists('getDashboardUrl') ? getDashboardUrl($userRole) : '/dashboard/' . $userRole . '.php';
+        // المطور يستخدم لوحة المدير
+        $dashboardRole = (strtolower($userRole) === 'developer') ? 'manager' : $userRole;
+        $dashboardUrl = function_exists('getDashboardUrl') ? getDashboardUrl($dashboardRole) : '/dashboard/' . $dashboardRole . '.php';
         
         // تنظيف شامل للمسار لضمان عدم تكرار الخطأ
         // 1. إزالة أي بروتوكول مع hostname ومنفذ
