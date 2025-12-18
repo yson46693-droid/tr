@@ -12,13 +12,45 @@ require_once __DIR__ . '/includes/audit_log.php';
 
 requireLogin();
 
-$currentUser = getCurrentUser();
-if (!$currentUser) {
-    $_SESSION['error_message'] = 'فشل تحميل بيانات المستخدم. يرجى تسجيل الدخول مرة أخرى.';
-    header('Location: login.php');
-    exit;
-}
-$db = db();
+// ========================================
+// الصفحة تحت التطوير - منع الوصول
+// ========================================
+// عرض رسالة "تحت التطوير" ومنع الوصول إلى الصفحة
+require_once __DIR__ . '/includes/lang/' . getCurrentLanguage() . '.php';
+$lang = $translations;
+$pageTitle = isset($lang['profile']) ? $lang['profile'] : 'الملف الشخصي';
+include __DIR__ . '/templates/header.php';
+
+// الحصول على role للمستخدم للعودة إلى لوحة التحكم
+$user = getUserFromToken();
+$userRole = $user['role'] ?? 'accountant';
+$dashboardUrl = getDashboardUrl($userRole);
+?>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-lg border-0">
+                <div class="card-body text-center p-5">
+                    <div class="mb-4">
+                        <i class="bi bi-tools" style="font-size: 5rem; color: #ffc107;"></i>
+                    </div>
+                    <h2 class="mb-3">الصفحة تحت التطوير</h2>
+                    <p class="text-muted mb-4">
+                        نعتذر، هذه الصفحة قيد التطوير حالياً ولا يمكن الوصول إليها في الوقت الحالي.
+                        <br>
+                        سيتم إتاحتها قريباً بإذن الله.
+                    </p>
+                    <a href="<?php echo htmlspecialchars($dashboardUrl); ?>" class="btn btn-primary btn-lg">
+                        <i class="bi bi-arrow-right me-2"></i>العودة إلى لوحة التحكم
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php
+include __DIR__ . '/templates/footer.php';
+exit; // إيقاف تنفيذ باقي الكود
 $passwordMinLength = getPasswordMinLength();
 
 $profilePhotoSupported = false;
