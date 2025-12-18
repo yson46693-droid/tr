@@ -172,8 +172,17 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // للصفحات (navigation requests): استخدام Network First مع Cache Fallback
+  // CRITICAL FIX: السماح لجميع navigation requests بالمرور مباشرة لتجنب Error Code: -2
+  // Service worker لا يجب أن يعترض navigation requests في HTTPS
   if (isNavigationRequest) {
+    // السماح للطلب بالمرور مباشرة بدون intercept
+    // هذا يمنع Error Code: -2 و ERR_FAILED
+    return;
+  }
+
+  // للصفحات (navigation requests): استخدام Network First مع Cache Fallback
+  // تم تعطيله مؤقتاً لتجنب Error Code: -2
+  if (false && isNavigationRequest) {
     // CRITICAL FIX: Safari لا يسمح بـ Service Worker بتقديم redirect responses
     // الحل: التحقق من redirects أولاً وإذا كان redirect، لا نعترضه نهائياً
     // FIX: السماح للطلبات بالمرور مباشرة إذا كان هناك مشكلة في الكاش لتجنب Error Code: -2
