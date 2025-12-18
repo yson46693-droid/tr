@@ -932,22 +932,27 @@ $tasks = $db->query($taskSql, $queryParams);
 // استخراج جميع العمال من notes لكل مهمة واستخراج اسم المنتج من notes إذا لم يكن موجوداً
 foreach ($tasks as &$task) {
     // #region agent log
-    file_put_contents('c:\\xampp\\htdocs\\v1\\.cursor\\debug.log', json_encode([
+    $logPath = 'c:\\xampp\\htdocs\\v1\\.cursor\\debug.log';
+    $logData = [
+        'task_id' => $task['id'] ?? 0,
+        'template_id' => $task['template_id'] ?? null,
+        'template_name' => $task['template_name'] ?? null,
+        'product_name' => $task['product_name'] ?? null,
+        'product_id' => $task['product_id'] ?? null,
+        'has_template_name_key' => isset($task['template_name']),
+        'all_keys' => array_keys($task)
+    ];
+    $logEntry = json_encode([
         'timestamp' => time() * 1000,
         'location' => 'tasks.php:' . __LINE__,
         'message' => 'Task raw data from database',
-        'data' => [
-            'task_id' => $task['id'] ?? 0,
-            'template_id' => $task['template_id'] ?? null,
-            'template_name' => $task['template_name'] ?? null,
-            'product_name' => $task['product_name'] ?? null,
-            'product_id' => $task['product_id'] ?? null,
-            'has_template_name_key' => isset($task['template_name'])
-        ],
+        'data' => $logData,
         'sessionId' => 'debug-session',
         'runId' => 'run1',
         'hypothesisId' => 'B'
-    ]) . "\n", FILE_APPEND);
+    ]) . "\n";
+    @file_put_contents($logPath, $logEntry, FILE_APPEND);
+    error_log('DEBUG: Task ' . ($task['id'] ?? 0) . ' - template_id: ' . ($task['template_id'] ?? 'NULL') . ', template_name: ' . ($task['template_name'] ?? 'NULL'));
     // #endregion
     $notes = $task['notes'] ?? '';
     $allWorkers = [];
@@ -990,14 +995,17 @@ foreach ($tasks as &$task) {
     // الأولوية الثانية: استخدام template_name من JOIN مع جداول القوالب (عند وجود template_id)
     // هذا يحل المشكلة عندما يتم حفظ template_id ولكن product_name يكون NULL
     // #region agent log
+    $logPath = 'c:\\xampp\\htdocs\\v1\\.cursor\\debug.log';
     $logData = [
         'task_id' => $task['id'] ?? 0,
         'template_id' => $task['template_id'] ?? null,
         'product_name_before' => $task['product_name'] ?? null,
         'template_name' => $task['template_name'] ?? null,
-        'finalProductName_before_template' => $finalProductName
+        'finalProductName_before_template' => $finalProductName,
+        'template_name_empty' => empty($task['template_name']),
+        'template_name_isset' => isset($task['template_name'])
     ];
-    file_put_contents('c:\\xampp\\htdocs\\v1\\.cursor\\debug.log', json_encode([
+    $logEntry = json_encode([
         'timestamp' => time() * 1000,
         'location' => 'tasks.php:' . __LINE__,
         'message' => 'Checking template_name for task',
@@ -1005,14 +1013,16 @@ foreach ($tasks as &$task) {
         'sessionId' => 'debug-session',
         'runId' => 'run1',
         'hypothesisId' => 'A'
-    ]) . "\n", FILE_APPEND);
+    ]) . "\n";
+    @file_put_contents($logPath, $logEntry, FILE_APPEND);
+    error_log('DEBUG: Task ' . ($task['id'] ?? 0) . ' - Checking template_name. template_id: ' . ($task['template_id'] ?? 'NULL') . ', template_name: ' . var_export($task['template_name'] ?? null, true) . ', empty: ' . (empty($task['template_name']) ? 'YES' : 'NO'));
     // #endregion
     if (empty($finalProductName) && !empty($task['template_name'])) {
         $trimmedName = trim((string)$task['template_name']);
         if ($trimmedName !== '') {
             $finalProductName = $trimmedName;
             // #region agent log
-            file_put_contents('c:\\xampp\\htdocs\\v1\\.cursor\\debug.log', json_encode([
+            $logEntry = json_encode([
                 'timestamp' => time() * 1000,
                 'location' => 'tasks.php:' . __LINE__,
                 'message' => 'Using template_name as finalProductName',
@@ -1020,7 +1030,9 @@ foreach ($tasks as &$task) {
                 'sessionId' => 'debug-session',
                 'runId' => 'run1',
                 'hypothesisId' => 'A'
-            ]) . "\n", FILE_APPEND);
+            ]) . "\n";
+            @file_put_contents($logPath, $logEntry, FILE_APPEND);
+            error_log('DEBUG: Task ' . ($task['id'] ?? 0) . ' - Using template_name: ' . $trimmedName);
             // #endregion
         }
     }
