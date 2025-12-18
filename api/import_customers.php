@@ -1249,8 +1249,16 @@ try {
             }
         }
         
-        // تأكيد المعاملة
-        $db->commit();
+        // تأكيد المعاملة - يجب أن يتم قبل أي شيء آخر
+        logImport('=== COMMITTING TRANSACTION ===');
+        try {
+            $db->commit();
+            logImport('✓ Transaction committed successfully');
+        } catch (Exception $commitError) {
+            logImport('✗ ERROR committing transaction: ' . $commitError->getMessage());
+            $db->rollBack();
+            throw $commitError;
+        }
         
         logImport('=== IMPORT COMPLETED ===');
         logImport("Imported: $imported customers");
@@ -1258,11 +1266,6 @@ try {
         logImport("Errors: " . count($errors));
         logImport("Empty rows skipped: $emptyRows");
         logImport("Total rows processed: " . (count($rows) - 1));
-        
-        // مسح الكاش
-        if (class_exists('Cache')) {
-            Cache::flush();
-        }
         
         // التحقق من أن هناك استيراد فعلي
         if ($imported === 0 && $skipped === 0 && empty($errors)) {
@@ -1292,6 +1295,16 @@ try {
             exit;
         }
         
+        // مسح الكاش بعد commit (لا يؤثر على البيانات المحفوظة)
+        try {
+            if (class_exists('Cache')) {
+                Cache::flush();
+            }
+        } catch (Exception $cacheError) {
+            // لا نوقف العملية إذا فشل مسح الكاش
+            logImport('⚠ Warning: Failed to flush cache: ' . $cacheError->getMessage());
+        }
+        
         $message = "تم استيراد {$imported} عميل بنجاح";
         if ($skipped > 0) {
             $message .= " وتم تخطي {$skipped} عميل (مكرر)";
@@ -1315,11 +1328,23 @@ try {
         exit;
         
     } catch (Exception $e) {
-        $db->rollBack();
-        $errorMsg = 'Transaction rollback error: ' . $e->getMessage();
+        // التحقق من حالة المعاملة قبل rollback
+        try {
+            // محاولة rollback فقط إذا كانت المعاملة لا تزال نشطة
+            if ($db->inTransaction()) {
+                $db->rollBack();
+                logImport('✓ Transaction rolled back');
+            } else {
+                logImport('⚠ Transaction already committed or not started');
+            }
+        } catch (Exception $rollbackError) {
+            logImport('✗ ERROR during rollback: ' . $rollbackError->getMessage());
+        }
+        
+        $errorMsg = 'Transaction error: ' . $e->getMessage();
         $errorTrace = 'Stack trace: ' . $e->getTraceAsString();
         
-        logImport('✗ TRANSACTION ROLLBACK: ' . $errorMsg);
+        logImport('✗ TRANSACTION ERROR: ' . $errorMsg);
         logImport('✗ STACK TRACE: ' . $errorTrace);
         
         error_log($errorMsg);
