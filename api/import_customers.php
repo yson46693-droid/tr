@@ -89,6 +89,7 @@ try {
                 `customer_id` int(11) NOT NULL,
                 `phone` varchar(20) NOT NULL,
                 `is_primary` tinyint(1) DEFAULT 0,
+                `title` varchar(50) DEFAULT NULL,
                 `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`),
                 KEY `customer_id` (`customer_id`),
@@ -96,6 +97,17 @@ try {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
         error_log('Table customer_phones created successfully in import API');
+    } else {
+        // التحقق من وجود عمود title وإضافته إذا لم يكن موجوداً
+        $titleColumn = $db->queryOne("SHOW COLUMNS FROM customer_phones LIKE 'title'");
+        if (empty($titleColumn)) {
+            try {
+                $db->execute("ALTER TABLE customer_phones ADD COLUMN `title` varchar(50) DEFAULT NULL AFTER `is_primary`");
+                error_log('Column title added to customer_phones table');
+            } catch (Exception $alterException) {
+                error_log('Error adding title column to customer_phones: ' . $alterException->getMessage());
+            }
+        }
     }
 } catch (Exception $e) {
     error_log('Error creating customer_phones table in import API: ' . $e->getMessage());
@@ -356,6 +368,7 @@ try {
     $nameIndex = -1;
     $phoneIndex = -1;
     $phone2Index = -1;
+    $phone3Index = -1;
     $addressIndex = -1;
     $balanceIndex = -1;
     $regionIndex = -1;
@@ -365,6 +378,7 @@ try {
     $nameVariations = ['اسم العميل', 'الاسم', 'name', 'customer name', 'اسم', 'اسم_العميل', 'اسم العميل', 'الاسم الكامل'];
     $phoneVariations = ['رقم الهاتف', 'الهاتف', 'phone', 'mobile', 'tel', 'رقم_الهاتف', 'رقم الهاتف (الأول)', 'تليفون', 'تلفون', 'telephone', 'رقم التليفون', 'رقم التلفون', 'هاتف', 'موبايل'];
     $phone2Variations = ['رقم الهاتف (الثاني)', 'الهاتف الثاني', 'phone2', 'mobile2', 'tel2', 'رقم_الهاتف_الثاني', 'رقم الهاتف الثاني', 'تليفون 2', 'تلفون 2', 'هاتف 2', 'هاتف ثاني'];
+    $phone3Variations = ['رقم الهاتف (الثالث)', 'الهاتف الثالث', 'phone3', 'mobile3', 'tel3', 'رقم_الهاتف_الثالث', 'رقم الهاتف الثالث', 'تليفون 3', 'تلفون 3', 'هاتف 3', 'هاتف ثالث'];
     $addressVariations = ['العنوان', 'address', 'location', 'عنوان', 'العنوان الكامل', 'عنوان العميل'];
     $balanceVariations = ['الرصيد', 'الديون', 'balance', 'debt', 'رصيد', 'ديون', 'صافى المبلغ', 'صافي المبلغ', 'صافى', 'صافي', 'المبلغ', 'net amount', 'رصيد العميل', 'رصيد العميل', 'الرصيد الحالي', 'المبلغ المستحق', 'المستحق', 'الديون المستحقة'];
     $regionVariations = ['المنطقة', 'region', 'منطقة', 'المنطقة', 'منطقة العميل'];
@@ -455,18 +469,34 @@ try {
         }
         if (count($phoneColumns) >= 2) {
             $phone2Index = $phoneColumns[1];
-        } elseif ($phoneIndex !== -1) {
-            // إذا كان هناك عمود واحد فقط، نبحث عن عمود آخر بهاتف ثاني
+        }
+        if (count($phoneColumns) >= 3) {
+            $phone3Index = $phoneColumns[2];
+        }
+        
+        // البحث عن أعمدة الهواتف المحددة بشكل صريح
+        if ($phoneIndex === -1 || $phone2Index === -1 || $phone3Index === -1) {
             foreach ($headers as $index => $header) {
                 $headerLower = mb_strtolower(trim($header), 'UTF-8');
-                if ($index !== $phoneIndex && (
+                
+                // البحث عن الهاتف الثاني
+                if ($phone2Index === -1 && $index !== $phoneIndex && (
                     in_array($headerLower, $phone2Variations, true) || 
-                    (strpos($headerLower, 'هاتف') !== false && (strpos($headerLower, 'ثاني') !== false || strpos($headerLower, '2') !== false)) ||
-                    strpos($headerLower, 'phone2') !== false ||
+                    (strpos($headerLower, 'هاتف') !== false && (strpos($headerLower, 'ثاني') !== false || strpos($headerLower, '2') !== false) && strpos($headerLower, '3') === false) ||
+                    strpos($headerLower, '2') !== false ||
                     strpos($headerLower, 'mobile2') !== false
                 )) {
                     $phone2Index = $index;
-                    break;
+                }
+                
+                // البحث عن الهاتف الثالث
+                if ($phone3Index === -1 && $index !== $phoneIndex && $index !== $phone2Index && (
+                    in_array($headerLower, $phone3Variations, true) || 
+                    (strpos($headerLower, 'هاتف') !== false && (strpos($headerLower, 'ثالث') !== false || strpos($headerLower, '3') !== false)) ||
+                    strpos($headerLower, 'phone3') !== false ||
+                    strpos($headerLower, 'mobile3') !== false
+                )) {
+                    $phone3Index = $index;
                 }
             }
         }
@@ -476,7 +506,7 @@ try {
     if ($nameIndex === -1) {
         echo json_encode([
             'success' => false,
-            'message' => 'لم يتم العثور على عمود "اسم العميل" في الملف. يرجى التأكد من وجود هذا العمود في الصف الأول. الأعمدة المدعومة: ايدي العميل (اختياري - للتحديث)، اسم العميل (مطلوب)، رقم الهاتف، رقم الهاتف (الثاني)، الرصيد، العنوان، المنطقة'
+            'message' => 'لم يتم العثور على عمود "اسم العميل" في الملف. يرجى التأكد من وجود هذا العمود في الصف الأول. الأعمدة المدعومة: ايدي العميل (اختياري - للتحديث)، اسم العميل (مطلوب)، رقم الهاتف، رقم الهاتف (الثاني)، رقم الهاتف (الثالث)، الرصيد، العنوان، المنطقة'
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -595,31 +625,9 @@ try {
     logImport("nameIndex: $nameIndex");
     logImport("phoneIndex: $phoneIndex");
     logImport("phone2Index: $phone2Index");
+    logImport("phone3Index: $phone3Index");
     logImport("balanceIndex: $balanceIndex");
     logImport("addressIndex: $addressIndex");
-    
-    // #region agent log
-    // Debug log: Column indices found
-    $debugLog = [
-        'id' => 'log_' . time() . '_' . uniqid(),
-        'timestamp' => round(microtime(true) * 1000),
-        'location' => 'import_customers.php:' . __LINE__,
-        'message' => 'Column indices found',
-        'data' => [
-            'nameIndex' => $nameIndex,
-            'phoneIndex' => $phoneIndex,
-            'phone2Index' => $phone2Index,
-            'balanceIndex' => $balanceIndex,
-            'addressIndex' => $addressIndex,
-            'headers' => $headers,
-            'originalHeaders' => $originalHeaders
-        ],
-        'sessionId' => 'debug-session',
-        'runId' => 'run1',
-        'hypothesisId' => 'A'
-    ];
-    @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-    // #endregion
     
     // معالجة البيانات
     logImport('=== STARTING DATA PROCESSING ===');
@@ -690,26 +698,6 @@ try {
                     }
                 }
                 
-                // #region agent log
-                $debugLog = [
-                    'id' => 'log_' . time() . '_' . uniqid(),
-                    'timestamp' => round(microtime(true) * 1000),
-                    'location' => 'import_customers.php:' . __LINE__,
-                    'message' => 'Reading phone from CSV row',
-                    'data' => [
-                        'row' => $i,
-                        'phoneIndex' => $phoneIndex,
-                        'rowLength' => count($row),
-                        'rawValue' => isset($row[$phoneIndex]) ? $row[$phoneIndex] : 'NOT_SET',
-                        'valueExists' => isset($row[$phoneIndex])
-                    ],
-                    'sessionId' => 'debug-session',
-                    'runId' => 'run1',
-                    'hypothesisId' => 'B'
-                ];
-                @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-                // #endregion
-                
                 if (isset($row[$phoneIndex]) && $row[$phoneIndex] !== null && $row[$phoneIndex] !== '') {
                     $rawPhone = trim((string)$row[$phoneIndex]);
                     // تسجيل القيمة الأصلية
@@ -729,19 +717,6 @@ try {
                         if ($i <= 5) {
                             logImport("Row $i - ✓ Cleaned phone: '$phone'");
                         }
-                        // #region agent log
-                        $debugLog = [
-                            'id' => 'log_' . time() . '_' . uniqid(),
-                            'timestamp' => round(microtime(true) * 1000),
-                            'location' => 'import_customers.php:' . __LINE__,
-                            'message' => 'Phone cleaned and set',
-                            'data' => ['row' => $i, 'phone' => $phone, 'rawPhone' => $row[$phoneIndex]],
-                            'sessionId' => 'debug-session',
-                            'runId' => 'run1',
-                            'hypothesisId' => 'B'
-                        ];
-                        @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-                        // #endregion
                     } else {
                         if ($i <= 5) {
                             logImport("Row $i - ⚠ Phone became empty after cleaning");
@@ -757,19 +732,6 @@ try {
                     logImport("Row $i - ✗ ERROR: phoneIndex is -1! Cannot read phone number.");
                     logImport("  - Available row indices: 0 to " . (count($row) - 1));
                 }
-                // #region agent log
-                $debugLog = [
-                    'id' => 'log_' . time() . '_' . uniqid(),
-                    'timestamp' => round(microtime(true) * 1000),
-                    'location' => 'import_customers.php:' . __LINE__,
-                    'message' => 'ERROR: phoneIndex is -1',
-                    'data' => ['row' => $i, 'phoneIndex' => $phoneIndex],
-                    'sessionId' => 'debug-session',
-                    'runId' => 'run1',
-                    'hypothesisId' => 'B'
-                ];
-                @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-                // #endregion
             }
             
             // قراءة رقم الهاتف الثاني
@@ -777,17 +739,40 @@ try {
             if ($phone2Index !== -1 && isset($row[$phone2Index])) {
                 $rawPhone2 = trim((string)$row[$phone2Index]);
                 // إزالة أي مسافات أو أحرف غير ضرورية
-                $rawPhone2 = str_replace([' ', '-', '_', '(', ')', '.', '/'], '', $rawPhone2);
+                $rawPhone2 = str_replace([' ', '-', '_', '(', ')', '.', '/', '+'], '', $rawPhone2);
                 // إزالة BOM إذا كان موجوداً
                 if (substr($rawPhone2, 0, 3) === "\xEF\xBB\xBF") {
                     $rawPhone2 = substr($rawPhone2, 3);
                 }
+                // إزالة أي أحرف غير رقمية
+                $rawPhone2 = preg_replace('/[^\d]/', '', $rawPhone2);
                 if ($rawPhone2 !== '' && strlen($rawPhone2) > 0) {
                     $phone2 = $rawPhone2;
                 }
             } else {
                 if ($i <= 5 && $phone2Index !== -1) {
                     logImport("WARNING: Row $i - phone2Index exists but row[$phone2Index] is empty. phone2Index=$phone2Index");
+                }
+            }
+            
+            // قراءة رقم الهاتف الثالث
+            $phone3 = null;
+            if ($phone3Index !== -1 && isset($row[$phone3Index])) {
+                $rawPhone3 = trim((string)$row[$phone3Index]);
+                // إزالة أي مسافات أو أحرف غير ضرورية
+                $rawPhone3 = str_replace([' ', '-', '_', '(', ')', '.', '/', '+'], '', $rawPhone3);
+                // إزالة BOM إذا كان موجوداً
+                if (substr($rawPhone3, 0, 3) === "\xEF\xBB\xBF") {
+                    $rawPhone3 = substr($rawPhone3, 3);
+                }
+                // إزالة أي أحرف غير رقمية
+                $rawPhone3 = preg_replace('/[^\d]/', '', $rawPhone3);
+                if ($rawPhone3 !== '' && strlen($rawPhone3) > 0) {
+                    $phone3 = $rawPhone3;
+                }
+            } else {
+                if ($i <= 5 && $phone3Index !== -1) {
+                    logImport("WARNING: Row $i - phone3Index exists but row[$phone3Index] is empty. phone3Index=$phone3Index");
                 }
             }
             
@@ -815,26 +800,6 @@ try {
                         logImport("  - Is empty: " . (empty($row[$balanceIndex]) ? 'YES' : 'NO'));
                     }
                 }
-                
-                // #region agent log
-                $debugLog = [
-                    'id' => 'log_' . time() . '_' . uniqid(),
-                    'timestamp' => round(microtime(true) * 1000),
-                    'location' => 'import_customers.php:' . __LINE__,
-                    'message' => 'Reading balance from CSV row',
-                    'data' => [
-                        'row' => $i,
-                        'balanceIndex' => $balanceIndex,
-                        'rowLength' => count($row),
-                        'rawValue' => isset($row[$balanceIndex]) ? $row[$balanceIndex] : 'NOT_SET',
-                        'valueExists' => isset($row[$balanceIndex])
-                    ],
-                    'sessionId' => 'debug-session',
-                    'runId' => 'run1',
-                    'hypothesisId' => 'C'
-                ];
-                @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-                // #endregion
                 
                 if (isset($row[$balanceIndex]) && $row[$balanceIndex] !== null && $row[$balanceIndex] !== '') {
                     $rawBalance = $row[$balanceIndex];
@@ -864,19 +829,6 @@ try {
                         if ($i <= 5) {
                             logImport("Row $i - Parsed balance: $balance");
                         }
-                        // #region agent log
-                        $debugLog = [
-                            'id' => 'log_' . time() . '_' . uniqid(),
-                            'timestamp' => round(microtime(true) * 1000),
-                            'location' => 'import_customers.php:' . __LINE__,
-                            'message' => 'Balance parsed and set',
-                            'data' => ['row' => $i, 'balance' => $balance, 'rawBalance' => $row[$balanceIndex]],
-                            'sessionId' => 'debug-session',
-                            'runId' => 'run1',
-                            'hypothesisId' => 'C'
-                        ];
-                        @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-                        // #endregion
                     } else {
                         // محاولة إزالة المزيد من الأحرف غير الرقمية
                         $cleanedBalance = preg_replace('/[^\d.\-+]/', '', $rawBalance);
@@ -904,19 +856,6 @@ try {
                     logImport("Row $i - ✗ ERROR: balanceIndex is -1! Cannot read balance.");
                     logImport("  - Available row indices: 0 to " . (count($row) - 1));
                 }
-                // #region agent log
-                $debugLog = [
-                    'id' => 'log_' . time() . '_' . uniqid(),
-                    'timestamp' => round(microtime(true) * 1000),
-                    'location' => 'import_customers.php:' . __LINE__,
-                    'message' => 'ERROR: balanceIndex is -1',
-                    'data' => ['row' => $i, 'balanceIndex' => $balanceIndex],
-                    'sessionId' => 'debug-session',
-                    'runId' => 'run1',
-                    'hypothesisId' => 'C'
-                ];
-                @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-                // #endregion
             }
             
             // قراءة المنطقة
@@ -935,19 +874,22 @@ try {
                     'name' => $name,
                     'phone' => $phone ?? 'NULL',
                     'phone2' => $phone2 ?? 'NULL',
+                    'phone3' => $phone3 ?? 'NULL',
                     'balance' => $balance,
                     'address' => $address ?? 'NULL',
                     'region' => $regionName ?? 'NULL',
                     'indices' => [
                         'phoneIndex' => $phoneIndex,
                         'phone2Index' => $phone2Index,
+                        'phone3Index' => $phone3Index,
                         'balanceIndex' => $balanceIndex,
                         'addressIndex' => $addressIndex
                     ],
                     'raw_values' => [
                         'balance' => ($balanceIndex !== -1 && isset($row[$balanceIndex])) ? $row[$balanceIndex] : 'NOT_SET',
                         'phone' => ($phoneIndex !== -1 && isset($row[$phoneIndex])) ? $row[$phoneIndex] : 'NOT_SET',
-                        'phone2' => ($phone2Index !== -1 && isset($row[$phone2Index])) ? $row[$phone2Index] : 'NOT_SET'
+                        'phone2' => ($phone2Index !== -1 && isset($row[$phone2Index])) ? $row[$phone2Index] : 'NOT_SET',
+                        'phone3' => ($phone3Index !== -1 && isset($row[$phone3Index])) ? $row[$phone3Index] : 'NOT_SET'
                     ],
                     'row_length' => count($row),
                     'all_row_values' => $row,
@@ -1034,27 +976,6 @@ try {
                         logImport("  - Update values: " . json_encode($updateValues, JSON_UNESCAPED_UNICODE));
                     }
                     
-                    // #region agent log
-                    $debugLog = [
-                        'id' => 'log_' . time() . '_' . uniqid(),
-                        'timestamp' => round(microtime(true) * 1000),
-                        'location' => 'import_customers.php:' . __LINE__,
-                        'message' => 'Before UPDATE customer',
-                        'data' => [
-                            'row' => $i,
-                            'customerId' => $customerId,
-                            'phone' => $phone,
-                            'balance' => $balance,
-                            'updateFields' => $updateFields,
-                            'updateValues' => $updateValues
-                        ],
-                        'sessionId' => 'debug-session',
-                        'runId' => 'run1',
-                        'hypothesisId' => 'D'
-                    ];
-                    @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-                    // #endregion
-                    
                     try {
                         $db->execute(
                             "UPDATE customers SET " . implode(', ', $updateFields) . " WHERE id = ?",
@@ -1074,27 +995,6 @@ try {
                             logImport("  - Phone: " . ($savedCustomer['phone'] ?? 'NULL'));
                             logImport("  - Balance: " . ($savedCustomer['balance'] ?? 'NULL') . " (type: " . gettype($savedCustomer['balance']) . ")");
                             logImport("  - Address: " . ($savedCustomer['address'] ?? 'NULL'));
-                            
-                            // #region agent log
-                            $debugLog = [
-                                'id' => 'log_' . time() . '_' . uniqid(),
-                                'timestamp' => round(microtime(true) * 1000),
-                                'location' => 'import_customers.php:' . __LINE__,
-                                'message' => 'After UPDATE - verified from DB',
-                                'data' => [
-                                    'row' => $i,
-                                    'customerId' => $customerId,
-                                    'savedPhone' => $savedCustomer['phone'] ?? null,
-                                    'savedBalance' => $savedCustomer['balance'] ?? null,
-                                    'expectedPhone' => $phone,
-                                    'expectedBalance' => $balance
-                                ],
-                                'sessionId' => 'debug-session',
-                                'runId' => 'run1',
-                                'hypothesisId' => 'D'
-                            ];
-                            @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-                            // #endregion
                         } else {
                             logImport("✗ ERROR: Could not verify saved customer data!");
                         }
@@ -1156,26 +1056,6 @@ try {
                         $customerPlaceholders[] = '?';
                     }
                     
-                    // #region agent log
-                    $debugLog = [
-                        'id' => 'log_' . time() . '_' . uniqid(),
-                        'timestamp' => round(microtime(true) * 1000),
-                        'location' => 'import_customers.php:' . __LINE__,
-                        'message' => 'Before INSERT customer',
-                        'data' => [
-                            'row' => $i,
-                            'phone' => $phone,
-                            'balance' => $balance,
-                            'customerColumns' => $customerColumns,
-                            'customerValues' => $customerValues
-                        ],
-                        'sessionId' => 'debug-session',
-                        'runId' => 'run1',
-                        'hypothesisId' => 'E'
-                    ];
-                    @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-                    // #endregion
-                    
                     try {
                         $db->execute(
                             "INSERT INTO customers (" . implode(', ', $customerColumns) . ") 
@@ -1198,27 +1078,6 @@ try {
                             logImport("  - Phone: " . ($savedCustomer['phone'] ?? 'NULL'));
                             logImport("  - Balance: " . ($savedCustomer['balance'] ?? 'NULL') . " (type: " . gettype($savedCustomer['balance']) . ")");
                             logImport("  - Address: " . ($savedCustomer['address'] ?? 'NULL'));
-                            
-                            // #region agent log
-                            $debugLog = [
-                                'id' => 'log_' . time() . '_' . uniqid(),
-                                'timestamp' => round(microtime(true) * 1000),
-                                'location' => 'import_customers.php:' . __LINE__,
-                                'message' => 'After INSERT - verified from DB',
-                                'data' => [
-                                    'row' => $i,
-                                    'customerId' => $customerId,
-                                    'savedPhone' => $savedCustomer['phone'] ?? null,
-                                    'savedBalance' => $savedCustomer['balance'] ?? null,
-                                    'expectedPhone' => $phone,
-                                    'expectedBalance' => $balance
-                                ],
-                                'sessionId' => 'debug-session',
-                                'runId' => 'run1',
-                                'hypothesisId' => 'E'
-                            ];
-                            @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-                            // #endregion
                         } else {
                             logImport("✗ ERROR: Could not verify saved customer data!");
                         }
@@ -1237,38 +1096,21 @@ try {
                 
                 // حفظ أرقام الهواتف في جدول customer_phones
                 try {
-                    // #region agent log
-                    $debugLog = [
-                        'id' => 'log_' . time() . '_' . uniqid(),
-                        'timestamp' => round(microtime(true) * 1000),
-                        'location' => 'import_customers.php:' . __LINE__,
-                        'message' => 'Before saving phones to customer_phones',
-                        'data' => [
-                            'row' => $i,
-                            'customerId' => $customerId,
-                            'phone' => $phone,
-                            'phone2' => $phone2,
-                            'phoneIndex' => $phoneIndex,
-                            'phone2Index' => $phone2Index
-                        ],
-                        'sessionId' => 'debug-session',
-                        'runId' => 'run1',
-                        'hypothesisId' => 'F'
-                    ];
-                    @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-                    // #endregion
-                    
                     $phonesToSave = [];
                     if ($phone !== null && trim($phone) !== '') {
-                        $phonesToSave[] = trim($phone);
+                        $phonesToSave[] = ['phone' => trim($phone), 'title' => null, 'is_primary' => true];
                     }
                     if ($phone2 !== null && trim($phone2) !== '') {
-                        $phonesToSave[] = trim($phone2);
+                        $phonesToSave[] = ['phone' => trim($phone2), 'title' => null, 'is_primary' => false];
+                    }
+                    if ($phone3 !== null && trim($phone3) !== '') {
+                        $phonesToSave[] = ['phone' => trim($phone3), 'title' => '2', 'is_primary' => false];
                     }
                     
                     logImport("Customer $customerId ($name) - Phones to save: " . json_encode($phonesToSave, JSON_UNESCAPED_UNICODE));
                     logImport("  - Phone1 (index $phoneIndex): " . ($phone ?? 'NULL'));
                     logImport("  - Phone2 (index $phone2Index): " . ($phone2 ?? 'NULL'));
+                    logImport("  - Phone3 (index $phone3Index): " . ($phone3 ?? 'NULL') . " (title: 2)");
                     
                     if (!empty($phonesToSave)) {
                         // حذف أرقام الهواتف القديمة أولاً (في حالة التحديث)
@@ -1277,10 +1119,12 @@ try {
                             logImport("Deleted old phones for customer $customerId");
                         }
                         
-                        $firstPhone = true;
                         $savedCount = 0;
-                        foreach ($phonesToSave as $phoneNumber) {
-                            $phoneNumber = trim($phoneNumber);
+                        foreach ($phonesToSave as $phoneData) {
+                            $phoneNumber = trim($phoneData['phone']);
+                            $phoneTitle = $phoneData['title'];
+                            $isPrimary = $phoneData['is_primary'] ? 1 : 0;
+                            
                             if (!empty($phoneNumber) && strlen($phoneNumber) > 0) {
                                 try {
                                     // التحقق من عدم وجود الرقم مسبقاً
@@ -1290,17 +1134,24 @@ try {
                                     );
                                     
                                     if (!$existingPhone) {
-                                        $result = $db->execute(
-                                            "INSERT INTO customer_phones (customer_id, phone, is_primary) VALUES (?, ?, ?)",
-                                            [$customerId, $phoneNumber, $firstPhone ? 1 : 0]
-                                        );
+                                        // بناء استعلام INSERT مع أو بدون title
+                                        if ($phoneTitle !== null) {
+                                            $result = $db->execute(
+                                                "INSERT INTO customer_phones (customer_id, phone, is_primary, title) VALUES (?, ?, ?, ?)",
+                                                [$customerId, $phoneNumber, $isPrimary, $phoneTitle]
+                                            );
+                                            logImport("✓ Phone saved: ID=" . $db->getLastInsertId() . ", Customer ID=$customerId ($name), Phone=$phoneNumber, Primary=$isPrimary, Title=$phoneTitle");
+                                        } else {
+                                            $result = $db->execute(
+                                                "INSERT INTO customer_phones (customer_id, phone, is_primary) VALUES (?, ?, ?)",
+                                                [$customerId, $phoneNumber, $isPrimary]
+                                            );
+                                            logImport("✓ Phone saved: ID=" . $db->getLastInsertId() . ", Customer ID=$customerId ($name), Phone=$phoneNumber, Primary=$isPrimary");
+                                        }
                                         $savedCount++;
-                                        $phoneId = $db->getLastInsertId();
-                                        logImport("✓ Phone saved: ID=$phoneId, Customer ID=$customerId ($name), Phone=$phoneNumber, Primary=" . ($firstPhone ? '1' : '0'));
                                     } else {
                                         logImport("⚠ Phone already exists: Customer ID $customerId, Phone: $phoneNumber");
                                     }
-                                    $firstPhone = false;
                                 } catch (Exception $phoneInsertError) {
                                     // تسجيل الخطأ ولكن لا نوقف العملية
                                     logImport('✗ Error inserting phone number "' . $phoneNumber . '" for customer ' . $customerId . ': ' . $phoneInsertError->getMessage());
@@ -1310,51 +1161,10 @@ try {
                         logImport("Total phones saved for customer $customerId: $savedCount");
                         
                         // التحقق من الأرقام المحفوظة
-                        $savedPhones = $db->query("SELECT phone, is_primary FROM customer_phones WHERE customer_id = ?", [$customerId]);
+                        $savedPhones = $db->query("SELECT phone, is_primary, title FROM customer_phones WHERE customer_id = ?", [$customerId]);
                         logImport("✓ Verified saved phones for customer $customerId: " . json_encode($savedPhones, JSON_UNESCAPED_UNICODE));
-                        
-                        // #region agent log
-                        $debugLog = [
-                            'id' => 'log_' . time() . '_' . uniqid(),
-                            'timestamp' => round(microtime(true) * 1000),
-                            'location' => 'import_customers.php:' . __LINE__,
-                            'message' => 'After saving phones - verified from DB',
-                            'data' => [
-                                'row' => $i,
-                                'customerId' => $customerId,
-                                'savedPhones' => $savedPhones,
-                                'expectedPhones' => $phonesToSave,
-                                'savedCount' => $savedCount
-                            ],
-                            'sessionId' => 'debug-session',
-                            'runId' => 'run1',
-                            'hypothesisId' => 'F'
-                        ];
-                        @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-                        // #endregion
                     } else {
-                        logImport("⚠ No phones to save for customer: $name (ID: $customerId) - Phone1: " . ($phone ?? 'NULL') . " (index: $phoneIndex), Phone2: " . ($phone2 ?? 'NULL') . " (index: $phone2Index)");
-                        
-                        // #region agent log
-                        $debugLog = [
-                            'id' => 'log_' . time() . '_' . uniqid(),
-                            'timestamp' => round(microtime(true) * 1000),
-                            'location' => 'import_customers.php:' . __LINE__,
-                            'message' => 'No phones to save',
-                            'data' => [
-                                'row' => $i,
-                                'customerId' => $customerId,
-                                'phone' => $phone,
-                                'phone2' => $phone2,
-                                'phoneIndex' => $phoneIndex,
-                                'phone2Index' => $phone2Index
-                            ],
-                            'sessionId' => 'debug-session',
-                            'runId' => 'run1',
-                            'hypothesisId' => 'F'
-                        ];
-                        @file_put_contents(__DIR__ . '/../.cursor/debug.log', json_encode($debugLog, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
-                        // #endregion
+                        logImport("⚠ No phones to save for customer: $name (ID: $customerId) - Phone1: " . ($phone ?? 'NULL') . " (index: $phoneIndex), Phone2: " . ($phone2 ?? 'NULL') . " (index: $phone2Index), Phone3: " . ($phone3 ?? 'NULL') . " (index: $phone3Index)");
                     }
                 } catch (Exception $phonesError) {
                     // تسجيل الخطأ ولكن لا نوقف العملية
