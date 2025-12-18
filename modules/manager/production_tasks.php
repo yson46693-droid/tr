@@ -253,8 +253,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $priority = in_array($priority, $allowedPriorities, true) ? $priority : 'normal';
         $dueDate = $_POST['due_date'] ?? '';
         $assignees = $_POST['assigned_to'] ?? [];
-        // الحصول على اسم المنتج من الحقل النصي إذا كان موجوداً، وإلا من القائمة المنسدلة
-        $productName = trim($_POST['product_name_custom'] ?? $_POST['product_name'] ?? '');
+        // الحصول على اسم المنتج من حقل الإدخال النصي
+        $productName = trim($_POST['product_name'] ?? '');
 
         $productQuantityInput = isset($_POST['product_quantity']) ? trim((string)$_POST['product_quantity']) : '';
         $productQuantity = null;
@@ -287,8 +287,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // تم ضبط رسالة الخطأ أعلاه (مثل التحقق من الكمية)
         } elseif (empty($assignees)) {
             $error = 'يجب اختيار عامل واحد على الأقل لاستلام المهمة.';
-        } elseif ($taskType === 'general' && $title === '') {
-            $error = 'يرجى إدخال عنوان للمهمة.';
         } elseif ($dueDate && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dueDate)) {
             $error = 'صيغة تاريخ الاستحقاق غير صحيحة.';
         } else {
@@ -1036,20 +1034,9 @@ try {
                         </div>
                         <div class="col-md-6" id="productFieldWrapper">
                             <label class="form-label">المنتج (اختياري)</label>
-                            <select class="form-select" name="product_name" id="productNameInput">
-                                <option value="">اختر من القوالب</option>
-                                <?php if (!empty($productTemplates)): ?>
-                                    <?php foreach ($productTemplates as $template): ?>
-                                        <option value="<?php echo htmlspecialchars($template['product_name'] ?? ''); ?>">
-                                            <?php echo htmlspecialchars($template['product_name'] ?? ''); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                                <option value="__custom__">-- إدخال منتج جديد --</option>
-                            </select>
-                            <input type="text" class="form-control mt-2" id="productNameCustomInput" name="product_name_custom" placeholder="أدخل اسم منتج جديد" style="display: none;">
+                            <input type="text" class="form-control" name="product_name" id="productNameInput" placeholder="أدخل اسم المنتج أو القالب">
                             <div class="form-text mt-2">
-                                <small class="text-muted">اختر من القوالب الموجودة أو اختر "إدخال منتج جديد" لإدخال منتج غير موجود في القوالب.</small>
+                                <small class="text-muted">أدخل اسم المنتج أو القالب المراد إنتاجه.</small>
                             </div>
                         </div>
                         <div class="col-md-6" id="quantityFieldWrapper">
@@ -1206,41 +1193,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (taskTypeSelect) {
         taskTypeSelect.addEventListener('change', updateTaskTypeUI);
         
-        // التعامل مع قائمة المنتجات
-        const productNameSelect = document.getElementById('productNameInput');
-        const productNameCustomInput = document.getElementById('productNameCustomInput');
-        
-        if (productNameSelect && productNameCustomInput) {
-            productNameSelect.addEventListener('change', function() {
-                if (this.value === '__custom__') {
-                    // إظهار حقل الإدخال النصي وإخفاء القائمة المنسدلة
-                    productNameCustomInput.style.display = 'block';
-                    productNameCustomInput.required = true;
-                    productNameSelect.name = ''; // إزالة name من select
-                    productNameCustomInput.name = 'product_name'; // إضافة name للحقل النصي
-                    productNameCustomInput.focus();
-                } else {
-                    // إخفاء حقل الإدخال النصي وإظهار القائمة المنسدلة
-                    productNameCustomInput.style.display = 'none';
-                    productNameCustomInput.required = false;
-                    productNameSelect.name = 'product_name'; // إضافة name للselect
-                    productNameCustomInput.name = 'product_name_custom'; // إزالة name من الحقل النصي
-                }
-            });
-            
-            // عند إرسال النموذج، تأكد من استخدام القيمة الصحيحة
-            const taskForm = productNameSelect.closest('form');
-            if (taskForm) {
-                taskForm.addEventListener('submit', function(e) {
-                    if (productNameSelect.value === '__custom__' && !productNameCustomInput.value.trim()) {
-                        e.preventDefault();
-                        alert('يرجى إدخال اسم المنتج');
-                        productNameCustomInput.focus();
-                        return false;
-                    }
-                });
-            }
-        }
+        // لا حاجة لمعالجة خاصة بحقل المنتج - الآن حقل نصي بسيط
     }
     updateTaskTypeUI();
 });
