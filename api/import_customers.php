@@ -21,21 +21,61 @@ $currentUser = getCurrentUser();
 $db = db();
 
 // دالة تسجيل مخصصة تكتب مباشرة في ملف السجلات
+// يتم تعريفها قبل أي استخدام
 function logImport($message) {
-    $logFile = __DIR__ . '/../storage/logs/import_customers.log';
-    $logDir = dirname($logFile);
-    if (!is_dir($logDir)) {
-        @mkdir($logDir, 0755, true);
+    // محاولة استخدام PRIVATE_STORAGE_PATH إذا كان معرفاً
+    if (defined('PRIVATE_STORAGE_PATH')) {
+        $logFile = PRIVATE_STORAGE_PATH . '/logs/import_customers.log';
+    } else {
+        // استخدام المسار النسبي
+        $logFile = __DIR__ . '/../storage/logs/import_customers.log';
     }
+    
+    $logDir = dirname($logFile);
+    
+    // محاولة إنشاء المجلد إذا لم يكن موجوداً
+    if (!is_dir($logDir)) {
+        $created = @mkdir($logDir, 0755, true);
+        if (!$created && !is_dir($logDir)) {
+            // إذا فشل، حاول استخدام مسار بديل
+            $logFile = __DIR__ . '/../import_customers_debug.log';
+            $logDir = dirname($logFile);
+            @mkdir($logDir, 0755, true);
+        }
+    }
+    
     $timestamp = date('Y-m-d H:i:s');
     $logMessage = "[$timestamp] $message\n";
+    
+    // محاولة الكتابة
     $result = @file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
-    // أيضاً كتابة في error_log العادي
-    error_log($message);
-    // إذا فشل الكتابة، حاول كتابة في مكان بديل
+    
+    // تسجيل في error_log العادي أيضاً
+    error_log('[IMPORT] ' . $message);
+    
+    // إذا فشلت الكتابة، حاول كتابة في أماكن بديلة
     if ($result === false) {
-        $altLogFile = __DIR__ . '/../import_customers_debug.log';
-        @file_put_contents($altLogFile, $logMessage, FILE_APPEND | LOCK_EX);
+        // محاولة 1: في نفس المجلد
+        $altLogFile1 = __DIR__ . '/import_customers_debug.log';
+        @file_put_contents($altLogFile1, $logMessage, FILE_APPEND | LOCK_EX);
+        
+        // محاولة 2: في المجلد الرئيسي
+        $altLogFile2 = dirname(__DIR__) . '/import_customers_debug.log';
+        @file_put_contents($altLogFile2, $logMessage, FILE_APPEND | LOCK_EX);
+        
+        // محاولة 3: في مجلد storage/logs البديل
+        $altLogFile3 = __DIR__ . '/../storage/logs/import_customers.log';
+        if (is_dir(dirname($altLogFile3))) {
+            @file_put_contents($altLogFile3, $logMessage, FILE_APPEND | LOCK_EX);
+        }
+        
+        // تسجيل الخطأ في error_log
+        error_log("Failed to write to log file: $logFile. Tried alternatives.");
+    }
+    
+    // أيضاً كتابة في APP_ERROR_LOG إذا كان معرفاً
+    if (defined('APP_ERROR_LOG') && APP_ERROR_LOG !== $logFile) {
+        @file_put_contents(APP_ERROR_LOG, $logMessage, FILE_APPEND | LOCK_EX);
     }
 }
 
@@ -62,8 +102,14 @@ try {
     // لا نوقف العملية، قد يكون الجدول موجوداً بالفعل
 }
 
+// اختبار دالة التسجيل في البداية
+logImport('=== API CALLED ===');
+logImport('Request method: ' . $_SERVER['REQUEST_METHOD']);
+logImport('Log file path: ' . (defined('PRIVATE_STORAGE_PATH') ? PRIVATE_STORAGE_PATH . '/logs/import_customers.log' : __DIR__ . '/../storage/logs/import_customers.log'));
+
 // التحقق من نوع الطلب
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    logImport('ERROR: Invalid request method: ' . $_SERVER['REQUEST_METHOD']);
     http_response_code(405);
     echo json_encode([
         'success' => false,
@@ -75,6 +121,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // التحقق من وجود الملف
 if (!isset($_FILES['excel_file']) || $_FILES['excel_file']['error'] !== UPLOAD_ERR_OK) {
     $errorMessage = 'لم يتم رفع الملف بنجاح';
+    $errorCode = $_FILES['excel_file']['error'] ?? 'UNKNOWN';
+    logImport('ERROR: File upload failed. Error code: ' . $errorCode);
+    
     if (isset($_FILES['excel_file']['error'])) {
         switch ($_FILES['excel_file']['error']) {
             case UPLOAD_ERR_INI_SIZE:
@@ -89,6 +138,8 @@ if (!isset($_FILES['excel_file']) || $_FILES['excel_file']['error'] !== UPLOAD_E
                 break;
         }
     }
+    
+    logImport('ERROR MESSAGE: ' . $errorMessage);
     
     echo json_encode([
         'success' => false,
@@ -1089,14 +1140,28 @@ try {
         
     } catch (Exception $e) {
         $db->rollBack();
-        error_log('Transaction rollback error: ' . $e->getMessage());
-        error_log('Stack trace: ' . $e->getTraceAsString());
+        $errorMsg = 'Transaction rollback error: ' . $e->getMessage();
+        $errorTrace = 'Stack trace: ' . $e->getTraceAsString();
+        
+        logImport('✗ TRANSACTION ROLLBACK: ' . $errorMsg);
+        logImport('✗ STACK TRACE: ' . $errorTrace);
+        
+        error_log($errorMsg);
+        error_log($errorTrace);
         throw $e;
     }
     
 } catch (Exception $e) {
-    error_log('Import customers error: ' . $e->getMessage());
-    error_log('Stack trace: ' . $e->getTraceAsString());
+    $errorMsg = 'Import customers error: ' . $e->getMessage();
+    $errorTrace = 'Stack trace: ' . $e->getTraceAsString();
+    
+    // تسجيل في logImport
+    logImport('✗ EXCEPTION: ' . $errorMsg);
+    logImport('✗ STACK TRACE: ' . $errorTrace);
+    
+    // تسجيل في error_log
+    error_log($errorMsg);
+    error_log($errorTrace);
     
     // التأكد من عدم وجود output قبل JSON
     if (ob_get_level() > 0) {
@@ -1107,12 +1172,21 @@ try {
     echo json_encode([
         'success' => false,
         'message' => 'حدث خطأ أثناء استيراد البيانات: ' . $e->getMessage(),
-        'error_details' => 'يرجى التحقق من ملف error_log لمزيد من التفاصيل'
+        'error_details' => 'يرجى التحقق من ملف السجلات لمزيد من التفاصيل',
+        'log_file' => defined('PRIVATE_STORAGE_PATH') ? PRIVATE_STORAGE_PATH . '/logs/import_customers.log' : 'storage/logs/import_customers.log'
     ], JSON_UNESCAPED_UNICODE);
     exit;
 } catch (Throwable $e) {
-    error_log('Import customers fatal error: ' . $e->getMessage());
-    error_log('Stack trace: ' . $e->getTraceAsString());
+    $errorMsg = 'Import customers fatal error: ' . $e->getMessage();
+    $errorTrace = 'Stack trace: ' . $e->getTraceAsString();
+    
+    // تسجيل في logImport
+    logImport('✗ FATAL ERROR: ' . $errorMsg);
+    logImport('✗ STACK TRACE: ' . $errorTrace);
+    
+    // تسجيل في error_log
+    error_log($errorMsg);
+    error_log($errorTrace);
     
     // التأكد من عدم وجود output قبل JSON
     if (ob_get_level() > 0) {
@@ -1122,7 +1196,8 @@ try {
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'message' => 'حدث خطأ فادح أثناء استيراد البيانات. يرجى التحقق من ملف error_log'
+        'message' => 'حدث خطأ فادح أثناء استيراد البيانات. يرجى التحقق من ملف السجلات',
+        'log_file' => defined('PRIVATE_STORAGE_PATH') ? PRIVATE_STORAGE_PATH . '/logs/import_customers.log' : 'storage/logs/import_customers.log'
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }

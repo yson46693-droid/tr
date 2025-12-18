@@ -262,6 +262,13 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 $taskType = $input['task_type'] ?? 'general';
                 $notes = tasksSafeString($input['notes'] ?? '');
                 
+                // إذا كان هناك quantity أو product_id، تغيير task_type تلقائياً إلى production
+                // هذا يجب أن يحدث في البداية قبل أي تحقق آخر
+                if (($quantity > 0 || $productId > 0) && $taskType !== 'production') {
+                    error_log("⚠ Auto-changing task_type to production (quantity: $quantity, product_id: $productId)");
+                    $taskType = 'production';
+                }
+                
                 // تسجيل للتشخيص - فقط للقيم المهمة
                 // يمكن حذف هذا إذا لم يكن هناك مشاكل
 
@@ -482,23 +489,8 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     }
                 }
                 
-                // إذا كان هناك product_id أو quantity ولكن task_type ليس production، تغييره تلقائياً
-                if ($hasProductData && $taskType !== 'production') {
-                    error_log("⚠ WARNING: Product data exists (product_id: $productId, quantity: $quantity) but task_type is '$task_type'. Auto-changing to 'production'.");
-                    $taskType = 'production';
-                    
-                    // بعد تغيير task_type إلى production، يجب أن يكون لدينا product_name
-                    // إذا لم يكن موجوداً، رفض الطلب
-                    if (empty($displayProductName) || trim($displayProductName) === '') {
-                        error_log("✗ ERROR: After changing task_type to production, product_name is still empty!");
-                        error_log("  - productId: $productId");
-                        error_log("  - quantity: $quantity");
-                        error_log("  - productName: '$productName'");
-                        throw new RuntimeException('يجب اختيار منتج عند إدخال كمية لمهمة الإنتاج');
-                    }
-                }
-                
                 // التحقق النهائي: إذا كان task_type هو production، يجب أن يكون لدينا product_name
+                // هذا يحدث بعد تغيير task_type تلقائياً في البداية (إذا كان هناك quantity أو product_id)
                 if ($taskType === 'production' && (empty($displayProductName) || trim($displayProductName) === '')) {
                     error_log("✗ ERROR: task_type is production but product_name is empty!");
                     error_log("  - productId: $productId");
