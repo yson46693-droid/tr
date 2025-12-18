@@ -956,6 +956,38 @@ document.addEventListener('DOMContentLoaded', function() {
         const loginUrl = (basePath + '/index.php').replace(/\/+/g, '/');
         return loginUrl.startsWith('/') ? loginUrl : '/' + loginUrl;
     }
+    
+    // دالة مساعدة للحصول على مسار API
+    function getApiPath(endpoint) {
+        const cleanEndpoint = String(endpoint || '').replace(/^\/+/, '');
+        const currentPath = window.location.pathname || '/';
+        const parts = currentPath.split('/').filter(Boolean);
+        const stopSegments = new Set(['dashboard', 'modules', 'api', 'assets', 'includes']);
+        const baseParts = [];
+        
+        for (const part of parts) {
+            if (stopSegments.has(part) || part.endsWith('.php')) {
+                break;
+            }
+            baseParts.push(part);
+        }
+        
+        const basePath = baseParts.length ? '/' + baseParts.join('/') : '';
+        const apiPath = (basePath + '/' + cleanEndpoint).replace(/\/+/g, '/');
+        
+        return apiPath.startsWith('/') ? apiPath : '/' + apiPath;
+    }
+    
+    // دالة مساعدة لإنشاء AbortSignal مع timeout
+    function createTimeoutSignal(timeoutMs) {
+        if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+            return AbortSignal.timeout(timeoutMs);
+        }
+        // Fallback للمتصفحات القديمة
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), timeoutMs);
+        return controller.signal;
+    }
 
     function redirectToLogin(loginUrl) {
         // تنظيف URL لضمان أنه مسار نسبي فقط (بدون بروتوكول أو hostname)
@@ -1090,16 +1122,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // فقط نعرض رسالة انتهاء الجلسة إذا كان الطلب فعلاً API call
-            // لكن أولاً نتحقق من أن الجلسة منتهية فعلياً في قاعدة البيانات
-            if (isApiCall) {
-                // التحقق من حالة الجلسة في قاعدة البيانات قبل إعادة التوجيه
-                // لا نعيد التوجيه إلا إذا كانت الجلسة منتهية فعلياً
-                // حساب مسار API
-                const currentPath = window.location.pathname || '/';
-                const pathParts = currentPath.split('/').filter(p => p && p !== 'dashboard' && p !== 'modules' && !p.endsWith('.php'));
-                const basePath = pathParts.length > 0 ? '/' + pathParts[0] : '';
-                const checkSessionUrl = (basePath + '/api/check_session.php').replace(/\/+/g, '/');
+                // فقط نعرض رسالة انتهاء الجلسة إذا كان الطلب فعلاً API call
+                // لكن أولاً نتحقق من أن الجلسة منتهية فعلياً في قاعدة البيانات
+                if (isApiCall) {
+                    // التحقق من حالة الجلسة في قاعدة البيانات قبل إعادة التوجيه
+                    // لا نعيد التوجيه إلا إذا كانت الجلسة منتهية فعلياً
+                    // حساب مسار API
+                    const currentPath = window.location.pathname || '/';
+                    const pathParts = currentPath.split('/').filter(p => p && p !== 'dashboard' && p !== 'modules' && !p.endsWith('.php'));
+                    const basePath = pathParts.length > 0 ? '/' + pathParts[0] : '';
+                    const checkSessionUrl = (basePath + '/api/check_session.php').replace(/\/+/g, '/');
+                    
+                    // دالة مساعدة لإنشاء AbortSignal مع timeout
+                    function createTimeoutSignal(timeoutMs) {
+                        if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+                            return AbortSignal.timeout(timeoutMs);
+                        }
+                        // Fallback للمتصفحات القديمة
+                        const controller = new AbortController();
+                        setTimeout(() => controller.abort(), timeoutMs);
+                        return controller.signal;
+                    }
                 
                 fetch(checkSessionUrl, {
                     method: 'GET',
@@ -1270,21 +1313,52 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // منع إعادة التوجيه في الصفحات المحمية أو إذا لم يكن API call
-                if (!isProtectedPage && isApiCall && !isErrorCodeMinus2) {
-                    // محاولة تحديد URL تسجيل الدخول
-                    const overlay = getOverlayElement();
-                    const loginUrl = getLoginUrl(overlay);
-                    
-                    // إظهار overlay بدلاً من ERR_FAILED
-                    setTimeout(() => {
-                        try {
-                            showSessionOverlay(loginUrl);
-                        } catch (e) {
-                            // إذا فشل overlay، التوجيه المباشر
-                            console.warn('Could not show overlay, redirecting:', e);
+                // لكن إذا كان ERR_FAILED في صفحة الداشبورد بعد انتهاء الجلسة، نعيد التوجيه
+                if (!isProtectedPage && isApiCall) {
+                    // إذا كان ERR_FAILED في صفحة الداشبورد، قد تكون الجلسة منتهية
+                    // محاولة التحقق من الجلسة أولاً
+                    if (isErrorCodeMinus2 && currentPath.includes('/dashboard/')) {
+                        // محاولة التحقق من الجلسة قبل إعادة التوجيه
+                        const checkSessionUrl = getApiPath('api/check_session.php');
+                        fetch(checkSessionUrl, {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            cache: 'no-cache',
+                            signal: createTimeoutSignal(5000)
+                        })
+                        .then(function(response) {
+                            return response.json().catch(() => ({ success: false }));
+                        })
+                        .then(function(data) {
+                            // إذا كانت الجلسة منتهية، أعد التوجيه
+                            if (!data.success || !data.session_exists) {
+                                const overlay = getOverlayElement();
+                                const loginUrl = getLoginUrl(overlay);
+                                redirectToLogin(loginUrl);
+                            }
+                        })
+                        .catch(function() {
+                            // في حالة الخطأ، افترض أن الجلسة منتهية وأعد التوجيه
+                            const overlay = getOverlayElement();
+                            const loginUrl = getLoginUrl(overlay);
                             redirectToLogin(loginUrl);
-                        }
-                    }, 100);
+                        });
+                    } else if (!isErrorCodeMinus2) {
+                        // محاولة تحديد URL تسجيل الدخول
+                        const overlay = getOverlayElement();
+                        const loginUrl = getLoginUrl(overlay);
+                        
+                        // إظهار overlay بدلاً من ERR_FAILED
+                        setTimeout(() => {
+                            try {
+                                showSessionOverlay(loginUrl);
+                            } catch (e) {
+                                // إذا فشل overlay، التوجيه المباشر
+                                console.warn('Could not show overlay, redirecting:', e);
+                                redirectToLogin(loginUrl);
+                            }
+                        }, 100);
+                    }
                 }
                 
                 // إرجاع استجابة خطأ بديلة لمنع عرض ERR_FAILED

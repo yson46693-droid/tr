@@ -852,18 +852,26 @@ $totalPages = max(1, (int) ceil($totalTasks / $perPage));
 $unifiedTemplatesExists = !empty($db->queryOne("SHOW TABLES LIKE 'unified_product_templates'"));
 $productTemplatesExists = !empty($db->queryOne("SHOW TABLES LIKE 'product_templates'"));
 // #region agent log
-file_put_contents('../../.cursor/debug.log', json_encode([
-    'timestamp' => time() * 1000,
-    'location' => 'tasks.php:' . __LINE__,
-    'message' => 'Template tables check',
-    'data' => [
-        'unifiedTemplatesExists' => $unifiedTemplatesExists,
-        'productTemplatesExists' => $productTemplatesExists
-    ],
-    'sessionId' => 'debug-session',
-    'runId' => 'run1',
-    'hypothesisId' => 'B'
-]) . "\n", FILE_APPEND);
+// كتابة آمنة في debug.log - التحقق من وجود المجلد أولاً
+$debugLogPath = __DIR__ . '/../../.cursor/debug.log';
+$debugLogDir = dirname($debugLogPath);
+if (!is_dir($debugLogDir)) {
+    @mkdir($debugLogDir, 0755, true);
+}
+if (is_dir($debugLogDir) && is_writable($debugLogDir)) {
+    @file_put_contents($debugLogPath, json_encode([
+        'timestamp' => time() * 1000,
+        'location' => 'tasks.php:' . __LINE__,
+        'message' => 'Template tables check',
+        'data' => [
+            'unifiedTemplatesExists' => $unifiedTemplatesExists,
+            'productTemplatesExists' => $productTemplatesExists
+        ],
+        'sessionId' => 'debug-session',
+        'runId' => 'run1',
+        'hypothesisId' => 'B'
+    ]) . "\n", FILE_APPEND);
+}
 // #endregion
 
 // SQL query لجلب المهام مع استخدام t.product_name مباشرة من الجدول (نفس طريقة طلبات العملاء)
@@ -913,19 +921,27 @@ LIMIT ? OFFSET ?";
 
 $queryParams = array_merge($params, [$perPage, $offset]);
 // #region agent log
-file_put_contents('../../.cursor/debug.log', json_encode([
-    'timestamp' => time() * 1000,
-    'location' => 'tasks.php:' . __LINE__,
-    'message' => 'SQL query with template joins',
-    'data' => [
-        'templateSelect' => $templateSelect,
-        'templateJoins' => $templateJoins,
-        'sql_preview' => substr($taskSql, 0, 200) . '...'
-    ],
-    'sessionId' => 'debug-session',
-    'runId' => 'run1',
-    'hypothesisId' => 'B'
-]) . "\n", FILE_APPEND);
+// كتابة آمنة في debug.log - التحقق من وجود المجلد أولاً
+$debugLogPath = __DIR__ . '/../../.cursor/debug.log';
+$debugLogDir = dirname($debugLogPath);
+if (!is_dir($debugLogDir)) {
+    @mkdir($debugLogDir, 0755, true);
+}
+if (is_dir($debugLogDir) && is_writable($debugLogDir)) {
+    @file_put_contents($debugLogPath, json_encode([
+        'timestamp' => time() * 1000,
+        'location' => 'tasks.php:' . __LINE__,
+        'message' => 'SQL query with template joins',
+        'data' => [
+            'templateSelect' => $templateSelect,
+            'templateJoins' => $templateJoins,
+            'sql_preview' => substr($taskSql, 0, 200) . '...'
+        ],
+        'sessionId' => 'debug-session',
+        'runId' => 'run1',
+        'hypothesisId' => 'B'
+    ]) . "\n", FILE_APPEND);
+}
 // #endregion
 $tasks = $db->query($taskSql, $queryParams);
 
@@ -1071,15 +1087,23 @@ foreach ($tasks as &$task) {
     // استخدام القيمة الفارغة بدلاً من null لضمان العرض الصحيح
     $task['product_name'] = !empty($finalProductName) ? $finalProductName : '';
     // #region agent log
-    file_put_contents('c:\\xampp\\htdocs\\v1\\.cursor\\debug.log', json_encode([
-        'timestamp' => time() * 1000,
-        'location' => 'tasks.php:' . __LINE__,
-        'message' => 'Final product_name assigned to task',
-        'data' => ['task_id' => $task['id'] ?? 0, 'final_product_name' => $task['product_name']],
-        'sessionId' => 'debug-session',
-        'runId' => 'run1',
-        'hypothesisId' => 'A'
-    ]) . "\n", FILE_APPEND);
+    // كتابة آمنة في debug.log - التحقق من وجود المجلد أولاً
+    $debugLogPath = __DIR__ . '/../../.cursor/debug.log';
+    $debugLogDir = dirname($debugLogPath);
+    if (!is_dir($debugLogDir)) {
+        @mkdir($debugLogDir, 0755, true);
+    }
+    if (is_dir($debugLogDir) && is_writable($debugLogDir)) {
+        @file_put_contents($debugLogPath, json_encode([
+            'timestamp' => time() * 1000,
+            'location' => 'tasks.php:' . __LINE__,
+            'message' => 'Final product_name assigned to task',
+            'data' => ['task_id' => $task['id'] ?? 0, 'final_product_name' => $task['product_name']],
+            'sessionId' => 'debug-session',
+            'runId' => 'run1',
+            'hypothesisId' => 'A'
+        ]) . "\n", FILE_APPEND);
+    }
     // #endregion
     
     // إزالة product_name_from_db لأنه لم يعد مطلوباً
@@ -1173,12 +1197,6 @@ try {
 
 $statsBaseConditions = [];
 $statsBaseParams = [];
-
-// إزالة الفلترة - السماح لجميع عمال الإنتاج برؤية إحصائيات جميع المهام
-// if ($isProduction) {
-//     $statsBaseConditions[] = 'assigned_to = ?';
-//     $statsBaseParams[] = (int) $currentUser['id'];
-// }
 
 $buildStatsQuery = function (?string $extraCondition = null, array $extraParams = []) use ($db, $statsBaseConditions, $statsBaseParams) {
     $conditions = $statsBaseConditions;

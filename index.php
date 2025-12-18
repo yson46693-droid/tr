@@ -203,7 +203,21 @@ if (preg_match('/[?&](_nocache|_refresh|_cache_bust|_t|_r|_auto_refresh)=\d+/', 
             exit;
         } elseif ($requestUri !== $cleanUri) {
             $escapedUrl = htmlspecialchars($cleanUri, ENT_QUOTES, 'UTF-8');
-            echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
+            echo '<script>';
+            echo 'try {';
+            echo '  var cleanUri = ' . json_encode($cleanUri, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
+            echo '  // تنظيف URL لضمان أنه مسار نسبي فقط';
+            echo '  cleanUri = cleanUri.replace(/^https?:\\/\\//i, "");';
+            echo '  cleanUri = cleanUri.replace(/^\\/\\/+/, "/");';
+            echo '  cleanUri = cleanUri.replace(/^[^\\/]+:[0-9]+\\//, "/");';
+            echo '  if (!cleanUri.startsWith("/")) cleanUri = "/" + cleanUri;';
+            echo '  cleanUri = cleanUri.replace(/\\/+/g, "/");';
+            echo '  window.location.replace(cleanUri);';
+            echo '} catch(e) {';
+            echo '  console.error("Redirect error:", e);';
+            echo '  window.location.href = "/index.php";';
+            echo '}';
+            echo '</script>';
             echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
             exit;
         }
@@ -350,7 +364,21 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
         exit;
     } else {
         $escapedUrl = htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8');
-        echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
+        echo '<script>';
+        echo 'try {';
+        echo '  var dashboardUrl = ' . json_encode($dashboardUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
+        echo '  // تنظيف URL لضمان أنه مسار نسبي فقط';
+        echo '  dashboardUrl = dashboardUrl.replace(/^https?:\\/\\//i, "");';
+        echo '  dashboardUrl = dashboardUrl.replace(/^\\/\\/+/, "/");';
+        echo '  dashboardUrl = dashboardUrl.replace(/^[^\\/]+:[0-9]+\\//, "/");';
+        echo '  if (!dashboardUrl.startsWith("/")) dashboardUrl = "/" + dashboardUrl;';
+        echo '  dashboardUrl = dashboardUrl.replace(/\\/+/g, "/");';
+        echo '  window.location.replace(dashboardUrl);';
+        echo '} catch(e) {';
+        echo '  console.error("Redirect error:", e);';
+        echo '  window.location.href = "/dashboard/accountant.php";';
+        echo '}';
+        echo '</script>';
         echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
         exit;
     }
@@ -700,9 +728,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         exit;
                     } else {
                         // إذا كانت headers قد أُرسلت، استخدم JavaScript redirect
+                        // تنظيف URL لضمان أنه مسار نسبي فقط لمنع ERR_FAILED
                         $escapedUrl = htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8');
                         echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Redirecting...</title>';
-                        echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
+                        echo '<script>';
+                        echo 'try {';
+                        echo '  var dashboardUrl = ' . json_encode($dashboardUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
+                        echo '  // تنظيف URL لضمان أنه مسار نسبي فقط';
+                        echo '  dashboardUrl = dashboardUrl.replace(/^https?:\\/\\//i, "");';
+                        echo '  dashboardUrl = dashboardUrl.replace(/^\\/\\/+/, "/");';
+                        echo '  dashboardUrl = dashboardUrl.replace(/^[^\\/]+:[0-9]+\\//, "/");';
+                        echo '  if (!dashboardUrl.startsWith("/")) dashboardUrl = "/" + dashboardUrl;';
+                        echo '  dashboardUrl = dashboardUrl.replace(/\\/+/g, "/");';
+                        echo '  window.location.replace(dashboardUrl);';
+                        echo '} catch(e) {';
+                        echo '  console.error("Redirect error:", e);';
+                        echo '  window.location.href = "/dashboard/accountant.php";';
+                        echo '}';
+                        echo '</script>';
                         echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
                         echo '</head><body><p>جاري التحويل... <a href="' . $escapedUrl . '">اضغط هنا إذا لم يتم التحويل تلقائياً</a></p></body></html>';
                         exit;
@@ -1397,48 +1440,67 @@ $lang = $translations;
                 return '/';
             }
             
-            // حفظ المسار الأصلي للتحقق لاحقاً
-            const originalUrl = url;
-            
-            // إزالة أي بروتوكول (http:// أو https://)
-            url = url.replace(/^https?:\/\//i, '');
-            
-            // إزالة // المكررة من البداية (لكن احتفظ بـ / الأولى)
-            url = url.replace(/^\/\/+/, '/');
-            
-            // إزالة hostname مع منفذ إذا كان موجوداً (مثل localhost:8000/)
-            // لكن فقط إذا كان قبل المسار الفعلي
-            url = url.replace(/^[^\/]+:[0-9]+\//, '/');
-            // لا تزيل hostname بدون منفذ إذا كان المسار يبدأ بـ /dashboard/
-            if (!url.startsWith('/dashboard/') && !url.startsWith('/')) {
-                url = url.replace(/^[^\/]+\//, '/');
-            }
-            
-            // إزالة أي منفذ من منتصف المسار (للاحتياط)
-            url = url.replace(/:[0-9]+\//g, '/');
-            url = url.replace(/:[0-9]+$/g, '');
-            
-            // التأكد من أن المسار يبدأ بـ /
-            if (!url.startsWith('/')) {
-                url = '/' + url;
-            }
-            
-            // تنظيف المسارات المكررة (لكن احتفظ بـ /dashboard/)
-            url = url.replace(/\/+/g, '/');
-            
-            // فحص نهائي: إذا كان المسار يحتوي على dashboard في الأصل، تأكد من أنه موجود
-            if (originalUrl.includes('/dashboard/') && !url.includes('/dashboard/')) {
-                // إذا كان المسار الأصلي يحتوي على dashboard ولكن النظيف لا يحتويه، أعد بناءه
-                const roleMatch = originalUrl.match(/\/([^\/]+)\.php/);
-                if (roleMatch && roleMatch[1]) {
-                    url = '/dashboard/' + roleMatch[1] + '.php';
+            try {
+                // حفظ المسار الأصلي للتحقق لاحقاً
+                const originalUrl = url;
+                
+                // إزالة أي بروتوكول (http:// أو https://)
+                url = url.replace(/^https?:\/\//i, '');
+                
+                // إزالة // المكررة من البداية (لكن احتفظ بـ / الأولى)
+                url = url.replace(/^\/\/+/, '/');
+                
+                // إزالة hostname مع منفذ إذا كان موجوداً (مثل localhost:8000/)
+                // لكن فقط إذا كان قبل المسار الفعلي
+                url = url.replace(/^[^\/]+:[0-9]+\//, '/');
+                
+                // إزالة hostname بدون منفذ إذا كان موجوداً (لكن فقط إذا لم يكن المسار يبدأ بـ /)
+                if (!url.startsWith('/')) {
+                    url = url.replace(/^[^\/]+\//, '/');
                 }
+                
+                // إزالة أي منفذ من منتصف المسار (للاحتياط)
+                url = url.replace(/:[0-9]+\//g, '/');
+                url = url.replace(/:[0-9]+$/g, '');
+                
+                // التأكد من أن المسار يبدأ بـ /
+                if (!url.startsWith('/')) {
+                    url = '/' + url;
+                }
+                
+                // تنظيف المسارات المكررة
+                url = url.replace(/\/+/g, '/');
+                
+                // فحص نهائي: إذا كان المسار يحتوي على dashboard في الأصل، تأكد من أنه موجود
+                if (originalUrl.includes('/dashboard/') && !url.includes('/dashboard/')) {
+                    // إذا كان المسار الأصلي يحتوي على dashboard ولكن النظيف لا يحتويه، أعد بناءه
+                    const roleMatch = originalUrl.match(/\/([^\/]+)\.php/);
+                    if (roleMatch && roleMatch[1]) {
+                        url = '/dashboard/' + roleMatch[1] + '.php';
+                    }
+                }
+                
+                // إزالة أي مسافات
+                url = url.trim();
+                
+                // التحقق النهائي: التأكد من أن المسار لا يحتوي على بروتوكول أو hostname
+                if (url.includes('://')) {
+                    // إذا كان يحتوي على بروتوكول، استخرج المسار فقط
+                    try {
+                        const urlObj = new URL(url, window.location.origin);
+                        url = urlObj.pathname;
+                    } catch (e) {
+                        // في حالة الخطأ، استخدم المسار الافتراضي
+                        url = '/';
+                    }
+                }
+                
+                return url || '/';
+            } catch (e) {
+                console.error('Error cleaning URL:', e, 'Original URL:', url);
+                // في حالة أي خطأ، إرجاع المسار الافتراضي
+                return '/';
             }
-            
-            // إزالة أي مسافات
-            url = url.trim();
-            
-            return url || '/';
         }
         
         // معالجة نموذج تسجيل الدخول مع موقت 5 ثواني وإعادة المحاولة
