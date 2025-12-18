@@ -13,6 +13,11 @@ require_once __DIR__ . '/includes/audit_log.php';
 requireLogin();
 
 $currentUser = getCurrentUser();
+if (!$currentUser) {
+    $_SESSION['error_message'] = 'فشل تحميل بيانات المستخدم. يرجى تسجيل الدخول مرة أخرى.';
+    header('Location: login.php');
+    exit;
+}
 $db = db();
 $passwordMinLength = getPasswordMinLength();
 
@@ -178,7 +183,7 @@ $pageTitle = isset($lang['profile']) ? $lang['profile'] : 'الملف الشخص
 
 <!-- القائمة الجانبية يتم تضمينها تلقائياً في header.php -->
 <?php
-$dashboardUrl = getDashboardUrl($currentUser['role']);
+$dashboardUrl = getDashboardUrl($currentUser['role'] ?? null);
 ?>
 <div class="page-header mb-4 d-flex justify-content-between align-items-center">
     <h2 class="mb-0"><i class="bi bi-person-circle me-2"></i><?php echo isset($lang['profile']) ? $lang['profile'] : 'الملف الشخصي'; ?></h2>
