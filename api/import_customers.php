@@ -29,9 +29,14 @@ function logImport($message) {
     }
     $timestamp = date('Y-m-d H:i:s');
     $logMessage = "[$timestamp] $message\n";
-    @file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
+    $result = @file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
     // أيضاً كتابة في error_log العادي
     error_log($message);
+    // إذا فشل الكتابة، حاول كتابة في مكان بديل
+    if ($result === false) {
+        $altLogFile = __DIR__ . '/../import_customers_debug.log';
+        @file_put_contents($altLogFile, $logMessage, FILE_APPEND | LOCK_EX);
+    }
 }
 
 // التأكد من وجود جدول customer_phones
@@ -119,10 +124,13 @@ if ($fileSize > 10 * 1024 * 1024) {
 }
 
 try {
+    logImport('========================================');
     logImport('=== STARTING CSV IMPORT ===');
     logImport('File: ' . $fileName);
     logImport('File size: ' . $fileSize . ' bytes');
     logImport('File extension: ' . $fileExtension);
+    logImport('Timestamp: ' . date('Y-m-d H:i:s'));
+    logImport('========================================');
     
     $rows = [];
     
@@ -270,6 +278,9 @@ try {
     }
     
     // قراءة رؤوس الأعمدة من الصف الأول
+    logImport('=== READING HEADERS ===');
+    logImport('First row (raw): ' . json_encode($rows[0], JSON_UNESCAPED_UNICODE));
+    
     $originalHeaders = $rows[0]; // حفظ النسخة الأصلية للتسجيل
     $headers = array_map(function($header) {
         // تنظيف من BOM
@@ -281,9 +292,13 @@ try {
     
     // تسجيل رؤوس الأعمدة الأصلية
     logImport('=== ORIGINAL CSV HEADERS ===');
-    logImport(json_encode($originalHeaders, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    foreach ($originalHeaders as $idx => $hdr) {
+        logImport("  Column $idx: '$hdr'");
+    }
     logImport('=== NORMALIZED HEADERS ===');
-    logImport(json_encode($headers, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    foreach ($headers as $idx => $hdr) {
+        logImport("  Column $idx: '$hdr'");
+    }
     
     // البحث عن أعمدة البيانات المطلوبة
     $customerIdIndex = -1;
@@ -745,23 +760,17 @@ try {
                     $updateFields = ['name = ?'];
                     $updateValues = [$name];
                     
-                    // تحديث رقم الهاتف إذا كان موجوداً
-                    if ($phone !== null) {
-                        $updateFields[] = 'phone = ?';
-                        $updateValues[] = $phone;
-                    }
+                    // تحديث رقم الهاتف - دائماً تحديثه حتى لو كان null
+                    $updateFields[] = 'phone = ?';
+                    $updateValues[] = $phone;
                     
-                    // تحديث الرصيد فقط إذا كان موجوداً في الملف
-                    if ($balanceIndex !== -1) {
-                        $updateFields[] = 'balance = ?';
-                        $updateValues[] = $balance;
-                    }
+                    // تحديث الرصيد - دائماً تحديثه حتى لو كان 0
+                    $updateFields[] = 'balance = ?';
+                    $updateValues[] = $balance;
                     
-                    // تحديث العنوان إذا كان موجوداً
-                    if ($address !== null) {
-                        $updateFields[] = 'address = ?';
-                        $updateValues[] = $address;
-                    }
+                    // تحديث العنوان - دائماً تحديثه حتى لو كان null
+                    $updateFields[] = 'address = ?';
+                    $updateValues[] = $address;
                     
                     if ($hasRegionIdColumn && $regionId !== null) {
                         $updateFields[] = 'region_id = ?';
@@ -777,16 +786,33 @@ try {
                         logImport("  - Update values: " . json_encode($updateValues, JSON_UNESCAPED_UNICODE));
                     }
                     
-                    $db->execute(
-                        "UPDATE customers SET " . implode(', ', $updateFields) . " WHERE id = ?",
-                        $updateValues
-                    );
-                    logImport("✓ Customer updated: ID=$customerId, Name=$name, Balance=" . ($balanceIndex !== -1 ? $balance : 'NOT_UPDATED') . " (from index $balanceIndex), Phone=" . ($phone ?? 'NULL') . " (from index $phoneIndex), Phone2=" . ($phone2 ?? 'NULL') . " (from index $phone2Index), Address=" . ($address ?? 'NULL'));
-                    
-                    // التحقق من البيانات المحفوظة
-                    $savedCustomer = $db->queryOne("SELECT name, phone, balance, address FROM customers WHERE id = ?", [$customerId]);
-                    if ($savedCustomer) {
-                        logImport("✓ Verified saved data - Name: {$savedCustomer['name']}, Phone: {$savedCustomer['phone']}, Balance: {$savedCustomer['balance']}, Address: {$savedCustomer['address']}");
+                    try {
+                        $db->execute(
+                            "UPDATE customers SET " . implode(', ', $updateFields) . " WHERE id = ?",
+                            $updateValues
+                        );
+                        logImport("✓ Customer updated successfully: ID=$customerId");
+                        logImport("  - Name: '$name'");
+                        logImport("  - Phone: " . ($phone ?? 'NULL') . " (from index $phoneIndex)");
+                        logImport("  - Balance: $balance (from index $balanceIndex, type: " . gettype($balance) . ")");
+                        logImport("  - Address: " . ($address ?? 'NULL'));
+                        
+                        // التحقق من البيانات المحفوظة فوراً
+                        $savedCustomer = $db->queryOne("SELECT name, phone, balance, address FROM customers WHERE id = ?", [$customerId]);
+                        if ($savedCustomer) {
+                            logImport("✓ VERIFIED saved data from database:");
+                            logImport("  - Name: '{$savedCustomer['name']}'");
+                            logImport("  - Phone: " . ($savedCustomer['phone'] ?? 'NULL'));
+                            logImport("  - Balance: " . ($savedCustomer['balance'] ?? 'NULL') . " (type: " . gettype($savedCustomer['balance']) . ")");
+                            logImport("  - Address: " . ($savedCustomer['address'] ?? 'NULL'));
+                        } else {
+                            logImport("✗ ERROR: Could not verify saved customer data!");
+                        }
+                    } catch (Exception $updateException) {
+                        logImport("✗ ERROR updating customer: " . $updateException->getMessage());
+                        logImport("  - SQL: UPDATE customers SET " . implode(', ', $updateFields) . " WHERE id = ?");
+                        logImport("  - Values: " . json_encode($updateValues, JSON_UNESCAPED_UNICODE));
+                        throw $updateException;
                     }
                     
                     // حذف أرقام الهواتف القديمة
@@ -808,12 +834,19 @@ try {
                         logImport("  - Address: " . ($address ?? 'NULL'));
                     }
                     
+                    // تسجيل القيم قبل الحفظ
+                    logImport("Row $i - Values before INSERT:");
+                    logImport("  - name: '$name'");
+                    logImport("  - phone: " . var_export($phone, true) . " (index: $phoneIndex)");
+                    logImport("  - balance: " . var_export($balance, true) . " (index: $balanceIndex, type: " . gettype($balance) . ")");
+                    logImport("  - address: " . var_export($address, true));
+                    
                     $customerColumns = ['name', 'phone', 'balance', 'address', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
                     $customerValues = [
                         $name,
-                        $phone,
-                        $balance,
-                        $address,
+                        $phone,  // قد يكون null
+                        $balance, // قد يكون 0.0
+                        $address, // قد يكون null
                         'active',
                         $currentUser['id'],
                         null,
@@ -822,6 +855,10 @@ try {
                     ];
                     $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?', '?', '?'];
                     
+                    // تسجيل SQL Query
+                    logImport("Row $i - SQL: INSERT INTO customers (" . implode(', ', $customerColumns) . ") VALUES (" . implode(', ', $customerPlaceholders) . ")");
+                    logImport("Row $i - Values: " . json_encode($customerValues, JSON_UNESCAPED_UNICODE));
+                    
                     // إضافة region_id إذا كان موجوداً
                     if ($hasRegionIdColumn && $regionId !== null) {
                         $customerColumns[] = 'region_id';
@@ -829,19 +866,36 @@ try {
                         $customerPlaceholders[] = '?';
                     }
                     
-                    $db->execute(
-                        "INSERT INTO customers (" . implode(', ', $customerColumns) . ") 
-                         VALUES (" . implode(', ', $customerPlaceholders) . ")",
-                        $customerValues
-                    );
-                    
-                    $customerId = $db->getLastInsertId();
-                    logImport("✓ Customer inserted: ID=$customerId, Name=$name, Balance=$balance (from index $balanceIndex), Phone=" . ($phone ?? 'NULL') . " (from index $phoneIndex), Phone2=" . ($phone2 ?? 'NULL') . " (from index $phone2Index), Address=" . ($address ?? 'NULL'));
-                    
-                    // التحقق من البيانات المحفوظة
-                    $savedCustomer = $db->queryOne("SELECT name, phone, balance, address FROM customers WHERE id = ?", [$customerId]);
-                    if ($savedCustomer) {
-                        logImport("✓ Verified saved data - Name: {$savedCustomer['name']}, Phone: {$savedCustomer['phone']}, Balance: {$savedCustomer['balance']}, Address: {$savedCustomer['address']}");
+                    try {
+                        $db->execute(
+                            "INSERT INTO customers (" . implode(', ', $customerColumns) . ") 
+                             VALUES (" . implode(', ', $customerPlaceholders) . ")",
+                            $customerValues
+                        );
+                        
+                        $customerId = $db->getLastInsertId();
+                        logImport("✓ Customer inserted successfully: ID=$customerId");
+                        logImport("  - Name: '$name'");
+                        logImport("  - Phone: " . ($phone ?? 'NULL') . " (from index $phoneIndex)");
+                        logImport("  - Balance: $balance (from index $balanceIndex, type: " . gettype($balance) . ")");
+                        logImport("  - Address: " . ($address ?? 'NULL'));
+                        
+                        // التحقق من البيانات المحفوظة فوراً
+                        $savedCustomer = $db->queryOne("SELECT name, phone, balance, address FROM customers WHERE id = ?", [$customerId]);
+                        if ($savedCustomer) {
+                            logImport("✓ VERIFIED saved data from database:");
+                            logImport("  - Name: '{$savedCustomer['name']}'");
+                            logImport("  - Phone: " . ($savedCustomer['phone'] ?? 'NULL'));
+                            logImport("  - Balance: " . ($savedCustomer['balance'] ?? 'NULL') . " (type: " . gettype($savedCustomer['balance']) . ")");
+                            logImport("  - Address: " . ($savedCustomer['address'] ?? 'NULL'));
+                        } else {
+                            logImport("✗ ERROR: Could not verify saved customer data!");
+                        }
+                    } catch (Exception $insertException) {
+                        logImport("✗ ERROR inserting customer: " . $insertException->getMessage());
+                        logImport("  - SQL: INSERT INTO customers (" . implode(', ', $customerColumns) . ") VALUES (" . implode(', ', $customerPlaceholders) . ")");
+                        logImport("  - Values: " . json_encode($customerValues, JSON_UNESCAPED_UNICODE));
+                        throw $insertException;
                     }
                     
                     logAudit($currentUser['id'], 'import_customer', 'customer', $customerId, null, [
