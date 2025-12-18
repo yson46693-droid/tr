@@ -40,7 +40,24 @@ unset($_SESSION['error_message'], $_SESSION['success_message']);
 // === تحميل بيانات المستخدم ===
 $user = getCurrentUser();
 $currentUser = $user;
-$userId = $user['id'] ?? null;
+
+// إذا لم يتم تحميل بيانات المستخدم، نحاول تحميلها مباشرة من قاعدة البيانات
+if (!$user || !isset($user['id'])) {
+    $userId = $_SESSION['user_id'] ?? null;
+    if ($userId) {
+        try {
+            $db = db();
+            $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$userId]);
+            if ($user && isset($user['id'])) {
+                $currentUser = $user;
+            }
+        } catch (Exception $e) {
+            error_log("Profile page - Failed to load user from database: " . $e->getMessage());
+        }
+    }
+}
+
+$userId = $user['id'] ?? $_SESSION['user_id'] ?? null;
 
 if (!$user || !isset($user['id'])) {
     $error = 'تعذر تحميل بيانات المستخدم. يرجى تسجيل الدخول مرة أخرى.';

@@ -966,23 +966,55 @@ function getCurrentUser() {
                             $userId = $sessionRecord['user_id'];
                         } else {
                             // المستخدم غير موجود أو غير مفعّل
-                            return null;
+                            // في الصفحات المحمية، نستخدم user_id من الجلسة حتى لو لم يكن المستخدم active
+                            if ($isProtectedPage && !empty($sessionRecord['user_id'])) {
+                                $userId = $sessionRecord['user_id'];
+                                $_SESSION['user_id'] = $userId;
+                                $_SESSION['logged_in'] = true;
+                                // نتابع لتحميل بيانات المستخدم من قاعدة البيانات مباشرة
+                            } else {
+                                return null;
+                            }
                         }
                     } else {
                         // لا توجد جلسة صالحة في قاعدة البيانات
-                        return null;
+                        // في الصفحات المحمية، إذا كان لدينا user_id في $_SESSION، نستخدمه
+                        if ($isProtectedPage && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+                            $userId = $_SESSION['user_id'];
+                            // نتابع لتحميل بيانات المستخدم من قاعدة البيانات مباشرة
+                        } else {
+                            return null;
+                        }
                     }
                 } else {
                     // فشل في إنشاء جدول الجلسات
-                    return null;
+                    // في الصفحات المحمية، إذا كان لدينا user_id في $_SESSION، نستخدمه
+                    if ($isProtectedPage && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+                        $userId = $_SESSION['user_id'];
+                        // نتابع لتحميل بيانات المستخدم من قاعدة البيانات مباشرة
+                    } else {
+                        return null;
+                    }
                 }
             } catch (Exception $e) {
                 error_log("getCurrentUser() ERROR: Failed to restore user_id from database: " . $e->getMessage());
-                return null;
+                // في الصفحات المحمية، إذا كان لدينا user_id في $_SESSION، نستخدمه
+                if ($isProtectedPage && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+                    $userId = $_SESSION['user_id'];
+                    // نتابع لتحميل بيانات المستخدم من قاعدة البيانات مباشرة
+                } else {
+                    return null;
+                }
             }
         } else {
             // لا يوجد session_id
-            return null;
+            // في الصفحات المحمية، إذا كان لدينا user_id في $_SESSION، نستخدمه
+            if ($isProtectedPage && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+                $userId = $_SESSION['user_id'];
+                // نتابع لتحميل بيانات المستخدم من قاعدة البيانات مباشرة
+            } else {
+                return null;
+            }
         }
     }
     
@@ -1009,6 +1041,11 @@ function getCurrentUser() {
         if ($user === null) {
             Cache::forget($cacheKey);
             $duration = round((microtime(true) - $startTime) * 1000, 2);
+            // في الصفحات المحمية، لا نحذف الجلسة حتى لو لم نجد المستخدم
+            if ($isProtectedPage && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+                // نرجع null لكن لا نحذف الجلسة
+                return null;
+            }
             // تم تعطيل التسجيل لتقليل استهلاك الموارد
             // error_log("getCurrentUser() NULL: User not found in database (from cache) for user ID {$userId} | Duration: {$duration}ms | Script: {$scriptName}");
             return null;
@@ -1030,6 +1067,13 @@ function getCurrentUser() {
         // تم تعطيل التسجيل لتقليل استهلاك الموارد
         // error_log("getCurrentUser() SUCCESS: User ID {$userId}, Role: " . ($user['role'] ?? 'NOT_SET') . ", Status: " . ($user['status'] ?? 'NOT_SET') . " | Duration: {$duration}ms | Script: {$scriptName}");
     } else {
+        // في الصفحات المحمية، لا نحذف الجلسة حتى لو لم نجد المستخدم
+        if ($isProtectedPage && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+            // نرجع null لكن لا نحذف الجلسة
+            // تم تعطيل التسجيل لتقليل استهلاك الموارد
+            // error_log("getCurrentUser() NULL: getCurrentUserFromDatabase() returned null for user ID {$userId} but keeping session in protected page | Duration: {$duration}ms | Script: {$scriptName}");
+            return null;
+        }
         // تم تعطيل التسجيل لتقليل استهلاك الموارد
         // error_log("getCurrentUser() NULL: getCurrentUserFromDatabase() returned null for user ID {$userId} | Duration: {$duration}ms | Script: {$scriptName}");
     }
