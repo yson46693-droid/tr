@@ -4555,71 +4555,92 @@ document.addEventListener('DOMContentLoaded', function () {
             
             // إظهار شريط التقدم
             var progressDiv = document.getElementById('importProgress');
-            var progressBar = progressDiv.querySelector('.progress-bar');
+            var progressBar = progressDiv ? progressDiv.querySelector('.progress-bar') : null;
             var statusDiv = document.getElementById('importStatus');
             var resultsDiv = document.getElementById('importResults');
             var errorsDiv = document.getElementById('importErrors');
             var submitBtn = document.getElementById('importSubmitBtn');
             
-            progressDiv.classList.remove('d-none');
-            resultsDiv.classList.add('d-none');
-            errorsDiv.classList.add('d-none');
-            progressBar.style.width = '0%';
-            statusDiv.textContent = 'جاري رفع الملف...';
-            submitBtn.disabled = true;
+            if (progressDiv) progressDiv.classList.remove('d-none');
+            if (resultsDiv) resultsDiv.classList.add('d-none');
+            if (errorsDiv) errorsDiv.classList.add('d-none');
+            if (progressBar) progressBar.style.width = '0%';
+            if (statusDiv) statusDiv.textContent = 'جاري رفع الملف...';
+            if (submitBtn) submitBtn.disabled = true;
             
             fetch('<?php echo getRelativeUrl("api/import_customers.php"); ?>', {
                 method: 'POST',
                 body: formData,
                 credentials: 'same-origin'
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('خطأ في الاتصال بالخادم: ' + response.status);
+                }
+                return response.json();
+            })
             .then(data => {
-                progressBar.style.width = '100%';
+                if (progressBar) progressBar.style.width = '100%';
                 
                 if (data.success) {
-                    statusDiv.textContent = 'تم الاستيراد بنجاح!';
-                    statusDiv.className = 'text-center text-success';
+                    if (statusDiv) {
+                        statusDiv.textContent = 'تم الاستيراد بنجاح!';
+                        statusDiv.className = 'text-center text-success';
+                    }
                     
                     var resultsContent = document.getElementById('importResultsContent');
-                    var html = '<ul class="mb-0">';
-                    html += '<li>تم استيراد: <strong>' + (data.imported || 0) + '</strong> عميل</li>';
-                    if (data.skipped && data.skipped > 0) {
-                        html += '<li>تم تخطي: <strong>' + data.skipped + '</strong> عميل (مكرر)</li>';
+                    if (resultsContent) {
+                        var html = '<ul class="mb-0">';
+                        html += '<li>تم استيراد: <strong>' + (data.imported || 0) + '</strong> عميل</li>';
+                        if (data.skipped && data.skipped > 0) {
+                            html += '<li>تم تخطي: <strong>' + data.skipped + '</strong> عميل (مكرر)</li>';
+                        }
+                        if (data.errors && data.errors.length > 0) {
+                            html += '<li>أخطاء: <strong>' + data.errors.length + '</strong> سطر</li>';
+                            if (data.errors.length <= 10) {
+                                html += '<li><small>' + data.errors.join('<br>') + '</small></li>';
+                            }
+                        }
+                        html += '</ul>';
+                        resultsContent.innerHTML = html;
                     }
-                    if (data.errors && data.errors.length > 0) {
-                        html += '<li>أخطاء: <strong>' + data.errors.length + '</strong> سطر</li>';
-                    }
-                    html += '</ul>';
-                    resultsContent.innerHTML = html;
-                    resultsDiv.classList.remove('d-none');
+                    if (resultsDiv) resultsDiv.classList.remove('d-none');
                     
                     // إعادة تحميل الصفحة بعد 2 ثانية
                     setTimeout(function() {
                         location.reload();
                     }, 2000);
                 } else {
-                    statusDiv.textContent = 'فشل الاستيراد';
-                    statusDiv.className = 'text-center text-danger';
+                    if (statusDiv) {
+                        statusDiv.textContent = 'فشل الاستيراد';
+                        statusDiv.className = 'text-center text-danger';
+                    }
                     
                     var errorsContent = document.getElementById('importErrorsContent');
-                    var html = '<p>' + (data.message || 'حدث خطأ أثناء الاستيراد') + '</p>';
-                    if (data.errors && data.errors.length > 0) {
-                        html += '<ul class="mb-0"><li>' + data.errors.join('</li><li>') + '</li></ul>';
+                    if (errorsContent) {
+                        var html = '<p>' + (data.message || 'حدث خطأ أثناء الاستيراد') + '</p>';
+                        if (data.errors && data.errors.length > 0) {
+                            html += '<ul class="mb-0"><li>' + data.errors.join('</li><li>') + '</li></ul>';
+                        }
+                        errorsContent.innerHTML = html;
                     }
-                    errorsContent.innerHTML = html;
-                    errorsDiv.classList.remove('d-none');
+                    if (errorsDiv) errorsDiv.classList.remove('d-none');
                 }
                 
-                submitBtn.disabled = false;
+                if (submitBtn) submitBtn.disabled = false;
             })
             .catch(error => {
                 console.error('Import error:', error);
-                statusDiv.textContent = 'حدث خطأ في الاتصال بالخادم';
-                statusDiv.className = 'text-center text-danger';
-                errorsDiv.classList.remove('d-none');
-                document.getElementById('importErrorsContent').innerHTML = '<p>' + error.message + '</p>';
-                submitBtn.disabled = false;
+                if (statusDiv) {
+                    statusDiv.textContent = 'حدث خطأ في الاتصال بالخادم';
+                    statusDiv.className = 'text-center text-danger';
+                }
+                if (errorsDiv) errorsDiv.classList.remove('d-none');
+                var errorsContent = document.getElementById('importErrorsContent');
+                if (errorsContent) {
+                    errorsContent.innerHTML = '<p>' + (error.message || 'حدث خطأ غير متوقع') + '</p>';
+                }
+                if (submitBtn) submitBtn.disabled = false;
             });
         });
     }
@@ -4630,9 +4651,22 @@ document.addEventListener('DOMContentLoaded', function () {
             if (importCustomersForm) {
                 importCustomersForm.reset();
             }
-            document.getElementById('importProgress').classList.add('d-none');
-            document.getElementById('importResults').classList.add('d-none');
-            document.getElementById('importErrors').classList.add('d-none');
+            var progressDiv = document.getElementById('importProgress');
+            var resultsDiv = document.getElementById('importResults');
+            var errorsDiv = document.getElementById('importErrors');
+            var statusDiv = document.getElementById('importStatus');
+            var progressBar = progressDiv ? progressDiv.querySelector('.progress-bar') : null;
+            var submitBtn = document.getElementById('importSubmitBtn');
+            
+            if (progressDiv) progressDiv.classList.add('d-none');
+            if (resultsDiv) resultsDiv.classList.add('d-none');
+            if (errorsDiv) errorsDiv.classList.add('d-none');
+            if (statusDiv) {
+                statusDiv.textContent = '';
+                statusDiv.className = 'text-center';
+            }
+            if (progressBar) progressBar.style.width = '0%';
+            if (submitBtn) submitBtn.disabled = false;
         });
     }
     
@@ -5352,10 +5386,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         <i class="bi bi-info-circle me-2"></i>
                         <strong>تعليمات الاستيراد:</strong>
                         <ul class="mb-0 mt-2">
-                            <li>يجب أن يحتوي ملف Excel على الأعمدة التالية: <strong>اسم العميل</strong> (مطلوب)، <strong>رقم الهاتف</strong>، <strong>العنوان</strong>، <strong>الرصيد</strong></li>
+                            <li>يجب أن يحتوي ملف CSV/Excel على الأعمدة التالية: <strong>اسم العميل</strong> (مطلوب)، <strong>رقم الهاتف</strong>، <strong>رقم الهاتف (الثاني)</strong>، <strong>رقم الهاتف (الثالث)</strong>، <strong>العنوان</strong>، <strong>الرصيد</strong>، <strong>المنطقة</strong></li>
                             <li>يجب أن يكون الصف الأول هو رؤوس الأعمدة</li>
-                            <li>الملفات المدعومة: .xlsx, .xls</li>
+                            <li>الملفات المدعومة: .csv, .xlsx, .xls</li>
                             <li>سيتم تخطي العملاء المكررين (بناءً على الاسم ورقم الهاتف)</li>
+                            <li>يمكن استخدام عمود <strong>ايدي العميل</strong> لتحديث العملاء الموجودين</li>
+                            <li>الهاتف الثالث سيُحفظ مع عنوان "2" في قاعدة البيانات</li>
                         </ul>
                     </div>
                     <div class="mb-3">
