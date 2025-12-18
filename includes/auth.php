@@ -888,10 +888,36 @@ function getCurrentUser() {
         return null;
     }
     
-    if (!isLoggedIn()) {
-        // تعطيل التسجيل لتقليل الضغط على السيرفر
-        // error_log("getCurrentUser() NULL: isLoggedIn() returned false");
-        return null;
+    // التحقق من أننا في صفحة محمية (profile.php, attendance.php, etc.)
+    $isProtectedPage = false;
+    if (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) {
+        $isProtectedPage = true;
+    } elseif (defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true) {
+        $isProtectedPage = true;
+    } elseif (defined('WEBAUTHN_API_ACTIVE') && WEBAUTHN_API_ACTIVE === true) {
+        $isProtectedPage = true;
+    } else {
+        $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+        if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
+            $isProtectedPage = true;
+        } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
+            $isProtectedPage = true;
+        } elseif (strpos($currentScript, 'webauthn_credentials.php') !== false || basename($currentScript) === 'webauthn_credentials.php') {
+            $isProtectedPage = true;
+        }
+    }
+    
+    // في الصفحات المحمية، نتحقق من $_SESSION مباشرة قبل isLoggedIn()
+    if ($isProtectedPage && isset($_SESSION['user_id']) && !empty($_SESSION['user_id']) && isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+        // في الصفحات المحمية، إذا كان $_SESSION صالحة، نتابع حتى لو فشل isLoggedIn()
+        // error_log("getCurrentUser() PROTECTED PAGE: $_SESSION is valid, continuing");
+    } else {
+        // في الصفحات غير المحمية، نتحقق من isLoggedIn() كالمعتاد
+        if (!isLoggedIn()) {
+            // تعطيل التسجيل لتقليل الضغط على السيرفر
+            // error_log("getCurrentUser() NULL: isLoggedIn() returned false");
+            return null;
+        }
     }
     
     $userId = $_SESSION['user_id'] ?? null;
