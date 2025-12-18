@@ -468,9 +468,10 @@ function getCurrentUserFromDatabase($userId) {
         }
     }
     
-    // الطريقة 5: التحقق من الدور في الجلسة - حماية شاملة للمندوبين
+    // الطريقة 5: التحقق من الدور من remember_token - حماية شاملة للمندوبين
     $isSalesUser = false;
-    if (isset($_SESSION['role']) && strtolower($_SESSION['role']) === 'sales') {
+    $userFromToken = getUserFromToken();
+    if ($userFromToken && isset($userFromToken['role']) && strtolower($userFromToken['role']) === 'sales') {
         $isSalesUser = true;
     }
     
@@ -502,9 +503,7 @@ function getCurrentUserFromDatabase($userId) {
         
         // إلغاء تسجيل الدخول تلقائياً لأسباب أمنية
         error_log("Security: User ID {$userId} not found in database - Auto logout");
-        // حذف الجلسة مباشرة دون استدعاء logout() لتجنب حلقة لا نهائية
-        session_unset();
-        session_destroy();
+        // تم إزالة نظام الجلسات - حذف remember_token فقط
         if (isset($_COOKIE['remember_token'])) {
             try {
                 if (ensureRememberTokensTable()) {
@@ -540,9 +539,7 @@ function getCurrentUserFromDatabase($userId) {
         
         // إلغاء تسجيل الدخول تلقائياً لأسباب أمنية
         error_log("Security: User ID {$userId} status is '{$user['status']}' - Auto logout");
-        // حذف الجلسة مباشرة دون استدعاء logout() لتجنب حلقة لا نهائية
-        session_unset();
-        session_destroy();
+        // تم إزالة نظام الجلسات - حذف remember_token فقط
         if (isset($_COOKIE['remember_token'])) {
             try {
                 if (ensureRememberTokensTable()) {
@@ -1201,23 +1198,64 @@ function requireLogin() {
     }
     
     if ($loginCheckResult) {
-        // للصفحات المحمية مثل profile.php، نتحقق من أن getUserFromToken() يعمل بشكل صحيح
+        // للصفحات المحمية مثل profile.php، نتحقق من أن يمكن تحميل بيانات المستخدم
         // لأن الصفحة تحتاج بيانات المستخدم لتعمل
         if ($isProtectedPage && ($isProfilePage || $isAttendancePage || $isSalesPage)) {
-            $userFromToken = getUserFromToken();
-            if (!$userFromToken || !isset($userFromToken['id']) || empty($userFromToken['id'])) {
-                // إذا فشل getUserFromToken()، نحاول مرة أخرى مع retry
-                error_log("requireLogin() - getUserFromToken() failed for protected page, retrying...");
-                usleep(100000); // 100ms
-                $userFromToken = getUserFromToken();
-                
-                if (!$userFromToken || !isset($userFromToken['id']) || empty($userFromToken['id'])) {
-                    // إذا فشل مرة أخرى، نعتبر أن المستخدم غير مسجل دخول
-                    error_log("requireLogin() - getUserFromToken() failed after retry for protected page");
-                    $loginCheckResult = false;
-                } else {
-                    error_log("requireLogin() - getUserFromToken() succeeded on retry for protected page");
+            // محاولة تحميل المستخدم مباشرة من token باستخدام نفس الاستعلام
+            $userLoaded = false;
+            if (isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
+                try {
+                    $cookieValue = $_COOKIE['remember_token'];
+                    $decoded = base64_decode($cookieValue, true);
+                    if ($decoded !== false && !empty($decoded)) {
+                        $parts = explode(':', $decoded);
+                        if (count($parts) === 2) {
+                            $tokenUserId = intval($parts[0]);
+                            $token = trim($parts[1]);
+                            
+                            if ($tokenUserId > 0 && !empty($token)) {
+                                $db = db();
+                                // استخدام نفس الاستعلام الذي يستخدمه checkRememberToken()
+                                $tokenRecord = $db->queryOne(
+                                    "SELECT rt.*, u.* FROM remember_tokens rt
+                                     INNER JOIN users u ON rt.user_id = u.id
+                                     WHERE rt.user_id = ? AND rt.token = ? AND rt.expires_at > NOW() AND u.status = 'active'",
+                                    [$tokenUserId, $token]
+                                );
+                                
+                                if ($tokenRecord) {
+                                    $userLoaded = true;
+                                    error_log("requireLogin() - Successfully verified user data for protected page (user_id: {$tokenUserId})");
+                                } else {
+                                    // محاولة مرة أخرى مع retry
+                                    error_log("requireLogin() - Token record not found, retrying...");
+                                    usleep(100000); // 100ms
+                                    $tokenRecord = $db->queryOne(
+                                        "SELECT rt.*, u.* FROM remember_tokens rt
+                                         INNER JOIN users u ON rt.user_id = u.id
+                                         WHERE rt.user_id = ? AND rt.token = ? AND rt.expires_at > NOW() AND u.status = 'active'",
+                                        [$tokenUserId, $token]
+                                    );
+                                    
+                                    if ($tokenRecord) {
+                                        $userLoaded = true;
+                                        error_log("requireLogin() - Successfully verified user data on retry for protected page");
+                                    } else {
+                                        error_log("requireLogin() - Token record not found after retry for protected page");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception $e) {
+                    error_log("requireLogin() - Exception during user data verification: " . $e->getMessage());
                 }
+            }
+            
+            // إذا فشل تحميل بيانات المستخدم، نعتبر أن المستخدم غير مسجل دخول
+            if (!$userLoaded) {
+                error_log("requireLogin() - Failed to verify user data for protected page, denying access");
+                $loginCheckResult = false;
             }
         }
         
@@ -1625,49 +1663,49 @@ function hashPassword($password) {
 }
 
 /**
- * إنشاء رمز CSRF
- * محسّن لدعم إعادة توليد الجلسة - يحفظ token السابق مؤقتاً
+ * إنشاء رمز CSRF - يعمل بدون جلسات باستخدام cookies
  */
 function generateCSRFToken($forceRefresh = false) {
-    // التأكد من أن الجلسة نشطة
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        if (!headers_sent()) {
-            @session_start();
-        }
+    $cookieName = 'csrf_token';
+    $isHttps = (
+        (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+        (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
+    );
+    
+    // إذا كان هناك token موجود في cookie ولم نطلب تحديثه، استخدمه
+    if (!$forceRefresh && isset($_COOKIE[$cookieName]) && !empty($_COOKIE[$cookieName])) {
+        return $_COOKIE[$cookieName];
     }
     
-    // التأكد من وجود $_SESSION
-    if (!isset($_SESSION) || !is_array($_SESSION)) {
-        return '';
-    }
+    // إنشاء token جديد
+    $token = bin2hex(random_bytes(32));
     
-    // حفظ token الحالي كـ previous قبل إنشاء واحد جديد
-    if ($forceRefresh && isset($_SESSION['csrf_token']) && !empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token_previous'] = $_SESSION['csrf_token'];
-        // تنظيف token السابق بعد 5 دقائق (وقت كافٍ لإكمال تسجيل الدخول)
-        if (!isset($_SESSION['csrf_token_previous_time'])) {
-            $_SESSION['csrf_token_previous_time'] = time();
-        }
-    }
+    // حفظ token في cookie (صالح لمدة ساعة)
+    setcookie($cookieName, $token, [
+        'expires' => time() + 3600,
+        'path' => '/',
+        'domain' => '',
+        'secure' => $isHttps,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
     
-    if ($forceRefresh || !isset($_SESSION['csrf_token']) || empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
+    // حفظ في $_COOKIE للطلبات اللاحقة في نفس الطلب
+    $_COOKIE[$cookieName] = $token;
     
-    // تنظيف token السابق القديم (أكثر من 5 دقائق)
-    if (isset($_SESSION['csrf_token_previous_time']) && 
-        (time() - $_SESSION['csrf_token_previous_time']) > 300) {
-        unset($_SESSION['csrf_token_previous']);
-        unset($_SESSION['csrf_token_previous_time']);
-    }
-    
-    return $_SESSION['csrf_token'] ?? '';
+    return $token;
 }
 
 /**
- * التحقق من رمز CSRF
+ * التحقق من رمز CSRF - يعمل بدون جلسات
  */
 function verifyCSRFToken($token) {
-    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+    $cookieName = 'csrf_token';
+    
+    if (!isset($_COOKIE[$cookieName]) || empty($_COOKIE[$cookieName])) {
+        return false;
+    }
+    
+    return hash_equals($_COOKIE[$cookieName], $token);
 }
 

@@ -57,9 +57,12 @@ if (isset($currentUser) && is_array($currentUser) && isset($currentUser['role'])
     $role = strtolower(trim($currentUser['role']));
 }
 
-// محاولة الحصول على role من session كبديل
-if (empty($role) && isset($_SESSION['role'])) {
-    $role = strtolower(trim($_SESSION['role']));
+// تم إزالة نظام الجلسات - استخدام getUserFromToken() فقط
+if (empty($role) && function_exists('getUserFromToken')) {
+    $user = getUserFromToken();
+    if ($user && isset($user['role'])) {
+        $role = strtolower(trim($user['role']));
+    }
 }
 
 $currentPageParam = $_GET['page'] ?? '';

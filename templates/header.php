@@ -26,7 +26,7 @@ if (!headers_sent()) {
     header('Pragma: no-cache');
     header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
-    header('ETag: "' . md5(time() . rand() . session_id()) . '"');
+    header('ETag: "' . md5(time() . rand() . uniqid()) . '"');
 }
 
 require_once __DIR__ . '/../includes/config.php';
