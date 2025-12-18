@@ -450,41 +450,91 @@ try {
         logImport("Column $idx: '$hdr' (original: '{$originalHeaders[$idx]}')");
     }
     
-    // التحقق من أن الأعمدة المهمة موجودة - بحث مرن جداً
+    // التحقق من أن الأعمدة المهمة موجودة - بحث مرن جداً في كلا النسختين
     if ($balanceIndex === -1) {
-        logImport('WARNING: balanceIndex not found! Available headers: ' . implode(' | ', $headers));
-        logImport('WARNING: Original headers: ' . implode(' | ', $originalHeaders));
-        // محاولة البحث بطريقة أكثر مرونة - البحث في كل شيء
+        logImport('WARNING: balanceIndex not found in first pass!');
+        logImport('  - Normalized headers: ' . implode(' | ', $headers));
+        logImport('  - Original headers: ' . implode(' | ', $originalHeaders));
+        
+        // البحث في الأسماء الأصلية أولاً (أكثر دقة)
         foreach ($originalHeaders as $idx => $hdr) {
-            $hdrLower = mb_strtolower(trim($hdr), 'UTF-8');
-            // البحث عن أي كلمة متعلقة بالرصيد أو المبلغ
-            if (preg_match('/رصيد|مبلغ|balance|debt|مستحق|ديون|صاف|صافي|المبلغ|الرصيد/i', $hdr) ||
-                mb_strpos($hdrLower, 'رصيد') !== false ||
-                mb_strpos($hdrLower, 'مبلغ') !== false ||
-                mb_strpos($hdrLower, 'balance') !== false ||
-                mb_strpos($hdrLower, 'debt') !== false) {
+            $hdrClean = trim($hdr);
+            $hdrLower = mb_strtolower($hdrClean, 'UTF-8');
+            
+            // البحث عن أي كلمة متعلقة بالرصيد أو المبلغ - بحث شامل جداً
+            $balanceKeywords = ['رصيد', 'مبلغ', 'balance', 'debt', 'مستحق', 'ديون', 'صاف', 'صافي', 'المبلغ', 'الرصيد', 'رصيد العميل'];
+            $found = false;
+            foreach ($balanceKeywords as $keyword) {
+                if (mb_stripos($hdrClean, $keyword) !== false || mb_stripos($hdrLower, $keyword) !== false) {
+                    $found = true;
+                    break;
+                }
+            }
+            
+            if ($found || preg_match('/رصيد|مبلغ|balance|debt|مستحق|ديون|صاف|صافي/i', $hdrClean)) {
                 $balanceIndex = $idx;
-                logImport("FOUND balance column by flexible search at index $idx: '$hdr' (normalized: '$hdrLower')");
+                logImport("✓ FOUND balance column at index $idx: '$hdr' (normalized: '$hdrLower')");
                 break;
             }
         }
+        
+        // إذا لم يُعثر عليه، ابحث في الأسماء المطابقة
+        if ($balanceIndex === -1) {
+            foreach ($headers as $idx => $hdr) {
+                if (preg_match('/رصيد|مبلغ|balance|debt|مستحق|ديون|صاف|صافي/i', $hdr)) {
+                    $balanceIndex = $idx;
+                    logImport("✓ FOUND balance column (normalized) at index $idx: '$hdr'");
+                    break;
+                }
+            }
+        }
     }
+    
     if ($phoneIndex === -1) {
-        logImport('WARNING: phoneIndex not found! Available headers: ' . implode(' | ', $headers));
-        logImport('WARNING: Original headers: ' . implode(' | ', $originalHeaders));
-        // محاولة البحث بطريقة أكثر مرونة - البحث في كل شيء
+        logImport('WARNING: phoneIndex not found in first pass!');
+        logImport('  - Normalized headers: ' . implode(' | ', $headers));
+        logImport('  - Original headers: ' . implode(' | ', $originalHeaders));
+        
+        // البحث في الأسماء الأصلية أولاً (أكثر دقة)
         foreach ($originalHeaders as $idx => $hdr) {
-            $hdrLower = mb_strtolower(trim($hdr), 'UTF-8');
-            // البحث عن أي كلمة متعلقة بالهاتف
-            if ((preg_match('/هاتف|تليفون|تلفون|phone|mobile|tel/i', $hdr) && 
-                !preg_match('/ثاني|2|second/i', $hdr)) ||
-                (mb_strpos($hdrLower, 'هاتف') !== false && mb_strpos($hdrLower, 'ثاني') === false) ||
-                (mb_strpos($hdrLower, 'تليفون') !== false && mb_strpos($hdrLower, 'ثاني') === false) ||
-                mb_strpos($hdrLower, 'phone') !== false ||
-                mb_strpos($hdrLower, 'mobile') !== false) {
+            $hdrClean = trim($hdr);
+            $hdrLower = mb_strtolower($hdrClean, 'UTF-8');
+            
+            // البحث عن أي كلمة متعلقة بالهاتف - بحث شامل جداً
+            $phoneKeywords = ['هاتف', 'تليفون', 'تلفون', 'phone', 'mobile', 'tel', 'telephone', 'موبايل'];
+            $found = false;
+            $isSecond = false;
+            
+            foreach ($phoneKeywords as $keyword) {
+                if (mb_stripos($hdrClean, $keyword) !== false || mb_stripos($hdrLower, $keyword) !== false) {
+                    // التحقق من أنه ليس هاتف ثاني
+                    if (mb_stripos($hdrClean, 'ثاني') !== false || 
+                        mb_stripos($hdrClean, '2') !== false ||
+                        mb_stripos($hdrLower, 'second') !== false) {
+                        $isSecond = true;
+                    } else {
+                        $found = true;
+                    }
+                    break;
+                }
+            }
+            
+            if ($found && !$isSecond) {
                 $phoneIndex = $idx;
-                logImport("FOUND phone column by flexible search at index $idx: '$hdr' (normalized: '$hdrLower')");
+                logImport("✓ FOUND phone column at index $idx: '$hdr' (normalized: '$hdrLower')");
                 break;
+            }
+        }
+        
+        // إذا لم يُعثر عليه، ابحث في الأسماء المطابقة
+        if ($phoneIndex === -1) {
+            foreach ($headers as $idx => $hdr) {
+                if (preg_match('/هاتف|تليفون|تلفون|phone|mobile|tel/i', $hdr) && 
+                    !preg_match('/ثاني|2|second/i', $hdr)) {
+                    $phoneIndex = $idx;
+                    logImport("✓ FOUND phone column (normalized) at index $idx: '$hdr'");
+                    break;
+                }
             }
         }
     }
@@ -552,37 +602,53 @@ try {
             
             // قراءة رقم الهاتف الأول
             $phone = null;
-            if ($phoneIndex !== -1 && isset($row[$phoneIndex]) && $row[$phoneIndex] !== null && $row[$phoneIndex] !== '') {
-                $rawPhone = trim((string)$row[$phoneIndex]);
-                // تسجيل القيمة الأصلية
+            if ($phoneIndex !== -1) {
+                // تسجيل معلومات التصحيح
                 if ($i <= 5) {
-                    logImport("Row $i - Raw phone value from CSV: '" . var_export($rawPhone, true) . "' (type: " . gettype($row[$phoneIndex]) . ")");
+                    logImport("Row $i - Reading phone from index $phoneIndex");
+                    logImport("  - Row length: " . count($row));
+                    logImport("  - Index exists: " . (isset($row[$phoneIndex]) ? 'YES' : 'NO'));
+                    if (isset($row[$phoneIndex])) {
+                        logImport("  - Raw value: " . var_export($row[$phoneIndex], true));
+                        logImport("  - Value type: " . gettype($row[$phoneIndex]));
+                        logImport("  - Is null: " . ($row[$phoneIndex] === null ? 'YES' : 'NO'));
+                        logImport("  - Is empty: " . (empty($row[$phoneIndex]) ? 'YES' : 'NO'));
+                    }
                 }
-                // إزالة أي مسافات أو أحرف غير ضرورية
-                $rawPhone = str_replace([' ', '-', '_', '(', ')', '.', '/', '+'], '', $rawPhone);
-                // إزالة BOM إذا كان موجوداً
-                if (substr($rawPhone, 0, 3) === "\xEF\xBB\xBF") {
-                    $rawPhone = substr($rawPhone, 3);
-                }
-                // إزالة أي أحرف غير رقمية
-                $rawPhone = preg_replace('/[^\d]/', '', $rawPhone);
-                if ($rawPhone !== '' && strlen($rawPhone) > 0) {
-                    $phone = $rawPhone;
+                
+                if (isset($row[$phoneIndex]) && $row[$phoneIndex] !== null && $row[$phoneIndex] !== '') {
+                    $rawPhone = trim((string)$row[$phoneIndex]);
+                    // تسجيل القيمة الأصلية
                     if ($i <= 5) {
-                        logImport("Row $i - Cleaned phone: '$phone'");
+                        logImport("Row $i - Raw phone value from CSV: '" . var_export($rawPhone, true) . "'");
+                    }
+                    // إزالة أي مسافات أو أحرف غير ضرورية
+                    $rawPhone = str_replace([' ', '-', '_', '(', ')', '.', '/', '+'], '', $rawPhone);
+                    // إزالة BOM إذا كان موجوداً
+                    if (substr($rawPhone, 0, 3) === "\xEF\xBB\xBF") {
+                        $rawPhone = substr($rawPhone, 3);
+                    }
+                    // إزالة أي أحرف غير رقمية
+                    $rawPhone = preg_replace('/[^\d]/', '', $rawPhone);
+                    if ($rawPhone !== '' && strlen($rawPhone) > 0) {
+                        $phone = $rawPhone;
+                        if ($i <= 5) {
+                            logImport("Row $i - ✓ Cleaned phone: '$phone'");
+                        }
+                    } else {
+                        if ($i <= 5) {
+                            logImport("Row $i - ⚠ Phone became empty after cleaning");
+                        }
                     }
                 } else {
                     if ($i <= 5) {
-                        logImport("Row $i - Phone became empty after cleaning");
+                        logImport("Row $i - ⚠ Phone value is null or empty at index $phoneIndex");
                     }
                 }
             } else {
                 if ($i <= 5) {
-                    logImport("WARNING: Row $i - phoneIndex is -1 or row[$phoneIndex] not set. phoneIndex=$phoneIndex, row length=" . count($row));
-                    if ($phoneIndex !== -1) {
-                        logImport("  - Row[$phoneIndex] exists: " . (isset($row[$phoneIndex]) ? 'YES' : 'NO'));
-                        logImport("  - Row[$phoneIndex] value: " . (isset($row[$phoneIndex]) ? var_export($row[$phoneIndex], true) : 'NOT_SET'));
-                    }
+                    logImport("Row $i - ✗ ERROR: phoneIndex is -1! Cannot read phone number.");
+                    logImport("  - Available row indices: 0 to " . (count($row) - 1));
                 }
             }
             
@@ -616,19 +682,33 @@ try {
             
             // قراءة الرصيد
             $balance = 0.0;
-            if ($balanceIndex !== -1 && isset($row[$balanceIndex]) && $row[$balanceIndex] !== null && $row[$balanceIndex] !== '') {
-                $rawBalance = $row[$balanceIndex];
-                // تسجيل القيمة الأصلية
+            if ($balanceIndex !== -1) {
+                // تسجيل معلومات التصحيح
                 if ($i <= 5) {
-                    logImport("Row $i - Raw balance value from CSV: '" . var_export($rawBalance, true) . "' (type: " . gettype($rawBalance) . ")");
+                    logImport("Row $i - Reading balance from index $balanceIndex");
+                    logImport("  - Row length: " . count($row));
+                    logImport("  - Index exists: " . (isset($row[$balanceIndex]) ? 'YES' : 'NO'));
+                    if (isset($row[$balanceIndex])) {
+                        logImport("  - Raw value: " . var_export($row[$balanceIndex], true));
+                        logImport("  - Value type: " . gettype($row[$balanceIndex]));
+                        logImport("  - Is null: " . ($row[$balanceIndex] === null ? 'YES' : 'NO'));
+                        logImport("  - Is empty: " . (empty($row[$balanceIndex]) ? 'YES' : 'NO'));
+                    }
                 }
-                // تحويل إلى نص وإزالة المسافات
-                $rawBalance = trim((string)$rawBalance);
-                // إزالة BOM إذا كان موجوداً
-                if (substr($rawBalance, 0, 3) === "\xEF\xBB\xBF") {
-                    $rawBalance = substr($rawBalance, 3);
-                }
-                if ($rawBalance !== '' && $rawBalance !== null) {
+                
+                if (isset($row[$balanceIndex]) && $row[$balanceIndex] !== null && $row[$balanceIndex] !== '') {
+                    $rawBalance = $row[$balanceIndex];
+                    // تسجيل القيمة الأصلية
+                    if ($i <= 5) {
+                        logImport("Row $i - Raw balance value from CSV: '" . var_export($rawBalance, true) . "' (type: " . gettype($rawBalance) . ")");
+                    }
+                    // تحويل إلى نص وإزالة المسافات
+                    $rawBalance = trim((string)$rawBalance);
+                    // إزالة BOM إذا كان موجوداً
+                    if (substr($rawBalance, 0, 3) === "\xEF\xBB\xBF") {
+                        $rawBalance = substr($rawBalance, 3);
+                    }
+                    if ($rawBalance !== '' && $rawBalance !== null) {
                     // إزالة الفواصل من الأرقام (مثل 1,000.50 أو 1.000,50)
                     $rawBalance = str_replace(',', '', $rawBalance);
                     // إزالة أي مسافات إضافية
@@ -657,17 +737,19 @@ try {
                         }
                     }
                 } else {
+                        if ($i <= 5) {
+                            logImport("Row $i - ⚠ Balance value is empty or null after trimming");
+                        }
+                    }
+                } else {
                     if ($i <= 5) {
-                        logImport("Row $i - Balance value is empty or null after trimming");
+                        logImport("Row $i - ⚠ Balance value is null or empty at index $balanceIndex");
                     }
                 }
             } else {
                 if ($i <= 5) {
-                    logImport("WARNING: Row $i - balanceIndex is -1 or row[$balanceIndex] not set. balanceIndex=$balanceIndex, row length=" . count($row));
-                    if ($balanceIndex !== -1) {
-                        logImport("  - Row[$balanceIndex] exists: " . (isset($row[$balanceIndex]) ? 'YES' : 'NO'));
-                        logImport("  - Row[$balanceIndex] value: " . (isset($row[$balanceIndex]) ? var_export($row[$balanceIndex], true) : 'NOT_SET'));
-                    }
+                    logImport("Row $i - ✗ ERROR: balanceIndex is -1! Cannot read balance.");
+                    logImport("  - Available row indices: 0 to " . (count($row) - 1));
                 }
             }
             

@@ -486,6 +486,25 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 if ($hasProductData && $taskType !== 'production') {
                     error_log("⚠ WARNING: Product data exists (product_id: $productId, quantity: $quantity) but task_type is '$task_type'. Auto-changing to 'production'.");
                     $taskType = 'production';
+                    
+                    // بعد تغيير task_type إلى production، يجب أن يكون لدينا product_name
+                    // إذا لم يكن موجوداً، رفض الطلب
+                    if (empty($displayProductName) || trim($displayProductName) === '') {
+                        error_log("✗ ERROR: After changing task_type to production, product_name is still empty!");
+                        error_log("  - productId: $productId");
+                        error_log("  - quantity: $quantity");
+                        error_log("  - productName: '$productName'");
+                        throw new RuntimeException('يجب اختيار منتج عند إدخال كمية لمهمة الإنتاج');
+                    }
+                }
+                
+                // التحقق النهائي: إذا كان task_type هو production، يجب أن يكون لدينا product_name
+                if ($taskType === 'production' && (empty($displayProductName) || trim($displayProductName) === '')) {
+                    error_log("✗ ERROR: task_type is production but product_name is empty!");
+                    error_log("  - productId: $productId");
+                    error_log("  - quantity: $quantity");
+                    error_log("  - productName: '$productName'");
+                    throw new RuntimeException('يجب اختيار منتج لمهمة الإنتاج');
                 }
                 
                 // حفظ product_name مباشرة في حقل product_name (نفس طريقة طلبات العملاء - السطر 444-448)
@@ -1703,31 +1722,38 @@ function tasksHtml(string $value): string
             console.log('Product name input value (before):', productNameInput.value);
             console.log('Task type:', taskTypeSelect ? taskTypeSelect.value : 'NOT FOUND');
             
+            // إذا كان هناك كمية، تغيير task_type تلقائياً إلى production
+            if (quantity > 0 && taskTypeSelect && taskTypeSelect.value !== 'production') {
+                console.log('⚠ Auto-changing task_type to production (quantity detected: ' + quantity + ')');
+                taskTypeSelect.value = 'production';
+                toggleProductionFields();
+                // تحديث product_name مرة أخرى بعد تغيير task_type
+                updateProductNameField();
+                // تحديث productName بعد تغيير task_type
+                const updatedOption = productSelect.options[productSelect.selectedIndex];
+                if (updatedOption && updatedOption.value !== '0' && updatedOption.value !== '') {
+                    productName = updatedOption.getAttribute('data-product-name') || updatedOption.text.trim();
+                    productName = productName.trim();
+                    productNameInput.value = productName;
+                }
+            }
+            
+            // تحديث product_name مرة أخرى قبل التحقق النهائي
+            const updatedProductName = updateProductNameField();
+            const finalProductName = productNameInput.value.trim();
+            
             // إذا كان هناك منتج محدد أو كمية، يجب أن يكون product_name موجوداً
-            // أو تغيير task_type تلقائياً إلى production
-            if ((productId > 0 || quantity > 0) && !productName) {
+            if ((productId > 0 || quantity > 0) && !finalProductName) {
                 console.warn('⚠ Product ID or quantity exists but product_name is empty!');
                 console.warn('  - Selected option:', selectedOption ? selectedOption.text : 'NONE');
                 console.warn('  - data-product-name:', selectedOption ? selectedOption.getAttribute('data-product-name') : 'NONE');
                 console.warn('  - productSelect.value:', productSelect.value);
                 console.warn('  - productSelect.selectedIndex:', productSelect.selectedIndex);
-            }
-            
-            // إذا كان هناك منتج وكمية، تغيير task_type تلقائياً إلى production
-            if (productId > 0 && quantity > 0 && taskTypeSelect && taskTypeSelect.value !== 'production') {
-                console.log('⚠ Auto-changing task_type to production (product and quantity detected)');
-                taskTypeSelect.value = 'production';
-                toggleProductionFields();
-                // تحديث product_name مرة أخرى بعد تغيير task_type
-                updateProductNameField();
+                console.warn('  - Updated product name:', updatedProductName);
             }
             
             // التحقق النهائي - إذا كان product_name فارغاً ولكن task_type هو production، منع الإرسال
             if (taskTypeSelect && taskTypeSelect.value === 'production') {
-                // تحديث product_name مرة أخرى قبل التحقق النهائي
-                const updatedProductName = updateProductNameField();
-                const finalProductName = productNameInput.value.trim();
-                
                 if (!finalProductName) {
                     console.error('✗ Cannot submit: product_name is required for production tasks!');
                     console.error('  - Selected option:', selectedOption ? selectedOption.text : 'NONE');
@@ -1744,10 +1770,12 @@ function tasksHtml(string $value): string
             }
             
             // التحقق الإضافي: إذا كان هناك quantity ولكن product_name فارغ، منع الإرسال
-            if (quantity > 0 && !productNameInput.value.trim()) {
+            // هذا مهم حتى لو كان task_type لم يتغير بعد
+            if (quantity > 0 && !finalProductName) {
                 console.error('✗ Cannot submit: quantity exists but product_name is empty!');
                 console.error('  - Quantity:', quantity);
                 console.error('  - Product name:', productNameInput.value);
+                console.error('  - Task type:', taskTypeSelect ? taskTypeSelect.value : 'NOT FOUND');
                 e.preventDefault();
                 alert('يجب اختيار منتج عند إدخال كمية');
                 return false;
