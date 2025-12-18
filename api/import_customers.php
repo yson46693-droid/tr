@@ -735,14 +735,24 @@ try {
                 logImport("Full row data: " . json_encode($row, JSON_UNESCAPED_UNICODE));
             }
             
-            // تخطي الصفوف الفارغة
-            if (empty($row[$nameIndex]) || trim($row[$nameIndex]) === '') {
-                $emptyRows++;
-                if ($i <= 5) {
-                    logImport("Row $i - Skipping empty row (name is empty)");
+            // قراءة اسم العميل أولاً للتحقق من أنه غير فارغ
+            $name = '';
+            if (isset($row[$nameIndex])) {
+                $name = trim($row[$nameIndex]);
+                // إزالة BOM إذا كان موجوداً
+                if (substr($name, 0, 3) === "\xEF\xBB\xBF") {
+                    $name = substr($name, 3);
                 }
+            }
+            
+            // تخطي الصفوف الفارغة
+            if (empty($name) || $name === '') {
+                $emptyRows++;
+                logImport("Row $i - Skipping empty row (name is empty or null)");
                 continue;
             }
+            
+            logImport("Row $i - Processing customer: '$name'");
             
             // قراءة البيانات مع التعامل مع الأعمدة الفارغة
             // قراءة ايدي العميل
@@ -751,13 +761,8 @@ try {
                 $rawValue = trim($row[$customerIdIndex]);
                 if ($rawValue !== '' && is_numeric($rawValue)) {
                     $customerIdFromFile = (int)$rawValue;
+                    logImport("Row $i - Found customer ID in file: $customerIdFromFile");
                 }
-            }
-            
-            // قراءة اسم العميل
-            $name = '';
-            if (isset($row[$nameIndex])) {
-                $name = trim($row[$nameIndex]);
             }
             
             // قراءة رقم الهاتف الأول
@@ -1027,26 +1032,41 @@ try {
             if (!$isUpdate) {
                 // للمندوبين: التحقق من التكرار فقط في عملائهم
                 if (isset($currentUser['role']) && $currentUser['role'] === 'sales') {
-                    $duplicateCheck = "SELECT id FROM customers WHERE name = ? AND (created_by = ? OR rep_id = ?)";
-                    $duplicateParams = [$name, $currentUser['id'], $currentUser['id']];
+                    // التحقق من التكرار بناءً على الاسم + الهاتف (إذا كان موجوداً)
+                    if ($phone && trim($phone) !== '') {
+                        // إذا كان هناك هاتف، نتحقق من الاسم + الهاتف
+                        $duplicateCheck = "SELECT id FROM customers WHERE name = ? AND phone = ? AND (created_by = ? OR rep_id = ?)";
+                        $duplicateParams = [$name, $phone, $currentUser['id'], $currentUser['id']];
+                    } else {
+                        // إذا لم يكن هناك هاتف، نتحقق من الاسم فقط (لكن فقط إذا كان هناك عميل بنفس الاسم بدون هاتف)
+                        $duplicateCheck = "SELECT id FROM customers WHERE name = ? AND (phone IS NULL OR phone = '') AND (created_by = ? OR rep_id = ?)";
+                        $duplicateParams = [$name, $currentUser['id'], $currentUser['id']];
+                    }
                 } else {
-                    $duplicateCheck = "SELECT id FROM customers WHERE name = ?";
-                    $duplicateParams = [$name];
+                    // للمدير/المحاسب: التحقق من التكرار في جميع العملاء
+                    if ($phone && trim($phone) !== '') {
+                        // إذا كان هناك هاتف، نتحقق من الاسم + الهاتف
+                        $duplicateCheck = "SELECT id FROM customers WHERE name = ? AND phone = ?";
+                        $duplicateParams = [$name, $phone];
+                    } else {
+                        // إذا لم يكن هناك هاتف، نتحقق من الاسم فقط (لكن فقط إذا كان هناك عميل بنفس الاسم بدون هاتف)
+                        $duplicateCheck = "SELECT id FROM customers WHERE name = ? AND (phone IS NULL OR phone = '')";
+                        $duplicateParams = [$name];
+                    }
                 }
                 
-                if ($phone) {
-                    $duplicateCheck .= " AND (phone = ? OR phone IS NULL)";
-                    $duplicateParams[] = $phone;
-                }
+                logImport("Row $i - Checking for duplicate: name='$name', phone=" . ($phone ? "'$phone'" : "NULL"));
+                logImport("Row $i - Duplicate check SQL: $duplicateCheck");
+                logImport("Row $i - Duplicate check params: " . json_encode($duplicateParams, JSON_UNESCAPED_UNICODE));
                 
                 $existing = $db->queryOne($duplicateCheck, $duplicateParams);
                 
                 if ($existing) {
                     $skipped++;
-                    if ($i <= 5) {
-                        logImport("Row $i - Skipping duplicate customer: '$name' (ID: {$existing['id']})");
-                    }
+                    logImport("Row $i - ✗ DUPLICATE FOUND - Skipping customer: '$name' " . ($phone ? "(Phone: $phone)" : "(No phone)") . " (Existing ID: {$existing['id']})");
                     continue;
+                } else {
+                    logImport("Row $i - ✓ No duplicate found for: '$name' " . ($phone ? "(Phone: $phone)" : "(No phone)") . " - Will import");
                 }
             }
             
