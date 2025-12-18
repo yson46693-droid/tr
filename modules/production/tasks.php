@@ -251,9 +251,13 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 $productId = isset($input['product_id']) ? (int) $input['product_id'] : 0;
                 // قراءة product_name مباشرة من POST - نفس طريقة طلبات العملاء
                 // في customer_orders.php يتم استخدام templateName مباشرة (السطر 448)
-                $rawProductName = isset($input['product_name']) ? (string)$input['product_name'] : '';
+                $rawProductName = isset($input['product_name']) ? $input['product_name'] : null;
+                // معالجة null و empty strings
+                if ($rawProductName === null || $rawProductName === 'null' || $rawProductName === '') {
+                    $rawProductName = '';
+                }
                 // استخدام trim مباشرة بدلاً من tasksSafeString لأن tasksSafeString قد يحذف القيمة
-                $productName = trim($rawProductName);
+                $productName = trim((string)$rawProductName);
                 $quantity = isset($input['quantity']) ? (float) $input['quantity'] : 0.0;
                 $taskType = $input['task_type'] ?? 'general';
                 $notes = tasksSafeString($input['notes'] ?? '');
@@ -268,6 +272,11 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 if ($taskType === 'production') {
                     // التحقق من وجود product_name أو product_id
                     if ($productId <= 0 && ($productName === '' || trim($productName) === '')) {
+                        error_log("✗ ERROR: Production task requires product_name or product_id!");
+                        error_log("  - productId: $productId");
+                        error_log("  - productName: '$productName'");
+                        error_log("  - rawProductName: " . ($rawProductName === null ? 'NULL' : "'$rawProductName'"));
+                        error_log("  - POST data: " . json_encode(['product_id' => $productId, 'product_name' => $rawProductName, 'quantity' => $quantity]));
                         throw new RuntimeException('يجب اختيار منتج لمهمة الإنتاج');
                     }
 
@@ -276,11 +285,24 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     }
                     
                     // إذا كان productName فارغاً لمهام الإنتاج، حاول الحصول عليه من product_id
-                    if (empty($productName) || trim($productName) === '' && $productId > 0) {
+                    if ((empty($productName) || trim($productName) === '') && $productId > 0) {
                         $product = $db->queryOne('SELECT name FROM products WHERE id = ?', [$productId]);
                         if ($product && !empty($product['name'])) {
                             $productName = trim($product['name']);
+                            error_log("✓ Retrieved product_name from product_id: '$productName' (product_id: $productId)");
+                        } else {
+                            error_log("✗ Product not found in database for product_id: $productId");
+                            // إذا لم يتم العثور على المنتج، رفض الطلب
+                            throw new RuntimeException('المنتج المحدد غير موجود في قاعدة البيانات');
                         }
+                    }
+                    
+                    // التحقق النهائي: يجب أن يكون لدينا product_name بعد كل المحاولات
+                    if (empty($productName) || trim($productName) === '') {
+                        error_log("✗ ERROR: product_name is still empty after all attempts!");
+                        error_log("  - productId: $productId");
+                        error_log("  - productName: '$productName'");
+                        throw new RuntimeException('لم يتم العثور على اسم المنتج. يرجى اختيار منتج صحيح');
                     }
 
                     // إذا كان productId <= 0 أو سالب (قالب بدون product_id)، البحث عن product_id باستخدام product_name
@@ -1687,6 +1709,8 @@ function tasksHtml(string $value): string
                 console.warn('⚠ Product ID or quantity exists but product_name is empty!');
                 console.warn('  - Selected option:', selectedOption ? selectedOption.text : 'NONE');
                 console.warn('  - data-product-name:', selectedOption ? selectedOption.getAttribute('data-product-name') : 'NONE');
+                console.warn('  - productSelect.value:', productSelect.value);
+                console.warn('  - productSelect.selectedIndex:', productSelect.selectedIndex);
             }
             
             // إذا كان هناك منتج وكمية، تغيير task_type تلقائياً إلى production
@@ -1694,21 +1718,39 @@ function tasksHtml(string $value): string
                 console.log('⚠ Auto-changing task_type to production (product and quantity detected)');
                 taskTypeSelect.value = 'production';
                 toggleProductionFields();
+                // تحديث product_name مرة أخرى بعد تغيير task_type
+                updateProductNameField();
             }
             
             // التحقق النهائي - إذا كان product_name فارغاً ولكن task_type هو production، منع الإرسال
             if (taskTypeSelect && taskTypeSelect.value === 'production') {
+                // تحديث product_name مرة أخرى قبل التحقق النهائي
+                const updatedProductName = updateProductNameField();
                 const finalProductName = productNameInput.value.trim();
+                
                 if (!finalProductName) {
                     console.error('✗ Cannot submit: product_name is required for production tasks!');
                     console.error('  - Selected option:', selectedOption ? selectedOption.text : 'NONE');
                     console.error('  - data-product-name:', selectedOption ? selectedOption.getAttribute('data-product-name') : 'NONE');
+                    console.error('  - productSelect.value:', productSelect.value);
+                    console.error('  - productSelect.selectedIndex:', productSelect.selectedIndex);
+                    console.error('  - Updated product name:', updatedProductName);
                     e.preventDefault();
                     alert('يجب اختيار منتج لمهمة الإنتاج');
                     return false;
                 } else {
                     console.log('✓ product_name is valid:', finalProductName);
                 }
+            }
+            
+            // التحقق الإضافي: إذا كان هناك quantity ولكن product_name فارغ، منع الإرسال
+            if (quantity > 0 && !productNameInput.value.trim()) {
+                console.error('✗ Cannot submit: quantity exists but product_name is empty!');
+                console.error('  - Quantity:', quantity);
+                console.error('  - Product name:', productNameInput.value);
+                e.preventDefault();
+                alert('يجب اختيار منتج عند إدخال كمية');
+                return false;
             }
             
             console.log('Product name input value (after):', productNameInput.value);
