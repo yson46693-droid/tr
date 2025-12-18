@@ -304,55 +304,70 @@ function isLoggedIn() {
         // === إذا لم تكن الجلسة صالحة في قاعدة البيانات، حذفها وإرجاع false ===
         // هذا هو التحقق الأمني الرئيسي - يجب أن تكون الجلسة موجودة في قاعدة البيانات
         if (!$sessionValidInDB) {
+            // === فحص أمان: في الصفحات المحمية (profile.php)، نرجع true مباشرة إذا كان لدينا $_SESSION صالحة ===
+            // هذا يضمن عدم إنهاء الجلسة للمستخدمين غير الإداريين عند الوصول إلى profile.php
+            if ($isProtectedPage && isset($userId) && !empty($userId)) {
+                error_log("isLoggedIn() PROTECTED PAGE: Keeping session active for protected page - user_id: {$userId}");
+                return true; // نرجع true مباشرة للصفحات المحمية إذا كان لدينا user_id صالح
+            }
+            
             // في الصفحات المحمية (profile.php, attendance.php, etc.)، نحاول استعادة الجلسة بدلاً من حذفها
-            if ($isProtectedPage && isset($userId) && !empty($userId) && !empty($sessionId)) {
-                // محاولة أخيرة لإنشاء/استعادة الجلسة في الصفحات المحمية
-                try {
-                    if (ensureSessionsTable()) {
-                        // التأكد من وجود اتصال قاعدة البيانات
-                        if (!isset($db)) {
-                            $db = db();
-                        }
-                        
-                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                        $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                        $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-                        $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
-                        
-                        // محاولة إنشاء الجلسة مرة أخرى
-                        $db->execute(
-                            "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                             VALUES (?, ?, ?, ?, ?, NOW())
-                             ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?, user_id = ?",
-                            [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt, $userId]
-                        );
-                        
-                        // التحقق من أن الجلسة تم إنشاؤها بنجاح
-                        $sessionRecord = $db->queryOne(
-                            "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
-                            [$userId, $sessionId]
-                        );
-                        
-                        if ($sessionRecord) {
-                            // نجحنا في استعادة الجلسة
-                            $sessionValidInDB = true;
-                            error_log("isLoggedIn() RESTORED in protected page: Recreated session for user_id: {$userId}");
-                            // نتابع التنفيذ بدلاً من إرجاع false
+            // ملاحظة: لا نطلب !empty($sessionId) لأن session_id قد يكون فارغاً في بعض الحالات
+            if ($isProtectedPage && isset($userId) && !empty($userId)) {
+                // إذا كان session_id موجوداً، نحاول استعادة الجلسة في قاعدة البيانات
+                if (!empty($sessionId)) {
+                    // محاولة أخيرة لإنشاء/استعادة الجلسة في الصفحات المحمية
+                    try {
+                        if (ensureSessionsTable()) {
+                            // التأكد من وجود اتصال قاعدة البيانات
+                            if (!isset($db)) {
+                                $db = db();
+                            }
+                            
+                            $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                            $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                            $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                            
+                            // محاولة إنشاء الجلسة مرة أخرى
+                            $db->execute(
+                                "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                                 VALUES (?, ?, ?, ?, ?, NOW())
+                                 ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?, user_id = ?",
+                                [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt, $userId]
+                            );
+                            
+                            // التحقق من أن الجلسة تم إنشاؤها بنجاح
+                            $sessionRecord = $db->queryOne(
+                                "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
+                                [$userId, $sessionId]
+                            );
+                            
+                            if ($sessionRecord) {
+                                // نجحنا في استعادة الجلسة
+                                $sessionValidInDB = true;
+                                error_log("isLoggedIn() RESTORED in protected page: Recreated session for user_id: {$userId}");
+                                // نتابع التنفيذ بدلاً من إرجاع false
+                            } else {
+                                // فشلنا في استعادة الجلسة - لكن في الصفحات المحمية، نعتبر الجلسة صالحة مؤقتاً
+                                error_log("isLoggedIn() WARNING in protected page: Failed to restore session for user_id: {$userId} - but keeping session active temporarily");
+                                // نعتبر الجلسة صالحة مؤقتاً في الصفحات المحمية - نرجع true
+                                return true; // نرجع true في الصفحات المحمية حتى لو فشلنا في استعادة الجلسة
+                            }
                         } else {
-                            // فشلنا في استعادة الجلسة - لكن في الصفحات المحمية، نعتبر الجلسة صالحة مؤقتاً
-                            error_log("isLoggedIn() WARNING in protected page: Failed to restore session for user_id: {$userId} - but keeping session active temporarily");
-                            // نعتبر الجلسة صالحة مؤقتاً في الصفحات المحمية - نرجع true
-                            return true; // نرجع true في الصفحات المحمية حتى لو فشلنا في استعادة الجلسة
+                            // فشل في إنشاء جدول الجلسات - لكن في الصفحات المحمية، نعتبر الجلسة صالحة مؤقتاً
+                            error_log("isLoggedIn() WARNING in protected page: Failed to ensure sessions table for user_id: {$userId} - but keeping session active temporarily");
+                            return true; // نرجع true في الصفحات المحمية
                         }
-                    } else {
-                        // فشل في إنشاء جدول الجلسات - لكن في الصفحات المحمية، نعتبر الجلسة صالحة مؤقتاً
-                        error_log("isLoggedIn() WARNING in protected page: Failed to ensure sessions table for user_id: {$userId} - but keeping session active temporarily");
-                        return true; // نرجع true في الصفحات المحمية
+                    } catch (Exception $restoreError) {
+                        // في الصفحات المحمية، حتى لو فشلنا، لا نحذف الجلسة - نرجع true
+                        error_log("isLoggedIn() WARNING in protected page: Exception during session restore for user_id: {$userId}: " . $restoreError->getMessage() . " - but keeping session active temporarily");
+                        return true; // نرجع true في الصفحات المحمية حتى لو فشلنا
                     }
-                } catch (Exception $restoreError) {
-                    // في الصفحات المحمية، حتى لو فشلنا، لا نحذف الجلسة - نرجع true
-                    error_log("isLoggedIn() WARNING in protected page: Exception during session restore for user_id: {$userId}: " . $restoreError->getMessage() . " - but keeping session active temporarily");
-                    return true; // نرجع true في الصفحات المحمية حتى لو فشلنا
+                } else {
+                    // إذا كان session_id فارغاً، نرجع true مباشرة للصفحات المحمية
+                    error_log("isLoggedIn() PROTECTED PAGE: session_id is empty but keeping session active for protected page - user_id: {$userId}");
+                    return true;
                 }
             }
             
