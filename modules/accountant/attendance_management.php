@@ -14,7 +14,7 @@ require_once __DIR__ . '/../../includes/attendance.php';
 require_once __DIR__ . '/../../includes/path_helper.php';
 require_once __DIR__ . '/../../includes/table_styles.php';
 
-requireRole(['accountant', 'manager']);
+requireRole(['accountant', 'manager', 'developer']);
 
 $currentUser = getCurrentUser();
 $db = db();
@@ -24,7 +24,7 @@ $success = '';
 
 // معالجة POST لتحديث العدادات والصلاحيات
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    requireRole(['accountant', 'manager']);
+    requireRole(['accountant', 'manager', 'developer']);
     
     $action = $_POST['action'] ?? '';
     $targetUserId = intval($_POST['user_id'] ?? 0);

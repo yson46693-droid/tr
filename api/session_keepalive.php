@@ -38,57 +38,32 @@ try {
         exit;
     }
     
-    // تحديث وقت آخر نشاط والجلسة في قاعدة البيانات
-    if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-        $_SESSION['last_activity'] = time();
-        
-        // تحديث last_activity_previous أيضاً لمنع انتهاء الجلسة
-        if (!isset($_SESSION['last_activity_previous'])) {
-            $_SESSION['last_activity_previous'] = time();
-        } else {
-            // تحديث previous activity time أيضاً لضمان عدم انتهاء الجلسة
-            $_SESSION['last_activity_previous'] = time();
-        }
-        
-        // تحديث الجلسة في قاعدة البيانات (last_activity و expires_at)
-        // استخدام timeout قصير لمنع تعليق الطلب
-        $userId = $_SESSION['user_id'] ?? 0;
-        $sessionId = session_id();
-        if ($userId > 0 && !empty($sessionId)) {
-            try {
-                // استخدام timeout قصير للاتصال بقاعدة البيانات
-                $db = db();
-                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                
-                // تحديث سريع - استخدام UPDATE مباشر بدون معالجة معقدة
-                // إضافة timeout للاستعلام لمنع التعليق
-                $db->execute(
-                    "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ? LIMIT 1",
-                    [$newExpiresAt, $userId, $sessionId]
-                );
-            } catch (Exception $e) {
-                // لا نسجل الخطأ في keep-alive لتقليل الضغط على السيرفر
-                // error_log("session_keepalive: Error updating session in database: " . $e->getMessage());
+    // تم إزالة نظام الجلسات - تحديث remember_token في قاعدة البيانات فقط
+    $user = getUserFromToken();
+    if ($user && isset($user['id'])) {
+        try {
+            $db = db();
+            if (isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
+                $cookieValue = $_COOKIE['remember_token'];
+                $decoded = base64_decode($cookieValue, true);
+                if ($decoded) {
+                    $parts = explode(':', $decoded);
+                    if (count($parts) === 2) {
+                        $userId = intval($parts[0]);
+                        $token = trim($parts[1]);
+                        
+                        // تحديث last_used في remember_tokens
+                        if (ensureRememberTokensTable()) {
+                            $db->execute(
+                                "UPDATE remember_tokens SET last_used = NOW() WHERE user_id = ? AND token = ?",
+                                [$userId, $token]
+                            );
+                        }
+                    }
+                }
             }
-        }
-        
-        // تحديث session cookie
-        if (!headers_sent() && session_id()) {
-            $isHttps = (
-                (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-                (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
-            );
-            
-            $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-            setcookie(session_name(), session_id(), [
-                'expires' => time() + $sessionLifetime,
-                'path' => '/',
-                'domain' => '',
-                'secure' => $isHttps,
-                'httponly' => true,
-                'samesite' => $isHttps ? 'None' : 'Lax',
-            ]);
+        } catch (Exception $e) {
+            // لا نسجل الخطأ في keep-alive لتقليل الضغط على السيرفر
         }
     }
     
@@ -96,7 +71,6 @@ try {
     echo json_encode([
         'success' => true,
         'message' => 'تم تجديد الجلسة',
-        'last_activity' => $_SESSION['last_activity'] ?? time(),
         'timestamp' => time()
     ]);
     

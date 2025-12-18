@@ -172,32 +172,43 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // للصفحات (navigation requests): استخدام Network First مع Cache Fallback
+  // CRITICAL FIX: السماح لجميع navigation requests بالمرور مباشرة لتجنب Error Code: -2
+  // Service worker لا يجب أن يعترض navigation requests في HTTPS
   if (isNavigationRequest) {
+    // السماح للطلب بالمرور مباشرة بدون intercept
+    // هذا يمنع Error Code: -2 و ERR_FAILED
+    return;
+  }
+
+  // للصفحات (navigation requests): استخدام Network First مع Cache Fallback
+  // تم تعطيله مؤقتاً لتجنب Error Code: -2
+  if (false && isNavigationRequest) {
     // CRITICAL FIX: Safari لا يسمح بـ Service Worker بتقديم redirect responses
     // الحل: التحقق من redirects أولاً وإذا كان redirect، لا نعترضه نهائياً
+    // FIX: السماح للطلبات بالمرور مباشرة إذا كان هناك مشكلة في الكاش لتجنب Error Code: -2
     event.respondWith(
       (async () => {
-        // التحقق من الكاش أولاً - أسرع وأكثر أماناً
-        const cache = await caches.open(NAVIGATION_CACHE_NAME);
-        const cachedResponse = await cache.match(event.request);
-        
-        if (cachedResponse && !isRedirectResponse(cachedResponse)) {
-          const isValid = await isCacheValid(event.request, NAVIGATION_CACHE_TTL);
-          if (isValid) {
-            return cachedResponse;
-          } else {
+        try {
+          // التحقق من الكاش أولاً - أسرع وأكثر أماناً
+          const cache = await caches.open(NAVIGATION_CACHE_NAME);
+          const cachedResponse = await cache.match(event.request);
+          
+          if (cachedResponse && !isRedirectResponse(cachedResponse)) {
+            const isValid = await isCacheValid(event.request, NAVIGATION_CACHE_TTL);
+            if (isValid) {
+              return cachedResponse;
+            } else {
+              await cache.delete(event.request);
+            }
+          } else if (cachedResponse && isRedirectResponse(cachedResponse)) {
             await cache.delete(event.request);
           }
-        } else if (cachedResponse && isRedirectResponse(cachedResponse)) {
-          await cache.delete(event.request);
-        }
-        
-        // التحقق من الكاش العام
-        const generalCache = await caches.open(CACHE_NAME);
-        const generalCached = await generalCache.match(event.request);
-        if (generalCached && !isRedirectResponse(generalCached)) {
-          return generalCached;
+          
+          // التحقق من الكاش العام
+          const generalCache = await caches.open(CACHE_NAME);
+          const generalCached = await generalCache.match(event.request);
+          if (generalCached && !isRedirectResponse(generalCached)) {
+            return generalCached;
         } else if (generalCached && isRedirectResponse(generalCached)) {
           await generalCache.delete(event.request);
         }
@@ -266,17 +277,31 @@ self.addEventListener('fetch', event => {
           
           return finalResponse;
         } catch (error) {
-          // في حالة الخطأ، محاولة الكاش أو offline page
+          // في حالة الخطأ (مثل Error Code: -2)، السماح للطلب بالمرور مباشرة
+          // هذا يمنع service worker من التسبب في ERR_FAILED
+          console.error('Service Worker fetch error:', error);
+          
+          // محاولة الكاش كحل أخير
           const offlinePage = await caches.match(BASE + 'offline.html');
           if (offlinePage) {
             return offlinePage;
           }
-          return new Response('لا يوجد اتصال بالشبكة', { 
-            status: 503,
-            headers: { 'Content-Type': 'text/html; charset=utf-8' }
+          
+          // إذا فشل كل شيء، السماح للطلب بالمرور مباشرة بدون intercept
+          // هذا يمنع Error Code: -2
+          return fetch(event.request).catch(() => {
+            return new Response('لا يوجد اتصال بالشبكة', { 
+              status: 503,
+              headers: { 'Content-Type': 'text/html; charset=utf-8' }
+            });
           });
         }
-      })()
+      })().catch(error => {
+        // FIX: إذا فشل كل شيء، السماح للطلب بالمرور مباشرة
+        // هذا يمنع Error Code: -2 الذي يحدث عندما يحاول service worker intercept طلب فاشل
+        console.error('Service Worker navigation request failed:', error);
+        return fetch(event.request);
+      })
     );
     return;
   }

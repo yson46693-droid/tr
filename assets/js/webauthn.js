@@ -155,6 +155,12 @@ class SimpleWebAuthn {
             });
 
             if (!challengeResponse.ok) {
+                // معالجة خاصة لخطأ 401 (Unauthorized)
+                if (challengeResponse.status === 401) {
+                    const errorData = await challengeResponse.json().catch(() => ({}));
+                    const errorMessage = errorData.message || 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول';
+                    throw new Error(errorMessage);
+                }
                 throw new Error(`خطأ في الاتصال بالخادم: ${challengeResponse.status}`);
             }
 
@@ -305,6 +311,12 @@ class SimpleWebAuthn {
             });
 
             if (!verifyResponse.ok) {
+                // معالجة خاصة لخطأ 401 (Unauthorized)
+                if (verifyResponse.status === 401) {
+                    const errorData = await verifyResponse.json().catch(() => ({}));
+                    const errorMessage = errorData.message || 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول';
+                    throw new Error(errorMessage);
+                }
                 throw new Error(`خطأ في التحقق: ${verifyResponse.status}`);
             }
 

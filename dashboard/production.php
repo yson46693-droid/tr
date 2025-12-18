@@ -24,7 +24,7 @@ require_once __DIR__ . '/../includes/path_helper.php';
 require_once __DIR__ . '/../includes/production_helper.php';
 require_once __DIR__ . '/../includes/batch_numbers.php';
 
-requireRole(['production', 'manager']);
+requireRole(['production', 'manager', 'developer']);
 
 $currentUser = getCurrentUser();
 $db = db();

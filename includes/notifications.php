@@ -33,7 +33,7 @@ if (!defined('ATTENDANCE_NOTIFICATION_CACHE_PREFIX')) {
 }
 
 /**
- * تخزين حالة تذكيرات الحضور في الجلسة
+ * تم إزالة نظام الجلسات - استخدام cache فقط لتذكيرات الحضور
  */
 function getAttendanceSessionKey(int $userId, string $kind): string
 {
@@ -43,29 +43,18 @@ function getAttendanceSessionKey(int $userId, string $kind): string
 
 function sessionHasAttendanceNotification(int $userId, string $kind): bool
 {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        return false;
-    }
-    $key = getAttendanceSessionKey($userId, $kind);
-    return !empty($_SESSION[$key]);
+    // تم إزالة نظام الجلسات - استخدام cache فقط
+    return false;
 }
 
 function sessionMarkAttendanceNotification(int $userId, string $kind): void
 {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        return;
-    }
-    $key = getAttendanceSessionKey($userId, $kind);
-    $_SESSION[$key] = true;
+    // تم إزالة نظام الجلسات - لا حاجة للتنفيذ
 }
 
 function sessionClearAttendanceNotification(int $userId, string $kind): void
 {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        return;
-    }
-    $key = getAttendanceSessionKey($userId, $kind);
-    unset($_SESSION[$key]);
+    // تم إزالة نظام الجلسات - لا حاجة للتنفيذ
 }
 
 /**

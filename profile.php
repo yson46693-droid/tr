@@ -4,13 +4,8 @@
  */
 
 define('ACCESS_ALLOWED', true);
-// تعريف ثابت لمنع حذف الجلسة في profile.php
+// تعريف ثابت للصفحة المحمية (profile.php)
 define('PROFILE_PAGE_ACTIVE', true);
-
-// التأكد من بدء الجلسة قبل أي شيء
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/path_helper.php';
@@ -18,97 +13,209 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/audit_log.php';
 
-// التحقق من تسجيل الدخول فقط
-// التأكد من أن الجلسة نشطة قبل التحقق
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    if (!headers_sent()) {
-        @session_start();
-    }
-}
+// التحقق من تسجيل الدخول - يعتمد على remember_token فقط
+// تم إزالة نظام الجلسات بالكامل
+// استخدام requireLogin() للتحقق من تسجيل الدخول (يتعامل مع التوجيه تلقائياً)
 
+// التحقق من تسجيل الدخول - يعتمد على remember_token فقط
 requireLogin();
 
+// ========================================
+// الحل 4: التحقق من صلاحيات الملفات
+// ========================================
+// التأكد من أن الدوال المطلوبة موجودة
+if (!function_exists('requireLogin')) {
+    die('خطأ: دالة requireLogin غير موجودة');
+}
+
+if (!function_exists('getUserFromToken')) {
+    die('خطأ: دالة getUserFromToken غير موجودة');
+}
+
 // تهيئة متغيرات الرسائل
-$error = $_SESSION['error_message'] ?? '';
-$success = $_SESSION['success_message'] ?? '';
-unset($_SESSION['error_message'], $_SESSION['success_message']);
+// تم إزالة نظام الجلسات - يمكن استخدام query parameters للرسائل إذا لزم الأمر
+$error = $_GET['error'] ?? '';
+$success = $_GET['success'] ?? '';
 
-// محاولة متعددة لتحميل المستخدم - حل نهائي للأجهزة الغريبة
+// ========================================
+// الحل 1: إضافة تسجيل تفصيلي للأخطاء (Debugging)
+// ========================================
+error_log("=== Profile.php Debug Info ===");
+error_log("Cookie exists: " . (isset($_COOKIE['remember_token']) ? 'YES' : 'NO'));
+$debugUser = getUserFromToken();
+error_log("User from getUserFromToken: " . ($debugUser ? json_encode($debugUser) : 'NULL'));
+error_log("User ID: " . (isset($debugUser['id']) ? $debugUser['id'] : 'NULL'));
+
+// تسجيل تفاصيل الـ cookie إذا كان موجوداً
+if (isset($_COOKIE['remember_token'])) {
+    error_log("Remember token cookie value (first 20 chars): " . substr($_COOKIE['remember_token'], 0, 20));
+    $decoded = base64_decode($_COOKIE['remember_token'], true);
+    if ($decoded) {
+        $parts = explode(':', $decoded);
+        error_log("Token parts count: " . count($parts));
+        if (count($parts) === 2) {
+            error_log("User ID from token: " . intval($parts[0]));
+        }
+    }
+}
+
+// === تحميل بيانات المستخدم ===
+// requireLogin() نجح بالفعل، لذلك يجب أن يكون هناك token صالح
+// نستخدم نفس الاستعلام الذي يستخدمه checkRememberToken() مباشرة
+$user = null;
 $currentUser = null;
-$maxAttempts = 3;
+$userId = null;
 
-for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-    // الطريقة 1: استخدام getCurrentUser()
-    $currentUser = getCurrentUser();
-    
-    if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
-        break; // نجح التحميل
-    }
-    
-    // الطريقة 2: إذا فشلت، جرب مباشرة من قاعدة البيانات
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
+// محاولة تحميل المستخدم مباشرة من remember_token باستخدام نفس الاستعلام
+if (isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
+    try {
+        if (ensureRememberTokensTable()) {
             $db = db();
-            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$_SESSION['user_id']]);
-            if ($userFromDb && isset($userFromDb['id'])) {
-                $currentUser = $userFromDb;
-                // تحديث الجلسة ببيانات المستخدم
-                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
-                    $_SESSION['username'] = $userFromDb['username'];
+            $cookieValue = $_COOKIE['remember_token'];
+            $decoded = base64_decode($cookieValue, true);
+            
+            if ($decoded !== false && !empty($decoded)) {
+                $parts = explode(':', $decoded);
+                if (count($parts) === 2) {
+                    $tokenUserId = intval($parts[0]);
+                    $token = trim($parts[1]);
+                    
+                    if ($tokenUserId > 0 && !empty($token)) {
+                        // استخدام نفس الاستعلام الذي يستخدمه checkRememberToken()
+                        // مع retry logic لضمان الموثوقية
+                        $maxRetries = 3;
+                        $retryDelay = 100000; // 100ms
+                        $tokenRecord = null;
+                        
+                        for ($retry = 0; $retry < $maxRetries; $retry++) {
+                            try {
+                                $tokenRecord = $db->queryOne(
+                                    "SELECT rt.*, u.* FROM remember_tokens rt
+                                     INNER JOIN users u ON rt.user_id = u.id
+                                     WHERE rt.user_id = ? AND rt.token = ? AND rt.expires_at > NOW() AND u.status = 'active'",
+                                    [$tokenUserId, $token]
+                                );
+                                
+                                if ($tokenRecord) {
+                                    // نجح الاستعلام
+                                    break;
+                                }
+                                
+                                // إذا لم نجد السجل، نحاول مرة أخرى
+                                if ($retry < $maxRetries - 1) {
+                                    error_log("Profile.php - Token record not found, retrying... (attempt " . ($retry + 1) . ")");
+                                    usleep($retryDelay);
+                                }
+                            } catch (Exception $e) {
+                                error_log("Profile.php - Database query error (retry " . ($retry + 1) . "): " . $e->getMessage());
+                                if ($retry < $maxRetries - 1) {
+                                    usleep($retryDelay);
+                                }
+                            }
+                        }
+                        
+                        if ($tokenRecord) {
+                            // تحديث last_used
+                            try {
+                                $db->execute(
+                                    "UPDATE remember_tokens SET last_used = NOW() WHERE id = ?",
+                                    [$tokenRecord['id']]
+                                );
+                            } catch (Exception $e) {
+                                // لا نعتبر هذا خطأ حرج
+                                error_log("Profile.php - Failed to update last_used: " . $e->getMessage());
+                            }
+                            
+                            // بناء مصفوفة بيانات المستخدم
+                            $user = [
+                                'id' => $tokenRecord['user_id'],
+                                'username' => $tokenRecord['username'],
+                                'email' => $tokenRecord['email'] ?? null,
+                                'full_name' => $tokenRecord['full_name'] ?? null,
+                                'role' => $tokenRecord['role'],
+                                'status' => $tokenRecord['status'],
+                                'phone' => $tokenRecord['phone'] ?? null,
+                                'created_at' => $tokenRecord['created_at'] ?? null,
+                                'updated_at' => $tokenRecord['updated_at'] ?? null,
+                                'profile_photo' => $tokenRecord['profile_photo'] ?? null,
+                                'webauthn_enabled' => $tokenRecord['webauthn_enabled'] ?? false,
+                            ];
+                            $currentUser = $user;
+                            $userId = $user['id'];
+                            error_log("Profile.php - Successfully loaded user from token (user_id: {$userId})");
+                        } else {
+                            error_log("Profile.php - Token record not found in database for user_id: {$tokenUserId} after {$maxRetries} attempts");
+                        }
+                    } else {
+                        error_log("Profile.php - Invalid tokenUserId ({$tokenUserId}) or empty token");
+                    }
+                } else {
+                    error_log("Profile.php - Invalid token format (parts count: " . count($parts) . ")");
                 }
-                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
-                    $_SESSION['role'] = $userFromDb['role'];
-                }
-                if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
-                    $_SESSION['logged_in'] = true;
-                }
-                break; // نجح التحميل
+            } else {
+                error_log("Profile.php - Failed to decode remember_token cookie");
             }
-        } catch (Exception $e) {
-            error_log("Profile page - Error loading user from database (attempt $attempt): " . $e->getMessage());
+        } else {
+            error_log("Profile.php - ensureRememberTokensTable() failed");
         }
+    } catch (Exception $e) {
+        error_log("Profile.php - Exception during token load: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
     }
-    
-    // الطريقة 3: إذا فشلت، جرب بدون التحقق من status
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            if (!isset($db)) {
-                $db = db();
-            }
-            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
-            if ($userFromDb && isset($userFromDb['id'])) {
-                $currentUser = $userFromDb;
-                // تحديث الجلسة ببيانات المستخدم
-                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
-                    $_SESSION['username'] = $userFromDb['username'];
-                }
-                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
-                    $_SESSION['role'] = $userFromDb['role'];
-                }
-                if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
-                    $_SESSION['logged_in'] = true;
-                }
-                break; // نجح التحميل
-            }
-        } catch (Exception $e) {
-            error_log("Profile page - Error loading user without status check (attempt $attempt): " . $e->getMessage());
-        }
-    }
-    
-    // إذا كانت المحاولة الأخيرة، انتظر قليلاً قبل المحاولة التالية
-    if ($attempt < $maxAttempts) {
-        usleep(100000); // انتظر 0.1 ثانية
+} else {
+    error_log("Profile.php - No remember_token cookie found");
+}
+
+// إذا فشل التحميل المباشر، نحاول getUserFromToken() كبديل
+if (!$user || !isset($user['id']) || empty($user['id'])) {
+    error_log("Profile.php - Direct token load failed, trying getUserFromToken()...");
+    $user = getUserFromToken();
+    if ($user && isset($user['id']) && !empty($user['id'])) {
+        $currentUser = $user;
+        $userId = $user['id'];
+        error_log("Profile.php - Successfully loaded user from getUserFromToken()");
     }
 }
 
-// إذا فشلت جميع المحاولات
-if (!$currentUser || !isset($currentUser['id']) || empty($currentUser['id'])) {
-    // لا نعيد التوجيه - نعرض رسالة خطأ في الصفحة
-    $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى أو تحديث الصفحة.';
-    error_log("Profile page - Failed to load user after $maxAttempts attempts. Session user_id: " . ($_SESSION['user_id'] ?? 'not set'));
+// إذا فشل كل شيء، نحاول getCurrentUser() كحل أخير
+if (!$user || !isset($user['id']) || empty($user['id'])) {
+    error_log("Profile.php - getUserFromToken() also failed, trying getCurrentUser()...");
+    $user = getCurrentUser();
+    if ($user && isset($user['id']) && !empty($user['id'])) {
+        $currentUser = $user;
+        $userId = $user['id'];
+        error_log("Profile.php - Successfully loaded user from getCurrentUser()");
+    }
 }
 
-$db = db();
+// إذا فشل تحميل المستخدم بعد كل المحاولات
+if (!$user || !isset($user['id']) || empty($user['id'])) {
+    error_log("Profile.php - CRITICAL: All attempts to load user data failed. requireLogin() succeeded but user data cannot be loaded.");
+    $error = 'تعذر تحميل بيانات المستخدم. يرجى إعادة تحميل الصفحة أو تسجيل الخروج والدخول مرة أخرى.';
+}
+
+// ========================================
+// الحل 6: فحص حالة قاعدة البيانات
+// ========================================
+try {
+    $db = db();
+    
+    // التحقق من وجود الجدول
+    $tableExists = $db->queryOne("SHOW TABLES LIKE 'remember_tokens'");
+    if (!$tableExists) {
+        error_log("Profile.php - CRITICAL: remember_tokens table does not exist!");
+        die('خطأ في النظام: جدول الجلسات غير موجود');
+    }
+    
+    // التحقق من عدد السجلات النشطة
+    $activeTokens = $db->queryOne(
+        "SELECT COUNT(*) as count FROM remember_tokens WHERE expires_at > NOW()"
+    );
+    error_log("Profile.php - Active tokens in database: " . ($activeTokens['count'] ?? 0));
+    
+} catch (Exception $e) {
+    error_log("Profile.php - Database check failed: " . $e->getMessage());
+}
+
 $passwordMinLength = getPasswordMinLength();
 
 $profilePhotoSupported = false;
@@ -121,59 +228,18 @@ try {
     $profilePhotoSupported = false;
 }
 
-// الحصول على بيانات المستخدم الكاملة - حل محسّن للأجهزة الغريبة
-$user = null;
-
-if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
-    // محاولة الحصول على بيانات محدثة من قاعدة البيانات
-    try {
-        $user = getUserById($currentUser['id']);
-        // إذا لم يتم العثور على المستخدم من getUserById، استخدم $currentUser
-        if (!$user || !isset($user['id'])) {
-            $user = $currentUser;
-        }
-    } catch (Exception $e) {
-        error_log("Profile page - Error in getUserById: " . $e->getMessage());
-        // في حالة الخطأ، استخدم $currentUser
-        $user = $currentUser;
-    }
-} else {
-    // إذا لم يكن هناك currentUser، استخدم بيانات الجلسة
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            $user = getUserById($_SESSION['user_id']);
-            // إذا نجح التحميل، احفظه في $currentUser أيضاً
-            if ($user && isset($user['id'])) {
-                $currentUser = $user;
-            }
-        } catch (Exception $e) {
-            error_log("Profile page - Error loading user from session: " . $e->getMessage());
-        }
-    }
-}
-
-// إذا لم يتم تحميل المستخدم بعد، جرب مباشرة من قاعدة البيانات
-if (!$user || !isset($user['id'])) {
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            if (!isset($db)) {
-                $db = db();
-            }
-            $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
-            if ($user && isset($user['id'])) {
-                $currentUser = $user;
-            }
-        } catch (Exception $e) {
-            error_log("Profile page - Final fallback error: " . $e->getMessage());
-        }
-    }
-}
-
 // معالجة تحديث البروفايل
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
-    if ($action === 'update_profile') {
+        if ($action === 'update_profile') {
+        // إعادة تحميل بيانات المستخدم قبل المعالجة
+        if (!$user || !is_array($user) || !isset($user['id']) || empty($user['id'])) {
+            $user = getCurrentUser();
+            $currentUser = $user;
+            $userId = $user['id'] ?? null;
+        }
+        
         $fullName = trim($_POST['full_name'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
@@ -233,10 +299,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.';
         } else {
             // التحقق من البريد الإلكتروني إذا تغير
-            if (isset($user['email']) && $email !== $user['email']) {
+            if ($user && is_array($user) && isset($user['email']) && isset($user['id']) && $email !== $user['email']) {
                 $existingUser = getUserByUsername($email);
-                $userId = ($currentUser && isset($currentUser['id'])) ? $currentUser['id'] : ($user && isset($user['id']) ? $user['id'] : ($_SESSION['user_id'] ?? null));
-                if ($existingUser && $existingUser['id'] != $userId) {
+                $userId = ($currentUser && isset($currentUser['id'])) ? $currentUser['id'] : ($user && isset($user['id']) ? $user['id'] : null);
+                
+                // إذا لم نجد userId، حاول الحصول من remember_token
+                if (!$userId) {
+                    $tokenUser = getUserFromToken();
+                    $userId = $tokenUser['id'] ?? null;
+                }
+                if ($existingUser && isset($existingUser['id']) && $existingUser['id'] != $userId) {
                     $error = 'البريد الإلكتروني مستخدم بالفعل';
                 }
             }
@@ -249,8 +321,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $userId = $currentUser['id'];
                 } elseif ($user && isset($user['id'])) {
                     $userId = $user['id'];
-                } elseif (isset($_SESSION['user_id'])) {
-                    $userId = $_SESSION['user_id'];
+                } else {
+                    // محاولة الحصول على userId من remember_token
+                    $tokenUser = getUserFromToken();
+                    $userId = $tokenUser['id'] ?? null;
                 }
                 
                 if (!$userId) {
@@ -279,7 +353,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!empty($newPassword)) {
                         if (empty($currentPassword)) {
                             $error = 'يجب إدخال كلمة المرور الحالية';
-                        } elseif (!$user || !isset($user['password_hash']) || !verifyPassword($currentPassword, $user['password_hash'])) {
+                        } elseif (!$user || !is_array($user) || !isset($user['id'])) {
+                            $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.';
+                        } elseif (!isset($user['password_hash']) || !verifyPassword($currentPassword, $user['password_hash'])) {
                             $error = 'كلمة المرور الحالية غير صحيحة';
                         } elseif ($newPassword !== $confirmPassword) {
                             $error = 'كلمة المرور الجديدة غير متطابقة';
@@ -299,36 +375,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (empty($error)) {
                         logAudit($userId, 'update_profile', 'user', $userId, null, ['full_name' => $fullName, 'email' => $email]);
                         
-                    // إعادة تحميل بيانات المستخدم المحدثة من قاعدة البيانات
-                    $updatedUser = getUserById($userId);
-                    if ($updatedUser) {
-                        $user = $updatedUser;
-                        
-                        // تحديث بيانات الجلسة
-                        if (isset($user['username'])) {
-                            $_SESSION['username'] = $user['username'];
-                        }
-                        if (isset($user['id'])) {
-                            $_SESSION['user_id'] = $user['id'];
-                        }
-                        if (isset($user['role'])) {
-                            $_SESSION['role'] = $user['role'];
-                        }
-                        $_SESSION['logged_in'] = true;
-                    }
+                    // إعادة تحميل بيانات المستخدم المحدثة
+                    $user = getCurrentUser();
+                    $currentUser = $user;
                     
-                    $_SESSION['success_message'] = 'تم تحديث البروفايل بنجاح';
+                    // تم إزالة نظام الجلسات - استخدام query parameter للرسالة
+                    $successMessage = urlencode('تم تحديث البروفايل بنجاح');
+                    $redirectUrl = $_SERVER['PHP_SELF'] . '?success=' . $successMessage;
                     
                     // Redirect لتجنب إعادة إرسال الطلب
-                    header('Location: ' . $_SERVER['PHP_SELF']);
+                    header('Location: ' . $redirectUrl);
                     exit;
                     }
                 }
             }
         }
         if (!empty($error)) {
-            $_SESSION['error_message'] = $error;
-            header('Location: ' . $_SERVER['PHP_SELF']);
+            // تم إزالة نظام الجلسات - استخدام query parameter للرسالة
+            $errorMessage = urlencode($error);
+            $redirectUrl = $_SERVER['PHP_SELF'] . '?error=' . $errorMessage;
+            header('Location: ' . $redirectUrl);
             exit;
         }
     }
@@ -355,16 +421,16 @@ if (document.body) {
 
 <!-- القائمة الجانبية يتم تضمينها تلقائياً في header.php -->
 <?php
-// الحصول على role من $user أو $currentUser أو session
+// الحصول على role من $user أو $currentUser
 $userRole = null;
 if ($user && isset($user['role'])) {
     $userRole = $user['role'];
 } elseif ($currentUser && isset($currentUser['role'])) {
     $userRole = $currentUser['role'];
-} elseif (isset($_SESSION['role'])) {
-    $userRole = $_SESSION['role'];
 } else {
-    $userRole = 'accountant'; // قيمة افتراضية
+    // محاولة الحصول من remember_token
+    $tokenUser = getUserFromToken();
+    $userRole = $tokenUser['role'] ?? 'accountant';
 }
 
 $dashboardUrl = getDashboardUrl($userRole);
@@ -384,6 +450,32 @@ $dashboardUrl = getDashboardUrl($userRole);
     </div>
 <?php endif; ?>
 
+<?php
+// ========================================
+// الحل 3: إضافة زر للتحقق اليدوي
+// ========================================
+// في حالة فشل تحميل البيانات
+if (!empty($error) && (!$user || !isset($user['id']))): ?>
+<div class="alert alert-danger mb-4">
+    <h4><i class="bi bi-exclamation-triangle me-2"></i>مشكلة في تحميل البيانات</h4>
+    <p><?php echo $error; ?></p>
+    <div class="mt-3">
+        <a href="<?php echo $_SERVER['PHP_SELF']; ?>" class="btn btn-primary me-2">
+            <i class="bi bi-arrow-clockwise me-2"></i>إعادة المحاولة
+        </a>
+        <a href="logout.php" class="btn btn-secondary">
+            <i class="bi bi-box-arrow-right me-2"></i>تسجيل الخروج والدخول مرة أخرى
+        </a>
+    </div>
+</div>
+
+<!-- إيقاف عرض بقية الصفحة -->
+<?php 
+include __DIR__ . '/templates/footer.php';
+exit;
+?>
+<?php endif; ?>
+
 <?php if ($success): ?>
     <div class="alert alert-success alert-dismissible fade show mb-4">
         <i class="bi bi-check-circle-fill me-2"></i>
@@ -393,22 +485,14 @@ $dashboardUrl = getDashboardUrl($userRole);
 <?php endif; ?>
 
 <?php
-// التأكد من أن $user موجود قبل عرض النموذج
-if (!$user || !is_array($user) || !isset($user['id'])) {
-    // محاولة إعادة تحميل المستخدم
-    if (isset($_SESSION['user_id'])) {
-        $user = getUserById($_SESSION['user_id']);
+// التحقق من وجود بيانات المستخدم
+if (!$user || !is_array($user) || !isset($user['id']) || empty($user['id'])) {
+    if (empty($error)) {
+        // إذا لم يتم تحميل المستخدم، نعرض رسالة خطأ
+        $error = 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . htmlspecialchars($dashboardUrl) . '">العودة</a> والمحاولة مرة أخرى.';
     }
-    
-    // إذا استمرت المشكلة، عرض رسالة خطأ
-    if (!$user || !is_array($user) || !isset($user['id'])) {
-        echo '<div class="alert alert-danger">';
-        echo '<i class="bi bi-exclamation-triangle-fill me-2"></i>';
-        echo 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . htmlspecialchars($dashboardUrl) . '">العودة</a> والمحاولة مرة أخرى.';
-        echo '</div>';
-        include __DIR__ . '/templates/footer.php';
-        exit;
-    }
+    // لا نعرض الصفحة إذا لم يتم تحميل المستخدم
+    // سيتم إيقاف الصفحة في الكود أعلاه (السطر 415-434)
 }
 ?>
 
@@ -729,14 +813,19 @@ async function loadCredentials() {
             method: 'GET',
             credentials: 'same-origin',
             headers: {
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache'
             },
-            signal: controller.signal
+            signal: controller.signal,
+            cache: 'no-store'
         });
         
         clearTimeout(timeoutId);
         
         if (!response.ok) {
+            if (response.status === 401) {
+                throw new Error('انتهت جلسة العمل. يرجى إعادة تحميل الصفحة.');
+            }
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
@@ -835,17 +924,30 @@ async function loadCredentials() {
         const listContainer = document.getElementById('credentialsList');
         if (listContainer) {
             let errorMessage = 'خطأ في تحميل البصمات';
+            let showReloadButton = false;
             
             if (error.name === 'AbortError' || error.message.includes('aborted')) {
                 errorMessage = 'انتهت مهلة التحميل. يمكنك المحاولة مرة أخرى أو إضافة بصمة جديدة مباشرة.';
             } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
                 errorMessage += ': ' + error.message + '<br><small>يرجى التحقق من اتصال الإنترنت أو المسار الصحيح للـ API</small>';
+            } else if (error.message.includes('401') || error.message.includes('انتهت جلسة العمل') || error.message.includes('Unauthorized')) {
+                errorMessage = 'انتهت جلسة العمل. يرجى إعادة تحميل الصفحة.';
+                showReloadButton = true;
             } else {
                 errorMessage += ': ' + error.message;
             }
             
-            listContainer.innerHTML = 
-                '<div class="alert alert-warning"><i class="bi bi-info-circle me-2"></i>' + errorMessage + '</div>';
+            let errorHtml = '<div class="alert alert-warning"><i class="bi bi-info-circle me-2"></i>' + errorMessage;
+            
+            if (showReloadButton) {
+                errorHtml += '<br><br><button class="btn btn-sm btn-primary mt-2" onclick="window.location.reload()"><i class="bi bi-arrow-clockwise me-2"></i>إعادة تحميل الصفحة</button>';
+            } else {
+                errorHtml += '<br><br><button class="btn btn-sm btn-primary mt-2" onclick="loadCredentials()"><i class="bi bi-arrow-clockwise me-2"></i>إعادة المحاولة</button>';
+            }
+            
+            errorHtml += '</div>';
+            
+            listContainer.innerHTML = errorHtml;
         }
     }
 }
@@ -891,6 +993,7 @@ function initWebAuthn() {
         initWebAuthn();
     }
 })();
+
 
 // تسجيل بصمة جديدة - نظام جديد مبسط
 async function registerNewCredential() {
@@ -948,6 +1051,14 @@ async function registerNewCredential() {
         
         // معالجة أفضل للأخطاء على الموبايل
         let errorMessage = error.message || 'حدث خطأ أثناء تسجيل البصمة';
+        
+        // معالجة خاصة لخطأ 401 (انتهت الجلسة)
+        if (errorMessage.includes('انتهت جلسة العمل') || errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+            if (confirm('انتهت جلسة العمل. هل تريد إعادة تحميل الصفحة لتسجيل الدخول مرة أخرى؟')) {
+                window.location.reload();
+            }
+            return;
+        }
         
         // إذا كانت الرسالة تحتوي على نص عربي مفصل، استخدمها مباشرة
         if (errorMessage.includes('تم إلغاء العملية') || errorMessage.includes('تأكد من:')) {
@@ -1008,6 +1119,7 @@ async function deleteCredential(credentialId, deviceName) {
         
         const response = await fetch(apiPath, {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
@@ -1033,6 +1145,11 @@ async function deleteCredential(credentialId, deviceName) {
         console.error('Error deleting credential:', error);
         alert('خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
     }
+}
+
+// التأكد من أن الدوال متاحة في النطاق العام
+if (typeof window.loadCredentials === 'undefined') {
+    window.loadCredentials = loadCredentials;
 }
 
 // تحميل القائمة عند تحميل الصفحة

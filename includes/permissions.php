@@ -31,8 +31,8 @@ function hasPermission($permissionName, $userId = null) {
         $role = $user['role'];
     }
     
-    // المدير لديه جميع الصلاحيات
-    if ($role === 'manager') {
+    // المدير والمطور لديهم جميع الصلاحيات
+    if ($role === 'manager' || $role === 'developer') {
         return true;
     }
     

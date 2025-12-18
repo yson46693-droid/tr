@@ -103,7 +103,7 @@ if (!defined('VEHICLE_INVENTORY_AJAX')) {
 
 require_once __DIR__ . '/../../includes/path_helper.php';
 
-requireRole(['sales', 'accountant', 'production', 'manager']);
+requireRole(['sales', 'accountant', 'production', 'manager', 'developer']);
 
 $currentUser = getCurrentUser();
 $db = db();

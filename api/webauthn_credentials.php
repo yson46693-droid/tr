@@ -4,12 +4,50 @@
  */
 
 define('ACCESS_ALLOWED', true);
+// تعريف ثابت لمنع حذف الجلسة في webauthn_credentials API
+define('WEBAUTHN_API_ACTIVE', true);
+
+// التأكد من بدء الجلسة قبل أي شيء
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/path_helper.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/audit_log.php';
 
-requireLogin();
+// === التحقق من تسجيل الدخول - تحقق بسيط من $_SESSION فقط ===
+$isAuthenticated = false;
+$userId = null;
+
+// التأكد من أن الثابت معرّف
+if (!defined('WEBAUTHN_API_ACTIVE')) {
+    define('WEBAUTHN_API_ACTIVE', true);
+}
+
+// التحقق البسيط من $_SESSION مباشرة
+if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+    $userId = $_SESSION['user_id'];
+    $isAuthenticated = true;
+}
+
+// إذا فشلت جميع محاولات التحقق
+if (!$isAuthenticated || !$userId) {
+    header('Content-Type: application/json; charset=utf-8');
+    http_response_code(401);
+    echo json_encode([
+        'success' => false,
+        'error' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول',
+        'debug' => [
+            'session_id' => session_id(),
+            'session_user_id' => $_SESSION['user_id'] ?? 'not set',
+            'session_logged_in' => $_SESSION['logged_in'] ?? 'not set'
+        ]
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 header('Content-Type: application/json; charset=utf-8');
 // CORS headers
@@ -28,15 +66,27 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {
     try {
-        // الحصول على قائمة الاعتماديات للمستخدم
-        if (!isset($_SESSION['user_id'])) {
+        // === استخدام user_id من التحقق الأولي ===
+        // $userId تم تعيينه بالفعل في التحقق الأولي أعلاه
+        // إذا لم يكن موجوداً، هذا يعني أن التحقق فشل بالفعل وتم إرجاع 401
+        if (!$userId || empty($userId)) {
             http_response_code(401);
-            echo json_encode(['success' => false, 'error' => 'غير مصرح به']);
+            echo json_encode([
+                'success' => false,
+                'error' => 'غير مصرح به - تعذر تحميل بيانات المستخدم',
+                'debug' => [
+                    'session_user_id' => $_SESSION['user_id'] ?? 'not set',
+                    'session_logged_in' => $_SESSION['logged_in'] ?? 'not set',
+                    'session_id' => session_id()
+                ]
+            ], JSON_UNESCAPED_UNICODE);
             exit;
         }
         
-        $userId = $_SESSION['user_id'];
-        $db = db();
+        // التأكد من وجود اتصال بقاعدة البيانات
+        if (!isset($db)) {
+            $db = db();
+        }
         
         if (!$db) {
             throw new Exception('فشل الاتصال بقاعدة البيانات');
@@ -77,7 +127,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {
     
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'delete') {
     // حذف اعتماد محدد
-    $userId = $_SESSION['user_id'];
+    // $userId تم تعيينه بالفعل في التحقق الأولي أعلاه
+    if (!$userId || empty($userId)) {
+        http_response_code(401);
+        echo json_encode([
+            'success' => false,
+            'error' => 'غير مصرح به - تعذر تحميل بيانات المستخدم'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
     $credentialId = $_POST['credential_id'] ?? '';
     
     if (empty($credentialId)) {

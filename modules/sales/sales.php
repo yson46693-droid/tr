@@ -16,7 +16,7 @@ require_once __DIR__ . '/../../includes/product_name_helper.php';
 
 require_once __DIR__ . '/table_styles.php';
 
-requireRole(['sales', 'accountant', 'manager']);
+requireRole(['sales', 'accountant', 'manager', 'developer']);
 
 $currentUser = getCurrentUser();
 $db = db();

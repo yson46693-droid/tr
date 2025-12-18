@@ -93,6 +93,7 @@ function getBasePath() {
  * تضمن إرجاع مسار نسبي فقط بدون أي بروتوكول أو hostname أو منفذ
  */
 function getDashboardUrl($role = null) {
+    
     $base = getBasePath();
     
     // التأكد من أن base يبدأ بـ / أو يكون فارغاً

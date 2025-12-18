@@ -112,7 +112,7 @@ if (!function_exists('enforceTasksRetentionLimit')) {
     }
 }
 
-requireRole(['manager', 'accountant']);
+requireRole(['manager', 'accountant', 'developer']);
 
 $db = db();
 $currentUser = getCurrentUser();
@@ -253,8 +253,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $priority = in_array($priority, $allowedPriorities, true) ? $priority : 'normal';
         $dueDate = $_POST['due_date'] ?? '';
         $assignees = $_POST['assigned_to'] ?? [];
-        // الحصول على اسم المنتج من الحقل النصي إذا كان موجوداً، وإلا من القائمة المنسدلة
-        $productName = trim($_POST['product_name_custom'] ?? $_POST['product_name'] ?? '');
+        // الحصول على اسم المنتج من حقل الإدخال النصي
+        $productName = trim($_POST['product_name'] ?? '');
 
         $productQuantityInput = isset($_POST['product_quantity']) ? trim((string)$_POST['product_quantity']) : '';
         $productQuantity = null;
@@ -287,8 +287,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // تم ضبط رسالة الخطأ أعلاه (مثل التحقق من الكمية)
         } elseif (empty($assignees)) {
             $error = 'يجب اختيار عامل واحد على الأقل لاستلام المهمة.';
-        } elseif ($taskType === 'general' && $title === '') {
-            $error = 'يرجى إدخال عنوان للمهمة.';
         } elseif ($dueDate && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dueDate)) {
             $error = 'صيغة تاريخ الاستحقاق غير صحيحة.';
         } else {
@@ -337,16 +335,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($productName !== '') {
                     $templateName = trim($productName);
                     
-                    // أولاً: البحث عن القالب بالاسم في unified_product_templates
+                    // أولاً: البحث عن القالب بالاسم في unified_product_templates (النشطة أولاً)
                     try {
                         $unifiedCheck = $db->queryOne("SHOW TABLES LIKE 'unified_product_templates'");
                         if (!empty($unifiedCheck)) {
+                            // البحث في القوالب النشطة أولاً
                             $template = $db->queryOne(
                                 "SELECT id FROM unified_product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) AND status = 'active' LIMIT 1",
                                 [$templateName, $templateName]
                             );
                             if ($template) {
                                 $templateId = (int)$template['id'];
+                            } else {
+                                // إذا لم يُعثر عليه في النشطة، البحث في جميع القوالب (بما في ذلك غير النشطة)
+                                $template = $db->queryOne(
+                                    "SELECT id FROM unified_product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) LIMIT 1",
+                                    [$templateName, $templateName]
+                                );
+                                if ($template) {
+                                    $templateId = (int)$template['id'];
+                                }
                             }
                         }
                     } catch (Exception $e) {
@@ -358,12 +366,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         try {
                             $productTemplatesCheck = $db->queryOne("SHOW TABLES LIKE 'product_templates'");
                             if (!empty($productTemplatesCheck)) {
+                                // البحث في القوالب النشطة أولاً
                                 $template = $db->queryOne(
                                     "SELECT id FROM product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) AND status = 'active' LIMIT 1",
                                     [$templateName, $templateName]
                                 );
                                 if ($template) {
                                     $templateId = (int)$template['id'];
+                                } else {
+                                    // إذا لم يُعثر عليه في النشطة، البحث في جميع القوالب (بما في ذلك غير النشطة)
+                                    $template = $db->queryOne(
+                                        "SELECT id FROM product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) LIMIT 1",
+                                        [$templateName, $templateName]
+                                    );
+                                    if ($template) {
+                                        $templateId = (int)$template['id'];
+                                    }
                                 }
                             }
                         } catch (Exception $e) {
@@ -420,17 +438,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 // حفظ template_id و product_name و product_id - نفس طريقة customer_orders
-                if ($templateId) {
-                    // إذا وُجد template_id، حفظه مع product_name = NULL
-                    $columns[] = 'template_id';
-                    $values[] = $templateId;
-                    $placeholders[] = '?';
-                } elseif ($productName !== '') {
-                    // إذا لم يُعثر على template_id، حفظ product_name
-                    $columns[] = 'product_name';
-                    $values[] = $productName;
-                    $placeholders[] = '?';
-                }
+                // حفظ template_id (حتى لو كان null) لضمان حفظ product_name بشكل صحيح
+                // عندما template_id = null، يجب أن يتم حفظ product_name لضمان عرضه في الجدول
+                $columns[] = 'template_id';
+                $values[] = $templateId; // يمكن أن يكون null
+                $placeholders[] = '?';
+                
+                // حفظ product_name دائماً (حتى لو كان null أو فارغاً) لضمان الاتساق
+                // هذا يضمن عرض اسم القالب في الجدول حتى لو فشل JOIN مع جداول القوالب أو كان template_id = null
+                // نفس الطريقة المستخدمة في production/tasks.php (السطر 502-519)
+                // نحفظ product_name دائماً لضمان الاتساق بين قاعدة البيانات و audit log
+                $columns[] = 'product_name';
+                $values[] = ($productName !== '') ? $productName : null; // حفظ null إذا كان فارغاً
+                $placeholders[] = '?';
                 
                 // حفظ product_id إذا تم العثور عليه
                 if ($productId !== null && $productId > 0) {
@@ -1014,20 +1034,9 @@ try {
                         </div>
                         <div class="col-md-6" id="productFieldWrapper">
                             <label class="form-label">المنتج (اختياري)</label>
-                            <select class="form-select" name="product_name" id="productNameInput">
-                                <option value="">اختر من القوالب</option>
-                                <?php if (!empty($productTemplates)): ?>
-                                    <?php foreach ($productTemplates as $template): ?>
-                                        <option value="<?php echo htmlspecialchars($template['product_name'] ?? ''); ?>">
-                                            <?php echo htmlspecialchars($template['product_name'] ?? ''); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                                <option value="__custom__">-- إدخال منتج جديد --</option>
-                            </select>
-                            <input type="text" class="form-control mt-2" id="productNameCustomInput" name="product_name_custom" placeholder="أدخل اسم منتج جديد" style="display: none;">
+                            <input type="text" class="form-control" name="product_name" id="productNameInput" placeholder="أدخل اسم المنتج أو القالب">
                             <div class="form-text mt-2">
-                                <small class="text-muted">اختر من القوالب الموجودة أو اختر "إدخال منتج جديد" لإدخال منتج غير موجود في القوالب.</small>
+                                <small class="text-muted">أدخل اسم المنتج أو القالب المراد إنتاجه.</small>
                             </div>
                         </div>
                         <div class="col-md-6" id="quantityFieldWrapper">
@@ -1184,41 +1193,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (taskTypeSelect) {
         taskTypeSelect.addEventListener('change', updateTaskTypeUI);
         
-        // التعامل مع قائمة المنتجات
-        const productNameSelect = document.getElementById('productNameInput');
-        const productNameCustomInput = document.getElementById('productNameCustomInput');
-        
-        if (productNameSelect && productNameCustomInput) {
-            productNameSelect.addEventListener('change', function() {
-                if (this.value === '__custom__') {
-                    // إظهار حقل الإدخال النصي وإخفاء القائمة المنسدلة
-                    productNameCustomInput.style.display = 'block';
-                    productNameCustomInput.required = true;
-                    productNameSelect.name = ''; // إزالة name من select
-                    productNameCustomInput.name = 'product_name'; // إضافة name للحقل النصي
-                    productNameCustomInput.focus();
-                } else {
-                    // إخفاء حقل الإدخال النصي وإظهار القائمة المنسدلة
-                    productNameCustomInput.style.display = 'none';
-                    productNameCustomInput.required = false;
-                    productNameSelect.name = 'product_name'; // إضافة name للselect
-                    productNameCustomInput.name = 'product_name_custom'; // إزالة name من الحقل النصي
-                }
-            });
-            
-            // عند إرسال النموذج، تأكد من استخدام القيمة الصحيحة
-            const taskForm = productNameSelect.closest('form');
-            if (taskForm) {
-                taskForm.addEventListener('submit', function(e) {
-                    if (productNameSelect.value === '__custom__' && !productNameCustomInput.value.trim()) {
-                        e.preventDefault();
-                        alert('يرجى إدخال اسم المنتج');
-                        productNameCustomInput.focus();
-                        return false;
-                    }
-                });
-            }
-        }
+        // لا حاجة لمعالجة خاصة بحقل المنتج - الآن حقل نصي بسيط
     }
     updateTaskTypeUI();
 });

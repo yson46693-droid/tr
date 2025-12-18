@@ -19,7 +19,7 @@ require_once __DIR__ . '/../../includes/consumption_reports.php';
 require_once __DIR__ . '/../../includes/production_helper.php';
 require_once __DIR__ . '/../../includes/honey_varieties.php';
 
-requireRole(['production', 'accountant', 'manager']);
+requireRole(['production', 'accountant', 'manager', 'developer']);
 
 $currentUser = getCurrentUser();
 $db = db();
@@ -4504,7 +4504,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 // إذا كان المستخدم مدير، أضفه مباشرة (المدير لا يحتاج لتسجيل حضور)
-                if ($currentUser['role'] === 'manager') {
+                if (in_array($currentUser['role'] ?? '', ['manager', 'developer'], true)) {
                     if (!in_array($selectedUserId, $workersList, true)) {
                         $workersList[] = $selectedUserId;
                     }
@@ -6516,8 +6516,8 @@ $lang = isset($translations) ? $translations : [];
     $reportsSection = $_GET['section'] ?? '';
     $currentPage = $_GET['page'] ?? '';
     $isReportsMode = $isReportsMode 
-        || ($reportsSection === 'reports' && ($currentUser['role'] ?? '') === 'manager')
-        || ($currentPage === 'reports' && ($currentUser['role'] ?? '') === 'manager');
+        || ($reportsSection === 'reports' && in_array($currentUser['role'] ?? '', ['manager', 'developer'], true))
+        || ($currentPage === 'reports' && in_array($currentUser['role'] ?? '', ['manager', 'developer'], true));
     ?>
     
     <?php if (!$isReportsMode): ?>
@@ -6829,7 +6829,7 @@ $lang = isset($translations) ? $translations : [];
                     <?php echo number_format($totalSpecificationsCount); ?>
                     مواصفة
                 </span>
-                <?php if (($currentUser['role'] ?? '') === 'manager'): ?>
+                <?php if (in_array($currentUser['role'] ?? '', ['manager', 'developer'], true)): ?>
                     <a href="<?php echo getDashboardUrl('manager'); ?>?page=product_templates&section=specifications" class="btn btn-light btn-sm">
                         <i class="bi bi-gear me-1"></i>إدارة المواصفات
                     </a>
@@ -6939,7 +6939,7 @@ $lang = isset($translations) ? $translations : [];
     <div class="card shadow-sm mb-4">
         <div class="card-body">
             <form method="get" class="row g-3 align-items-end" action="<?php echo htmlspecialchars(getDashboardUrl($currentUser['role'] ?? 'production')); ?>">
-                <?php if (($currentUser['role'] ?? '') === 'manager'): ?>
+                <?php if (in_array($currentUser['role'] ?? '', ['manager', 'developer'], true)): ?>
                     <input type="hidden" name="page" value="reports">
                 <?php else: ?>
                     <input type="hidden" name="page" value="production">

@@ -21,7 +21,7 @@ if (file_exists(__DIR__ . '/../../includes/cache.php')) {
     require_once __DIR__ . '/../../includes/cache.php';
 }
 
-requireRole(['accountant', 'manager']);
+requireRole(['accountant', 'manager', 'developer']);
 
 $currentUser = getCurrentUser();
 $db = db();

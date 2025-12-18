@@ -11,26 +11,10 @@ if (!defined('ACCESS_ALLOWED')) {
 }
 
 /**
- * تحسين دالة التحقق من CSRF - متوافقة مع النظام الحالي
- * تستخدم نفس النظام الموجود في auth.php
- * محسّنة لدعم إعادة توليد الجلسة (session regeneration)
+ * تحسين دالة التحقق من CSRF - يعمل بدون جلسات
+ * تستخدم cookies بدلاً من الجلسات
  */
 function verifyCSRFTokenEnhanced($token = null, $allowPreviousToken = true) {
-    // التأكد من أن الجلسة نشطة
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        // محاولة بدء الجلسة إذا لم تكن قد بدأت
-        if (!headers_sent()) {
-            @session_start();
-        } else {
-            return false;
-        }
-    }
-    
-    // التأكد من وجود $_SESSION
-    if (!isset($_SESSION) || !is_array($_SESSION)) {
-        return false;
-    }
-    
     // إذا لم يتم تمرير token، احصل عليه من POST أو GET
     if ($token === null) {
         $token = $_POST['csrf_token'] ?? $_GET['csrf_token'] ?? null;
@@ -47,94 +31,60 @@ function verifyCSRFTokenEnhanced($token = null, $allowPreviousToken = true) {
         return false;
     }
     
-    // التحقق من وجود token في الجلسة (الحالي أو السابق)
-    $currentToken = isset($_SESSION['csrf_token']) ? trim((string)$_SESSION['csrf_token']) : '';
-    $previousToken = isset($_SESSION['csrf_token_previous']) ? trim((string)$_SESSION['csrf_token_previous']) : '';
+    // التحقق من وجود token في cookie
+    $cookieName = 'csrf_token';
+    $currentToken = isset($_COOKIE[$cookieName]) ? trim((string)$_COOKIE[$cookieName]) : '';
     
-    // إذا لم يكن هناك token في الجلسة، إنشاء واحد جديد (للمحاولة الأولى فقط)
+    // إذا لم يكن هناك token في cookie، فشل التحقق
     if (empty($currentToken)) {
-        // هذا غير طبيعي - يجب أن يكون هناك token دائماً
-        error_log("CSRF: No token in session, generating new one");
-        if (function_exists('generateCSRFToken')) {
-            generateCSRFToken(true);
-            $currentToken = isset($_SESSION['csrf_token']) ? trim((string)$_SESSION['csrf_token']) : '';
-        } else {
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-            $currentToken = trim((string)$_SESSION['csrf_token']);
-        }
-        
-        // التحقق مع token الجديد
-        if (!empty($currentToken) && hash_equals($currentToken, $token)) {
-            return true;
-        }
-        
-        // حتى مع token جديد، يجب أن يطابق token الطلب
+        error_log("CSRF: No token in cookie");
         return false;
     }
     
-    // التحقق من token الحالي أولاً
+    // التحقق من token
     if (!empty($currentToken) && hash_equals($currentToken, $token)) {
         return true;
     }
     
-    // إذا فشل التحقق مع token الحالي، جرب token السابق (مفيد عند إعادة توليد الجلسة)
-    if ($allowPreviousToken && !empty($previousToken)) {
-        // التحقق من أن token السابق لم ينته صلاحيته (5 دقائق)
-        $previousTokenTime = isset($_SESSION['csrf_token_previous_time']) ? (int)$_SESSION['csrf_token_previous_time'] : 0;
-        $tokenAge = time() - $previousTokenTime;
-        
-        if ($tokenAge <= 300 && hash_equals($previousToken, $token)) { // 300 ثانية = 5 دقائق
-            // تم استخدام token سابق - نجح التحقق
-            // نحتفظ بالـ token السابق لمدة قصيرة للسماح بالطلبات المتعددة في نفس العملية
-            // سيتم حذفه تلقائياً بعد 5 دقائق أو في generateCSRFToken
-            error_log("CSRF: Validated using previous token (session regeneration detected, age: {$tokenAge}s)");
-            return true;
-        } elseif ($tokenAge > 300) {
-            // token السابق قديم جداً - حذفه
-            unset($_SESSION['csrf_token_previous']);
-            unset($_SESSION['csrf_token_previous_time']);
-        }
-    }
-    
-    // فشل التحقق - تسجيل معلومات للتشخيص
-    $sessionTokenLength = strlen($currentToken);
-    $requestTokenLength = strlen($token);
-    $tokenMatches = ($currentToken === $token); // للتحقق بدون hash_equals
-    
-    error_log("CSRF: Token verification failed. Current token length: {$sessionTokenLength}, Request token length: {$requestTokenLength}, Direct match: " . ($tokenMatches ? 'yes' : 'no') . ", Previous token exists: " . (!empty($previousToken) ? 'yes' : 'no'));
+    // فشل التحقق
+    error_log("CSRF: Token verification failed. Cookie token length: " . strlen($currentToken) . ", Request token length: " . strlen($token));
     
     return false;
 }
 
 /**
- * الحصول على CSRF Token - متوافق مع النظام الحالي
+ * الحصول على CSRF Token - يعمل بدون جلسات
  */
 function getCSRFToken() {
-    // التأكد من أن الجلسة نشطة
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        if (!headers_sent()) {
-            @session_start();
-        } else {
-            return '';
-        }
-    }
-    
-    // التأكد من وجود $_SESSION
-    if (!isset($_SESSION) || !is_array($_SESSION)) {
-        return '';
-    }
-    
     // استخدام الدالة الموجودة في auth.php إذا كانت متاحة
     if (function_exists('generateCSRFToken')) {
         return generateCSRFToken();
     }
     
     // Fallback: إنشاء token جديد
-    if (!isset($_SESSION['csrf_token']) || empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    $cookieName = 'csrf_token';
+    $isHttps = (
+        (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+        (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
+    );
+    
+    $token = bin2hex(random_bytes(32));
+    
+    // التحقق من أن headers لم يتم إرسالها بعد
+    if (!headers_sent()) {
+        setcookie($cookieName, $token, [
+            'expires' => time() + 3600,
+            'path' => '/',
+            'domain' => '',
+            'secure' => $isHttps,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
     }
     
-    return $_SESSION['csrf_token'];
+    $_COOKIE[$cookieName] = $token;
+    
+    return $token;
 }
 
 /**
@@ -171,33 +121,16 @@ function protectFormFromCSRF() {
             return true;
         }
         
-        // التحقق من أن الجلسة نشطة
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            // محاولة بدء الجلسة
-            if (!headers_sent()) {
-                @session_start();
-            } else {
-                // إذا تم إرسال headers، لا يمكن التحقق من CSRF
-                error_log("CSRF: Cannot start session - headers already sent");
-                return false;
-            }
-        }
-        
-        // التأكد من وجود $_SESSION
-        if (!isset($_SESSION) || !is_array($_SESSION)) {
-            error_log("CSRF: Session array not available");
-            return false;
-        }
-        
-        // التأكد من وجود CSRF token في الجلسة قبل التحقق
-        if (!isset($_SESSION['csrf_token']) || empty($_SESSION['csrf_token'])) {
+        // تم إزالة نظام الجلسات - التحقق من وجود CSRF token في cookie
+        $cookieName = 'csrf_token';
+        if (!isset($_COOKIE[$cookieName]) || empty($_COOKIE[$cookieName])) {
             // إنشاء token جديد إذا لم يكن موجوداً
             if (function_exists('generateCSRFToken')) {
                 generateCSRFToken(true);
             } else {
-                $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+                getCSRFToken();
             }
-            error_log("CSRF: Generated new token for session");
+            error_log("CSRF: Generated new token in cookie");
         }
         
         // التحقق من CSRF Token
@@ -210,45 +143,33 @@ function protectFormFromCSRF() {
             $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
             $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
             $hasTokenInPost = isset($_POST['csrf_token']) && !empty($_POST['csrf_token']);
-            $hasTokenInSession = isset($_SESSION['csrf_token']) && !empty($_SESSION['csrf_token']);
-            $hasPreviousToken = isset($_SESSION['csrf_token_previous']) && !empty($_SESSION['csrf_token_previous']);
-            $sessionId = session_id();
+            $hasTokenInCookie = isset($_COOKIE['csrf_token']) && !empty($_COOKIE['csrf_token']);
             
             $logMessage = sprintf(
-                "CSRF Validation Failed - IP: %s, UserAgent: %s, HasTokenInPost: %s, HasTokenInSession: %s, HasPreviousToken: %s, SessionID: %s, IsLoginRequest: %s",
+                "CSRF Validation Failed - IP: %s, UserAgent: %s, HasTokenInPost: %s, HasTokenInCookie: %s, IsLoginRequest: %s",
                 $ipAddress,
                 $userAgent,
                 ($hasTokenInPost ? 'yes' : 'no'),
-                ($hasTokenInSession ? 'yes' : 'no'),
-                ($hasPreviousToken ? 'yes' : 'no'),
-                $sessionId,
+                ($hasTokenInCookie ? 'yes' : 'no'),
                 ($isLoginRequest ? 'yes' : 'no')
             );
             
             error_log($logMessage);
             
             // لطلبات تسجيل الدخول، نسمح بتجاوز التحقق إذا كان هناك token في الطلب
-            // لأن session_regenerate_id() سيتم استدعاؤه في login() مما يغير token
             if ($isLoginRequest && $hasTokenInPost) {
-                // لطلبات تسجيل الدخول مع token، نسمح بتجاوز التحقق
-                error_log("CSRF: Allowing login request to proceed despite validation failure (session regeneration will occur)");
+                error_log("CSRF: Allowing login request to proceed despite validation failure");
                 return true; // نسمح للمتابعة
             }
             
             // فقط في حالة عدم كونها طلب تسجيل دخول أو في حالة عدم وجود token نهائياً
-            if (!$isLoginRequest || (!$hasTokenInPost && !$hasTokenInSession)) {
+            if (!$isLoginRequest || (!$hasTokenInPost && !$hasTokenInCookie)) {
                 http_response_code(403);
                 die('خطأ في التحقق الأمني. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
             }
             
             // لطلبات تسجيل الدخول بدون token، نعيد false للسماح للمعالج الأعلى بالتعامل معها
             return false;
-        }
-        
-        // بعد التحقق الناجح، تنظيف token السابق إذا كان موجوداً (استخدام مرة واحدة)
-        if (isset($_SESSION['csrf_token_previous']) && $allowPreviousToken) {
-            // نترك token السابق للسماح بمحاولات متعددة في نفس الطلب
-            // سيتم حذفه في verifyCSRFTokenEnhanced عند الاستخدام
         }
     }
     

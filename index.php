@@ -203,7 +203,21 @@ if (preg_match('/[?&](_nocache|_refresh|_cache_bust|_t|_r|_auto_refresh)=\d+/', 
             exit;
         } elseif ($requestUri !== $cleanUri) {
             $escapedUrl = htmlspecialchars($cleanUri, ENT_QUOTES, 'UTF-8');
-            echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
+            echo '<script>';
+            echo 'try {';
+            echo '  var cleanUri = ' . json_encode($cleanUri, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
+            echo '  // تنظيف URL لضمان أنه مسار نسبي فقط';
+            echo '  cleanUri = cleanUri.replace(/^https?:\\/\\//i, "");';
+            echo '  cleanUri = cleanUri.replace(/^\\/\\/+/, "/");';
+            echo '  cleanUri = cleanUri.replace(/^[^\\/]+:[0-9]+\\//, "/");';
+            echo '  if (!cleanUri.startsWith("/")) cleanUri = "/" + cleanUri;';
+            echo '  cleanUri = cleanUri.replace(/\\/+/g, "/");';
+            echo '  window.location.replace(cleanUri);';
+            echo '} catch(e) {';
+            echo '  console.error("Redirect error:", e);';
+            echo '  window.location.href = "/index.php";';
+            echo '}';
+            echo '</script>';
             echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
             exit;
         }
@@ -350,7 +364,21 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
         exit;
     } else {
         $escapedUrl = htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8');
-        echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
+        echo '<script>';
+        echo 'try {';
+        echo '  var dashboardUrl = ' . json_encode($dashboardUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
+        echo '  // تنظيف URL لضمان أنه مسار نسبي فقط';
+        echo '  dashboardUrl = dashboardUrl.replace(/^https?:\\/\\//i, "");';
+        echo '  dashboardUrl = dashboardUrl.replace(/^\\/\\/+/, "/");';
+        echo '  dashboardUrl = dashboardUrl.replace(/^[^\\/]+:[0-9]+\\//, "/");';
+        echo '  if (!dashboardUrl.startsWith("/")) dashboardUrl = "/" + dashboardUrl;';
+        echo '  dashboardUrl = dashboardUrl.replace(/\\/+/g, "/");';
+        echo '  window.location.replace(dashboardUrl);';
+        echo '} catch(e) {';
+        echo '  console.error("Redirect error:", e);';
+        echo '  window.location.href = "/dashboard/accountant.php";';
+        echo '}';
+        echo '</script>';
         echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
         exit;
     }
@@ -369,69 +397,42 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
         // حذف الجلسة القديمة من قاعدة البيانات أولاً
         try {
             require_once __DIR__ . '/includes/db.php';
-            require_once __DIR__ . '/includes/auth.php';
-            $db = db();
-            $userId = $_SESSION['user_id'] ?? 0;
-            $oldSessionId = session_id();
-            
-            if ($userId > 0 && ensureSessionsTable()) {
-                // حذف جميع الجلسات للمستخدم (لتأكيد حذف الجلسة القديمة)
-                $db->execute("DELETE FROM sessions WHERE user_id = ?", [$userId]);
-                // تعطيل التسجيل لتقليل الضغط على السيرفر
-                // error_log("Login from new device: All sessions deleted for user_id: {$userId}");
-            }
+            // تم إزالة نظام الجلسات - لا حاجة لأي كود متعلق بالجلسات
         } catch (Exception $e) {
             // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
-            // error_log("Login from new device: Error deleting old session: " . $e->getMessage());
         }
-        
-        // حذف الجلسة PHP الحالية بشكل كامل
-        $sessionName = session_name();
-        
-        // حذف جميع بيانات الجلسة
-        $_SESSION = [];
-        @session_unset();
-        @session_destroy();
-        
-        // حذف session cookie من جميع المسارات
-        if (isset($_COOKIE[$sessionName])) {
-            setcookie($sessionName, '', time() - 3600, '/');
-            setcookie($sessionName, '', time() - 3600, '/', '');
-            unset($_COOKIE[$sessionName]);
-        }
-        
-        // التأكد من إنشاء جلسة جديدة تماماً (سيتم ذلك في login())
-        // تعطيل التسجيل لتقليل الضغط على السيرفر
-        // error_log("Login from new device: Old session completely cleared, allowing new login for: {$loginUsername}");
     } else {
-        // محاولة تسجيل دخول بحساب مختلف - منع ذلك وإعادة التوجيه
-        $userRole = $_SESSION['role'] ?? 'accountant';
-        $basePath = getBasePath();
-        $basePath = rtrim($basePath, '/');
-        $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
-        $dashboardUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $dashboardUrl);
-        if (strpos($dashboardUrl, '/') !== 0) {
-            $dashboardUrl = '/' . $dashboardUrl;
-        }
-        
-        // إرجاع رسالة خطأ
-        if (isset($_POST['ajax_login']) && $_POST['ajax_login'] == '1') {
-            while (ob_get_level() > 0) {
-                ob_end_clean();
+        // محاولة تسجيل دخول بحساب مختلف - التحقق من remember_token
+        $currentUser = getCurrentUser();
+        if ($currentUser) {
+            $userRole = $currentUser['role'] ?? 'accountant';
+            $basePath = getBasePath();
+            $basePath = rtrim($basePath, '/');
+            $dashboardUrl = (!empty($basePath) ? $basePath : '') . '/dashboard/' . $userRole . '.php';
+            $dashboardUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $dashboardUrl);
+            if (strpos($dashboardUrl, '/') !== 0) {
+                $dashboardUrl = '/' . $dashboardUrl;
             }
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode([
-                'success' => false,
-                'message' => 'يوجد جلسة نشطة لحساب آخر. يرجى تسجيل الخروج أولاً.',
-                'redirect_url' => $dashboardUrl
-            ], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        
-        // إعادة التوجيه إلى الداشبورد
-        if (!headers_sent()) {
-            header('Location: ' . $dashboardUrl, true, 303);
-            exit;
+            
+            // إرجاع رسالة خطأ
+            if (isset($_POST['ajax_login']) && $_POST['ajax_login'] == '1') {
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'يوجد حساب نشط آخر. يرجى تسجيل الخروج أولاً.',
+                    'redirect_url' => $dashboardUrl
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            
+            // إعادة التوجيه إلى الداشبورد
+            if (!headers_sent()) {
+                header('Location: ' . $dashboardUrl, true, 303);
+                exit;
+            }
         }
     }
 }
@@ -439,12 +440,11 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
 $error = '';
 $success = '';
 
-// التحقق من وجود رسالة خطأ الجلسة من requireLogin()
-if (isset($_SESSION['session_error']) && !empty($_SESSION['session_error'])) {
-    $error = $_SESSION['session_error'];
-    unset($_SESSION['session_error']);
-    unset($_SESSION['session_failed']);
-}
+// تم إزالة نظام الجلسات - لا حاجة لرسائل الجلسة
+// يمكن استخدام query parameters أو cookies للرسائل إذا لزم الأمر
+
+// التحقق من وجود session_expired في sessionStorage (من JavaScript redirect)
+// سيتم عرض الرسالة في JavaScript
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = $_POST['username'] ?? '';
@@ -522,119 +522,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             // error_log("Rate limiter reset error: " . $e->getMessage());
                         }
                     }
-                    // تجديد معرف الجلسة
-                    if (function_exists('regenerateSessionAfterLogin')) {
-                        regenerateSessionAfterLogin();
-                    }
-                    
+                    // تم إزالة نظام الجلسات - النظام يعتمد فقط على remember_token
                     $userRole = $result['user']['role'] ?? 'accountant';
                     
                     // استخدام دالة getDashboardUrl() للحصول على المسار الصحيح
                     if (!function_exists('getDashboardUrl')) {
                         require_once __DIR__ . '/includes/path_helper.php';
-                    }
-                    
-                    // التأكد من أن الجلسة محفوظة في قاعدة البيانات قبل إعادة التوجيه
-                    $sessionId = session_id();
-                    $userId = $_SESSION['user_id'] ?? 0;
-                    if ($sessionId && $userId > 0) {
-                        try {
-                            $db = db();
-                            // التحقق من وجود الجلسة في قاعدة البيانات مع إعادة المحاولة
-                            // البحث بدون شرط expires_at - لا نهي الجلسة أبداً بناءً على الخمول
-                            $maxRetries = 5;
-                            $sessionCheck = null;
-                            for ($retry = 0; $retry < $maxRetries; $retry++) {
-                                $sessionCheck = $db->queryOne(
-                                    "SELECT * FROM sessions WHERE user_id = ? AND session_id = ?",
-                                    [$userId, $sessionId]
-                                );
-                                
-                                if ($sessionCheck) {
-                                    // إذا وُجدت الجلسة لكنها منتهية الصلاحية، نمددها دائماً (لا نهي الجلسة أبداً)
-                                    if (strtotime($sessionCheck['expires_at']) < time()) {
-                                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                                        $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                                        $db->execute(
-                                            "UPDATE sessions SET expires_at = ?, last_activity = NOW() WHERE id = ?",
-                                            [$newExpiresAt, $sessionCheck['id']]
-                                        );
-                                        $sessionCheck['expires_at'] = $newExpiresAt;
-                                        // تعطيل التسجيل لتقليل الضغط على السيرفر
-                                        // error_log("Login: Session expired but extended for user_id: {$userId}");
-                                    } else {
-                                        // تحديث expires_at دائماً لضمان بقاء الجلسة صالحة - لا نهي الجلسة أبداً بناءً على الخمول
-                                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                                        $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                                        $db->execute(
-                                            "UPDATE sessions SET expires_at = ?, last_activity = NOW() WHERE id = ?",
-                                            [$newExpiresAt, $sessionCheck['id']]
-                                        );
-                                    }
-                                    break; // الجلسة موجودة، توقف عن إعادة المحاولة
-                                }
-                                
-                                if ($retry < $maxRetries - 1) {
-                                    // انتظار قصير قبل إعادة المحاولة
-                                    usleep(100000); // 0.1 ثانية
-                                    // تعطيل التسجيل لتقليل الضغط على السيرفر
-                                    // error_log("Login: Retry {$retry} - Session not found in DB before redirect, waiting...");
-                                }
-                            }
-                            
-                            if ($sessionCheck) {
-                                // تعطيل التسجيل لتقليل الضغط على السيرفر
-                                // error_log("Login: Session verified in database before redirect");
-                            } else {
-                                // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
-                                // error_log("Login ERROR: Session not found in database after {$maxRetries} retries before redirect");
-                                // محاولة إعادة حفظ الجلسة كحل أخير
-                                try {
-                                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                                    $expiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                                    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-                                    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
-                                    
-                                    $db->execute(
-                                        "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                                         VALUES (?, ?, ?, ?, ?, NOW())
-                                         ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?",
-                                        [$userId, $sessionId, $ipAddress, $userAgent, $expiresAt, $expiresAt]
-                                    );
-                                    // تعطيل التسجيل لتقليل الضغط على السيرفر
-                                    // error_log("Login: Re-saved session to database as last resort");
-                                } catch (Exception $saveError) {
-                                    // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
-                                    // error_log("Login ERROR: Failed to re-save session: " . $saveError->getMessage());
-                                }
-                            }
-                        } catch (Exception $e) {
-                            // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
-                            // error_log("Login: Error checking session before redirect: " . $e->getMessage());
-                        }
-                    }
-                    
-                    // التأكد من أن session cookie موجود في $_COOKIE
-                    $sessionName = session_name();
-                    if (!isset($_COOKIE[$sessionName]) || $_COOKIE[$sessionName] !== $sessionId) {
-                        // تعطيل التسجيل لتقليل الضغط على السيرفر
-                        // error_log("Login WARNING: Session cookie mismatch - setting cookie again");
-                        if (!headers_sent()) {
-                            $isHttps = (
-                                (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-                                (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
-                            );
-                            $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                            setcookie($sessionName, $sessionId, [
-                                'expires' => time() + $sessionLifetime,
-                                'path' => '/',
-                                'domain' => '',
-                                'secure' => $isHttps,
-                                'httponly' => true,
-                                'samesite' => $isHttps ? 'None' : 'Lax',
-                            ]);
-                            $_COOKIE[$sessionName] = $sessionId;
-                        }
                     }
                     
                     $dashboardUrl = getDashboardUrl($userRole);
@@ -693,9 +586,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         exit;
                     } else {
                         // إذا كانت headers قد أُرسلت، استخدم JavaScript redirect
+                        // تنظيف URL لضمان أنه مسار نسبي فقط لمنع ERR_FAILED
                         $escapedUrl = htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8');
                         echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Redirecting...</title>';
-                        echo '<script>window.location.replace("' . $escapedUrl . '");</script>';
+                        echo '<script>';
+                        echo 'try {';
+                        echo '  var dashboardUrl = ' . json_encode($dashboardUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
+                        echo '  // تنظيف URL لضمان أنه مسار نسبي فقط';
+                        echo '  dashboardUrl = dashboardUrl.replace(/^https?:\\/\\//i, "");';
+                        echo '  dashboardUrl = dashboardUrl.replace(/^\\/\\/+/, "/");';
+                        echo '  dashboardUrl = dashboardUrl.replace(/^[^\\/]+:[0-9]+\\//, "/");';
+                        echo '  if (!dashboardUrl.startsWith("/")) dashboardUrl = "/" + dashboardUrl;';
+                        echo '  dashboardUrl = dashboardUrl.replace(/\\/+/g, "/");';
+                        echo '  window.location.replace(dashboardUrl);';
+                        echo '} catch(e) {';
+                        echo '  console.error("Redirect error:", e);';
+                        echo '  window.location.href = "/dashboard/accountant.php";';
+                        echo '}';
+                        echo '</script>';
                         echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
                         echo '</head><body><p>جاري التحويل... <a href="' . $escapedUrl . '">اضغط هنا إذا لم يتم التحويل تلقائياً</a></p></body></html>';
                         exit;
@@ -994,12 +902,19 @@ $lang = $translations;
                         </div>
                         
                         <?php if ($error): ?>
-                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <div class="alert alert-warning alert-dismissible fade show" role="alert" id="sessionErrorAlert">
                                 <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                                <?php echo htmlspecialchars($error); ?>
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                <strong>تنبيه:</strong> <?php echo htmlspecialchars($error); ?>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button>
                             </div>
                         <?php endif; ?>
+                        
+                        <!-- رسالة تنبيه من JavaScript (عند ERR_FAILED أو أخطاء الاتصال) -->
+                        <div class="alert alert-warning alert-dismissible fade show d-none" role="alert" id="jsSessionErrorAlert">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>تنبيه:</strong> <span id="jsSessionErrorText">انتهت الجلسة أو حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.</span>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
                         
                         <?php if ($success): ?>
                             <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -1297,6 +1212,34 @@ $lang = $translations;
             }
         })();
         
+        // التحقق من رسائل الخطأ من sessionStorage (عند إعادة التوجيه من JavaScript)
+        (function() {
+            try {
+                const sessionExpired = sessionStorage.getItem('session_expired');
+                const redirectReason = sessionStorage.getItem('redirect_reason');
+                
+                if (sessionExpired === 'true') {
+                    // إظهار رسالة التنبيه
+                    const alertElement = document.getElementById('jsSessionErrorAlert');
+                    const errorTextElement = document.getElementById('jsSessionErrorText');
+                    
+                    if (alertElement && errorTextElement) {
+                        if (redirectReason) {
+                            errorTextElement.textContent = redirectReason;
+                        }
+                        alertElement.classList.remove('d-none');
+                        alertElement.classList.add('show');
+                        
+                        // إزالة العناصر من sessionStorage بعد عرضها
+                        sessionStorage.removeItem('session_expired');
+                        sessionStorage.removeItem('redirect_reason');
+                    }
+                }
+            } catch (e) {
+                // تجاهل الأخطاء في sessionStorage (مثلاً في وضع الخصوصية)
+            }
+        })();
+        
         // إظهار/إخفاء كلمة المرور
         document.getElementById('togglePassword')?.addEventListener('click', function() {
             const passwordInput = document.getElementById('password');
@@ -1339,53 +1282,83 @@ $lang = $translations;
          * تضمن إرجاع مسار نسبي فقط لمنع خطأ ERR_FAILED
          * مهم: لا تزيل /dashboard/ من المسار
          */
+        // دالة مساعدة لإنشاء AbortSignal مع timeout
+        function createTimeoutSignal(timeoutMs) {
+            if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+                return AbortSignal.timeout(timeoutMs);
+            }
+            // Fallback للمتصفحات القديمة
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), timeoutMs);
+            return controller.signal;
+        }
+        
         function cleanUrl(url) {
             if (!url || typeof url !== 'string') {
                 return '/';
             }
             
-            // حفظ المسار الأصلي للتحقق لاحقاً
-            const originalUrl = url;
-            
-            // إزالة أي بروتوكول (http:// أو https://)
-            url = url.replace(/^https?:\/\//i, '');
-            
-            // إزالة // المكررة من البداية (لكن احتفظ بـ / الأولى)
-            url = url.replace(/^\/\/+/, '/');
-            
-            // إزالة hostname مع منفذ إذا كان موجوداً (مثل localhost:8000/)
-            // لكن فقط إذا كان قبل المسار الفعلي
-            url = url.replace(/^[^\/]+:[0-9]+\//, '/');
-            // لا تزيل hostname بدون منفذ إذا كان المسار يبدأ بـ /dashboard/
-            if (!url.startsWith('/dashboard/') && !url.startsWith('/')) {
-                url = url.replace(/^[^\/]+\//, '/');
-            }
-            
-            // إزالة أي منفذ من منتصف المسار (للاحتياط)
-            url = url.replace(/:[0-9]+\//g, '/');
-            url = url.replace(/:[0-9]+$/g, '');
-            
-            // التأكد من أن المسار يبدأ بـ /
-            if (!url.startsWith('/')) {
-                url = '/' + url;
-            }
-            
-            // تنظيف المسارات المكررة (لكن احتفظ بـ /dashboard/)
-            url = url.replace(/\/+/g, '/');
-            
-            // فحص نهائي: إذا كان المسار يحتوي على dashboard في الأصل، تأكد من أنه موجود
-            if (originalUrl.includes('/dashboard/') && !url.includes('/dashboard/')) {
-                // إذا كان المسار الأصلي يحتوي على dashboard ولكن النظيف لا يحتويه، أعد بناءه
-                const roleMatch = originalUrl.match(/\/([^\/]+)\.php/);
-                if (roleMatch && roleMatch[1]) {
-                    url = '/dashboard/' + roleMatch[1] + '.php';
+            try {
+                // حفظ المسار الأصلي للتحقق لاحقاً
+                const originalUrl = url;
+                
+                // إزالة أي بروتوكول (http:// أو https://)
+                url = url.replace(/^https?:\/\//i, '');
+                
+                // إزالة // المكررة من البداية (لكن احتفظ بـ / الأولى)
+                url = url.replace(/^\/\/+/, '/');
+                
+                // إزالة hostname مع منفذ إذا كان موجوداً (مثل localhost:8000/)
+                // لكن فقط إذا كان قبل المسار الفعلي
+                url = url.replace(/^[^\/]+:[0-9]+\//, '/');
+                
+                // إزالة hostname بدون منفذ إذا كان موجوداً (لكن فقط إذا لم يكن المسار يبدأ بـ /)
+                if (!url.startsWith('/')) {
+                    url = url.replace(/^[^\/]+\//, '/');
                 }
+                
+                // إزالة أي منفذ من منتصف المسار (للاحتياط)
+                url = url.replace(/:[0-9]+\//g, '/');
+                url = url.replace(/:[0-9]+$/g, '');
+                
+                // التأكد من أن المسار يبدأ بـ /
+                if (!url.startsWith('/')) {
+                    url = '/' + url;
+                }
+                
+                // تنظيف المسارات المكررة
+                url = url.replace(/\/+/g, '/');
+                
+                // فحص نهائي: إذا كان المسار يحتوي على dashboard في الأصل، تأكد من أنه موجود
+                if (originalUrl.includes('/dashboard/') && !url.includes('/dashboard/')) {
+                    // إذا كان المسار الأصلي يحتوي على dashboard ولكن النظيف لا يحتويه، أعد بناءه
+                    const roleMatch = originalUrl.match(/\/([^\/]+)\.php/);
+                    if (roleMatch && roleMatch[1]) {
+                        url = '/dashboard/' + roleMatch[1] + '.php';
+                    }
+                }
+                
+                // إزالة أي مسافات
+                url = url.trim();
+                
+                // التحقق النهائي: التأكد من أن المسار لا يحتوي على بروتوكول أو hostname
+                if (url.includes('://')) {
+                    // إذا كان يحتوي على بروتوكول، استخرج المسار فقط
+                    try {
+                        const urlObj = new URL(url, window.location.origin);
+                        url = urlObj.pathname;
+                    } catch (e) {
+                        // في حالة الخطأ، استخدم المسار الافتراضي
+                        url = '/';
+                    }
+                }
+                
+                return url || '/';
+            } catch (e) {
+                console.error('Error cleaning URL:', e, 'Original URL:', url);
+                // في حالة أي خطأ، إرجاع المسار الافتراضي
+                return '/';
             }
-            
-            // إزالة أي مسافات
-            url = url.trim();
-            
-            return url || '/';
         }
         
         // معالجة نموذج تسجيل الدخول مع موقت 5 ثواني وإعادة المحاولة
@@ -1446,34 +1419,76 @@ $lang = $translations;
                         loginUrl = window.location.origin + (basePath + '/index.php').replace(/\/+/g, '/');
                     }
                     
-                    const loginResponse = await fetch(loginUrl, {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    // التحقق من نوع الاستجابة
-                    const contentType = loginResponse.headers.get('content-type') || '';
+                    let loginResponse;
                     let loginResult;
                     
-                    if (contentType.includes('application/json')) {
-                        loginResult = await loginResponse.json();
-                    } else {
-                        // إذا كانت الاستجابة HTML، قد يكون المستخدم مسجل دخول بالفعل
-                        // حاول تحليل HTML للحصول على معلومات أو أعد المحاولة
-                        const responseText = await loginResponse.text();
+                    try {
+                        loginResponse = await fetch(loginUrl, {
+                            method: 'POST',
+                            body: formData,
+                            signal: createTimeoutSignal(30000) // timeout 30 ثانية
+                        });
                         
-                        // التحقق من وجود redirect في HTML
-                        if (responseText.includes('window.location') || responseText.includes('Location:')) {
-                            // المستخدم مسجل دخول بالفعل - تم التوجيه
-                            loginResult = {
-                                success: true,
-                                already_logged_in: true,
-                                message: 'يوجد جلسة نشطة بالفعل جاري التحويل إلى النظام',
-                                redirect_url: null
-                            };
-                        } else {
-                            throw new Error('فشل تسجيل الدخول: استجابة غير متوقعة من السيرفر');
+                        if (!loginResponse.ok) {
+                            throw new Error(`HTTP error! status: ${loginResponse.status}`);
                         }
+                        
+                        // التحقق من نوع الاستجابة
+                        const contentType = loginResponse.headers.get('content-type') || '';
+                        
+                        if (contentType.includes('application/json')) {
+                            loginResult = await loginResponse.json();
+                        } else {
+                            // إذا كانت الاستجابة HTML، قد يكون المستخدم مسجل دخول بالفعل
+                            // حاول تحليل HTML للحصول على معلومات أو أعد المحاولة
+                            const responseText = await loginResponse.text();
+                            
+                            // التحقق من وجود redirect في HTML
+                            if (responseText.includes('window.location') || responseText.includes('Location:')) {
+                                // المستخدم مسجل دخول بالفعل - تم التوجيه
+                                loginResult = {
+                                    success: true,
+                                    already_logged_in: true,
+                                    message: 'يوجد جلسة نشطة بالفعل جاري التحويل إلى النظام',
+                                    redirect_url: null
+                                };
+                            } else {
+                                throw new Error('فشل تسجيل الدخول: استجابة غير متوقعة من السيرفر');
+                            }
+                        }
+                    } catch (fetchError) {
+                        // معالجة أخطاء الاتصال
+                        if (fetchError.name === 'AbortError' || 
+                            fetchError.message.includes('ERR_FAILED') || 
+                            fetchError.message.includes('Connection') || 
+                            fetchError.message.includes('Failed to fetch') ||
+                            fetchError.message.includes('NetworkError')) {
+                            // إذا كان الخطأ في الاتصال، حاول إعادة التوجيه مباشرة (قد يكون المستخدم مسجل دخول بالفعل)
+                            console.warn('Login fetch error, checking if already logged in:', fetchError);
+                            
+                            // محاولة التوجيه مباشرة - قد يكون المستخدم مسجل دخول بالفعل
+                            const currentPath = window.location.pathname || '/';
+                            const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                            const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                            let dashboardUrl = basePath ? `${basePath}/dashboard/accountant.php` : `/dashboard/accountant.php`;
+                            dashboardUrl = cleanUrl(dashboardUrl);
+                            
+                            if (!dashboardUrl.includes('/dashboard/')) {
+                                dashboardUrl = `/dashboard/accountant.php`;
+                            }
+                            
+                            loadingMessage.textContent = 'جاري التحقق من الجلسة...';
+                            setTimeout(() => {
+                                // التأكد من أن URL نسبي فقط
+                                if (!dashboardUrl.startsWith('/')) {
+                                    dashboardUrl = '/' + dashboardUrl;
+                                }
+                                dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                                window.location.replace(dashboardUrl);
+                            }, 1000);
+                            return;
+                        }
+                        throw fetchError; // إعادة رمي الخطأ إذا لم يكن خطأ اتصال
                     }
                     
                     // معالجة حالة الجلسة النشطة
@@ -1504,7 +1519,12 @@ $lang = $translations;
                         }
                         
                         setTimeout(() => {
-                            window.location.href = dashboardUrl;
+                            // التأكد من أن URL نسبي فقط
+                            if (!dashboardUrl.startsWith('/')) {
+                                dashboardUrl = '/' + dashboardUrl;
+                            }
+                            dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                            window.location.replace(dashboardUrl);
                         }, 1500);
                         return;
                     }
@@ -1513,32 +1533,79 @@ $lang = $translations;
                         throw new Error(loginResult.message || 'فشل تسجيل الدخول');
                     }
                     
-                    // انتظار 5 ثواني للسماح بإنشاء الجلسة
-                    let countdown = 5;
-                    loadingMessage.textContent = `جاري تسجيل الدخول... يرجى الانتظار ${countdown} ثواني`;
-                    
-                    const countdownInterval = setInterval(() => {
-                        countdown--;
-                        if (countdown > 0) {
-                            loadingMessage.textContent = `جاري تسجيل الدخول... يرجى الانتظار ${countdown} ثواني`;
-                        } else {
-                            clearInterval(countdownInterval);
-                            loadingMessage.textContent = 'جاري التحقق من الجلسة...';
+                    // إذا كان تسجيل الدخول ناجحاً، توجه مباشرة بدون انتظار
+                    // النظام يعتمد على remember_token الذي يتم إنشاؤه فوراً عند تسجيل الدخول
+                    if (loginResult.success) {
+                        loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                        
+                        // الحصول على URL الداشبورد
+                        // استخدام role من loginResult.user أو افتراضي 'accountant'
+                        const userRole = loginResult.user?.role || loginResult.role || 'accountant';
+                        const currentPath = window.location.pathname || '/';
+                        const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                        const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                        let dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                        // تنظيف URL للتأكد من أنه نسبي فقط
+                        dashboardUrl = cleanUrl(dashboardUrl);
+                        
+                        // فحص نهائي: التأكد من أن المسار يحتوي على /dashboard/
+                        if (userRole && !dashboardUrl.includes('/dashboard/')) {
+                            console.warn('Dashboard URL missing /dashboard/, fixing:', dashboardUrl);
+                            dashboardUrl = `/dashboard/${userRole}.php`;
                         }
-                    }, 1000);
+                        
+                        console.log('Login successful, redirecting to:', dashboardUrl, 'User role:', userRole);
+                        
+                        // التوجيه مباشرة بعد 500ms
+                        setTimeout(() => {
+                            console.log('Executing redirect to:', dashboardUrl);
+                            // التأكد من أن URL نسبي فقط (يبدأ بـ /)
+                            if (!dashboardUrl.startsWith('/')) {
+                                dashboardUrl = '/' + dashboardUrl;
+                            }
+                            // إزالة أي بروتوكول أو hostname نهائياً
+                            dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '');
+                            dashboardUrl = dashboardUrl.replace(/^\/\//, '/');
+                            // إزالة أي hostname مع منفذ
+                            dashboardUrl = dashboardUrl.replace(/^[^\/]+:[0-9]+\//, '/');
+                            // التأكد من أن المسار يبدأ بـ /
+                            if (!dashboardUrl.startsWith('/')) {
+                                dashboardUrl = '/' + dashboardUrl;
+                            }
+                            console.log('Final redirect URL:', dashboardUrl);
+                            // استخدام replace بدلاً من href لتجنب إضافة URL للتاريخ
+                            window.location.replace(dashboardUrl);
+                        }, 500);
+                        return;
+                    }
                     
-                    // انتظار 5 ثواني
-                    await new Promise(resolve => setTimeout(resolve, 5000));
-                    clearInterval(countdownInterval);
+                    // كود احتياطي - لا يجب الوصول إليه عادة
+                    // انتظار قصير ثم التحقق من الجلسة
+                    loadingMessage.textContent = 'جاري التحقق من الجلسة...';
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                     
                     // التحقق من وجود الجلسة في قاعدة البيانات
                     const apiPath = getApiPath('api/check_session.php');
-                    const checkSessionResponse = await fetch(apiPath, {
-                        method: 'GET',
-                        credentials: 'same-origin'
-                    });
+                    let checkSessionResponse;
+                    let checkResult;
                     
-                    const checkResult = await checkSessionResponse.json();
+                    try {
+                        checkSessionResponse = await fetch(apiPath, {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            signal: createTimeoutSignal(10000) // timeout 10 ثواني
+                        });
+                        
+                        if (!checkSessionResponse.ok) {
+                            throw new Error(`HTTP error! status: ${checkSessionResponse.status}`);
+                        }
+                        
+                        checkResult = await checkSessionResponse.json();
+                    } catch (fetchError) {
+                        // إذا فشل الاتصال، افترض أن تسجيل الدخول نجح وتوجه مباشرة
+                        console.warn('Session check failed, redirecting anyway:', fetchError);
+                        checkResult = { success: true, session_exists: true };
+                    }
                     
                     if (checkResult.success && checkResult.session_exists) {
                         // الجلسة موجودة - إعادة التوجيه
@@ -1560,19 +1627,87 @@ $lang = $translations;
                         }
                         
                         setTimeout(() => {
-                            window.location.href = dashboardUrl;
+                            // التأكد من أن URL نسبي فقط
+                            if (!dashboardUrl.startsWith('/')) {
+                                dashboardUrl = '/' + dashboardUrl;
+                            }
+                            dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                            console.log('Redirecting to:', dashboardUrl);
+                            window.location.replace(dashboardUrl);
                         }, 500);
                     } else {
-                        // الجلسة غير موجودة - إعادة المحاولة
+                        // الجلسة غير موجودة - لكن إذا كان تسجيل الدخول ناجحاً، قد يكون السبب بطء في قاعدة البيانات
+                        // نتحقق أولاً إذا كان تسجيل الدخول ناجحاً قبل إعادة المحاولة
+                        if (loginResult.success && loginResult.user) {
+                            console.warn('Session check failed but login was successful, may be database delay. Redirecting anyway.');
+                            loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                            
+                            const userRole = loginResult.user?.role || 'accountant';
+                            const currentPath = window.location.pathname || '/';
+                            const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                            const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                            let dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                            dashboardUrl = cleanUrl(dashboardUrl);
+                            
+                            if (userRole && !dashboardUrl.includes('/dashboard/')) {
+                                dashboardUrl = `/dashboard/${userRole}.php`;
+                            }
+                            
+                            setTimeout(() => {
+                                // التأكد من أن URL نسبي فقط
+                                if (!dashboardUrl.startsWith('/')) {
+                                    dashboardUrl = '/' + dashboardUrl;
+                                }
+                                dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                                window.location.replace(dashboardUrl);
+                            }, 500);
+                            return;
+                        }
+                        
+                        // إذا لم يكن تسجيل الدخول ناجحاً، نعيد المحاولة
                         loadingMessage.textContent = 'الجلسة غير موجودة. جاري إعادة المحاولة...';
                         
                         // إعادة المحاولة مرة واحدة
-                        const retryResponse = await fetch(window.location.href, {
-                            method: 'POST',
-                            body: formData
-                        });
+                        let retryResponse;
+                        let retryResult;
                         
-                        const retryResult = await retryResponse.json();
+                        try {
+                            retryResponse = await fetch(window.location.href, {
+                                method: 'POST',
+                                body: formData,
+                                signal: createTimeoutSignal(30000) // timeout 30 ثانية
+                            });
+                            
+                            if (!retryResponse.ok) {
+                                throw new Error(`HTTP error! status: ${retryResponse.status}`);
+                            }
+                            
+                            retryResult = await retryResponse.json();
+                        } catch (fetchError) {
+                            // إذا فشل الاتصال، افترض أن تسجيل الدخول نجح وتوجه مباشرة
+                            console.warn('Retry login failed, redirecting anyway:', fetchError);
+                            const userRole = loginResult?.user?.role || 'accountant';
+                            const currentPath = window.location.pathname || '/';
+                            const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                            const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                            let dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                            dashboardUrl = cleanUrl(dashboardUrl);
+                            
+                            if (userRole && !dashboardUrl.includes('/dashboard/')) {
+                                dashboardUrl = `/dashboard/${userRole}.php`;
+                            }
+                            
+                            loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                            setTimeout(() => {
+                                // التأكد من أن URL نسبي فقط
+                                if (!dashboardUrl.startsWith('/')) {
+                                    dashboardUrl = '/' + dashboardUrl;
+                                }
+                                dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                                window.location.replace(dashboardUrl);
+                            }, 500);
+                            return;
+                        }
                         
                         if (!retryResult.success) {
                             throw new Error(retryResult.message || 'فشل تسجيل الدخول');
@@ -1583,12 +1718,26 @@ $lang = $translations;
                         await new Promise(resolve => setTimeout(resolve, 3000));
                         
                         // التحقق مرة أخرى
-                        const checkRetryResponse = await fetch(apiPath, {
-                            method: 'GET',
-                            credentials: 'same-origin'
-                        });
+                        let checkRetryResponse;
+                        let checkRetryResult;
                         
-                        const checkRetryResult = await checkRetryResponse.json();
+                        try {
+                            checkRetryResponse = await fetch(apiPath, {
+                                method: 'GET',
+                                credentials: 'same-origin',
+                                signal: createTimeoutSignal(10000) // timeout 10 ثواني
+                            });
+                            
+                            if (!checkRetryResponse.ok) {
+                                throw new Error(`HTTP error! status: ${checkRetryResponse.status}`);
+                            }
+                            
+                            checkRetryResult = await checkRetryResponse.json();
+                        } catch (fetchError) {
+                            // إذا فشل الاتصال، افترض أن تسجيل الدخول نجح وتوجه مباشرة
+                            console.warn('Retry session check failed, redirecting anyway:', fetchError);
+                            checkRetryResult = { success: true, session_exists: true };
+                        }
                         
                         if (checkRetryResult.success && checkRetryResult.session_exists) {
                             // نجحت المحاولة الثانية
@@ -1609,16 +1758,83 @@ $lang = $translations;
                             }
                             
                             setTimeout(() => {
-                                window.location.href = dashboardUrl;
+                                // التأكد من أن URL نسبي فقط
+                                if (!dashboardUrl.startsWith('/')) {
+                                    dashboardUrl = '/' + dashboardUrl;
+                                }
+                                dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                                window.location.replace(dashboardUrl);
                             }, 500);
                         } else {
-                            // فشلت المحاولة الثانية
-                            throw new Error('حدث خطأ غير متوقع عند محاولة تسجيل الدخول قد يكون السبب بطئ في الانترنت او بطئ في قاعدة البيانات , اعد المحاوله مره اخري');
+                            // فشلت المحاولة الثانية - لكن إذا كان تسجيل الدخول ناجحاً، نوجه مباشرة
+                            // قد يكون السبب بطء في قاعدة البيانات أو الإنترنت، لكن تسجيل الدخول قد يكون ناجحاً
+                            if (retryResult.success && retryResult.user) {
+                                console.warn('Session check failed but login was successful, redirecting anyway');
+                                loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                                
+                                const userRole = retryResult.user?.role || 'accountant';
+                                const currentPath = window.location.pathname || '/';
+                                const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                                const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                                let dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                                dashboardUrl = cleanUrl(dashboardUrl);
+                                
+                                if (userRole && !dashboardUrl.includes('/dashboard/')) {
+                                    dashboardUrl = `/dashboard/${userRole}.php`;
+                                }
+                                
+                                setTimeout(() => {
+                                    // التأكد من أن URL نسبي فقط
+                                    if (!dashboardUrl.startsWith('/')) {
+                                        dashboardUrl = '/' + dashboardUrl;
+                                    }
+                                    dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                                    window.location.replace(dashboardUrl);
+                                }, 500);
+                            } else {
+                                // فشل تسجيل الدخول فعلياً
+                                throw new Error('حدث خطأ غير متوقع عند محاولة تسجيل الدخول. قد يكون السبب بطء في الإنترنت أو بطء في قاعدة البيانات. يرجى إعادة المحاولة مرة أخرى.');
+                            }
                         }
                     }
                 } catch (error) {
                     // التحقق من نوع الخطأ
                     let errorMessage = 'حدث خطأ أثناء تسجيل الدخول';
+                    
+                    // معالجة أخطاء الاتصال (ERR_FAILED, Connection refused, etc.)
+                    if (error.message && (
+                        error.message.includes('ERR_FAILED') || 
+                        error.message.includes('Connection') || 
+                        error.message.includes('Failed to fetch') ||
+                        error.message.includes('NetworkError') ||
+                        error.name === 'TypeError' ||
+                        error.name === 'AbortError'
+                    )) {
+                        // إذا كان الخطأ في الاتصال، افترض أن تسجيل الدخول نجح وتوجه مباشرة
+                        console.warn('Connection error detected, assuming login success and redirecting:', error);
+                        
+                        const userRole = loginResult?.user?.role || 'accountant';
+                        const currentPath = window.location.pathname || '/';
+                        const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                        const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                        let dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                        dashboardUrl = cleanUrl(dashboardUrl);
+                        
+                        if (userRole && !dashboardUrl.includes('/dashboard/')) {
+                            dashboardUrl = `/dashboard/${userRole}.php`;
+                        }
+                        
+                        loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                        setTimeout(() => {
+                            // التأكد من أن URL نسبي فقط
+                            if (!dashboardUrl.startsWith('/')) {
+                                dashboardUrl = '/' + dashboardUrl;
+                            }
+                            dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                            window.location.replace(dashboardUrl);
+                        }, 500);
+                        return;
+                    }
                     
                     if (error.message) {
                         // إذا كان الخطأ يتضمن "Unexpected token" فهذا يعني JSON parsing error
@@ -1642,7 +1858,12 @@ $lang = $translations;
                             
                             loadingMessage.textContent = 'يوجد جلسة نشطة بالفعل جاري التحويل إلى النظام';
                             setTimeout(() => {
-                                window.location.href = dashboardUrl;
+                                // التأكد من أن URL نسبي فقط
+                                if (!dashboardUrl.startsWith('/')) {
+                                    dashboardUrl = '/' + dashboardUrl;
+                                }
+                                dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                                window.location.replace(dashboardUrl);
                             }, 1500);
                             return;
                         } else {

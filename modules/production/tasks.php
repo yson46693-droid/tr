@@ -15,7 +15,7 @@ require_once __DIR__ . '/../../includes/path_helper.php';
 require_once __DIR__ . '/../../includes/notifications.php';
 require_once __DIR__ . '/../../includes/table_styles.php';
 
-requireRole(['production', 'accountant', 'manager']);
+requireRole(['production', 'accountant', 'manager', 'developer']);
 
 // التحقق من وجود عمود product_name في جدول tasks وإضافته إذا لم يكن موجوداً
 try {
@@ -848,19 +848,64 @@ $totalRow = $db->queryOne('SELECT COUNT(*) AS total FROM tasks t ' . $whereClaus
 $totalTasks = isset($totalRow['total']) ? (int) $totalRow['total'] : 0;
 $totalPages = max(1, (int) ceil($totalTasks / $perPage));
 
+// التحقق من وجود جداول القوالب قبل إضافة JOIN
+$unifiedTemplatesExists = !empty($db->queryOne("SHOW TABLES LIKE 'unified_product_templates'"));
+$productTemplatesExists = !empty($db->queryOne("SHOW TABLES LIKE 'product_templates'"));
+// #region agent log
+// كتابة آمنة في debug.log - التحقق من وجود المجلد أولاً
+$debugLogPath = __DIR__ . '/../../.cursor/debug.log';
+$debugLogDir = dirname($debugLogPath);
+if (!is_dir($debugLogDir)) {
+    @mkdir($debugLogDir, 0755, true);
+}
+if (is_dir($debugLogDir) && is_writable($debugLogDir)) {
+    @file_put_contents($debugLogPath, json_encode([
+        'timestamp' => time() * 1000,
+        'location' => 'tasks.php:' . __LINE__,
+        'message' => 'Template tables check',
+        'data' => [
+            'unifiedTemplatesExists' => $unifiedTemplatesExists,
+            'productTemplatesExists' => $productTemplatesExists
+        ],
+        'sessionId' => 'debug-session',
+        'runId' => 'run1',
+        'hypothesisId' => 'B'
+    ]) . "\n", FILE_APPEND);
+}
+// #endregion
+
 // SQL query لجلب المهام مع استخدام t.product_name مباشرة من الجدول (نفس طريقة طلبات العملاء)
 // استخدام t.product_name مباشرة قبل t.* لتجنب أي تعارض
+// إضافة JOIN مع جداول القوالب لجلب اسم القالب عند وجود template_id
+$templateJoins = '';
+$templateSelect = '';
+if ($unifiedTemplatesExists && $productTemplatesExists) {
+    // كلا الجدولين موجودان: استخدام COALESCE للبحث في كليهما
+    $templateSelect = ', COALESCE(upt.product_name, pt.product_name) AS template_name';
+    $templateJoins = 'LEFT JOIN unified_product_templates upt ON t.template_id = upt.id AND upt.status = \'active\' ';
+    $templateJoins .= 'LEFT JOIN product_templates pt ON t.template_id = pt.id AND pt.status = \'active\' ';
+} elseif ($unifiedTemplatesExists) {
+    // فقط unified_product_templates موجود
+    $templateSelect = ', upt.product_name AS template_name';
+    $templateJoins = 'LEFT JOIN unified_product_templates upt ON t.template_id = upt.id AND upt.status = \'active\' ';
+} elseif ($productTemplatesExists) {
+    // فقط product_templates موجود
+    $templateSelect = ', pt.product_name AS template_name';
+    $templateJoins = 'LEFT JOIN product_templates pt ON t.template_id = pt.id AND pt.status = \'active\' ';
+}
+
 $taskSql = "SELECT t.id, t.title, t.description, t.assigned_to, t.created_by, t.priority, t.status,
     t.due_date, t.completed_at, t.received_at, t.started_at, t.related_type, t.related_id,
-    t.product_id, t.quantity, t.notes, t.created_at, t.updated_at,
+    t.product_id, t.template_id, t.quantity, t.notes, t.created_at, t.updated_at,
     t.product_name,
     uAssign.full_name AS assigned_to_name,
     uCreate.full_name AS created_by_name,
-    p.name AS product_name_from_db
+    p.name AS product_name_from_db" . $templateSelect . "
 FROM tasks t
 LEFT JOIN users uAssign ON t.assigned_to = uAssign.id
 LEFT JOIN users uCreate ON t.created_by = uCreate.id
 LEFT JOIN products p ON t.product_id = p.id
+" . $templateJoins . "
 $whereClause
 ORDER BY 
     CASE t.priority
@@ -875,10 +920,56 @@ ORDER BY
 LIMIT ? OFFSET ?";
 
 $queryParams = array_merge($params, [$perPage, $offset]);
+// #region agent log
+// كتابة آمنة في debug.log - التحقق من وجود المجلد أولاً
+$debugLogPath = __DIR__ . '/../../.cursor/debug.log';
+$debugLogDir = dirname($debugLogPath);
+if (!is_dir($debugLogDir)) {
+    @mkdir($debugLogDir, 0755, true);
+}
+if (is_dir($debugLogDir) && is_writable($debugLogDir)) {
+    @file_put_contents($debugLogPath, json_encode([
+        'timestamp' => time() * 1000,
+        'location' => 'tasks.php:' . __LINE__,
+        'message' => 'SQL query with template joins',
+        'data' => [
+            'templateSelect' => $templateSelect,
+            'templateJoins' => $templateJoins,
+            'sql_preview' => substr($taskSql, 0, 200) . '...'
+        ],
+        'sessionId' => 'debug-session',
+        'runId' => 'run1',
+        'hypothesisId' => 'B'
+    ]) . "\n", FILE_APPEND);
+}
+// #endregion
 $tasks = $db->query($taskSql, $queryParams);
 
 // استخراج جميع العمال من notes لكل مهمة واستخراج اسم المنتج من notes إذا لم يكن موجوداً
 foreach ($tasks as &$task) {
+    // #region agent log
+    $logPath = '../../.cursor/debug.log';
+    $logData = [
+        'task_id' => $task['id'] ?? 0,
+        'template_id' => $task['template_id'] ?? null,
+        'template_name' => $task['template_name'] ?? null,
+        'product_name' => $task['product_name'] ?? null,
+        'product_id' => $task['product_id'] ?? null,
+        'has_template_name_key' => isset($task['template_name']),
+        'all_keys' => array_keys($task)
+    ];
+    $logEntry = json_encode([
+        'timestamp' => time() * 1000,
+        'location' => 'tasks.php:' . __LINE__,
+        'message' => 'Task raw data from database',
+        'data' => $logData,
+        'sessionId' => 'debug-session',
+        'runId' => 'run1',
+        'hypothesisId' => 'B'
+    ]) . "\n";
+    @file_put_contents($logPath, $logEntry, FILE_APPEND);
+    error_log('DEBUG: Task ' . ($task['id'] ?? 0) . ' - template_id: ' . ($task['template_id'] ?? 'NULL') . ', template_name: ' . ($task['template_name'] ?? 'NULL'));
+    // #endregion
     $notes = $task['notes'] ?? '';
     $allWorkers = [];
     
@@ -917,7 +1008,52 @@ foreach ($tasks as &$task) {
         }
     }
     
-    // الأولوية الثانية: استخدام product_name_from_db من JOIN مع products (للتوافق مع المهام القديمة)
+    // الأولوية الثانية: استخدام template_name من JOIN مع جداول القوالب (عند وجود template_id)
+    // هذا يحل المشكلة عندما يتم حفظ template_id ولكن product_name يكون NULL
+    // #region agent log
+    $logPath = '../../.cursor/debug.log';
+    $logData = [
+        'task_id' => $task['id'] ?? 0,
+        'template_id' => $task['template_id'] ?? null,
+        'product_name_before' => $task['product_name'] ?? null,
+        'template_name' => $task['template_name'] ?? null,
+        'finalProductName_before_template' => $finalProductName,
+        'template_name_empty' => empty($task['template_name']),
+        'template_name_isset' => isset($task['template_name'])
+    ];
+    $logEntry = json_encode([
+        'timestamp' => time() * 1000,
+        'location' => 'tasks.php:' . __LINE__,
+        'message' => 'Checking template_name for task',
+        'data' => $logData,
+        'sessionId' => 'debug-session',
+        'runId' => 'run1',
+        'hypothesisId' => 'A'
+    ]) . "\n";
+    @file_put_contents($logPath, $logEntry, FILE_APPEND);
+    error_log('DEBUG: Task ' . ($task['id'] ?? 0) . ' - Checking template_name. template_id: ' . ($task['template_id'] ?? 'NULL') . ', template_name: ' . var_export($task['template_name'] ?? null, true) . ', empty: ' . (empty($task['template_name']) ? 'YES' : 'NO'));
+    // #endregion
+    if (empty($finalProductName) && !empty($task['template_name'])) {
+        $trimmedName = trim((string)$task['template_name']);
+        if ($trimmedName !== '') {
+            $finalProductName = $trimmedName;
+            // #region agent log
+            $logEntry = json_encode([
+                'timestamp' => time() * 1000,
+                'location' => 'tasks.php:' . __LINE__,
+                'message' => 'Using template_name as finalProductName',
+                'data' => ['task_id' => $task['id'] ?? 0, 'template_name' => $trimmedName, 'finalProductName' => $finalProductName],
+                'sessionId' => 'debug-session',
+                'runId' => 'run1',
+                'hypothesisId' => 'A'
+            ]) . "\n";
+            @file_put_contents($logPath, $logEntry, FILE_APPEND);
+            error_log('DEBUG: Task ' . ($task['id'] ?? 0) . ' - Using template_name: ' . $trimmedName);
+            // #endregion
+        }
+    }
+    
+    // الأولوية الثالثة: استخدام product_name_from_db من JOIN مع products (للتوافق مع المهام القديمة)
     if (empty($finalProductName) && !empty($task['product_name_from_db'])) {
         $trimmedName = trim((string)$task['product_name_from_db']);
         if ($trimmedName !== '') {
@@ -925,7 +1061,7 @@ foreach ($tasks as &$task) {
         }
     }
     
-    // الأولوية الثالثة: استخراج من notes (للتوافق مع المهام القديمة جداً)
+    // الأولوية الرابعة: استخراج من notes (للتوافق مع المهام القديمة جداً)
     if (empty($finalProductName) && !empty($notes)) {
         // البحث عن "المنتج: " متبوعاً باسم المنتج
         if (preg_match('/المنتج:\s*([^\n\r]+?)\s*-\s*الكمية:/i', $notes, $productMatches)) {
@@ -950,6 +1086,25 @@ foreach ($tasks as &$task) {
     // في customer_orders.php: echo htmlspecialchars($item['product_name'] ?? '-');
     // استخدام القيمة الفارغة بدلاً من null لضمان العرض الصحيح
     $task['product_name'] = !empty($finalProductName) ? $finalProductName : '';
+    // #region agent log
+    // كتابة آمنة في debug.log - التحقق من وجود المجلد أولاً
+    $debugLogPath = __DIR__ . '/../../.cursor/debug.log';
+    $debugLogDir = dirname($debugLogPath);
+    if (!is_dir($debugLogDir)) {
+        @mkdir($debugLogDir, 0755, true);
+    }
+    if (is_dir($debugLogDir) && is_writable($debugLogDir)) {
+        @file_put_contents($debugLogPath, json_encode([
+            'timestamp' => time() * 1000,
+            'location' => 'tasks.php:' . __LINE__,
+            'message' => 'Final product_name assigned to task',
+            'data' => ['task_id' => $task['id'] ?? 0, 'final_product_name' => $task['product_name']],
+            'sessionId' => 'debug-session',
+            'runId' => 'run1',
+            'hypothesisId' => 'A'
+        ]) . "\n", FILE_APPEND);
+    }
+    // #endregion
     
     // إزالة product_name_from_db لأنه لم يعد مطلوباً
     unset($task['product_name_from_db']);
@@ -1042,12 +1197,6 @@ try {
 
 $statsBaseConditions = [];
 $statsBaseParams = [];
-
-// إزالة الفلترة - السماح لجميع عمال الإنتاج برؤية إحصائيات جميع المهام
-// if ($isProduction) {
-//     $statsBaseConditions[] = 'assigned_to = ?';
-//     $statsBaseParams[] = (int) $currentUser['id'];
-// }
 
 $buildStatsQuery = function (?string $extraCondition = null, array $extraParams = []) use ($db, $statsBaseConditions, $statsBaseParams) {
     $conditions = $statsBaseConditions;

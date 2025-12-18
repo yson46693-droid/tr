@@ -13,11 +13,12 @@ if (!defined('HEADER_INCLUDED')) {
     define('HEADER_INCLUDED', true);
 }
 
-// إضافة Permissions-Policy header للسماح بالوصول إلى Geolocation, Camera, Microphone, Notifications
+// إضافة Permissions-Policy header للسماح بالوصول إلى Geolocation, Camera, Microphone
+// ملاحظة: notifications تم إزالته من Feature-Policy لأنه غير مدعوم
 if (!headers_sent()) {
-    header("Permissions-Policy: geolocation=(self), camera=(self), microphone=(self), notifications=(self)");
-    // Feature-Policy كبديل للمتصفحات القديمة
-    header("Feature-Policy: geolocation 'self'; camera 'self'; microphone 'self'; notifications 'self'");
+    header("Permissions-Policy: geolocation=(self), camera=(self), microphone=(self)");
+    // Feature-Policy كبديل للمتصفحات القديمة (بدون notifications)
+    header("Feature-Policy: geolocation 'self'; camera 'self'; microphone 'self'");
     
     // === Cache Control Headers - منع تخزين الصفحات في cache ===
     // هذه headers ضرورية لضمان تحديث البيانات بعد أي طلب
@@ -25,7 +26,7 @@ if (!headers_sent()) {
     header('Pragma: no-cache');
     header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
-    header('ETag: "' . md5(time() . rand() . session_id()) . '"');
+    header('ETag: "' . md5(time() . rand() . uniqid()) . '"');
 }
 
 require_once __DIR__ . '/../includes/config.php';
@@ -168,8 +169,8 @@ if (ob_get_level() > 0) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta http-equiv="Permissions-Policy" content="geolocation=(self), camera=(self), microphone=(self), notifications=(self)">
-    <meta http-equiv="Feature-Policy" content="geolocation 'self'; camera 'self'; microphone 'self'; notifications 'self'">
+    <meta http-equiv="Permissions-Policy" content="geolocation=(self), camera=(self), microphone=(self)">
+    <meta http-equiv="Feature-Policy" content="geolocation 'self'; camera 'self'; microphone 'self'">
     <!-- Cache Control Meta Tags - منع تخزين الصفحة لضمان جلب البيانات المحدثة -->
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
@@ -2746,6 +2747,110 @@ if (ob_get_level() > 0) {
         }
     })();
     </script>
+    
+    <!-- معالج الأخطاء JavaScript - منع ظهور رسائل خطأ المتصفح (ERR_FAILED) -->
+    <script>
+    (function() {
+        'use strict';
+        
+        // دالة للحصول على URL صفحة تسجيل الدخول
+        function getLoginUrl() {
+            const currentPath = window.location.pathname || '/';
+            const pathParts = currentPath.split('/').filter(p => p && p !== 'dashboard' && p !== 'modules' && !p.endsWith('.php'));
+            const basePath = pathParts.length > 0 ? '/' + pathParts[0] : '';
+            return (basePath ? basePath : '') + '/index.php';
+        }
+        
+        // دالة لإعادة التوجيه إلى صفحة تسجيل الدخول مع رسالة تنبيه
+        function redirectToLogin(reason) {
+            const loginUrl = getLoginUrl();
+            
+            // حفظ سبب إعادة التوجيه في sessionStorage
+            try {
+                sessionStorage.setItem('session_expired', 'true');
+                sessionStorage.setItem('redirect_reason', reason || 'انتهت الجلسة أو حدث خطأ في الاتصال');
+            } catch (e) {
+                // تجاهل الأخطاء في sessionStorage
+            }
+            
+            // إعادة التوجيه
+            window.location.replace(loginUrl);
+        }
+        
+        // معالج أخطاء JavaScript العامة
+        window.addEventListener('error', function(event) {
+            // تجاهل الأخطاء من مصادر خارجية (CDN، إلخ)
+            if (event.filename && (
+                event.filename.includes('cdn.jsdelivr.net') ||
+                event.filename.includes('code.jquery.com') ||
+                event.filename.includes('googleapis.com')
+            )) {
+                return;
+            }
+            
+            // معالجة أخطاء الاتصال (ERR_FAILED، NetworkError، إلخ)
+            const errorMessage = (event.message || '').toLowerCase();
+            if (errorMessage.includes('failed to fetch') ||
+                errorMessage.includes('networkerror') ||
+                errorMessage.includes('err_failed') ||
+                errorMessage.includes('connection') ||
+                errorMessage.includes('network')) {
+                
+                // إذا كان الخطأ متعلقاً بالاتصال، أعد التوجيه إلى تسجيل الدخول
+                redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
+                event.preventDefault();
+                return true;
+            }
+        }, true);
+        
+        // معالج رفض Promise (unhandledrejection) - للأخطاء غير المعالجة في Promises
+        window.addEventListener('unhandledrejection', function(event) {
+            const reason = event.reason;
+            
+            // التحقق من أن الخطأ متعلق بالاتصال
+            if (reason && typeof reason === 'object') {
+                const errorMessage = (reason.message || reason.toString() || '').toLowerCase();
+                if (errorMessage.includes('failed to fetch') ||
+                    errorMessage.includes('networkerror') ||
+                    errorMessage.includes('err_failed') ||
+                    errorMessage.includes('connection') ||
+                    errorMessage.includes('network')) {
+                    
+                    redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
+                    event.preventDefault();
+                    return;
+                }
+            }
+        });
+        
+        // اعتراض طلبات fetch للتحقق من الأخطاء
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+            return originalFetch.apply(this, args).catch(function(error) {
+                const errorMessage = (error.message || error.toString() || '').toLowerCase();
+                
+                // التحقق من أخطاء الاتصال
+                if (errorMessage.includes('failed to fetch') ||
+                    errorMessage.includes('networkerror') ||
+                    errorMessage.includes('err_failed') ||
+                    errorMessage.includes('connection') ||
+                    errorMessage.includes('network') ||
+                    error.name === 'TypeError' ||
+                    error.name === 'NetworkError') {
+                    
+                    // التحقق من أن الطلب ليس لصفحة تسجيل الدخول نفسها
+                    const url = args[0];
+                    if (url && typeof url === 'string' && !url.includes('index.php')) {
+                        redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
+                    }
+                }
+                
+                // إعادة رمي الخطأ للتعامل معه بشكل طبيعي
+                throw error;
+            });
+        };
+    })();
+    </script>
 </head>
 <body class="dashboard-body<?php echo isset($pageBodyClass) ? ' ' . htmlspecialchars($pageBodyClass) : ''; ?>"
       data-user-role="<?php echo htmlspecialchars(isset($currentUser['role']) ? $currentUser['role'] : ''); ?>"
@@ -2759,6 +2864,68 @@ if (ob_get_level() > 0) {
         <!-- Homeline Style Sidebar -->
         <?php if (isLoggedIn()): ?>
         <?php include __DIR__ . '/homeline_sidebar.php'; ?>
+        <?php endif; ?>
+        
+        <!-- Developer Quick Access Bar -->
+        <?php if (isLoggedIn() && isDeveloper()): ?>
+        <div class="developer-quick-access-bar" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 10px 0; border-bottom: 2px solid #5568d3; position: sticky; top: 0; z-index: 1030; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+            <div class="container-fluid">
+                <div class="row align-items-center">
+                    <div class="col-12">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-code-slash"></i>
+                                <strong>وصول سريع للمطور:</strong>
+                            </div>
+                            <div class="d-flex align-items-center flex-wrap gap-2" style="flex: 1; justify-content: flex-end;">
+                                <a href="<?php echo getRelativeUrl('dashboard/developer.php'); ?>" class="btn btn-sm btn-light shadow-sm" style="white-space: nowrap; font-weight: 500;">
+                                    <i class="bi bi-code-slash me-1"></i> لوحة المطور
+                                </a>
+                                <a href="<?php echo getRelativeUrl('dashboard/manager.php'); ?>" class="btn btn-sm btn-light shadow-sm" style="white-space: nowrap; font-weight: 500;">
+                                    <i class="bi bi-speedometer2 me-1"></i> لوحة المدير
+                                </a>
+                                <a href="<?php echo getRelativeUrl('dashboard/developer.php?page=system_settings'); ?>" class="btn btn-sm btn-light shadow-sm" style="white-space: nowrap; font-weight: 500;">
+                                    <i class="bi bi-gear me-1"></i> إعدادات النظام
+                                </a>
+                                <a href="<?php echo getRelativeUrl('dashboard/sales.php'); ?>" class="btn btn-sm btn-light shadow-sm" style="white-space: nowrap; font-weight: 500;">
+                                    <i class="bi bi-cart me-1"></i> لوحة المبيعات
+                                </a>
+                                <a href="<?php echo getRelativeUrl('dashboard/accountant.php'); ?>" class="btn btn-sm btn-light shadow-sm" style="white-space: nowrap; font-weight: 500;">
+                                    <i class="bi bi-calculator me-1"></i> لوحة المحاسبة
+                                </a>
+                                <a href="<?php echo getRelativeUrl('dashboard/production.php'); ?>" class="btn btn-sm btn-light shadow-sm" style="white-space: nowrap; font-weight: 500;">
+                                    <i class="bi bi-gear-wide me-1"></i> لوحة الإنتاج
+                                </a>
+                                <div class="dropdown" style="display: inline-block;">
+                                    <button class="btn btn-sm btn-light dropdown-toggle" type="button" id="developerQuickAccessDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="white-space: nowrap;">
+                                        <i class="bi bi-three-dots-vertical"></i> المزيد
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="developerQuickAccessDropdown">
+                                        <li><h6 class="dropdown-header">صفحات المدير</h6></li>
+                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/manager.php?page=users'); ?>"><i class="bi bi-people me-2"></i>المستخدمين</a></li>
+                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/manager.php?page=security'); ?>"><i class="bi bi-shield-lock me-2"></i>الأمان</a></li>
+                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/manager.php?page=company_products'); ?>"><i class="bi bi-box-seam me-2"></i>منتجات الشركة</a></li>
+                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/manager.php?page=approvals'); ?>"><i class="bi bi-check-circle me-2"></i>الموافقات</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header">صفحات المبيعات</h6></li>
+                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/sales.php?page=customers'); ?>"><i class="bi bi-people me-2"></i>العملاء</a></li>
+                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/sales.php?page=orders'); ?>"><i class="bi bi-cart-check me-2"></i>الطلبات</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header">صفحات المحاسبة</h6></li>
+                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/accountant.php?page=financial'); ?>"><i class="bi bi-safe me-2"></i>الخزنة</a></li>
+                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/accountant.php?page=invoices'); ?>"><i class="bi bi-receipt me-2"></i>الفواتير</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header">صفحات الإنتاج</h6></li>
+                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/production.php?page=production'); ?>"><i class="bi bi-gear-wide me-2"></i>الإنتاج</a></li>
+                                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('dashboard/production.php?page=tasks'); ?>"><i class="bi bi-list-task me-2"></i>المهام</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <?php endif; ?>
         
         <!-- Top Bar -->

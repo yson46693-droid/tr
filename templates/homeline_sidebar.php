@@ -57,9 +57,12 @@ if (isset($currentUser) && is_array($currentUser) && isset($currentUser['role'])
     $role = strtolower(trim($currentUser['role']));
 }
 
-// محاولة الحصول على role من session كبديل
-if (empty($role) && isset($_SESSION['role'])) {
-    $role = strtolower(trim($_SESSION['role']));
+// تم إزالة نظام الجلسات - استخدام getUserFromToken() فقط
+if (empty($role) && function_exists('getUserFromToken')) {
+    $user = getUserFromToken();
+    if ($user && isset($user['role'])) {
+        $role = strtolower(trim($user['role']));
+    }
 }
 
 $currentPageParam = $_GET['page'] ?? '';
@@ -74,6 +77,8 @@ if (empty($role)) {
         $role = 'accountant';
     } elseif ($currentPage === 'production.php') {
         $role = 'production';
+    } elseif ($currentPage === 'developer.php') {
+        $role = 'developer';
     }
 }
 
@@ -173,6 +178,13 @@ switch ($role) {
                 'icon' => 'bi-wallet2',
                 'url' => $baseUrl . 'manager.php?page=customer_credit_balances',
                 'active' => ($currentPage === 'manager.php' && $currentPageParam === 'customer_credit_balances'),
+                'badge' => null
+            ],
+            [
+                'title' => 'جداول التحصيل - عملاء الشركة',
+                'icon' => 'bi-calendar-check',
+                'url' => $baseUrl . 'manager.php?page=company_payment_schedules',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'company_payment_schedules'),
                 'badge' => null
             ],
             [
@@ -336,6 +348,13 @@ switch ($role) {
                 'icon' => 'bi-wallet2',
                 'url' => $baseUrl . 'accountant.php?page=customer_credit_balances',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'customer_credit_balances'),
+                'badge' => null
+            ],
+            [
+                'title' => 'جداول التحصيل - عملاء الشركة',
+                'icon' => 'bi-calendar-check',
+                'url' => $baseUrl . 'accountant.php?page=company_payment_schedules',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'company_payment_schedules'),
                 'badge' => null
             ],
             [
@@ -551,6 +570,62 @@ switch ($role) {
         ];
         break;
         
+    case 'developer':
+        $menuItems = [
+            [
+                'title' => 'لوحة المطور',
+                'icon' => 'bi-code-slash',
+                'url' => $baseUrl . 'developer.php',
+                'active' => ($currentPage === 'developer.php' && ($currentPageParam === 'overview' || $currentPageParam === '')),
+                'badge' => null
+            ],
+            ['divider' => true, 'title' => 'إدارة النظام'],
+            [
+                'title' => 'إعدادات النظام',
+                'icon' => 'bi-gear',
+                'url' => $baseUrl . 'developer.php?page=system_settings',
+                'active' => ($currentPage === 'developer.php' && $currentPageParam === 'system_settings'),
+                'badge' => null
+            ],
+            [
+                'title' => 'المستخدمين',
+                'icon' => 'bi-people',
+                'url' => $baseUrl . 'developer.php?page=users',
+                'active' => ($currentPage === 'developer.php' && $currentPageParam === 'users'),
+                'badge' => null
+            ],
+            [
+                'title' => 'الأمان',
+                'icon' => 'bi-shield-lock',
+                'url' => $baseUrl . 'developer.php?page=security',
+                'active' => ($currentPage === 'developer.php' && $currentPageParam === 'security'),
+                'badge' => null
+            ],
+            [
+                'title' => 'سجلات التدقيق',
+                'icon' => 'bi-journal-text',
+                'url' => $baseUrl . 'developer.php?page=audit_logs',
+                'active' => ($currentPage === 'developer.php' && $currentPageParam === 'audit_logs'),
+                'badge' => null
+            ],
+            [
+                'title' => 'النسخ الاحتياطية',
+                'icon' => 'bi-database',
+                'url' => $baseUrl . 'developer.php?page=backups',
+                'active' => ($currentPage === 'developer.php' && $currentPageParam === 'backups'),
+                'badge' => null
+            ],
+            ['divider' => true, 'title' => 'لوحات أخرى'],
+            [
+                'title' => 'لوحة المدير',
+                'icon' => 'bi-speedometer2',
+                'url' => $baseUrl . 'manager.php',
+                'active' => false,
+                'badge' => null
+            ]
+        ];
+        break;
+    
     case 'production':
         $menuItems = [
             [

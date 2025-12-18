@@ -24,7 +24,7 @@ if (!defined('CUSTOMERS_MODULE_BOOTSTRAPPED')) {
         require_once __DIR__ . '/../../includes/cache.php';
     }
 
-    requireRole(['sales', 'accountant', 'manager']);
+    requireRole(['sales', 'accountant', 'manager', 'developer']);
 }
 
 if (!defined('CUSTOMERS_PURCHASE_HISTORY_AJAX')) {
@@ -309,7 +309,7 @@ if ($sessionSuccess !== null) {
 // تحديد المسار الأساسي للروابط بناءً على دور المستخدم
 $currentRole = strtolower((string)($currentUser['role'] ?? 'sales'));
 $customersBaseScript = 'sales.php';
-if ($currentRole === 'manager') {
+if (in_array($currentRole, ['manager', 'developer'], true)) {
     $customersBaseScript = 'manager.php';
 } elseif ($currentRole === 'accountant') {
     $customersBaseScript = 'accountant.php';
@@ -320,7 +320,7 @@ $customersPageBaseWithSection = $customersPageBase . '&section=' . urlencode($se
 // معالجة طلبات سجل مشتريات العميل (للمدير والمندوب)
 // ملاحظة: يجب أن يكون هذا قبل أي output HTML
 if (
-    in_array($currentRole, ['manager', 'sales'], true) &&
+    in_array($currentRole, ['manager', 'developer', 'sales'], true) &&
     isset($_GET['ajax'], $_GET['action']) &&
     $_GET['ajax'] === 'purchase_history' &&
     $_GET['action'] === 'purchase_history'
@@ -1026,8 +1026,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $allowedFields = [];
                     $userRole = strtolower($currentUser['role'] ?? '');
                     
-                    if ($userRole === 'manager') {
-                        // المدير يعدل جميع البيانات ما عدا اسم العميل
+                    if (in_array($userRole, ['manager', 'developer'], true)) {
+                        // المدير والمطور يعدلون جميع البيانات ما عدا اسم العميل
                         $canEdit = true;
                         $allowedFields = ['phone', 'address', 'region_id', 'balance'];
                     } elseif (in_array($userRole, ['accountant', 'sales'], true)) {
@@ -1544,7 +1544,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
         <i class="bi bi-people me-2"></i><?php echo $isSalesUser ? 'عملائي' : 'العملاء'; ?>
     </h2>
     <div class="d-flex gap-2">
-        <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
+        <?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?>
         <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#importCustomersModal">
             <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد من CSV
         </button>
@@ -4555,18 +4555,18 @@ document.addEventListener('DOMContentLoaded', function () {
             
             // إظهار شريط التقدم
             var progressDiv = document.getElementById('importProgress');
-            var progressBar = progressDiv.querySelector('.progress-bar');
+            var progressBar = progressDiv ? progressDiv.querySelector('.progress-bar') : null;
             var statusDiv = document.getElementById('importStatus');
             var resultsDiv = document.getElementById('importResults');
             var errorsDiv = document.getElementById('importErrors');
             var submitBtn = document.getElementById('importSubmitBtn');
             
-            progressDiv.classList.remove('d-none');
-            resultsDiv.classList.add('d-none');
-            errorsDiv.classList.add('d-none');
-            progressBar.style.width = '0%';
-            statusDiv.textContent = 'جاري رفع الملف...';
-            submitBtn.disabled = true;
+            if (progressDiv) progressDiv.classList.remove('d-none');
+            if (resultsDiv) resultsDiv.classList.add('d-none');
+            if (errorsDiv) errorsDiv.classList.add('d-none');
+            if (progressBar) progressBar.style.width = '0%';
+            if (statusDiv) statusDiv.textContent = 'جاري رفع الملف...';
+            if (submitBtn) submitBtn.disabled = true;
             
             fetch('<?php echo getRelativeUrl("api/import_customers.php"); ?>', {
                 method: 'POST',
@@ -4620,9 +4620,20 @@ document.addEventListener('DOMContentLoaded', function () {
                     
                     var errorsContent = document.getElementById('importErrorsContent');
                     if (errorsContent) {
-                        var html = '<p>' + (data.message || 'حدث خطأ أثناء الاستيراد') + '</p>';
+                        var html = '<p><strong>' + (data.message || 'حدث خطأ أثناء الاستيراد') + '</strong></p>';
+                        if (data.debug_info) {
+                            html += '<div class="small text-muted mt-2">';
+                            html += '<strong>معلومات إضافية:</strong><br>';
+                            html += '- عدد الصفوف: ' + (data.debug_info.total_rows || 0) + '<br>';
+                            html += '- الصفوف الفارغة: ' + (data.debug_info.empty_rows || 0) + '<br>';
+                            html += '- فهرس عمود الاسم: ' + (data.debug_info.name_index !== undefined ? data.debug_info.name_index : 'غير موجود');
+                            html += '</div>';
+                        }
                         if (data.errors && data.errors.length > 0) {
-                            html += '<ul class="mb-0"><li>' + data.errors.join('</li><li>') + '</li></ul>';
+                            html += '<ul class="mb-0 mt-2"><li>' + data.errors.join('</li><li>') + '</li></ul>';
+                        }
+                        if (data.log_file) {
+                            html += '<p class="small text-muted mt-2">يمكنك التحقق من ملف السجلات: ' + data.log_file + '</p>';
                         }
                         errorsContent.innerHTML = html;
                     }
@@ -5103,7 +5114,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                     $rawBalance = number_format($customerBalance, 2, '.', '');
                                     ?>
                                     <div class="d-flex flex-wrap align-items-center gap-2">
-                                        <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
+                                        <?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?>
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-warning edit-customer-btn"
@@ -5337,7 +5348,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                     <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <?php if ($currentRole === 'manager'): ?>
+                            <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
                             <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRegionFromCustomerModal">
                                 <i class="bi bi-plus-circle"></i>
                             </button>
@@ -5453,7 +5464,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <input type="text" class="form-control" id="editCustomerName" disabled>
                         <small class="text-muted">لا يمكن تعديل اسم العميل</small>
                     </div>
-                    <?php if ($currentRole === 'manager'): ?>
+                    <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
                     <div class="mb-3">
                         <label class="form-label">ديون العميل / رصيد العميل</label>
                         <input type="number" class="form-control" name="balance" id="editCustomerBalance" step="0.01" placeholder="مثال: 0 أو -500">
@@ -5493,7 +5504,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                     <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <?php if ($currentRole === 'manager'): ?>
+                            <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
                             <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRegionFromCustomerModal">
                                 <i class="bi bi-plus-circle"></i>
                             </button>
@@ -5512,7 +5523,7 @@ document.addEventListener('DOMContentLoaded', function () {
 <?php endif; ?>
 
 <!-- Modal إضافة منطقة جديدة (من نموذج العميل) -->
-<?php if ($currentRole === 'manager'): ?>
+<?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
 <div class="modal fade" id="addRegionFromCustomerModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">

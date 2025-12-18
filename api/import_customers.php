@@ -12,87 +12,107 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/audit_log.php';
 
-// تنظيف أي output buffer قبل البدء
-if (ob_get_level() > 0) {
-    ob_clean();
+// تنظيف أي output سابق
+while (ob_get_level() > 0) {
+    ob_end_clean();
 }
 
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST');
-header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
 
 // التحقق من الصلاحيات
-try {
-    requireRole(['manager', 'accountant', 'sales']);
-} catch (Exception $authError) {
-    http_response_code(403);
-    echo json_encode([
-        'success' => false,
-        'message' => 'غير مصرح لك بالوصول إلى هذه الصفحة: ' . $authError->getMessage()
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
-}
+requireRole(['manager', 'accountant', 'sales']);
 
 $currentUser = getCurrentUser();
 $db = db();
 
+// التحقق من نوع الطلب
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode([
+        'success' => false,
+        'message' => 'طريقة الطلب غير مدعومة'
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 // دالة تسجيل مخصصة تكتب مباشرة في ملف السجلات
 // يتم تعريفها قبل أي استخدام
+// تحسين للعمل حتى مع مشاكل الاستضافة
 function logImport($message) {
-    // محاولة استخدام PRIVATE_STORAGE_PATH إذا كان معرفاً
-    if (defined('PRIVATE_STORAGE_PATH')) {
-        $logFile = PRIVATE_STORAGE_PATH . '/logs/import_customers.log';
-    } else {
-        // استخدام المسار النسبي
-        $logFile = __DIR__ . '/../storage/logs/import_customers.log';
-    }
-    
-    $logDir = dirname($logFile);
-    
-    // محاولة إنشاء المجلد إذا لم يكن موجوداً
-    if (!is_dir($logDir)) {
-        $created = @mkdir($logDir, 0755, true);
-        if (!$created && !is_dir($logDir)) {
-            // إذا فشل، حاول استخدام مسار بديل
-            $logFile = __DIR__ . '/../import_customers_debug.log';
-            $logDir = dirname($logFile);
-            @mkdir($logDir, 0755, true);
-        }
-    }
+    global $importDebugLog; // لتخزين السجلات في الذاكرة أيضاً
     
     $timestamp = date('Y-m-d H:i:s');
     $logMessage = "[$timestamp] $message\n";
     
-    // محاولة الكتابة
-    $result = @file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
+    // تخزين في الذاكرة للعرض لاحقاً
+    if (!isset($importDebugLog)) {
+        $importDebugLog = [];
+    }
+    $importDebugLog[] = $logMessage;
     
-    // تسجيل في error_log العادي أيضاً
+    // تسجيل في error_log العادي (يعمل دائماً)
     error_log('[IMPORT] ' . $message);
     
-    // إذا فشلت الكتابة، حاول كتابة في أماكن بديلة
-    if ($result === false) {
-        // محاولة 1: في نفس المجلد
-        $altLogFile1 = __DIR__ . '/import_customers_debug.log';
-        @file_put_contents($altLogFile1, $logMessage, FILE_APPEND | LOCK_EX);
-        
-        // محاولة 2: في المجلد الرئيسي
-        $altLogFile2 = dirname(__DIR__) . '/import_customers_debug.log';
-        @file_put_contents($altLogFile2, $logMessage, FILE_APPEND | LOCK_EX);
-        
-        // محاولة 3: في مجلد storage/logs البديل
-        $altLogFile3 = __DIR__ . '/../storage/logs/import_customers.log';
-        if (is_dir(dirname($altLogFile3))) {
-            @file_put_contents($altLogFile3, $logMessage, FILE_APPEND | LOCK_EX);
-        }
-        
-        // تسجيل الخطأ في error_log
-        error_log("Failed to write to log file: $logFile. Tried alternatives.");
+    // قائمة المسارات المحتملة (من الأكثر احتمالاً للأقل)
+    $possiblePaths = [];
+    
+    // 1. PRIVATE_STORAGE_PATH إذا كان معرفاً
+    if (defined('PRIVATE_STORAGE_PATH')) {
+        $possiblePaths[] = PRIVATE_STORAGE_PATH . '/logs/import_customers.log';
     }
     
-    // أيضاً كتابة في APP_ERROR_LOG إذا كان معرفاً
-    if (defined('APP_ERROR_LOG') && APP_ERROR_LOG !== $logFile) {
-        @file_put_contents(APP_ERROR_LOG, $logMessage, FILE_APPEND | LOCK_EX);
+    // 2. المسار النسبي storage/logs
+    $possiblePaths[] = __DIR__ . '/../storage/logs/import_customers.log';
+    
+    // 3. في مجلد api
+    $possiblePaths[] = __DIR__ . '/import_customers_debug.log';
+    
+    // 4. في المجلد الرئيسي
+    $possiblePaths[] = dirname(__DIR__) . '/import_customers_debug.log';
+    
+    // 5. في temp directory
+    $tempDir = sys_get_temp_dir();
+    if ($tempDir && is_writable($tempDir)) {
+        $possiblePaths[] = $tempDir . '/import_customers_debug.log';
+    }
+    
+    // 6. APP_ERROR_LOG إذا كان معرفاً
+    if (defined('APP_ERROR_LOG')) {
+        $possiblePaths[] = APP_ERROR_LOG;
+    }
+    
+    // محاولة الكتابة في جميع المسارات
+    $written = false;
+    foreach ($possiblePaths as $logFile) {
+        $logDir = dirname($logFile);
+        
+        // محاولة إنشاء المجلد إذا لم يكن موجوداً
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+        
+        // محاولة الكتابة
+        if (is_dir($logDir) && (is_writable($logDir) || @is_writable($logFile))) {
+            $result = @file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
+            if ($result !== false) {
+                $written = true;
+                // لا نكسر الحلقة - نكتب في جميع الملفات المتاحة
+            }
+        }
+    }
+    
+    // إذا فشلت جميع المحاولات، على الأقل error_log يعمل
+    if (!$written) {
+        error_log("CRITICAL: Could not write to any log file. Message: $message");
+        // محاولة أخيرة: كتابة في stdout (قد يعمل في بعض الاستضافات)
+        if (defined('STDOUT') && is_resource(STDOUT)) {
+            @fwrite(STDOUT, $logMessage);
+        }
+    }
+    
+    // تسجيل معلومات إضافية عن حالة الكتابة (فقط للرسائل المهمة)
+    if (strpos($message, '=== ') !== false || strpos($message, 'ERROR') !== false || strpos($message, 'SUCCESS') !== false) {
+        error_log("[IMPORT-DEBUG] Written: " . ($written ? 'YES' : 'NO') . " | Message: " . substr($message, 0, 100));
     }
 }
 
@@ -134,7 +154,29 @@ try {
 // اختبار دالة التسجيل في البداية
 logImport('=== API CALLED ===');
 logImport('Request method: ' . $_SERVER['REQUEST_METHOD']);
-logImport('Log file path: ' . (defined('PRIVATE_STORAGE_PATH') ? PRIVATE_STORAGE_PATH . '/logs/import_customers.log' : __DIR__ . '/../storage/logs/import_customers.log'));
+logImport('Timestamp: ' . date('Y-m-d H:i:s'));
+logImport('PHP Version: ' . PHP_VERSION);
+logImport('Memory limit: ' . ini_get('memory_limit'));
+logImport('Max execution time: ' . ini_get('max_execution_time'));
+
+// تسجيل معلومات الاستضافة
+logImport('Server: ' . ($_SERVER['SERVER_SOFTWARE'] ?? 'Unknown'));
+logImport('Document root: ' . ($_SERVER['DOCUMENT_ROOT'] ?? 'Unknown'));
+logImport('Script path: ' . __FILE__);
+logImport('Base dir: ' . __DIR__);
+
+// التحقق من الصلاحيات
+logImport('Current user ID: ' . ($currentUser['id'] ?? 'Unknown'));
+logImport('Current user role: ' . ($currentUser['role'] ?? 'Unknown'));
+
+// تسجيل معلومات الملف
+if (isset($_FILES['excel_file'])) {
+    logImport('File name: ' . ($_FILES['excel_file']['name'] ?? 'Unknown'));
+    logImport('File size: ' . ($_FILES['excel_file']['size'] ?? 0) . ' bytes');
+    logImport('File error: ' . ($_FILES['excel_file']['error'] ?? 'Unknown'));
+} else {
+    logImport('WARNING: No file uploaded');
+}
 
 // التحقق من نوع الطلب
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -349,13 +391,25 @@ try {
         }
     }
     
-    if (empty($rows) || count($rows) < 2) {
+    if (empty($rows)) {
+        logImport('ERROR: No rows found in file');
         echo json_encode([
             'success' => false,
-            'message' => 'الملف فارغ أو لا يحتوي على بيانات'
+            'message' => 'الملف فارغ أو لا يمكن قراءته'
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
+    
+    if (count($rows) < 2) {
+        logImport('ERROR: File has only ' . count($rows) . ' row(s). Need at least 2 rows (header + data).');
+        echo json_encode([
+            'success' => false,
+            'message' => 'الملف يجب أن يحتوي على رأس الأعمدة في الصف الأول وصف واحد على الأقل من البيانات. الملف الحالي يحتوي على ' . count($rows) . ' صف فقط.'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
+    logImport('File read successfully. Total rows: ' . count($rows) . ' (1 header + ' . (count($rows) - 1) . ' data rows)');
     
     // قراءة رؤوس الأعمدة من الصف الأول
     logImport('=== READING HEADERS ===');
@@ -650,10 +704,13 @@ try {
     logImport('=== STARTING DATA PROCESSING ===');
     logImport('Total rows in file: ' . count($rows));
     logImport('Total data rows (excluding header): ' . (count($rows) - 1));
+    logImport('Current user role: ' . ($currentUser['role'] ?? 'unknown'));
+    logImport('Current user ID: ' . ($currentUser['id'] ?? 'unknown'));
     
     $imported = 0;
     $skipped = 0;
     $errors = [];
+    $emptyRows = 0;
     
     // التحقق من وجود أعمدة في جدول customers
     $hasLatitudeColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'latitude'"));
@@ -662,9 +719,12 @@ try {
     $hasRegionIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'region_id'"));
     
     // بدء المعاملة
-    $db->beginTransaction();
-    
+    $transactionStarted = false;
+    $transactionCommitted = false;
     try {
+        $db->beginTransaction();
+        $transactionStarted = true;
+        logImport('✓ Transaction started');
         for ($i = 1; $i < count($rows); $i++) {
             $row = $rows[$i];
             
@@ -675,13 +735,24 @@ try {
                 logImport("Full row data: " . json_encode($row, JSON_UNESCAPED_UNICODE));
             }
             
-            // تخطي الصفوف الفارغة
-            if (empty($row[$nameIndex]) || trim($row[$nameIndex]) === '') {
-                if ($i <= 5) {
-                    logImport("Row $i - Skipping empty row (name is empty)");
+            // قراءة اسم العميل أولاً للتحقق من أنه غير فارغ
+            $name = '';
+            if (isset($row[$nameIndex])) {
+                $name = trim($row[$nameIndex]);
+                // إزالة BOM إذا كان موجوداً
+                if (substr($name, 0, 3) === "\xEF\xBB\xBF") {
+                    $name = substr($name, 3);
                 }
+            }
+            
+            // تخطي الصفوف الفارغة
+            if (empty($name) || $name === '') {
+                $emptyRows++;
+                logImport("Row $i - Skipping empty row (name is empty or null)");
                 continue;
             }
+            
+            logImport("Row $i - Processing customer: '$name'");
             
             // قراءة البيانات مع التعامل مع الأعمدة الفارغة
             // قراءة ايدي العميل
@@ -690,13 +761,8 @@ try {
                 $rawValue = trim($row[$customerIdIndex]);
                 if ($rawValue !== '' && is_numeric($rawValue)) {
                     $customerIdFromFile = (int)$rawValue;
+                    logImport("Row $i - Found customer ID in file: $customerIdFromFile");
                 }
-            }
-            
-            // قراءة اسم العميل
-            $name = '';
-            if (isset($row[$nameIndex])) {
-                $name = trim($row[$nameIndex]);
             }
             
             // قراءة رقم الهاتف الأول
@@ -949,12 +1015,15 @@ try {
                 if ($existingCustomer) {
                     $customerId = $customerIdFromFile;
                     $isUpdate = true;
+                    logImport("Row $i - Will UPDATE existing customer ID=$customerIdFromFile");
                 } else {
-                    // إذا كان مندوب يحاول تحديث عميل لا ينتمي له، نتخطاه
+                    // إذا كان مندوب يحاول تحديث عميل لا ينتمي له، ننشئ عميل جديد بدلاً من التخطي
                     if (isset($currentUser['role']) && $currentUser['role'] === 'sales') {
-                        logImport("Row $i - Skipping customer ID=$customerIdFromFile (does not belong to sales rep)");
-                        $skipped++;
-                        continue;
+                        logImport("Row $i - Customer ID=$customerIdFromFile does not belong to sales rep. Creating new customer instead.");
+                        // سنستمر في العملية لإنشاء عميل جديد (isUpdate سيبقى false)
+                    } else {
+                        logImport("Row $i - Customer ID=$customerIdFromFile not found. Creating new customer.");
+                        // سنستمر في العملية لإنشاء عميل جديد
                     }
                 }
             }
@@ -963,23 +1032,41 @@ try {
             if (!$isUpdate) {
                 // للمندوبين: التحقق من التكرار فقط في عملائهم
                 if (isset($currentUser['role']) && $currentUser['role'] === 'sales') {
-                    $duplicateCheck = "SELECT id FROM customers WHERE name = ? AND (created_by = ? OR rep_id = ?)";
-                    $duplicateParams = [$name, $currentUser['id'], $currentUser['id']];
+                    // التحقق من التكرار بناءً على الاسم + الهاتف (إذا كان موجوداً)
+                    if ($phone && trim($phone) !== '') {
+                        // إذا كان هناك هاتف، نتحقق من الاسم + الهاتف
+                        $duplicateCheck = "SELECT id FROM customers WHERE name = ? AND phone = ? AND (created_by = ? OR rep_id = ?)";
+                        $duplicateParams = [$name, $phone, $currentUser['id'], $currentUser['id']];
+                    } else {
+                        // إذا لم يكن هناك هاتف، نتحقق من الاسم فقط (لكن فقط إذا كان هناك عميل بنفس الاسم بدون هاتف)
+                        $duplicateCheck = "SELECT id FROM customers WHERE name = ? AND (phone IS NULL OR phone = '') AND (created_by = ? OR rep_id = ?)";
+                        $duplicateParams = [$name, $currentUser['id'], $currentUser['id']];
+                    }
                 } else {
-                    $duplicateCheck = "SELECT id FROM customers WHERE name = ?";
-                    $duplicateParams = [$name];
+                    // للمدير/المحاسب: التحقق من التكرار في جميع العملاء
+                    if ($phone && trim($phone) !== '') {
+                        // إذا كان هناك هاتف، نتحقق من الاسم + الهاتف
+                        $duplicateCheck = "SELECT id FROM customers WHERE name = ? AND phone = ?";
+                        $duplicateParams = [$name, $phone];
+                    } else {
+                        // إذا لم يكن هناك هاتف، نتحقق من الاسم فقط (لكن فقط إذا كان هناك عميل بنفس الاسم بدون هاتف)
+                        $duplicateCheck = "SELECT id FROM customers WHERE name = ? AND (phone IS NULL OR phone = '')";
+                        $duplicateParams = [$name];
+                    }
                 }
                 
-                if ($phone) {
-                    $duplicateCheck .= " AND (phone = ? OR phone IS NULL)";
-                    $duplicateParams[] = $phone;
-                }
+                logImport("Row $i - Checking for duplicate: name='$name', phone=" . ($phone ? "'$phone'" : "NULL"));
+                logImport("Row $i - Duplicate check SQL: $duplicateCheck");
+                logImport("Row $i - Duplicate check params: " . json_encode($duplicateParams, JSON_UNESCAPED_UNICODE));
                 
                 $existing = $db->queryOne($duplicateCheck, $duplicateParams);
                 
                 if ($existing) {
                     $skipped++;
+                    logImport("Row $i - ✗ DUPLICATE FOUND - Skipping customer: '$name' " . ($phone ? "(Phone: $phone)" : "(No phone)") . " (Existing ID: {$existing['id']})");
                     continue;
+                } else {
+                    logImport("Row $i - ✓ No duplicate found for: '$name' " . ($phone ? "(Phone: $phone)" : "(No phone)") . " - Will import");
                 }
             }
             
@@ -1102,6 +1189,11 @@ try {
                     }
                     
                     try {
+                        logImport("Row $i - Attempting INSERT for customer: '$name'");
+                        logImport("  - rep_id: " . ($repId ?? 'NULL'));
+                        logImport("  - created_by: " . $currentUser['id']);
+                        logImport("  - created_by_admin: " . ($currentUser['role'] === 'sales' ? 0 : 1));
+                        
                         $db->execute(
                             "INSERT INTO customers (" . implode(', ', $customerColumns) . ") 
                              VALUES (" . implode(', ', $customerPlaceholders) . ")",
@@ -1109,6 +1201,10 @@ try {
                         );
                         
                         $customerId = $db->getLastInsertId();
+                        if ($customerId <= 0) {
+                            logImport("✗ ERROR: Insert succeeded but customerId is invalid: $customerId");
+                            throw new Exception("فشل الحصول على معرف العميل بعد الإدراج");
+                        }
                         logImport("✓ Customer inserted successfully: ID=$customerId");
                         logImport("  - Name: '$name'");
                         logImport("  - Phone: " . ($phone ?? 'NULL') . " (from index $phoneIndex)");
@@ -1218,22 +1314,135 @@ try {
                 }
                 
                 $imported++;
+                logImport("Row $i - Customer imported successfully. Total imported so far: $imported");
             } catch (Exception $insertError) {
+                logImport("Row $i - ERROR: " . $insertError->getMessage());
                 $errors[] = "سطر " . ($i + 1) . ": " . $insertError->getMessage();
             }
         }
         
-        // تأكيد المعاملة
-        $db->commit();
+        logImport("=== LOOP COMPLETED ===");
+        logImport("Total imported: $imported");
+        logImport("Total skipped: $skipped");
+        logImport("Total errors: " . count($errors));
+        logImport("Transaction started: " . ($transactionStarted ? 'YES' : 'NO'));
+        
+        // تأكيد المعاملة - يجب أن يتم قبل أي شيء آخر
+        logImport('=== COMMITTING TRANSACTION ===');
+        $transactionCommitted = false;
+        try {
+            if ($transactionStarted) {
+                logImport('Attempting to commit transaction...');
+                $commitResult = $db->commit();
+                logImport('Commit result: ' . ($commitResult ? 'SUCCESS' : 'FAILED'));
+                
+                if ($commitResult === false) {
+                    $errorMsg = 'Commit returned false - transaction may have failed';
+                    logImport('✗ ERROR: ' . $errorMsg);
+                    throw new Exception($errorMsg);
+                }
+                
+                $transactionCommitted = true;
+                $transactionStarted = false; // تم commit، لا نحتاج rollback
+                logImport('✓ Transaction committed successfully');
+                
+                // التحقق النهائي من البيانات المحفوظة - بعد commit مباشرة
+                if ($imported > 0) {
+                    logImport('=== VERIFYING SAVED DATA AFTER COMMIT ===');
+                    try {
+                        // استخدام استعلام بسيط للتحقق - بدون prepared statement لتجنب أي مشاكل
+                        $userId = (int)$currentUser['id'];
+                        $verifyQuery = "SELECT COUNT(*) as count FROM customers WHERE created_by = $userId AND created_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)";
+                        $verifyResult = $db->rawQuery($verifyQuery, false);
+                        
+                        if ($verifyResult) {
+                            $row = $verifyResult->fetch_assoc();
+                            $recentCount = (int)($row['count'] ?? 0);
+                            logImport("Recent customers (last 5 minutes): $recentCount (expected: $imported)");
+                            
+                            if ($recentCount < $imported) {
+                                logImport("⚠ WARNING: Recent count ($recentCount) is less than imported count ($imported)");
+                                logImport("  This may indicate that data was not saved properly");
+                                
+                                // محاولة التحقق مرة أخرى بعد ثانية
+                                sleep(1);
+                                $verifyResult2 = $db->rawQuery($verifyQuery, false);
+                                if ($verifyResult2) {
+                                    $row2 = $verifyResult2->fetch_assoc();
+                                    $recentCount2 = (int)($row2['count'] ?? 0);
+                                    logImport("Second verification (after 1 second): $recentCount2");
+                                }
+                            } else {
+                                logImport("✓ SUCCESS: All imported customers are saved in database");
+                            }
+                        } else {
+                            logImport("⚠ Could not execute verification query");
+                        }
+                    } catch (Exception $verifyError) {
+                        logImport('⚠ Warning: Could not verify saved data: ' . $verifyError->getMessage());
+                    }
+                }
+            } else {
+                logImport('⚠ No transaction to commit');
+            }
+        } catch (Exception $commitError) {
+            logImport('✗ ERROR committing transaction: ' . $commitError->getMessage());
+            logImport('✗ Stack trace: ' . $commitError->getTraceAsString());
+            if ($transactionStarted) {
+                try {
+                    $db->rollBack();
+                    logImport('✓ Transaction rolled back after commit error');
+                } catch (Exception $rollbackError) {
+                    logImport('✗ ERROR during rollback after commit error: ' . $rollbackError->getMessage());
+                }
+                $transactionStarted = false;
+            }
+            throw $commitError;
+        }
         
         logImport('=== IMPORT COMPLETED ===');
         logImport("Imported: $imported customers");
         logImport("Skipped: $skipped customers");
         logImport("Errors: " . count($errors));
+        logImport("Empty rows skipped: $emptyRows");
+        logImport("Total rows processed: " . (count($rows) - 1));
         
-        // مسح الكاش
-        if (class_exists('Cache')) {
-            Cache::flush();
+        // التحقق من أن هناك استيراد فعلي
+        if ($imported === 0 && $skipped === 0 && empty($errors)) {
+            logImport('WARNING: No customers imported, skipped, or errors. File may be empty or invalid.');
+            $totalDataRows = count($rows) - 1;
+            $errorMessage = 'لم يتم استيراد أي عميل.';
+            if ($emptyRows > 0) {
+                $errorMessage .= " تم تخطي {$emptyRows} صف فارغ.";
+            }
+            if ($totalDataRows === 0) {
+                $errorMessage .= ' الملف لا يحتوي على صفوف بيانات (فقط رأس الأعمدة).';
+            } else {
+                $errorMessage .= ' يرجى التحقق من: 1) أن عمود "اسم العميل" موجود في الصف الأول، 2) أن البيانات غير فارغة، 3) أن الأعمدة مطابقة للأسماء المدعومة';
+            }
+            echo json_encode([
+                'success' => false,
+                'imported' => 0,
+                'skipped' => 0,
+                'errors' => [],
+                'message' => $errorMessage,
+                'debug_info' => [
+                    'total_rows' => $totalDataRows,
+                    'empty_rows' => $emptyRows,
+                    'name_index' => $nameIndex
+                ]
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        
+        // مسح الكاش بعد commit (لا يؤثر على البيانات المحفوظة)
+        try {
+            if (class_exists('Cache')) {
+                Cache::flush();
+            }
+        } catch (Exception $cacheError) {
+            // لا نوقف العملية إذا فشل مسح الكاش
+            logImport('⚠ Warning: Failed to flush cache: ' . $cacheError->getMessage());
         }
         
         $message = "تم استيراد {$imported} عميل بنجاح";
@@ -1244,29 +1453,138 @@ try {
             $message .= ". حدثت أخطاء في " . count($errors) . " سطر";
         }
         
-        echo json_encode([
+        // إذا لم يتم استيراد أي عميل ولكن تم تخطي بعضها، فهذا يعني أن جميع العملاء مكررين
+        if ($imported === 0 && $skipped > 0) {
+            $message = "تم تخطي جميع العملاء ({$skipped} عميل) لأنهم موجودون مسبقاً في قاعدة البيانات";
+        }
+        
+        // إضافة معلومات التصحيح في response
+        $response = [
             'success' => true,
             'imported' => $imported,
             'skipped' => $skipped,
             'errors' => $errors,
-            'message' => $message,
-            'log_file' => 'storage/logs/import_customers.log'
-        ], JSON_UNESCAPED_UNICODE);
+            'message' => $message
+        ];
+        
+        // إضافة معلومات التصحيح إذا كانت متاحة
+        global $importDebugLog;
+        if (isset($importDebugLog) && !empty($importDebugLog)) {
+            // إضافة آخر 30 سطر من السجلات
+            $response['debug_log'] = array_slice($importDebugLog, -30);
+            $response['debug_log_count'] = count($importDebugLog);
+        } else {
+            $response['debug_log_warning'] = 'No debug log available - logImport may not be working';
+        }
+        
+        // إضافة معلومات عن حالة المعاملة
+        $response['transaction_info'] = [
+            'started' => $transactionStarted ?? false,
+            'committed' => $transactionCommitted ?? false
+        ];
+        
+        // التحقق النهائي من البيانات المحفوظة
+        if ($imported > 0 && $transactionCommitted) {
+            try {
+                $verifyQuery = "SELECT COUNT(*) as count FROM customers WHERE created_by = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)";
+                $verifyResult = $db->queryOne($verifyQuery, [$currentUser['id']]);
+                $savedCount = (int)($verifyResult['count'] ?? 0);
+                $response['verified_saved'] = $savedCount;
+                $response['verified_match'] = ($savedCount >= $imported);
+                
+                if ($savedCount < $imported) {
+                    $response['warning'] = "تم حفظ $savedCount عميل فقط من أصل $imported";
+                }
+            } catch (Exception $verifyError) {
+                $response['verify_error'] = $verifyError->getMessage();
+            }
+        }
+        
+        echo json_encode($response, JSON_UNESCAPED_UNICODE);
+        exit;
         
     } catch (Exception $e) {
-        $db->rollBack();
-        $errorMsg = 'Transaction rollback error: ' . $e->getMessage();
+        // تسجيل الخطأ فوراً في error_log (يعمل دائماً)
+        error_log('=== IMPORT EXCEPTION CAUGHT ===');
+        error_log('Error: ' . $e->getMessage());
+        error_log('File: ' . $e->getFile());
+        error_log('Line: ' . $e->getLine());
+        error_log('Trace: ' . $e->getTraceAsString());
+        
+        // التحقق من حالة المعاملة قبل rollback
+        // فقط إذا كانت المعاملة لا تزال نشطة ولم يتم commit
+        if ($transactionStarted && !$transactionCommitted) {
+            try {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                    logImport('✓ Transaction rolled back due to error');
+                    error_log('Transaction rolled back');
+                } else {
+                    logImport('⚠ Transaction not active, skipping rollback');
+                    error_log('Transaction not active, skipping rollback');
+                }
+            } catch (Exception $rollbackError) {
+                logImport('✗ ERROR during rollback: ' . $rollbackError->getMessage());
+                error_log('Rollback error: ' . $rollbackError->getMessage());
+            }
+            $transactionStarted = false;
+        } else {
+            if ($transactionCommitted) {
+                logImport('⚠ Transaction already committed, data is saved. Error occurred after commit.');
+                error_log('Transaction already committed - data should be saved');
+            } else {
+                logImport('⚠ No transaction to rollback');
+                error_log('No transaction to rollback');
+            }
+        }
+        
+        $errorMsg = 'Transaction error: ' . $e->getMessage();
         $errorTrace = 'Stack trace: ' . $e->getTraceAsString();
         
-        logImport('✗ TRANSACTION ROLLBACK: ' . $errorMsg);
+        logImport('✗ TRANSACTION ERROR: ' . $errorMsg);
         logImport('✗ STACK TRACE: ' . $errorTrace);
         
         error_log($errorMsg);
         error_log($errorTrace);
-        throw $e;
+        
+        // إذا تم commit بالفعل، لا نرمي exception - البيانات محفوظة
+        // فقط نرمي exception إذا كان commit لم يحدث
+        if (!$transactionCommitted) {
+            throw $e;
+        } else {
+            // البيانات محفوظة، لكن حدث خطأ بعد commit
+            // نرسل response بنجاح مع تحذير
+            logImport('⚠ Data was saved but error occurred after commit. Sending success response.');
+            error_log('Data was saved but error occurred after commit');
+            
+            global $importDebugLog;
+            $response = [
+                'success' => true,
+                'imported' => $imported ?? 0,
+                'skipped' => $skipped ?? 0,
+                'errors' => $errors ?? [],
+                'message' => "تم استيراد " . ($imported ?? 0) . " عميل بنجاح (حدث خطأ بعد الحفظ ولكن البيانات محفوظة)",
+                'warning' => 'حدث خطأ بعد حفظ البيانات ولكن جميع البيانات تم حفظها بنجاح',
+                'error_after_commit' => $e->getMessage()
+            ];
+            
+            if (isset($importDebugLog) && !empty($importDebugLog)) {
+                $response['debug_log'] = array_slice($importDebugLog, -30);
+            }
+            
+            echo json_encode($response, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
     }
     
 } catch (Exception $e) {
+    // تسجيل فوراً في error_log (يعمل دائماً)
+    error_log('=== OUTER EXCEPTION HANDLER ===');
+    error_log('Import customers error: ' . $e->getMessage());
+    error_log('File: ' . $e->getFile());
+    error_log('Line: ' . $e->getLine());
+    error_log('Stack trace: ' . $e->getTraceAsString());
+    
     $errorMsg = 'Import customers error: ' . $e->getMessage();
     $errorTrace = 'Stack trace: ' . $e->getTraceAsString();
     
@@ -1274,45 +1592,34 @@ try {
     logImport('✗ EXCEPTION: ' . $errorMsg);
     logImport('✗ STACK TRACE: ' . $errorTrace);
     
-    // تسجيل في error_log
+    // تسجيل في error_log مرة أخرى للتأكد
     error_log($errorMsg);
     error_log($errorTrace);
     
     // التأكد من عدم وجود output قبل JSON
-    if (ob_get_level() > 0) {
-        ob_clean();
+    while (ob_get_level() > 0) {
+        ob_end_clean();
     }
     
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'message' => 'حدث خطأ أثناء استيراد البيانات: ' . $e->getMessage(),
-        'error_details' => 'يرجى التحقق من ملف السجلات لمزيد من التفاصيل',
-        'log_file' => defined('PRIVATE_STORAGE_PATH') ? PRIVATE_STORAGE_PATH . '/logs/import_customers.log' : 'storage/logs/import_customers.log'
+        'message' => 'حدث خطأ أثناء استيراد البيانات: ' . $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
     exit;
 } catch (Throwable $e) {
-    $errorMsg = 'Import customers fatal error: ' . $e->getMessage();
-    $errorTrace = 'Stack trace: ' . $e->getTraceAsString();
-    
-    // تسجيل في logImport
-    logImport('✗ FATAL ERROR: ' . $errorMsg);
-    logImport('✗ STACK TRACE: ' . $errorTrace);
-    
-    // تسجيل في error_log
-    error_log($errorMsg);
-    error_log($errorTrace);
+    error_log('Import customers fatal error: ' . $e->getMessage());
+    error_log('Stack trace: ' . $e->getTraceAsString());
     
     // التأكد من عدم وجود output قبل JSON
-    if (ob_get_level() > 0) {
-        ob_clean();
+    while (ob_get_level() > 0) {
+        ob_end_clean();
     }
     
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'message' => 'حدث خطأ فادح أثناء استيراد البيانات. يرجى التحقق من ملف السجلات',
-        'log_file' => defined('PRIVATE_STORAGE_PATH') ? PRIVATE_STORAGE_PATH . '/logs/import_customers.log' : 'storage/logs/import_customers.log'
+        'message' => 'حدث خطأ فادح أثناء استيراد البيانات. يرجى التحقق من ملف error_log'
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }

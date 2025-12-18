@@ -13,7 +13,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/chat.php';
 require_once __DIR__ . '/../../includes/path_helper.php';
 
-requireRole(['manager', 'production', 'sales', 'accountant']);
+requireRole(['manager', 'production', 'sales', 'accountant', 'developer']);
 
 $currentUser = getCurrentUser();
 $currentUserId = (int) ($currentUser['id'] ?? 0);

@@ -9,6 +9,146 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
+/**
+ * معالج الأخطاء الشامل - يمنع ظهور رسائل خطأ المتصفح ويرسل المستخدم لتسجيل الدخول
+ */
+function handleErrorAndRedirect($errno, $errstr, $errfile, $errline, $context = null) {
+    // تجاهل الأخطاء التي تم إيقافها باستخدام @
+    if (!(error_reporting() & $errno)) {
+        return false;
+    }
+    
+    // تجاهل بعض الأخطاء غير الحرجة
+    $nonCriticalErrors = [E_NOTICE, E_WARNING, E_DEPRECATED, E_STRICT];
+    if (in_array($errno, $nonCriticalErrors, true)) {
+        return false; // استمر التنفيذ للأخطاء غير الحرجة
+    }
+    
+    // للأخطاء الحرجة (Fatal Errors، Parse Errors، إلخ) - إعادة التوجيه
+    // تجنب الحلقات اللانهائية من خلال التحقق من أننا لسنا في صفحة تسجيل الدخول
+    $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+    if (strpos($currentScript, 'index.php') !== false && basename($currentScript) === 'index.php') {
+        return false; // لا نعيد التوجيه إذا كنا بالفعل في صفحة تسجيل الدخول
+    }
+    
+    // تم إزالة نظام الجلسات - لا حاجة لحفظ معلومات الخطأ في session
+    
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    
+    // محاولة إعادة التوجيه إلى صفحة تسجيل الدخول
+    $loginUrl = '/index.php';
+    if (function_exists('getRelativeUrl')) {
+        $loginUrl = getRelativeUrl('index.php');
+    } else {
+        // محاولة بناء URL نسبي بناءً على المسار الحالي
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+        $pathParts = explode('/', trim(parse_url($requestUri, PHP_URL_PATH), '/'));
+        $basePath = '';
+        foreach ($pathParts as $part) {
+            if (in_array($part, ['dashboard', 'modules', 'api', 'assets', 'includes']) || strpos($part, '.php') !== false) {
+                break;
+            }
+            if (!empty($part)) {
+                $basePath .= '/' . $part;
+            }
+        }
+        if (!empty($basePath)) {
+            $loginUrl = $basePath . '/index.php';
+        }
+    }
+    
+    // تنظيف URL
+    $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
+    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+    if (strpos($loginUrl, '/') !== 0) {
+        $loginUrl = '/' . $loginUrl;
+    }
+    
+    // إرسال header redirect إذا أمكن
+    if (!@headers_sent()) {
+        @header('Location: ' . $loginUrl, true, 303);
+        exit;
+    } else {
+        // استخدام JavaScript redirect إذا تم إرسال headers بالفعل
+        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+        echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
+        exit;
+    }
+}
+
+/**
+ * معالج الأخطاء القاتلة (Fatal Errors)
+ */
+function handleFatalError() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_PARSE, E_RECOVERABLE_ERROR], true)) {
+        handleErrorAndRedirect($error['type'], $error['message'], $error['file'], $error['line']);
+    }
+}
+
+/**
+ * معالج الاستثناءات (Exceptions)
+ */
+function handleException($exception) {
+    // تجنب الحلقات اللانهائية
+    $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+    if (strpos($currentScript, 'index.php') !== false && basename($currentScript) === 'index.php') {
+        // إذا كنا في صفحة تسجيل الدخول، اعرض الخطأ بشكل طبيعي
+        return false;
+    }
+    
+    // تم إزالة نظام الجلسات - لا حاجة لحفظ معلومات الخطأ في session
+    
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    
+    // إعادة التوجيه إلى صفحة تسجيل الدخول
+    $loginUrl = '/index.php';
+    if (function_exists('getRelativeUrl')) {
+        $loginUrl = getRelativeUrl('index.php');
+    }
+    
+    // تنظيف URL
+    $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
+    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+    if (strpos($loginUrl, '/') !== 0) {
+        $loginUrl = '/' . $loginUrl;
+    }
+    
+    if (!@headers_sent()) {
+        @header('Location: ' . $loginUrl, true, 303);
+        exit;
+    } else {
+        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+        echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
+        exit;
+    }
+}
+
+// تسجيل معالجات الأخطاء (فقط إذا لم نكن في صفحة تسجيل الدخول)
+$currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
+$isLoginPage = (strpos($currentScript, 'index.php') !== false && basename($currentScript) === 'index.php');
+
+if (!$isLoginPage) {
+    // تسجيل معالج الأخطاء
+    set_error_handler('handleErrorAndRedirect', E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED & ~E_STRICT);
+    
+    // تسجيل معالج الأخطاء القاتلة
+    register_shutdown_function('handleFatalError');
+    
+    // تسجيل معالج الاستثناءات
+    set_exception_handler('handleException');
+}
+
 define('DB_HOST', 'localhost');
 define('DB_PORT', '3306');
 define('DB_USER', 'co_db');
@@ -52,8 +192,7 @@ define('DATE_FORMAT', 'd/m/Y');
 define('TIME_FORMAT', 'g:i A'); // نظام 12 ساعة صباحاً ومساءً
 define('DATETIME_FORMAT', 'd/m/Y g:i A');
 
-// إعدادات الجلسة - 7 أيام (604800 ثانية)
-define('SESSION_LIFETIME', 3600 * 24 * 7); // 7 أيام
+// تم إزالة نظام الجلسات - لا حاجة لإعدادات الجلسة
 
 // إعدادات timeout لمنع توقف الخادم
 // زيادة timeout للطلبات الطويلة (مثل keep-alive)
@@ -69,140 +208,7 @@ if (!ini_get('default_socket_timeout') || ini_get('default_socket_timeout') > 10
     @ini_set('default_socket_timeout', 5); // 5 ثواني للاتصال بقاعدة البيانات (مخفض)
 }
 
-// إعدادات الجلسة - يجب تعيينها قبل بدء الجلسة
-// التحقق من حالة الجلسة قبل محاولة تغيير الإعدادات
-if (session_status() === PHP_SESSION_NONE) {
-    ini_set('session.gc_maxlifetime', SESSION_LIFETIME);
-    ini_set('session.cookie_lifetime', SESSION_LIFETIME);
-    // إعدادات إضافية لتحسين استقرار الجلسات
-    ini_set('session.gc_probability', 1);
-    ini_set('session.gc_divisor', 1000); // تنظيف الجلسات القديمة بنسبة 0.1%
-}
-
-$isHttps = (
-    (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-    (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
-);
-
-// تحسين إعدادات session cookie للعمل بشكل أفضل على الهواتف
-$sessionCookieOptions = [
-    'lifetime' => SESSION_LIFETIME,
-    'path' => '/',
-    'domain' => '',
-    'secure' => $isHttps,
-    'httponly' => true,
-    // استخدام 'None' على HTTPS للسماح بالعمل على جميع المتصفحات، أو 'Lax' كبديل آمن
-    'samesite' => $isHttps ? 'None' : 'Lax',
-];
-
-// التأكد من أن الجلسة نشطة بشكل صحيح
-if (session_status() === PHP_SESSION_NONE) {
-    // الجلسة لم تبدأ بعد - بدء الجلسة مع الإعدادات الصحيحة
-    session_set_cookie_params($sessionCookieOptions);
-    @session_start();
-} elseif (session_status() === PHP_SESSION_ACTIVE) {
-    // الجلسة نشطة بالفعل - تحديث الإعدادات فقط
-    // تحديث إعدادات الكوكي الحالية إن كانت الجلسة قد بدأت بالفعل قبل تضمين الملف
-    // تحديث تلقائي لوقت انتهاء الجلسة عند كل طلب نشط
-    if (!headers_sent() && session_id()) {
-        // تحديث وقت انتهاء الجلسة عند كل طلب نشط (إذا كان المستخدم مسجل دخول)
-        if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
-            // تحديث وقت آخر نشاط
-            $_SESSION['last_activity'] = time();
-            
-            // تحديث الكوكي بوقت انتهاء جديد
-            setcookie(session_name(), session_id(), [
-                'expires' => time() + SESSION_LIFETIME,
-                'path' => '/',
-                'domain' => '',
-                'secure' => $isHttps,
-                'httponly' => true,
-                'samesite' => $isHttps ? 'None' : 'Lax',
-            ]);
-        } else {
-            // للمستخدمين غير المسجلين، تحديث عادي
-            setcookie(session_name(), session_id(), [
-                'expires' => time() + SESSION_LIFETIME,
-                'path' => '/',
-                'domain' => '',
-                'secure' => $isHttps,
-                'httponly' => true,
-                'samesite' => 'Lax',
-            ]);
-        }
-    }
-}
-
-// تحميل session logger إذا كان متوفراً
-if (file_exists(__DIR__ . '/session_logger.php')) {
-    require_once __DIR__ . '/session_logger.php';
-}
-
-// التحقق الأمني المبسط: فقط تحديث الجلسة دون إلغاء الجلسة بشكل مفرط
-// الفحوصات الأمنية الصارمة تتم في auth.php عند الحاجة
-// ملاحظة: تحديث الـ cookie يتم في الكود أعلاه (lines 85-111)، لا حاجة لتحديثه هنا مرة أخرى
-if (session_status() === PHP_SESSION_ACTIVE) {
-    // إذا كان المستخدم مسجل دخول، تحديث وقت آخر نشاط
-    if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        // التحقق من أننا في profile.php أو attendance.php - منع حذف الجلسة
-        $isProfilePage = defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true;
-        $isAttendancePage = defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true;
-        if (!$isProfilePage && !$isAttendancePage) {
-            $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
-            if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
-                $isProfilePage = true;
-            } elseif (strpos($currentScript, 'attendance.php') !== false || basename($currentScript) === 'attendance.php') {
-                $isAttendancePage = true;
-            }
-        }
-        if (!$isProfilePage && !$isAttendancePage) {
-            $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-            if (strpos($requestUri, 'profile.php') !== false) {
-                $isProfilePage = true;
-            } elseif (strpos($requestUri, 'attendance.php') !== false) {
-                $isAttendancePage = true;
-            }
-        }
-        
-        $isProtectedPage = $isProfilePage || $isAttendancePage;
-        
-        // التحقق من طلب keep-alive API - عدم حذف الجلسة أبداً في هذا الحالة
-        $isKeepAliveRequest = false;
-        $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
-        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-        if (strpos($currentScript, 'session_keepalive.php') !== false || 
-            strpos($requestUri, 'session_keepalive.php') !== false ||
-            (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest' && strpos($requestUri, 'keepalive') !== false)) {
-            $isKeepAliveRequest = true;
-        }
-        
-        // تحديث وقت آخر نشاط
-        $_SESSION['last_activity'] = time();
-        
-        // تحديث last_activity_previous أيضاً عند كل طلب نشط (إلا إذا كان keep-alive request)
-        // هذا يمنع حذف الجلسة بشكل خاطئ عندما يكون المستخدم نشطاً
-        if (!$isKeepAliveRequest) {
-            $_SESSION['last_activity_previous'] = time();
-        } elseif (!isset($_SESSION['last_activity_previous'])) {
-            // إذا كان keep-alive request ولم يكن هناك previous، نضبطه لأول مرة
-            $_SESSION['last_activity_previous'] = time();
-        }
-        
-        // === تعطيل حذف الجلسة بناءً على last_activity_previous ===
-        // هذا المنطق يعتمد على $_SESSION وليس على قاعدة البيانات
-        // التحقق من صحة الجلسة يتم في isLoggedIn() بناءً على expires_at في قاعدة البيانات فقط
-        // لذلك لا نحتاج لحذف الجلسة هنا لأن isLoggedIn() سيتحقق من expires_at في قاعدة البيانات
-        
-        // تحديث last_activity_previous لأغراض أخرى فقط (مثل الإحصائيات)
-        // لكن لا نستخدمه لحذف الجلسة - التحقق من الجلسة يتم في isLoggedIn() فقط
-        if (!isset($_SESSION['last_activity_previous'])) {
-            $_SESSION['last_activity_previous'] = time();
-        } elseif (!$isKeepAliveRequest) {
-            // تحديث last_activity_previous عند كل طلب نشط (باستثناء keep-alive)
-            $_SESSION['last_activity_previous'] = time();
-        }
-    }
-}
+// تم إزالة نظام الجلسات بالكامل - لا حاجة لأي كود متعلق بالجلسات
 
 // إعدادات الأمان
 define('PASSWORD_MIN_LENGTH', 6);
@@ -346,6 +352,12 @@ if (!defined('ASSETS_VERSION')) {
 }
 define('COMPANY_NAME', 'شركة البركة');
 
+// إعدادات وضع الصيانة
+// تغيير هذا إلى true لتفعيل وضع الصيانة
+if (!defined('MAINTENANCE_MODE')) {
+    define('MAINTENANCE_MODE', false);
+}
+
 // إعدادات التقارير
 define('REPORTS_AUTO_DELETE', true); // حذف التقارير بعد الإرسال
 define('REPORTS_RETENTION_HOURS', 24); // الاحتفاظ بالتقارير لمدة 24 ساعة
@@ -431,7 +443,8 @@ function clearCache() {
 
 // دالة مساعدة للحصول على اللغة الحالية
 function getCurrentLanguage() {
-    return $_SESSION['language'] ?? DEFAULT_LANGUAGE;
+    // تم إزالة نظام الجلسات - استخدام اللغة الافتراضية
+    return DEFAULT_LANGUAGE;
 }
 
 // دالة مساعدة للحصول على رمز العملة بعد تنظيفه من 262145
@@ -602,16 +615,16 @@ function getTextAlign() {
  * @param string|null $errorMessage رسالة الخطأ (اختياري)
  */
 function preventDuplicateSubmission($successMessage = null, $redirectParams = [], $redirectUrl = null, $role = null, $errorMessage = null) {
-    // إذا كانت هناك رسالة نجاح، حفظها في session
+    // تم إزالة نظام الجلسات - إضافة الرسائل كـ query parameters
     if ($successMessage !== null && $successMessage !== '') {
-        $_SESSION['success_message'] = $successMessage;
-        error_log("preventDuplicateSubmission: Saved success message to session: " . $successMessage);
+        $redirectParams['success'] = urlencode($successMessage);
+        error_log("preventDuplicateSubmission: Added success message to redirect params: " . $successMessage);
     }
     
-    // إذا كانت هناك رسالة خطأ، حفظها في session
+    // إذا كانت هناك رسالة خطأ، إضافتها كـ query parameter
     if ($errorMessage !== null && $errorMessage !== '') {
-        $_SESSION['error_message'] = $errorMessage;
-        error_log("preventDuplicateSubmission: Saved error message to session: " . $errorMessage);
+        $redirectParams['error'] = urlencode($errorMessage);
+        error_log("preventDuplicateSubmission: Added error message to redirect params: " . $errorMessage);
     }
     
     // بناء URL إعادة التوجيه
@@ -711,58 +724,36 @@ function preventDuplicateSubmission($successMessage = null, $redirectParams = []
 }
 
 /**
- * التحقق من وجود رسالة نجاح في session وعرضها
+ * التحقق من وجود رسالة نجاح في query parameters وعرضها
  * يجب استدعاؤها في بداية الصفحة بعد معالجة POST
  * 
  * @return string|null رسالة النجاح أو null
  */
 function getSuccessMessage() {
-    // استخدام request ID لمنع قراءة الرسالة مرتين في نفس الطلب
-    $requestId = $_SERVER['REQUEST_TIME_FLOAT'] . '_' . (session_id() ?: 'nosession');
-    
-    if (isset($_SESSION['success_message_read_request_id']) && 
-        $_SESSION['success_message_read_request_id'] === $requestId) {
-        // تم قراءة الرسالة بالفعل في هذا الطلب
-        return null;
-    }
-    
-    if (isset($_SESSION['success_message'])) {
-        $message = $_SESSION['success_message'];
-        unset($_SESSION['success_message']);
-        $_SESSION['success_message_read_request_id'] = $requestId; // وضع flag أن الرسالة تم قراءتها
-        return $message;
+    // تم إزالة نظام الجلسات - قراءة الرسالة من query parameters
+    if (isset($_GET['success']) && !empty($_GET['success'])) {
+        return urldecode($_GET['success']);
     }
     return null;
 }
 
 /**
- * التحقق من وجود رسالة خطأ في session وعرضها
+ * التحقق من وجود رسالة خطأ في query parameters وعرضها
  * يجب استدعاؤها في بداية الصفحة بعد معالجة POST
  * 
  * @return string|null رسالة الخطأ أو null
  */
 function getErrorMessage() {
-    // استخدام request ID لمنع قراءة الرسالة مرتين في نفس الطلب
-    $requestId = $_SERVER['REQUEST_TIME_FLOAT'] . '_' . (session_id() ?: 'nosession');
-    
-    if (isset($_SESSION['error_message_read_request_id']) && 
-        $_SESSION['error_message_read_request_id'] === $requestId) {
-        // تم قراءة الرسالة بالفعل في هذا الطلب
-        return null;
-    }
-    
-    if (isset($_SESSION['error_message'])) {
-        $message = $_SESSION['error_message'];
-        unset($_SESSION['error_message']);
-        $_SESSION['error_message_read_request_id'] = $requestId; // وضع flag أن الرسالة تم قراءتها
-        return $message;
+    // تم إزالة نظام الجلسات - قراءة الرسالة من query parameters
+    if (isset($_GET['error']) && !empty($_GET['error'])) {
+        return urldecode($_GET['error']);
     }
     return null;
 }
 
 /**
  * دالة مساعدة لتطبيق PRG pattern على الطلبات POST
- * تقرأ الرسائل من session وتعرضها
+ * تقرأ الرسائل من query parameters وتعرضها (تم إزالة نظام الجلسات)
  * 
  * @param string|null $defaultError متغير لرسالة الخطأ الافتراضي
  * @param string|null $defaultSuccess متغير لرسالة النجاح الافتراضي

@@ -4,6 +4,8 @@
  */
 
 define('ACCESS_ALLOWED', true);
+// تعريف ثابت لمنع حذف الجلسة في sales.php
+define('SALES_PAGE_ACTIVE', true);
 
 // تنظيف أي output buffer سابق قبل أي شيء - لتحسين الأداء
 while (ob_get_level() > 0) {
@@ -111,7 +113,7 @@ require_once __DIR__ . '/../includes/audit_log.php';
 require_once __DIR__ . '/../includes/notifications.php';
 require_once __DIR__ . '/../includes/path_helper.php';
 
-requireRole('sales');
+requireRole(['sales', 'developer']);
 
 // تحميل $currentUser قبل header.php لضمان أنه متاح في جميع الملفات
 if (!isset($currentUser) || $currentUser === null) {

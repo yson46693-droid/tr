@@ -9,9 +9,7 @@ if (!ob_get_level()) {
 
 define('ACCESS_ALLOWED', true);
 
-if (session_status() === PHP_SESSION_NONE) {
-    @session_start();
-}
+// تم إزالة نظام الجلسات - لا حاجة لبدء الجلسة
 
 try {
     require_once __DIR__ . '/includes/config.php';
@@ -33,35 +31,25 @@ try {
     error_log("Logout Page Error: " . $e->getMessage());
 }
 
-// حذف الجلسة و remember tokens من قاعدة البيانات
-// حفظ user_id قبل حذف الجلسة
+// تم إزالة نظام الجلسات - حذف remember tokens فقط
 $userId = null;
-$sessionId = null;
-if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['user_id'])) {
-    $userId = $_SESSION['user_id'];
-    $sessionId = session_id();
-}
-
-// حذف جميع الجلسات و remember tokens من قاعدة البيانات
-if ($userId) {
+if (isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
     try {
         require_once __DIR__ . '/includes/db.php';
         require_once __DIR__ . '/includes/auth.php';
         $db = db();
         
-        // حذف جميع الجلسات للمستخدم من قاعدة البيانات (ليس فقط الجلسة الحالية)
-        if (ensureSessionsTable()) {
-            try {
-                // حذف جميع الجلسات للمستخدم
-                $db->execute("DELETE FROM sessions WHERE user_id = ?", [$userId]);
-                error_log("Logout: Deleted all sessions for user_id: {$userId}");
-            } catch (Exception $e) {
-                error_log("Logout: Error deleting sessions from database: " . $e->getMessage());
+        $cookieValue = $_COOKIE['remember_token'];
+        $decoded = base64_decode($cookieValue, true);
+        if ($decoded) {
+            $parts = explode(':', $decoded);
+            if (count($parts) === 2) {
+                $userId = intval($parts[0]);
             }
         }
         
-        // التحقق من وجود جدول remember_tokens وحذف جميع tokens للمستخدم
-        if (ensureRememberTokensTable()) {
+        // حذف جميع remember tokens للمستخدم
+        if ($userId && ensureRememberTokensTable()) {
             try {
                 $db->execute("DELETE FROM remember_tokens WHERE user_id = ?", [$userId]);
                 error_log("Logout: Deleted all remember tokens for user_id: {$userId}");
@@ -92,52 +80,19 @@ if (isset($_COOKIE['remember_token'])) {
     }
 }
 
-// إنهاء الجلسة بشكل نهائي - يجب أن يحدث بعد حذف الجلسة من قاعدة البيانات
-if (session_status() === PHP_SESSION_ACTIVE) {
-    $cookieParams = session_get_cookie_params();
-    $sessionName = session_name();
-    
-    // حذف جميع متغيرات الجلسة
-    $_SESSION = [];
-    
-    // إلغاء تسجيل جميع متغيرات الجلسة
-    @session_unset();
-    
-    // حذف session cookie بجميع الإعدادات الممكنة
-    $sessionCookieOptions = [
-        ['expires' => time() - 3600, 'path' => $cookieParams['path'], 'domain' => $cookieParams['domain'], 'secure' => $cookieParams['secure'], 'httponly' => $cookieParams['httponly']],
-        ['expires' => time() - 3600, 'path' => '/', 'domain' => '', 'secure' => $isHttps, 'httponly' => true],
-        ['expires' => time() - 3600, 'path' => '/', 'domain' => null, 'secure' => $isHttps, 'httponly' => true],
-        ['expires' => time() - 3600, 'path' => $cookieParams['path'], 'domain' => '', 'secure' => $isHttps, 'httponly' => true],
+// تم إزالة نظام الجلسات - حذف remember_token cookie فقط
+// حذف remember_token cookie بجميع الإعدادات الممكنة
+if (isset($_COOKIE['remember_token'])) {
+    $cookieOptions = [
+        ['expires' => time() - 3600, 'path' => '/', 'domain' => '', 'secure' => $isHttps, 'httponly' => true, 'samesite' => 'Lax'],
+        ['expires' => time() - 3600, 'path' => '/', 'domain' => null, 'secure' => $isHttps, 'httponly' => true, 'samesite' => 'Lax'],
+        ['expires' => time() - 3600, 'path' => '/', 'domain' => '', 'secure' => false, 'httponly' => true, 'samesite' => 'Lax'],
     ];
     
-    foreach ($sessionCookieOptions as $options) {
-        @setcookie($sessionName, '', $options);
+    foreach ($cookieOptions as $options) {
+        @setcookie('remember_token', '', $options);
     }
-    
-    // تدمير الجلسة نهائياً
-    @session_destroy();
-    
-    // التأكد من حذف جميع cookies
-    if (isset($_COOKIE[$sessionName])) {
-        unset($_COOKIE[$sessionName]);
-    }
-}
-
-// حذف جميع الكوكيز المتعلقة بالجلسة
-if (isset($_COOKIE)) {
-    foreach ($_COOKIE as $name => $value) {
-        if (strpos($name, 'PHPSESSID') !== false || 
-            strpos($name, 'remember_token') !== false || 
-            strpos($name, session_name()) !== false ||
-            strpos($name, 'session') !== false) {
-            // حذف cookie بجميع الإعدادات الممكنة
-            @setcookie($name, '', time() - 3600, '/');
-            @setcookie($name, '', time() - 3600, '/', '');
-            @setcookie($name, '', time() - 3600, '/', null);
-            @setcookie($name, '', time() - 3600);
-        }
-    }
+    unset($_COOKIE['remember_token']);
 }
 
 while (ob_get_level()) {

@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'edit_region') {
         // المدير والمحاسب والمندوب يمكنهم تعديل المناطق
-        if (!in_array($userRole, ['manager', 'accountant', 'sales'], true)) {
+        if (!in_array($userRole, ['manager', 'developer', 'accountant', 'sales'], true)) {
             $error = 'غير مصرح لك بتعديل المناطق';
         } else {
             $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;

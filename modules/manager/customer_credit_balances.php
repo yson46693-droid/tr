@@ -14,7 +14,7 @@ require_once __DIR__ . '/../../includes/audit_log.php';
 require_once __DIR__ . '/../../includes/path_helper.php';
 require_once __DIR__ . '/../../includes/approval_system.php';
 
-requireRole(['manager', 'accountant']);
+requireRole(['manager', 'accountant', 'developer']);
 
 /**
  * حساب صافي رصيد خزنة الشركة
