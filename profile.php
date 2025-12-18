@@ -18,8 +18,19 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/audit_log.php';
 
-// التحقق من تسجيل الدخول فقط
-requireLogin();
+// التحقق من تسجيل الدخول فقط - تحقق بسيط من $_SESSION
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    if (!headers_sent()) {
+        @session_start();
+    }
+}
+
+// التحقق البسيط من تسجيل الدخول
+if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true || !isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
+    // إعادة التوجيه إلى صفحة تسجيل الدخول
+    header('Location: login.php');
+    exit;
+}
 
 // تهيئة متغيرات الرسائل
 $error = $_SESSION['error_message'] ?? '';
