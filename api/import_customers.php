@@ -676,6 +676,7 @@ try {
     
     // بدء المعاملة
     $transactionStarted = false;
+    $transactionCommitted = false;
     try {
         $db->beginTransaction();
         $transactionStarted = true;
@@ -1346,16 +1347,25 @@ try {
         
     } catch (Exception $e) {
         // التحقق من حالة المعاملة قبل rollback
-        try {
-            // محاولة rollback فقط إذا كانت المعاملة لا تزال نشطة
-            if ($db->inTransaction()) {
-                $db->rollBack();
-                logImport('✓ Transaction rolled back');
-            } else {
-                logImport('⚠ Transaction already committed or not started');
+        // فقط إذا كانت المعاملة لا تزال نشطة ولم يتم commit
+        if ($transactionStarted && !$transactionCommitted) {
+            try {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                    logImport('✓ Transaction rolled back due to error');
+                } else {
+                    logImport('⚠ Transaction not active, skipping rollback');
+                }
+            } catch (Exception $rollbackError) {
+                logImport('✗ ERROR during rollback: ' . $rollbackError->getMessage());
             }
-        } catch (Exception $rollbackError) {
-            logImport('✗ ERROR during rollback: ' . $rollbackError->getMessage());
+            $transactionStarted = false;
+        } else {
+            if ($transactionCommitted) {
+                logImport('⚠ Transaction already committed, data is saved. Error occurred after commit.');
+            } else {
+                logImport('⚠ No transaction to rollback');
+            }
         }
         
         $errorMsg = 'Transaction error: ' . $e->getMessage();
@@ -1366,7 +1376,25 @@ try {
         
         error_log($errorMsg);
         error_log($errorTrace);
-        throw $e;
+        
+        // إذا تم commit بالفعل، لا نرمي exception - البيانات محفوظة
+        // فقط نرمي exception إذا كان commit لم يحدث
+        if (!$transactionCommitted) {
+            throw $e;
+        } else {
+            // البيانات محفوظة، لكن حدث خطأ بعد commit
+            // نرسل response بنجاح مع تحذير
+            logImport('⚠ Data was saved but error occurred after commit. Sending success response.');
+            echo json_encode([
+                'success' => true,
+                'imported' => $imported ?? 0,
+                'skipped' => $skipped ?? 0,
+                'errors' => $errors ?? [],
+                'message' => "تم استيراد " . ($imported ?? 0) . " عميل بنجاح (حدث خطأ بعد الحفظ ولكن البيانات محفوظة)",
+                'warning' => 'حدث خطأ بعد حفظ البيانات ولكن جميع البيانات تم حفظها بنجاح'
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
     }
     
 } catch (Exception $e) {
