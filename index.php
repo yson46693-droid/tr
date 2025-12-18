@@ -222,11 +222,6 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
     // يوجد جلسة نشطة ولا توجد محاولة تسجيل دخول - إعادة التوجيه إلى الداشبورد
     $userRole = $_SESSION['role'] ?? 'accountant';
     
-    // المطور يستخدم لوحة المدير
-    if (strtolower($userRole) === 'developer') {
-        $userRole = 'manager';
-    }
-    
     // الحصول على المسار الأساسي
     $basePath = getBasePath();
     $basePath = rtrim($basePath, '/');
@@ -533,11 +528,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     
                     $userRole = $result['user']['role'] ?? 'accountant';
-                    
-                    // المطور يستخدم لوحة المدير
-                    if (strtolower($userRole) === 'developer') {
-                        $userRole = 'manager';
-                    }
                     
                     // استخدام دالة getDashboardUrl() للحصول على المسار الصحيح
                     if (!function_exists('getDashboardUrl')) {
