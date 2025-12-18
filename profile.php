@@ -15,24 +15,14 @@ require_once __DIR__ . '/includes/audit_log.php';
 
 // التحقق من تسجيل الدخول - يعتمد على remember_token فقط
 // تم إزالة نظام الجلسات بالكامل
-if (!isLoggedIn()) {
-    // إعادة التوجيه إلى صفحة تسجيل الدخول
-    $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
-    // تنظيف URL
-    $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
-    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
-    if (strpos($loginUrl, '/') !== 0) {
-        $loginUrl = '/' . $loginUrl;
-    }
-    
-    if (!headers_sent()) {
-        header('Location: ' . $loginUrl);
-        exit;
-    } else {
-        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
-        exit;
-    }
-}
+// استخدام requireLogin() للتحقق من تسجيل الدخول (يتعامل مع التوجيه تلقائياً)
+
+// تسجيل للتشخيص (يمكن إزالته لاحقاً)
+$hasCookie = isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token']);
+$isLoggedInResult = isLoggedIn();
+error_log("Profile.php - hasCookie: " . ($hasCookie ? 'yes' : 'no') . " | isLoggedIn: " . ($isLoggedInResult ? 'yes' : 'no'));
+
+requireLogin();
 
 // تهيئة متغيرات الرسائل
 // تم إزالة نظام الجلسات - يمكن استخدام query parameters للرسائل إذا لزم الأمر

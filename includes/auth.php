@@ -49,11 +49,16 @@ function getPasswordMinLength(): int
  */
 function isLoggedIn() {
     // التحقق من remember_token فقط - لا نستخدم $_SESSION أبداً
-    if (isset($_COOKIE['remember_token'])) {
-        return checkRememberToken($_COOKIE['remember_token'], false); // false = لا ننشئ جلسة
+    if (!isset($_COOKIE['remember_token']) || empty($_COOKIE['remember_token'])) {
+        return false;
     }
     
-    return false;
+    $cookieValue = $_COOKIE['remember_token'];
+    if (empty($cookieValue)) {
+        return false;
+    }
+    
+    return checkRememberToken($cookieValue, false); // false = لا ننشئ جلسة
 }
 
 /**
@@ -122,23 +127,32 @@ function checkRememberToken($cookieValue, $createSession = true) {
     try {
         // التأكد من وجود الجدول
         if (!ensureRememberTokensTable()) {
+            error_log("checkRememberToken: ensureRememberTokensTable() failed");
             return false;
         }
         
-        $decoded = base64_decode($cookieValue);
-        if (!$decoded) {
+        if (empty($cookieValue)) {
+            error_log("checkRememberToken: cookieValue is empty");
+            return false;
+        }
+        
+        $decoded = base64_decode($cookieValue, true); // strict mode
+        if ($decoded === false || empty($decoded)) {
+            error_log("checkRememberToken: base64_decode failed for cookie value");
             return false;
         }
         
         $parts = explode(':', $decoded);
         if (count($parts) !== 2) {
+            error_log("checkRememberToken: Invalid token format (parts count: " . count($parts) . ")");
             return false;
         }
         
         $userId = intval($parts[0]);
-        $token = $parts[1];
+        $token = trim($parts[1]);
         
         if ($userId <= 0 || empty($token)) {
+            error_log("checkRememberToken: Invalid userId ({$userId}) or empty token");
             return false;
         }
         
@@ -151,6 +165,7 @@ function checkRememberToken($cookieValue, $createSession = true) {
         );
         
         if (!$tokenRecord) {
+            error_log("checkRememberToken: Token not found or expired for user_id: {$userId}");
             // حذف cookie غير صالح
             $isHttps = (
                 (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
@@ -172,10 +187,15 @@ function checkRememberToken($cookieValue, $createSession = true) {
         }
         
         // تحديث آخر استخدام
-        $db->execute(
-            "UPDATE remember_tokens SET last_used = NOW() WHERE id = ?",
-            [$tokenRecord['id']]
-        );
+        try {
+            $db->execute(
+                "UPDATE remember_tokens SET last_used = NOW() WHERE id = ?",
+                [$tokenRecord['id']]
+            );
+        } catch (Exception $e) {
+            // لا نعتبر هذا خطأ حرج - فقط تسجيل
+            error_log("checkRememberToken: Failed to update last_used: " . $e->getMessage());
+        }
         
         // === لا نستخدم $_SESSION - تم إزالة كل كود الجلسات ===
         // في النظام الجديد، نرجع true دائماً بدون إنشاء جلسة
@@ -183,7 +203,10 @@ function checkRememberToken($cookieValue, $createSession = true) {
         
         return true;
     } catch (Exception $e) {
-        error_log("Remember Token Check Error: " . $e->getMessage());
+        error_log("Remember Token Check Error: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
+        return false;
+    } catch (Throwable $e) {
+        error_log("Remember Token Check Throwable: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
         return false;
     }
 }
@@ -648,13 +671,19 @@ function login($username, $password, $rememberMe = true) { // جعل rememberMe 
     
     // إنشاء cookie آمن - دائماً مطلوب
     $cookieValue = base64_encode($user['id'] . ':' . $token);
+    
+    // تحديد domain بناءً على البيئة
+    $cookieDomain = '';
+    // في الإنتاج، يمكن تحديد domain إذا لزم الأمر
+    // $cookieDomain = '.albarakah.info'; // للسماح بالوصول من جميع subdomains
+    
     $cookieSet = setcookie(
         'remember_token',
         $cookieValue,
         [
             'expires' => time() + ($expiresDays * 24 * 60 * 60),
             'path' => '/',
-            'domain' => '',
+            'domain' => $cookieDomain,
             'secure' => $isHttps,
             'httponly' => true, // منع JavaScript من الوصول
             'samesite' => 'Lax'
@@ -662,11 +691,30 @@ function login($username, $password, $rememberMe = true) { // جعل rememberMe 
     );
     
     if (!$cookieSet) {
-        error_log("WARNING: Failed to set remember_token cookie");
+        error_log("WARNING: Failed to set remember_token cookie for user_id: " . $user['id']);
+    } else {
+        // تسجيل نجاح إنشاء cookie (فقط في حالة التطوير)
+        // error_log("SUCCESS: remember_token cookie set for user_id: " . $user['id']);
     }
     
     // التأكد من أن cookie موجود في $_COOKIE للطلبات اللاحقة في نفس الطلب
     $_COOKIE['remember_token'] = $cookieValue;
+    
+    // محاولة إضافة cookie مرة أخرى بدون secure إذا كان HTTP (للتوافق)
+    if (!$isHttps) {
+        @setcookie(
+            'remember_token',
+            $cookieValue,
+            [
+                'expires' => time() + ($expiresDays * 24 * 60 * 60),
+                'path' => '/',
+                'domain' => $cookieDomain,
+                'secure' => false,
+                'httponly' => true,
+                'samesite' => 'Lax'
+            ]
+        );
+    }
     
     // تسجيل محاولة ناجحة
     logLoginAttempt($username, true);
@@ -1023,6 +1071,23 @@ function requireLogin() {
     // التحقق من تسجيل الدخول - يعتمد على remember_token فقط
     try {
         $loginCheckResult = isLoggedIn();
+        
+        // إذا فشل التحقق وكانت الصفحة محمية (مثل profile.php)، حاول مرة أخرى
+        // قد يكون هناك تأخير بسيط في قاعدة البيانات
+        if (!$loginCheckResult && $isProtectedPage && isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
+            // انتظار قصير جداً (50ms) ثم إعادة المحاولة
+            usleep(50000);
+            $loginCheckResult = isLoggedIn();
+            
+            // إذا استمر الفشل، حاول الحصول على المستخدم مباشرة من token
+            if (!$loginCheckResult) {
+                $userFromToken = getUserFromToken();
+                if ($userFromToken && isset($userFromToken['id'])) {
+                    $loginCheckResult = true;
+                    error_log("requireLogin() - Retry successful for protected page using getUserFromToken()");
+                }
+            }
+        }
     } catch (Throwable $e) {
         error_log("requireLogin() ERROR: Failed to check login status: " . $e->getMessage());
         $loginCheckResult = false;
