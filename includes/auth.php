@@ -1839,8 +1839,8 @@ function requireLogin() {
         // التحقق من وضع الصيانة بعد التحقق من تسجيل الدخول
         $maintenanceCheck = checkMaintenanceMode();
         if (!$maintenanceCheck['allowed']) {
-            // حفظ رسالة وضع الصيانة في session
-            if (session_status() === PHP_SESSION_ACTIVE) {
+            // حفظ رسالة وضع الصيانة في session فقط للمستخدمين غير المطورين
+            if (session_status() === PHP_SESSION_ACTIVE && !isDeveloper()) {
                 $_SESSION['maintenance_mode'] = true;
                 $_SESSION['maintenance_message'] = $maintenanceCheck['message'] ?? 'التطبيق تحت الصيانة في الوقت الحالي برجاء إعادة المحاولة في وقت لاحق';
             }
@@ -1849,7 +1849,7 @@ function requireLogin() {
             // سيتم عرض Modal في JavaScript بناءً على $_SESSION['maintenance_mode']
             // نتابع التنفيذ ولكن الصفحة ستقوم بعرض Modal وتمنع التفاعلات
         } else {
-            // إزالة علامة وضع الصيانة إذا كان الوضع معطلاً
+            // إزالة علامة وضع الصيانة إذا كان الوضع معطلاً أو إذا كان المستخدم مطوراً
             if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['maintenance_mode'])) {
                 unset($_SESSION['maintenance_mode'], $_SESSION['maintenance_message']);
             }

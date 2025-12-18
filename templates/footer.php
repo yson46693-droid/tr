@@ -1512,14 +1512,7 @@ if (!defined('ACCESS_ALLOWED')) {
         
         // دالة للتحقق من وضع الصيانة
         function checkMaintenanceMode() {
-            // التحقق أولاً من session
-            <?php if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['maintenance_mode']) && $_SESSION['maintenance_mode']): ?>
-            // إذا كان وضع الصيانة مفعلاً في session، عرض Modal
-            showMaintenanceModal();
-            return;
-            <?php endif; ?>
-            
-            // التحقق عبر API
+            // التحقق أولاً من API (الأكثر دقة)
             fetch(getApiPath('api/check_maintenance_mode.php'))
                 .then(response => response.json())
                 .then(data => {
@@ -1527,13 +1520,27 @@ if (!defined('ACCESS_ALLOWED')) {
                         // وضع الصيانة مفعّل والمستخدم ليس مطوراً
                         showMaintenanceModal();
                     } else {
-                        // وضع الصيانة معطل أو المستخدم مطور
+                        // وضع الصيانة معطل أو المستخدم مطور - إخفاء Modal
                         hideMaintenanceModal();
+                        // تنظيف session إذا كان مطوراً
+                        if (data.is_developer && data.success) {
+                            // المطور لديه وصول - إزالة علامة وضع الصيانة من session
+                            fetch(getApiPath('api/clear_maintenance_session.php')).catch(() => {});
+                        }
                     }
                 })
                 .catch(error => {
                     console.warn('Error checking maintenance mode:', error);
-                    // في حالة الخطأ، لا نعرض Modal
+                    // في حالة الخطأ، التحقق من session كبديل (لكن فقط إذا لم يكن مطوراً)
+                    <?php 
+                    $currentUser = getCurrentUser();
+                    $isDev = isset($currentUser['role']) && strtolower($currentUser['role']) === 'developer';
+                    if (!$isDev && session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['maintenance_mode']) && $_SESSION['maintenance_mode']): 
+                    ?>
+                    showMaintenanceModal();
+                    <?php else: ?>
+                    hideMaintenanceModal();
+                    <?php endif; ?>
                 });
         }
         

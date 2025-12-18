@@ -2763,7 +2763,7 @@ if (ob_get_level() > 0) {
         
         <!-- Developer Quick Access Bar -->
         <?php if (isLoggedIn() && isDeveloper()): ?>
-        <div class="developer-quick-access-bar" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 8px 0; border-bottom: 2px solid #5568d3; position: sticky; top: 0; z-index: 1030; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div class="developer-quick-access-bar" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 10px 0; border-bottom: 2px solid #5568d3; position: sticky; top: 0; z-index: 1030; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
             <div class="container-fluid">
                 <div class="row align-items-center">
                     <div class="col-12">
@@ -2773,23 +2773,23 @@ if (ob_get_level() > 0) {
                                 <strong>وصول سريع للمطور:</strong>
                             </div>
                             <div class="d-flex align-items-center flex-wrap gap-2" style="flex: 1; justify-content: flex-end;">
-                                <a href="<?php echo getRelativeUrl('dashboard/developer.php'); ?>" class="btn btn-sm btn-light" style="white-space: nowrap;">
-                                    <i class="bi bi-code-slash"></i> لوحة المطور
+                                <a href="<?php echo getRelativeUrl('dashboard/developer.php'); ?>" class="btn btn-sm btn-light shadow-sm" style="white-space: nowrap; font-weight: 500;">
+                                    <i class="bi bi-code-slash me-1"></i> لوحة المطور
                                 </a>
-                                <a href="<?php echo getRelativeUrl('dashboard/manager.php'); ?>" class="btn btn-sm btn-light" style="white-space: nowrap;">
-                                    <i class="bi bi-speedometer2"></i> لوحة المدير
+                                <a href="<?php echo getRelativeUrl('dashboard/manager.php'); ?>" class="btn btn-sm btn-light shadow-sm" style="white-space: nowrap; font-weight: 500;">
+                                    <i class="bi bi-speedometer2 me-1"></i> لوحة المدير
                                 </a>
-                                <a href="<?php echo getRelativeUrl('dashboard/developer.php?page=system_settings'); ?>" class="btn btn-sm btn-light" style="white-space: nowrap;">
-                                    <i class="bi bi-gear"></i> إعدادات النظام
+                                <a href="<?php echo getRelativeUrl('dashboard/developer.php?page=system_settings'); ?>" class="btn btn-sm btn-light shadow-sm" style="white-space: nowrap; font-weight: 500;">
+                                    <i class="bi bi-gear me-1"></i> إعدادات النظام
                                 </a>
-                                <a href="<?php echo getRelativeUrl('dashboard/sales.php'); ?>" class="btn btn-sm btn-light" style="white-space: nowrap;">
-                                    <i class="bi bi-cart"></i> لوحة المبيعات
+                                <a href="<?php echo getRelativeUrl('dashboard/sales.php'); ?>" class="btn btn-sm btn-light shadow-sm" style="white-space: nowrap; font-weight: 500;">
+                                    <i class="bi bi-cart me-1"></i> لوحة المبيعات
                                 </a>
-                                <a href="<?php echo getRelativeUrl('dashboard/accountant.php'); ?>" class="btn btn-sm btn-light" style="white-space: nowrap;">
-                                    <i class="bi bi-calculator"></i> لوحة المحاسبة
+                                <a href="<?php echo getRelativeUrl('dashboard/accountant.php'); ?>" class="btn btn-sm btn-light shadow-sm" style="white-space: nowrap; font-weight: 500;">
+                                    <i class="bi bi-calculator me-1"></i> لوحة المحاسبة
                                 </a>
-                                <a href="<?php echo getRelativeUrl('dashboard/production.php'); ?>" class="btn btn-sm btn-light" style="white-space: nowrap;">
-                                    <i class="bi bi-gear-wide"></i> لوحة الإنتاج
+                                <a href="<?php echo getRelativeUrl('dashboard/production.php'); ?>" class="btn btn-sm btn-light shadow-sm" style="white-space: nowrap; font-weight: 500;">
+                                    <i class="bi bi-gear-wide me-1"></i> لوحة الإنتاج
                                 </a>
                                 <div class="dropdown" style="display: inline-block;">
                                     <button class="btn btn-sm btn-light dropdown-toggle" type="button" id="developerQuickAccessDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="white-space: nowrap;">
