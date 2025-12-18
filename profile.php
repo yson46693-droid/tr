@@ -174,6 +174,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
     if ($action === 'update_profile') {
+        // إعادة تحميل بيانات المستخدم قبل المعالجة للتأكد من وجودها
+        if (!$user || !is_array($user) || !isset($user['id'])) {
+            // محاولة إعادة تحميل المستخدم
+            if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+                try {
+                    $user = getUserById($_SESSION['user_id']);
+                    if ($user && isset($user['id'])) {
+                        $currentUser = $user;
+                    }
+                } catch (Exception $e) {
+                    error_log("Profile update - Error reloading user: " . $e->getMessage());
+                }
+            }
+            
+            // إذا استمرت المشكلة، جرب مباشرة من قاعدة البيانات
+            if (!$user || !is_array($user) || !isset($user['id'])) {
+                if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+                    try {
+                        if (!isset($db)) {
+                            $db = db();
+                        }
+                        $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
+                        if ($user && isset($user['id'])) {
+                            $currentUser = $user;
+                        }
+                    } catch (Exception $e) {
+                        error_log("Profile update - Final fallback error: " . $e->getMessage());
+                    }
+                }
+            }
+        }
+        
         $fullName = trim($_POST['full_name'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
@@ -233,10 +265,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.';
         } else {
             // التحقق من البريد الإلكتروني إذا تغير
-            if (isset($user['email']) && $email !== $user['email']) {
+            if ($user && is_array($user) && isset($user['email']) && isset($user['id']) && $email !== $user['email']) {
                 $existingUser = getUserByUsername($email);
                 $userId = ($currentUser && isset($currentUser['id'])) ? $currentUser['id'] : ($user && isset($user['id']) ? $user['id'] : ($_SESSION['user_id'] ?? null));
-                if ($existingUser && $existingUser['id'] != $userId) {
+                if ($existingUser && isset($existingUser['id']) && $existingUser['id'] != $userId) {
                     $error = 'البريد الإلكتروني مستخدم بالفعل';
                 }
             }
@@ -279,7 +311,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!empty($newPassword)) {
                         if (empty($currentPassword)) {
                             $error = 'يجب إدخال كلمة المرور الحالية';
-                        } elseif (!$user || !isset($user['password_hash']) || !verifyPassword($currentPassword, $user['password_hash'])) {
+                        } elseif (!$user || !is_array($user) || !isset($user['id'])) {
+                            $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.';
+                        } elseif (!isset($user['password_hash']) || !verifyPassword($currentPassword, $user['password_hash'])) {
                             $error = 'كلمة المرور الحالية غير صحيحة';
                         } elseif ($newPassword !== $confirmPassword) {
                             $error = 'كلمة المرور الجديدة غير متطابقة';
@@ -396,8 +430,32 @@ $dashboardUrl = getDashboardUrl($userRole);
 // التأكد من أن $user موجود قبل عرض النموذج
 if (!$user || !is_array($user) || !isset($user['id'])) {
     // محاولة إعادة تحميل المستخدم
-    if (isset($_SESSION['user_id'])) {
-        $user = getUserById($_SESSION['user_id']);
+    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+        try {
+            $user = getUserById($_SESSION['user_id']);
+            if ($user && isset($user['id'])) {
+                $currentUser = $user;
+            }
+        } catch (Exception $e) {
+            error_log("Profile display - Error reloading user: " . $e->getMessage());
+        }
+    }
+    
+    // إذا استمرت المشكلة، جرب مباشرة من قاعدة البيانات
+    if (!$user || !is_array($user) || !isset($user['id'])) {
+        if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+            try {
+                if (!isset($db)) {
+                    $db = db();
+                }
+                $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
+                if ($user && isset($user['id'])) {
+                    $currentUser = $user;
+                }
+            } catch (Exception $e) {
+                error_log("Profile display - Final fallback error: " . $e->getMessage());
+            }
+        }
     }
     
     // إذا استمرت المشكلة، عرض رسالة خطأ
