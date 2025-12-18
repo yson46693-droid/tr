@@ -567,19 +567,33 @@ try {
                     // التحقق من أن القيمة رقمية
                     if (is_numeric($rawBalance)) {
                         $balance = (float)$rawBalance;
+                        if ($i <= 5) {
+                            error_log("Row $i - Parsed balance: $balance");
+                        }
                     } else {
                         // محاولة إزالة المزيد من الأحرف غير الرقمية
                         $cleanedBalance = preg_replace('/[^\d.\-+]/', '', $rawBalance);
                         if (is_numeric($cleanedBalance)) {
                             $balance = (float)$cleanedBalance;
+                            if ($i <= 5) {
+                                error_log("Row $i - Parsed balance (after cleaning): $balance");
+                            }
                         } else {
                             error_log("WARNING: Row $i - Balance value '$rawBalance' (cleaned: '$cleanedBalance') is not numeric");
                         }
+                    }
+                } else {
+                    if ($i <= 5) {
+                        error_log("Row $i - Balance value is empty or null after trimming");
                     }
                 }
             } else {
                 if ($i <= 5) {
                     error_log("WARNING: Row $i - balanceIndex is -1 or row[$balanceIndex] not set. balanceIndex=$balanceIndex, row length=" . count($row));
+                    if ($balanceIndex !== -1) {
+                        error_log("  - Row[$balanceIndex] exists: " . (isset($row[$balanceIndex]) ? 'YES' : 'NO'));
+                        error_log("  - Row[$balanceIndex] value: " . (isset($row[$balanceIndex]) ? var_export($row[$balanceIndex], true) : 'NOT_SET'));
+                    }
                 }
             }
             
@@ -697,6 +711,13 @@ try {
                     
                     $updateValues[] = $customerId;
                     
+                    // تسجيل البيانات قبل التحديث
+                    if ($i <= 5) {
+                        error_log("Row $i - About to UPDATE customer ID=$customerId:");
+                        error_log("  - Update fields: " . implode(', ', $updateFields));
+                        error_log("  - Update values: " . json_encode($updateValues, JSON_UNESCAPED_UNICODE));
+                    }
+                    
                     $db->execute(
                         "UPDATE customers SET " . implode(', ', $updateFields) . " WHERE id = ?",
                         $updateValues
@@ -719,6 +740,15 @@ try {
                     ]);
                 } else {
                     // إدراج عميل جديد
+                    // تسجيل البيانات قبل الحفظ
+                    if ($i <= 5) {
+                        error_log("Row $i - About to INSERT customer:");
+                        error_log("  - Name: '$name'");
+                        error_log("  - Phone: " . ($phone ?? 'NULL') . " (from index $phoneIndex)");
+                        error_log("  - Balance: $balance (from index $balanceIndex)");
+                        error_log("  - Address: " . ($address ?? 'NULL'));
+                    }
+                    
                     $customerColumns = ['name', 'phone', 'balance', 'address', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
                     $customerValues = [
                         $name,
