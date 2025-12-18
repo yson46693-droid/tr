@@ -675,9 +675,11 @@ try {
     $hasRegionIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'region_id'"));
     
     // بدء المعاملة
-    $db->beginTransaction();
-    
+    $transactionStarted = false;
     try {
+        $db->beginTransaction();
+        $transactionStarted = true;
+        logImport('✓ Transaction started');
         for ($i = 1; $i < count($rows); $i++) {
             $row = $rows[$i];
             
@@ -1251,12 +1253,27 @@ try {
         
         // تأكيد المعاملة - يجب أن يتم قبل أي شيء آخر
         logImport('=== COMMITTING TRANSACTION ===');
+        $transactionCommitted = false;
         try {
-            $db->commit();
-            logImport('✓ Transaction committed successfully');
+            if ($transactionStarted) {
+                $db->commit();
+                $transactionCommitted = true;
+                $transactionStarted = false; // تم commit، لا نحتاج rollback
+                logImport('✓ Transaction committed successfully');
+            } else {
+                logImport('⚠ No transaction to commit');
+            }
         } catch (Exception $commitError) {
             logImport('✗ ERROR committing transaction: ' . $commitError->getMessage());
-            $db->rollBack();
+            if ($transactionStarted) {
+                try {
+                    $db->rollBack();
+                    logImport('✓ Transaction rolled back after commit error');
+                } catch (Exception $rollbackError) {
+                    logImport('✗ ERROR during rollback after commit error: ' . $rollbackError->getMessage());
+                }
+                $transactionStarted = false;
+            }
             throw $commitError;
         }
         

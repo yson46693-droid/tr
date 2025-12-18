@@ -446,14 +446,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $values[] = $templateId; // يمكن أن يكون null
                 $placeholders[] = '?';
                 
-                // حفظ product_name دائماً إذا كان موجوداً (حتى لو كان هناك template_id أو template_id = null)
+                // حفظ product_name دائماً (حتى لو كان null أو فارغاً) لضمان الاتساق
                 // هذا يضمن عرض اسم القالب في الجدول حتى لو فشل JOIN مع جداول القوالب أو كان template_id = null
                 // نفس الطريقة المستخدمة في production/tasks.php (السطر 502-519)
-                if ($productName !== '') {
-                    $columns[] = 'product_name';
-                    $values[] = $productName;
-                    $placeholders[] = '?';
-                }
+                // نحفظ product_name دائماً لضمان الاتساق بين قاعدة البيانات و audit log
+                $columns[] = 'product_name';
+                $values[] = ($productName !== '') ? $productName : null; // حفظ null إذا كان فارغاً
+                $placeholders[] = '?';
                 
                 // حفظ product_id إذا تم العثور عليه
                 if ($productId !== null && $productId > 0) {
