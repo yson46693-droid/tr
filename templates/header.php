@@ -2987,11 +2987,13 @@ if (ob_get_level() > 0) {
             
             <div class="topbar-right">
                 <!-- Settings -->
-                <a href="<?php echo getRelativeUrl('profile.php'); ?>" 
+                <a href="#" 
                    class="topbar-action" 
                    data-bs-toggle="tooltip" 
-                   title="<?php echo isset($lang['settings']) ? $lang['settings'] : 'الإعدادات'; ?>"
-                   aria-label="<?php echo isset($lang['settings']) ? $lang['settings'] : 'الإعدادات'; ?>">
+                   title="الصفحة تحت التطوير"
+                   aria-label="الصفحة تحت التطوير"
+                   onclick="event.preventDefault(); alert('الصفحة تحت التطوير حالياً'); return false;"
+                   style="cursor: not-allowed; opacity: 0.6;">
                     <i class="bi bi-gear" aria-hidden="true"></i>
                     <span class="visually-hidden"><?php echo isset($lang['settings']) ? $lang['settings'] : 'الإعدادات'; ?></span>
                 </a>
@@ -3099,7 +3101,7 @@ if (ob_get_level() > 0) {
                             ?></small>
                         </li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('profile.php'); ?>"><i class="bi bi-person me-2"></i><?php echo isset($lang['profile']) ? $lang['profile'] : 'الملف الشخصي'; ?></a></li>
+                        <li><a class="dropdown-item" href="#" onclick="event.preventDefault(); alert('الصفحة تحت التطوير حالياً'); return false;" style="cursor: not-allowed; opacity: 0.6;"><i class="bi bi-person me-2"></i><?php echo isset($lang['profile']) ? $lang['profile'] : 'الملف الشخصي'; ?></a></li>
                         <?php if ((isset($currentUser['role']) ? $currentUser['role'] : '') !== 'manager'): ?>
                         <li><a class="dropdown-item" href="<?php echo getRelativeUrl('attendance.php'); ?>"><i class="bi bi-calendar-check me-2"></i><?php echo isset($lang['attendance']) ? $lang['attendance'] : 'الحضور والانصراف'; ?></a></li>
                         <?php endif; ?>
