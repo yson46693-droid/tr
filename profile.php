@@ -190,7 +190,7 @@ if (!$user || !isset($user['id']) || empty($user['id'])) {
 // إذا فشل تحميل المستخدم بعد كل المحاولات
 if (!$user || !isset($user['id']) || empty($user['id'])) {
     error_log("Profile.php - CRITICAL: All attempts to load user data failed. requireLogin() succeeded but user data cannot be loaded.");
-    $error = 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . $_SERVER['PHP_SELF'] . '">إعادة تحميل الصفحة</a> أو <a href="logout.php">تسجيل الخروج</a> والدخول مرة أخرى.';
+    $error = 'تعذر تحميل بيانات المستخدم. يرجى إعادة تحميل الصفحة أو تسجيل الخروج والدخول مرة أخرى.';
 }
 
 // ========================================
