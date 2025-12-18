@@ -926,6 +926,7 @@ async function deleteCredential(credentialId, deviceName) {
         
         const response = await fetch(apiPath, {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },

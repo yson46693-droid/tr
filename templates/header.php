@@ -13,11 +13,12 @@ if (!defined('HEADER_INCLUDED')) {
     define('HEADER_INCLUDED', true);
 }
 
-// إضافة Permissions-Policy header للسماح بالوصول إلى Geolocation, Camera, Microphone, Notifications
+// إضافة Permissions-Policy header للسماح بالوصول إلى Geolocation, Camera, Microphone
+// ملاحظة: notifications تم إزالته من Feature-Policy لأنه غير مدعوم
 if (!headers_sent()) {
-    header("Permissions-Policy: geolocation=(self), camera=(self), microphone=(self), notifications=(self)");
-    // Feature-Policy كبديل للمتصفحات القديمة
-    header("Feature-Policy: geolocation 'self'; camera 'self'; microphone 'self'; notifications 'self'");
+    header("Permissions-Policy: geolocation=(self), camera=(self), microphone=(self)");
+    // Feature-Policy كبديل للمتصفحات القديمة (بدون notifications)
+    header("Feature-Policy: geolocation 'self'; camera 'self'; microphone 'self'");
     
     // === Cache Control Headers - منع تخزين الصفحات في cache ===
     // هذه headers ضرورية لضمان تحديث البيانات بعد أي طلب
@@ -168,8 +169,8 @@ if (ob_get_level() > 0) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta http-equiv="Permissions-Policy" content="geolocation=(self), camera=(self), microphone=(self), notifications=(self)">
-    <meta http-equiv="Feature-Policy" content="geolocation 'self'; camera 'self'; microphone 'self'; notifications 'self'">
+    <meta http-equiv="Permissions-Policy" content="geolocation=(self), camera=(self), microphone=(self)">
+    <meta http-equiv="Feature-Policy" content="geolocation 'self'; camera 'self'; microphone 'self'">
     <!-- Cache Control Meta Tags - منع تخزين الصفحة لضمان جلب البيانات المحدثة -->
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">

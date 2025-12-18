@@ -8,11 +8,12 @@ if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
 }
 
-// إضافة Permissions-Policy header للسماح بالوصول إلى Geolocation, Camera, Microphone, Notifications
+// إضافة Permissions-Policy header للسماح بالوصول إلى Geolocation, Camera, Microphone
+// ملاحظة: notifications تم إزالته من Feature-Policy لأنه غير مدعوم
 if (!headers_sent()) {
-    header("Permissions-Policy: geolocation=(self), camera=(self), microphone=(self), notifications=(self)");
-    // Feature-Policy كبديل للمتصفحات القديمة
-    header("Feature-Policy: geolocation 'self'; camera 'self'; microphone 'self'; notifications 'self'");
+    header("Permissions-Policy: geolocation=(self), camera=(self), microphone=(self)");
+    // Feature-Policy كبديل للمتصفحات القديمة (بدون notifications)
+    header("Feature-Policy: geolocation 'self'; camera 'self'; microphone 'self'");
 }
 
 if (!defined('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED')) {
