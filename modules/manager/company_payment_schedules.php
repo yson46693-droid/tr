@@ -642,9 +642,13 @@ if (isset($_GET['id'])) {
                     
                     <?php if ($selectedSchedule['status'] !== 'paid' && $selectedSchedule['status'] !== 'cancelled'): ?>
                         <div class="mt-3">
-                            <button class="btn btn-success" onclick="showPaymentModal(<?php echo $selectedSchedule['id']; ?>, <?php echo $selectedSchedule['amount']; ?>)">
-                                <i class="bi bi-cash me-2"></i>تسجيل دفعة
-                            </button>
+                            <form method="POST" style="display: inline;" onsubmit="return confirm('هل أنت متأكد من تمييز هذا الجدول كمدفوع؟');">
+                                <input type="hidden" name="action" value="mark_as_paid">
+                                <input type="hidden" name="schedule_id" value="<?php echo $selectedSchedule['id']; ?>">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="bi bi-check-circle me-2"></i>تم التحصيل
+                                </button>
+                            </form>
                             <button class="btn btn-info" onclick="showReminderModal(<?php echo $selectedSchedule['id']; ?>)">
                                 <i class="bi bi-bell me-2"></i>إنشاء تذكير
                             </button>
