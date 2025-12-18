@@ -112,50 +112,58 @@ $error = $_SESSION['error_message'] ?? '';
 $success = $_SESSION['success_message'] ?? '';
 unset($_SESSION['error_message'], $_SESSION['success_message']);
 
-// محاولة متعددة لتحميل المستخدم - حل نهائي للأجهزة الغريبة
+// === تحميل بيانات المستخدم - حل نهائي محسّن ===
 $currentUser = null;
-$maxAttempts = 3;
+$user = null;
 
-for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-    // الطريقة 1: استخدام getCurrentUser()
-    $currentUser = getCurrentUser();
+// التأكد من وجود user_id في الجلسة
+if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
+    error_log("Profile page - Missing user_id in session");
+    $error = 'تعذر تحميل بيانات المستخدم. يرجى تسجيل الدخول مرة أخرى.';
+} else {
+    $userId = $_SESSION['user_id'];
     
-    if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
-        break; // نجح التحميل
+    // الطريقة 1: محاولة استخدام getCurrentUser() أولاً
+    try {
+        $currentUser = getCurrentUser();
+        if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
+            $user = $currentUser;
+        }
+    } catch (Exception $e) {
+        error_log("Profile page - getCurrentUser() failed: " . $e->getMessage());
     }
     
-    // الطريقة 2: إذا فشلت، جرب مباشرة من قاعدة البيانات
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+    // الطريقة 2: إذا فشلت، جرب getUserById()
+    if (!$user || !isset($user['id'])) {
         try {
-            $db = db();
-            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$_SESSION['user_id']]);
-            if ($userFromDb && isset($userFromDb['id'])) {
-                $currentUser = $userFromDb;
+            $user = getUserById($userId);
+            if ($user && isset($user['id'])) {
+                $currentUser = $user;
                 // تحديث الجلسة ببيانات المستخدم
-                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
-                    $_SESSION['username'] = $userFromDb['username'];
+                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $user['username']) {
+                    $_SESSION['username'] = $user['username'];
                 }
-                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
-                    $_SESSION['role'] = $userFromDb['role'];
+                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $user['role']) {
+                    $_SESSION['role'] = $user['role'];
                 }
                 if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
                     $_SESSION['logged_in'] = true;
                 }
-                break; // نجح التحميل
             }
         } catch (Exception $e) {
-            error_log("Profile page - Error loading user from database (attempt $attempt): " . $e->getMessage());
+            error_log("Profile page - getUserById() failed: " . $e->getMessage());
         }
     }
     
-    // الطريقة 3: إذا فشلت، جرب بدون التحقق من status
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+    // الطريقة 3: إذا فشلت، جرب مباشرة من قاعدة البيانات
+    if (!$user || !isset($user['id'])) {
         try {
             if (!isset($db)) {
                 $db = db();
             }
-            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
+            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$userId]);
             if ($userFromDb && isset($userFromDb['id'])) {
+                $user = $userFromDb;
                 $currentUser = $userFromDb;
                 // تحديث الجلسة ببيانات المستخدم
                 if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
@@ -167,24 +175,17 @@ for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
                 if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
                     $_SESSION['logged_in'] = true;
                 }
-                break; // نجح التحميل
             }
         } catch (Exception $e) {
-            error_log("Profile page - Error loading user without status check (attempt $attempt): " . $e->getMessage());
+            error_log("Profile page - Direct database query failed: " . $e->getMessage());
         }
     }
     
-    // إذا كانت المحاولة الأخيرة، انتظر قليلاً قبل المحاولة التالية
-    if ($attempt < $maxAttempts) {
-        usleep(100000); // انتظر 0.1 ثانية
+    // إذا فشلت جميع المحاولات
+    if (!$user || !isset($user['id']) || empty($user['id'])) {
+        error_log("Profile page - Failed to load user. user_id: " . $userId . ", Session data: " . json_encode(array_keys($_SESSION ?? [])));
+        $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى أو تحديث الصفحة.';
     }
-}
-
-// إذا فشلت جميع المحاولات
-if (!$currentUser || !isset($currentUser['id']) || empty($currentUser['id'])) {
-    // لا نعيد التوجيه - نعرض رسالة خطأ في الصفحة
-    $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى أو تحديث الصفحة.';
-    error_log("Profile page - Failed to load user after $maxAttempts attempts. Session user_id: " . ($_SESSION['user_id'] ?? 'not set'));
 }
 
 $db = db();
@@ -200,50 +201,42 @@ try {
     $profilePhotoSupported = false;
 }
 
-// الحصول على بيانات المستخدم الكاملة - حل محسّن للأجهزة الغريبة
-$user = null;
-
-if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
-    // محاولة الحصول على بيانات محدثة من قاعدة البيانات
-    try {
-        $user = getUserById($currentUser['id']);
-        // إذا لم يتم العثور على المستخدم من getUserById، استخدم $currentUser
-        if (!$user || !isset($user['id'])) {
-            $user = $currentUser;
-        }
-    } catch (Exception $e) {
-        error_log("Profile page - Error in getUserById: " . $e->getMessage());
-        // في حالة الخطأ، استخدم $currentUser
-        $user = $currentUser;
+// === التأكد من تحميل بيانات المستخدم الكاملة ===
+// إذا كان $user محمّل بالفعل من الكود السابق، لا حاجة لإعادة التحميل
+// لكن نتحقق من أن البيانات محدثة
+if ($user && isset($user['id']) && !empty($user['id'])) {
+    // البيانات محمّلة بالفعل - لا حاجة لإعادة التحميل
+    // فقط نتحقق من أن $currentUser محدث
+    if (!$currentUser || !isset($currentUser['id']) || $currentUser['id'] != $user['id']) {
+        $currentUser = $user;
     }
+} elseif ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
+    // إذا كان $currentUser موجود لكن $user غير موجود، استخدم $currentUser
+    $user = $currentUser;
 } else {
-    // إذا لم يكن هناك currentUser، استخدم بيانات الجلسة
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            $user = getUserById($_SESSION['user_id']);
-            // إذا نجح التحميل، احفظه في $currentUser أيضاً
-            if ($user && isset($user['id'])) {
-                $currentUser = $user;
-            }
-        } catch (Exception $e) {
-            error_log("Profile page - Error loading user from session: " . $e->getMessage());
-        }
-    }
-}
-
-// إذا لم يتم تحميل المستخدم بعد، جرب مباشرة من قاعدة البيانات
-if (!$user || !isset($user['id'])) {
+    // محاولة أخيرة: تحميل مباشر من قاعدة البيانات
     if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
         try {
             if (!isset($db)) {
                 $db = db();
             }
-            $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
-            if ($user && isset($user['id'])) {
-                $currentUser = $user;
+            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
+            if ($userFromDb && isset($userFromDb['id'])) {
+                $user = $userFromDb;
+                $currentUser = $userFromDb;
+                // تحديث الجلسة
+                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
+                    $_SESSION['username'] = $userFromDb['username'];
+                }
+                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
+                    $_SESSION['role'] = $userFromDb['role'];
+                }
+                if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
+                    $_SESSION['logged_in'] = true;
+                }
             }
         } catch (Exception $e) {
-            error_log("Profile page - Final fallback error: " . $e->getMessage());
+            error_log("Profile page - Final user load attempt failed: " . $e->getMessage());
         }
     }
 }
@@ -252,34 +245,45 @@ if (!$user || !isset($user['id'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
-    if ($action === 'update_profile') {
-        // إعادة تحميل بيانات المستخدم قبل المعالجة للتأكد من وجودها
-        if (!$user || !is_array($user) || !isset($user['id'])) {
-            // محاولة إعادة تحميل المستخدم
-            if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+        if ($action === 'update_profile') {
+        // === إعادة تحميل بيانات المستخدم قبل المعالجة ===
+        if (!$user || !is_array($user) || !isset($user['id']) || empty($user['id'])) {
+            $userId = $_SESSION['user_id'] ?? null;
+            
+            if ($userId) {
+                // محاولة 1: استخدام getUserById()
                 try {
-                    $user = getUserById($_SESSION['user_id']);
+                    $user = getUserById($userId);
                     if ($user && isset($user['id'])) {
                         $currentUser = $user;
                     }
                 } catch (Exception $e) {
-                    error_log("Profile update - Error reloading user: " . $e->getMessage());
+                    error_log("Profile update - getUserById() failed: " . $e->getMessage());
                 }
-            }
-            
-            // إذا استمرت المشكلة، جرب مباشرة من قاعدة البيانات
-            if (!$user || !is_array($user) || !isset($user['id'])) {
-                if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+                
+                // محاولة 2: تحميل مباشر من قاعدة البيانات
+                if (!$user || !isset($user['id'])) {
                     try {
                         if (!isset($db)) {
                             $db = db();
                         }
-                        $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
-                        if ($user && isset($user['id'])) {
-                            $currentUser = $user;
+                        $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$userId]);
+                        if ($userFromDb && isset($userFromDb['id'])) {
+                            $user = $userFromDb;
+                            $currentUser = $userFromDb;
+                            // تحديث الجلسة
+                            if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
+                                $_SESSION['username'] = $userFromDb['username'];
+                            }
+                            if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
+                                $_SESSION['role'] = $userFromDb['role'];
+                            }
+                            if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
+                                $_SESSION['logged_in'] = true;
+                            }
                         }
                     } catch (Exception $e) {
-                        error_log("Profile update - Final fallback error: " . $e->getMessage());
+                        error_log("Profile update - Direct database query failed: " . $e->getMessage());
                     }
                 }
             }
@@ -572,39 +576,36 @@ $dashboardUrl = getDashboardUrl($userRole);
 <?php endif; ?>
 
 <?php
-// التأكد من أن $user موجود قبل عرض النموذج
-if (!$user || !is_array($user) || !isset($user['id'])) {
-    // محاولة إعادة تحميل المستخدم
+// === التحقق النهائي من وجود بيانات المستخدم قبل عرض النموذج ===
+if (!$user || !is_array($user) || !isset($user['id']) || empty($user['id'])) {
+    // محاولة أخيرة: تحميل مباشر من قاعدة البيانات
     if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
         try {
-            $user = getUserById($_SESSION['user_id']);
-            if ($user && isset($user['id'])) {
-                $currentUser = $user;
+            if (!isset($db)) {
+                $db = db();
+            }
+            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
+            if ($userFromDb && isset($userFromDb['id'])) {
+                $user = $userFromDb;
+                $currentUser = $userFromDb;
+                // تحديث الجلسة
+                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
+                    $_SESSION['username'] = $userFromDb['username'];
+                }
+                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
+                    $_SESSION['role'] = $userFromDb['role'];
+                }
+                if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
+                    $_SESSION['logged_in'] = true;
+                }
             }
         } catch (Exception $e) {
-            error_log("Profile display - Error reloading user: " . $e->getMessage());
+            error_log("Profile display - Final user load failed: " . $e->getMessage());
         }
     }
     
-    // إذا استمرت المشكلة، جرب مباشرة من قاعدة البيانات
-    if (!$user || !is_array($user) || !isset($user['id'])) {
-        if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-            try {
-                if (!isset($db)) {
-                    $db = db();
-                }
-                $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
-                if ($user && isset($user['id'])) {
-                    $currentUser = $user;
-                }
-            } catch (Exception $e) {
-                error_log("Profile display - Final fallback error: " . $e->getMessage());
-            }
-        }
-    }
-    
-    // إذا استمرت المشكلة، عرض رسالة خطأ
-    if (!$user || !is_array($user) || !isset($user['id'])) {
+    // إذا استمرت المشكلة بعد جميع المحاولات، عرض رسالة خطأ
+    if (!$user || !is_array($user) || !isset($user['id']) || empty($user['id'])) {
         echo '<div class="alert alert-danger">';
         echo '<i class="bi bi-exclamation-triangle-fill me-2"></i>';
         echo 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . htmlspecialchars($dashboardUrl) . '">العودة</a> والمحاولة مرة أخرى.';
