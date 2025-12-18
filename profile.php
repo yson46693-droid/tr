@@ -20,10 +20,44 @@ require_once __DIR__ . '/includes/audit_log.php';
 // التحقق من تسجيل الدخول - يعتمد على remember_token فقط
 requireLogin();
 
+// ========================================
+// الحل 4: التحقق من صلاحيات الملفات
+// ========================================
+// التأكد من أن الدوال المطلوبة موجودة
+if (!function_exists('requireLogin')) {
+    die('خطأ: دالة requireLogin غير موجودة');
+}
+
+if (!function_exists('getUserFromToken')) {
+    die('خطأ: دالة getUserFromToken غير موجودة');
+}
+
 // تهيئة متغيرات الرسائل
 // تم إزالة نظام الجلسات - يمكن استخدام query parameters للرسائل إذا لزم الأمر
 $error = $_GET['error'] ?? '';
 $success = $_GET['success'] ?? '';
+
+// ========================================
+// الحل 1: إضافة تسجيل تفصيلي للأخطاء (Debugging)
+// ========================================
+error_log("=== Profile.php Debug Info ===");
+error_log("Cookie exists: " . (isset($_COOKIE['remember_token']) ? 'YES' : 'NO'));
+$debugUser = getUserFromToken();
+error_log("User from getUserFromToken: " . ($debugUser ? json_encode($debugUser) : 'NULL'));
+error_log("User ID: " . (isset($debugUser['id']) ? $debugUser['id'] : 'NULL'));
+
+// تسجيل تفاصيل الـ cookie إذا كان موجوداً
+if (isset($_COOKIE['remember_token'])) {
+    error_log("Remember token cookie value (first 20 chars): " . substr($_COOKIE['remember_token'], 0, 20));
+    $decoded = base64_decode($_COOKIE['remember_token'], true);
+    if ($decoded) {
+        $parts = explode(':', $decoded);
+        error_log("Token parts count: " . count($parts));
+        if (count($parts) === 2) {
+            error_log("User ID from token: " . intval($parts[0]));
+        }
+    }
+}
 
 // === تحميل بيانات المستخدم ===
 // استخدام getUserFromToken() مباشرة - لا نعتمد على getCurrentUser() لأنه يعتمد على isLoggedIn()
@@ -95,18 +129,79 @@ if (!$user || !isset($user['id']) || empty($user['id'])) {
     }
 }
 
-// إذا فشلت جميع المحاولات وكان هناك remember_token، لا نعيد التوجيه
-// لأن requireLogin() قد يكون سمح بالوصول بناءً على getUserFromToken()
-// فقط نعرض رسالة خطأ
+// ========================================
+// الحل 2: تحسين منطق التحقق
+// ========================================
 if (!$user || !isset($user['id']) || empty($user['id'])) {
+    // تسجيل السبب
+    error_log("Profile.php - User data not loaded. Checking cookie...");
+    
     if (isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
-        // إذا كان هناك cookie، نعرض رسالة خطأ بدلاً من إعادة التوجيه
-        // لأن requireLogin() قد يكون سمح بالوصول
-        $error = 'تعذر تحميل بيانات المستخدم. يرجى إعادة تحميل الصفحة.';
-        error_log("Profile.php - WARNING: Failed to load user data but remember_token exists");
+        // Cookie موجود لكن فشل التحميل - مشكلة في البيانات
+        error_log("Profile.php - Cookie exists but user load failed");
+        
+        // محاولة إضافية: التحقق من صلاحية الـ token في قاعدة البيانات
+        try {
+            $db = db();
+            $decoded = base64_decode($_COOKIE['remember_token'], true);
+            
+            if ($decoded) {
+                $parts = explode(':', $decoded);
+                if (count($parts) === 2) {
+                    $tokenUserId = intval($parts[0]);
+                    $token = trim($parts[1]);
+                    
+                    // التحقق من وجود Token في قاعدة البيانات
+                    $tokenExists = $db->queryOne(
+                        "SELECT COUNT(*) as count FROM remember_tokens 
+                         WHERE user_id = ? AND token = ? AND expires_at > NOW()",
+                        [$tokenUserId, $token]
+                    );
+                    
+                    if ($tokenExists && $tokenExists['count'] > 0) {
+                        // Token صالح لكن فشل تحميل البيانات
+                        error_log("Profile.php - Valid token but user data not loading");
+                        $error = 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . $_SERVER['PHP_SELF'] . '">إعادة تحميل الصفحة</a> أو <a href="logout.php">تسجيل الخروج</a> والدخول مرة أخرى.';
+                        
+                        // لا نقوم بإعادة التوجيه - نعطي المستخدم خيارات
+                        // يمكن عرض نموذج مبسط أو رسالة
+                        
+                    } else {
+                        // Token منتهي أو غير صالح
+                        error_log("Profile.php - Invalid or expired token. Redirecting to login.");
+                        
+                        // حذف الـ cookie المنتهي
+                        setcookie('remember_token', '', time() - 3600, '/', '', true, true);
+                        
+                        $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+                        $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
+                        $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+                        if (strpos($loginUrl, '/') !== 0) {
+                            $loginUrl = '/' . $loginUrl;
+                        }
+                        
+                        if (!headers_sent()) {
+                            header('Location: ' . $loginUrl . '?error=' . urlencode('انتهت صلاحية الجلسة'));
+                            exit;
+                        }
+                    }
+                } else {
+                    error_log("Profile.php - Malformed token");
+                    $error = 'بيانات الجلسة غير صحيحة. يرجى تسجيل الدخول مرة أخرى.';
+                }
+            } else {
+                error_log("Profile.php - Failed to decode token");
+                $error = 'فشل فك تشفير بيانات الجلسة.';
+            }
+        } catch (Exception $e) {
+            error_log("Profile.php - Exception during token validation: " . $e->getMessage());
+            $error = 'حدث خطأ أثناء التحقق من الجلسة.';
+        }
+        
     } else {
-        // إذا لم يكن هناك cookie، إعادة التوجيه لتسجيل الدخول
-        error_log("Profile.php - CRITICAL: No remember_token found. Redirecting to login.");
+        // لا يوجد cookie أصلاً - تحويل لتسجيل الدخول
+        error_log("Profile.php - No cookie found. Redirecting to login.");
+        
         $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
         $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
         $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
@@ -124,7 +219,29 @@ if (!$user || !isset($user['id']) || empty($user['id'])) {
     }
 }
 
-$db = db();
+// ========================================
+// الحل 6: فحص حالة قاعدة البيانات
+// ========================================
+try {
+    $db = db();
+    
+    // التحقق من وجود الجدول
+    $tableExists = $db->queryOne("SHOW TABLES LIKE 'remember_tokens'");
+    if (!$tableExists) {
+        error_log("Profile.php - CRITICAL: remember_tokens table does not exist!");
+        die('خطأ في النظام: جدول الجلسات غير موجود');
+    }
+    
+    // التحقق من عدد السجلات النشطة
+    $activeTokens = $db->queryOne(
+        "SELECT COUNT(*) as count FROM remember_tokens WHERE expires_at > NOW()"
+    );
+    error_log("Profile.php - Active tokens in database: " . ($activeTokens['count'] ?? 0));
+    
+} catch (Exception $e) {
+    error_log("Profile.php - Database check failed: " . $e->getMessage());
+}
+
 $passwordMinLength = getPasswordMinLength();
 
 $profilePhotoSupported = false;
@@ -357,6 +474,32 @@ $dashboardUrl = getDashboardUrl($userRole);
         <?php echo htmlspecialchars($error); ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
+<?php endif; ?>
+
+<?php
+// ========================================
+// الحل 3: إضافة زر للتحقق اليدوي
+// ========================================
+// في حالة فشل تحميل البيانات
+if (!empty($error) && (!$user || !isset($user['id']))): ?>
+<div class="alert alert-danger mb-4">
+    <h4><i class="bi bi-exclamation-triangle me-2"></i>مشكلة في تحميل البيانات</h4>
+    <p><?php echo $error; ?></p>
+    <div class="mt-3">
+        <a href="<?php echo $_SERVER['PHP_SELF']; ?>" class="btn btn-primary me-2">
+            <i class="bi bi-arrow-clockwise me-2"></i>إعادة المحاولة
+        </a>
+        <a href="logout.php" class="btn btn-secondary">
+            <i class="bi bi-box-arrow-right me-2"></i>تسجيل الخروج والدخول مرة أخرى
+        </a>
+    </div>
+</div>
+
+<!-- إيقاف عرض بقية الصفحة -->
+<?php 
+include __DIR__ . '/templates/footer.php';
+exit;
+?>
 <?php endif; ?>
 
 <?php if ($success): ?>
