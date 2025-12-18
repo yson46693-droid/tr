@@ -98,8 +98,33 @@ try {
 $isAuthenticated = false;
 $userId = null;
 
+// التأكد من أن الثابت معرّف قبل استدعاء isLoggedIn()
+if (!defined('WEBAUTHN_API_ACTIVE')) {
+    define('WEBAUTHN_API_ACTIVE', true);
+}
+
 // التحقق 1: استخدام isLoggedIn() - الأكثر موثوقية
 try {
+    // تحديث الجلسة في قاعدة البيانات قبل التحقق
+    $sessionId = session_id();
+    if (!empty($sessionId) && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+        try {
+            if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+                $db = db();
+                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                
+                // تحديث الجلسة في قاعدة البيانات
+                $db->execute(
+                    "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
+                    [$newExpiresAt, $_SESSION['user_id'], $sessionId]
+                );
+            }
+        } catch (Exception $updateError) {
+            error_log("WebAuthn API - Failed to update session before check: " . $updateError->getMessage());
+        }
+    }
+    
     if (isLoggedIn()) {
         // إذا نجح isLoggedIn()، نحاول الحصول على user_id
         if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
@@ -111,7 +136,7 @@ try {
             if (!empty($sessionId) && function_exists('ensureSessionsTable') && ensureSessionsTable()) {
                 $db = db();
                 $sessionRecord = $db->queryOne(
-                    "SELECT user_id FROM sessions WHERE session_id = ? AND expires_at > NOW()",
+                    "SELECT user_id FROM sessions WHERE session_id = ? ORDER BY last_activity DESC LIMIT 1",
                     [$sessionId]
                 );
                 if ($sessionRecord && isset($sessionRecord['user_id'])) {
@@ -213,6 +238,48 @@ if (!$isAuthenticated && isset($_SESSION['user_id']) && !empty($_SESSION['user_i
         }
     } catch (Exception $e) {
         error_log("WebAuthn API - Direct database query failed: " . $e->getMessage());
+    }
+}
+
+// محاولة أخيرة: التحقق من الجلسة مباشرة من قاعدة البيانات قبل إرجاع 401
+if (!$isAuthenticated || !$userId) {
+    try {
+        $sessionId = session_id();
+        if (!empty($sessionId) && function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+            $db = db();
+            $sessionRecord = $db->queryOne(
+                "SELECT user_id, expires_at FROM sessions WHERE session_id = ? ORDER BY last_activity DESC LIMIT 1",
+                [$sessionId]
+            );
+            if ($sessionRecord && isset($sessionRecord['user_id'])) {
+                $expiresAt = $sessionRecord['expires_at'];
+                // إذا كانت الجلسة منتهية لكنها حديثة (أقل من ساعة)، نجددها
+                if (strtotime($expiresAt) < time() && (time() - strtotime($expiresAt)) < 3600) {
+                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                    $db->execute(
+                        "UPDATE sessions SET expires_at = ?, last_activity = NOW() WHERE session_id = ?",
+                        [$newExpiresAt, $sessionId]
+                    );
+                    $expiresAt = $newExpiresAt;
+                }
+                
+                if (strtotime($expiresAt) > time()) {
+                    $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$sessionRecord['user_id']]);
+                    if ($userFromDb && isset($userFromDb['id'])) {
+                        $userId = $userFromDb['id'];
+                        $_SESSION['user_id'] = $userId;
+                        $_SESSION['username'] = $userFromDb['username'];
+                        $_SESSION['role'] = $userFromDb['role'];
+                        $_SESSION['logged_in'] = true;
+                        $isAuthenticated = true;
+                        error_log("WebAuthn API - Last attempt succeeded: Restored session for user_id: {$userId}");
+                    }
+                }
+            }
+        }
+    } catch (Exception $lastAttemptError) {
+        error_log("WebAuthn API - Last attempt to restore session failed: " . $lastAttemptError->getMessage());
     }
 }
 

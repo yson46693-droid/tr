@@ -1000,6 +1000,13 @@ async function loadCredentials() {
         
         console.log('Loading credentials from:', apiPath);
         
+        // تحديث الجلسة قبل استدعاء API
+        try {
+            await refreshSession();
+        } catch (refreshError) {
+            console.warn('Failed to refresh session before loading credentials:', refreshError);
+        }
+        
         // إنشاء AbortController للتحكم في timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -1008,12 +1015,118 @@ async function loadCredentials() {
             method: 'GET',
             credentials: 'same-origin',
             headers: {
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache'
             },
-            signal: controller.signal
+            signal: controller.signal,
+            cache: 'no-store'
         });
         
         clearTimeout(timeoutId);
+        
+        // معالجة خاصة لخطأ 401
+        if (response.status === 401) {
+            // محاولة تحديث الجلسة مرة أخرى
+            try {
+                await refreshSession();
+                // إعادة المحاولة مرة واحدة فقط
+                const retryResponse = await fetch(apiPath + '?action=list', {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    },
+                    cache: 'no-store'
+                });
+                
+                if (retryResponse.status === 401) {
+                    throw new Error('انتهت جلسة العمل. يرجى إعادة تحميل الصفحة.');
+                }
+                
+                // استخدام الاستجابة من المحاولة الثانية
+                if (!retryResponse.ok) {
+                    throw new Error(`HTTP error! status: ${retryResponse.status}`);
+                }
+                
+                // معالجة الاستجابة الناجحة
+                const contentType = retryResponse.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await retryResponse.text();
+                    console.error('Non-JSON response from credentials API:', text);
+                    throw new Error('استجابة غير صحيحة من الخادم');
+                }
+                
+                const data = await retryResponse.json();
+                
+                if (!data.success) {
+                    listContainer.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>خطأ في تحميل البصمات: ' + (data.error || 'حدث خطأ غير معروف') + '</div>';
+                    console.error('API Error:', data);
+                    return;
+                }
+                
+                if (data.credentials.length === 0) {
+                    listContainer.innerHTML = `
+                        <div class="alert alert-secondary mb-0">
+                            <i class="bi bi-info-circle me-2"></i>
+                            لا توجد بصمات مسجلة حالياً
+                        </div>
+                    `;
+                    return;
+                }
+                
+                let html = '<div class="list-group">';
+                data.credentials.forEach(cred => {
+                    const createdDate = new Date(cred.created_at).toLocaleDateString('ar-EG');
+                    const lastUsed = cred.last_used ? new Date(cred.last_used).toLocaleDateString('ar-EG') : 'لم يتم الاستخدام';
+                    
+                    html += `
+                        <div class="list-group-item d-flex justify-content-between align-items-center" data-credential-id="${cred.id}">
+                            <div>
+                                <div class="fw-bold">
+                                    <i class="bi bi-fingerprint me-2"></i>
+                                    ${cred.device_name || 'جهاز غير معروف'}
+                                </div>
+                                <small class="text-muted">
+                                    <div>تاريخ التسجيل: ${createdDate}</div>
+                                    <div>آخر استخدام: ${lastUsed}</div>
+                                </small>
+                            </div>
+                            <button class="btn btn-sm btn-danger delete-credential-btn" data-credential-id="${cred.id}" data-device-name="${(cred.device_name || 'البصمة').replace(/"/g, '&quot;')}">
+                                <i class="bi bi-trash"></i> حذف
+                            </button>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                
+                listContainer.innerHTML = html;
+                
+                // إضافة event listeners لأزرار الحذف
+                listContainer.querySelectorAll('.delete-credential-btn').forEach(btn => {
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const credentialId = this.getAttribute('data-credential-id');
+                        const deviceName = this.getAttribute('data-device-name');
+                        deleteCredential(credentialId, deviceName);
+                    });
+                });
+                
+                // إخفاء علامة التحميل بعد نجاح التحميل
+                if (statusLoader) {
+                    statusLoader.classList.remove('show');
+                    statusLoader.style.display = 'none';
+                    statusLoader.style.visibility = 'hidden';
+                    statusLoader.style.pointerEvents = 'none';
+                    statusLoader.style.opacity = '0';
+                }
+                
+                return; // إنهاء الدالة بنجاح
+            } catch (retryError) {
+                throw new Error('انتهت جلسة العمل. يرجى إعادة تحميل الصفحة.');
+            }
+        }
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -1114,17 +1227,30 @@ async function loadCredentials() {
         const listContainer = document.getElementById('credentialsList');
         if (listContainer) {
             let errorMessage = 'خطأ في تحميل البصمات';
+            let showReloadButton = false;
             
             if (error.name === 'AbortError' || error.message.includes('aborted')) {
                 errorMessage = 'انتهت مهلة التحميل. يمكنك المحاولة مرة أخرى أو إضافة بصمة جديدة مباشرة.';
             } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
                 errorMessage += ': ' + error.message + '<br><small>يرجى التحقق من اتصال الإنترنت أو المسار الصحيح للـ API</small>';
+            } else if (error.message.includes('401') || error.message.includes('انتهت جلسة العمل') || error.message.includes('Unauthorized')) {
+                errorMessage = 'انتهت جلسة العمل. يرجى إعادة تحميل الصفحة.';
+                showReloadButton = true;
             } else {
                 errorMessage += ': ' + error.message;
             }
             
-            listContainer.innerHTML = 
-                '<div class="alert alert-warning"><i class="bi bi-info-circle me-2"></i>' + errorMessage + '</div>';
+            let errorHtml = '<div class="alert alert-warning"><i class="bi bi-info-circle me-2"></i>' + errorMessage;
+            
+            if (showReloadButton) {
+                errorHtml += '<br><br><button class="btn btn-sm btn-primary mt-2" onclick="window.location.reload()"><i class="bi bi-arrow-clockwise me-2"></i>إعادة تحميل الصفحة</button>';
+            } else {
+                errorHtml += '<br><br><button class="btn btn-sm btn-primary mt-2" onclick="loadCredentials()"><i class="bi bi-arrow-clockwise me-2"></i>إعادة المحاولة</button>';
+            }
+            
+            errorHtml += '</div>';
+            
+            listContainer.innerHTML = errorHtml;
         }
     }
 }
@@ -1174,16 +1300,37 @@ function initWebAuthn() {
 // دالة مساعدة لتحديث الجلسة قبل إرسال أي طلب API
 async function refreshSession() {
     try {
-        // إرسال طلب بسيط لتحديث الجلسة
+        // إرسال طلب HEAD لتحديث الجلسة بدون تحميل المحتوى الكامل
         const response = await fetch(window.location.href, {
             method: 'HEAD',
             credentials: 'same-origin',
-            cache: 'no-cache'
+            cache: 'no-store',
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
         });
+        
+        // إذا فشل الطلب، جرب طلب GET بسيط
+        if (!response.ok) {
+            const getResponse = await fetch(window.location.href + '?refresh_session=1', {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            return getResponse.ok;
+        }
+        
         return response.ok;
     } catch (error) {
         console.warn('Failed to refresh session:', error);
-        return false;
+        // في حالة الفشل، نرجع true لأن الجلسة قد تكون صالحة بالفعل
+        return true;
     }
 }
 
@@ -1339,6 +1486,11 @@ async function deleteCredential(credentialId, deviceName) {
         console.error('Error deleting credential:', error);
         alert('خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
     }
+}
+
+// التأكد من أن الدوال متاحة في النطاق العام
+if (typeof window.loadCredentials === 'undefined') {
+    window.loadCredentials = loadCredentials;
 }
 
 // تحميل القائمة عند تحميل الصفحة
