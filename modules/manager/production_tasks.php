@@ -337,16 +337,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($productName !== '') {
                     $templateName = trim($productName);
                     
-                    // أولاً: البحث عن القالب بالاسم في unified_product_templates
+                    // أولاً: البحث عن القالب بالاسم في unified_product_templates (النشطة أولاً)
                     try {
                         $unifiedCheck = $db->queryOne("SHOW TABLES LIKE 'unified_product_templates'");
                         if (!empty($unifiedCheck)) {
+                            // البحث في القوالب النشطة أولاً
                             $template = $db->queryOne(
                                 "SELECT id FROM unified_product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) AND status = 'active' LIMIT 1",
                                 [$templateName, $templateName]
                             );
                             if ($template) {
                                 $templateId = (int)$template['id'];
+                            } else {
+                                // إذا لم يُعثر عليه في النشطة، البحث في جميع القوالب (بما في ذلك غير النشطة)
+                                $template = $db->queryOne(
+                                    "SELECT id FROM unified_product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) LIMIT 1",
+                                    [$templateName, $templateName]
+                                );
+                                if ($template) {
+                                    $templateId = (int)$template['id'];
+                                }
                             }
                         }
                     } catch (Exception $e) {
@@ -358,12 +368,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         try {
                             $productTemplatesCheck = $db->queryOne("SHOW TABLES LIKE 'product_templates'");
                             if (!empty($productTemplatesCheck)) {
+                                // البحث في القوالب النشطة أولاً
                                 $template = $db->queryOne(
                                     "SELECT id FROM product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) AND status = 'active' LIMIT 1",
                                     [$templateName, $templateName]
                                 );
                                 if ($template) {
                                     $templateId = (int)$template['id'];
+                                } else {
+                                    // إذا لم يُعثر عليه في النشطة، البحث في جميع القوالب (بما في ذلك غير النشطة)
+                                    $template = $db->queryOne(
+                                        "SELECT id FROM product_templates WHERE (product_name = ? OR CONCAT('قالب #', id) = ?) LIMIT 1",
+                                        [$templateName, $templateName]
+                                    );
+                                    if ($template) {
+                                        $templateId = (int)$template['id'];
+                                    }
                                 }
                             }
                         } catch (Exception $e) {
@@ -420,15 +440,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 // حفظ template_id و product_name و product_id - نفس طريقة customer_orders
-                // حفظ template_id إذا وُجد
-                if ($templateId) {
-                    $columns[] = 'template_id';
-                    $values[] = $templateId;
-                    $placeholders[] = '?';
-                }
+                // حفظ template_id (حتى لو كان null) لضمان حفظ product_name بشكل صحيح
+                // عندما template_id = null، يجب أن يتم حفظ product_name لضمان عرضه في الجدول
+                $columns[] = 'template_id';
+                $values[] = $templateId; // يمكن أن يكون null
+                $placeholders[] = '?';
                 
-                // حفظ product_name دائماً إذا كان موجوداً (حتى لو كان هناك template_id)
-                // هذا يضمن عرض اسم القالب في الجدول حتى لو فشل JOIN مع جداول القوالب
+                // حفظ product_name دائماً إذا كان موجوداً (حتى لو كان هناك template_id أو template_id = null)
+                // هذا يضمن عرض اسم القالب في الجدول حتى لو فشل JOIN مع جداول القوالب أو كان template_id = null
                 // نفس الطريقة المستخدمة في production/tasks.php (السطر 502-519)
                 if ($productName !== '') {
                     $columns[] = 'product_name';
