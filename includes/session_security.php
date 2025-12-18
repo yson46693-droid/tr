@@ -105,16 +105,15 @@ function initSecureSession() {
         return;
     }
     
-    // محاولة إنشاء مجلد sessions داخل tmp (اختياري)
-    $sessionPath = __DIR__ . '/../tmp/sessions';
-    if (!is_dir($sessionPath)) {
-        @mkdir($sessionPath, 0750, true);
-    }
-    
-    // تعيين مسار الجلسات إذا كان قابل للكتابة (اختياري)
-    if (is_dir($sessionPath) && is_writable($sessionPath)) {
-        @session_save_path($sessionPath);
-    }
+    // تم تعطيل إنشاء مجلد sessions المخصص - استخدام المسار الافتراضي لـ PHP فقط
+    // Disabled custom sessions folder - using PHP default session path only
+    // $sessionPath = __DIR__ . '/../tmp/sessions';
+    // if (!is_dir($sessionPath)) {
+    //     @mkdir($sessionPath, 0750, true);
+    // }
+    // if (is_dir($sessionPath) && is_writable($sessionPath)) {
+    //     @session_save_path($sessionPath);
+    // }
     
     // إعدادات آمنة للكوكيز (متوافقة مع config.php)
     $isHttps = (
@@ -262,25 +261,27 @@ function regenerateSessionAfterLogin() {
 }
 
 /**
- * تنظيف الجلسات القديمة (اختياري - لتوفير المساحة)
+ * تنظيف الجلسات القديمة (تم تعطيله - استخدام المسار الافتراضي لـ PHP)
+ * Cleanup old sessions (disabled - using PHP default session path)
  */
 function cleanupOldSessions() {
-    $sessionPath = __DIR__ . '/../tmp/sessions';
-    if (!is_dir($sessionPath)) {
-        return;
-    }
+    // تم تعطيل هذه الدالة - لا نستخدم مجلد الجلسات المخصص
+    // This function is disabled - we don't use custom sessions folder
+    return 0;
     
-    $files = glob($sessionPath . '/sess_*');
-    $now = time();
-    $cleaned = 0;
-    
-    foreach ($files as $file) {
-        // حذف الجلسات الأقدم من ساعة
-        if (filemtime($file) < ($now - 3600)) {
-            @unlink($file);
-            $cleaned++;
-        }
-    }
-    
-    return $cleaned;
+    // الكود القديم المحذوف:
+    // $sessionPath = __DIR__ . '/../tmp/sessions';
+    // if (!is_dir($sessionPath)) {
+    //     return;
+    // }
+    // $files = glob($sessionPath . '/sess_*');
+    // $now = time();
+    // $cleaned = 0;
+    // foreach ($files as $file) {
+    //     if (filemtime($file) < ($now - 3600)) {
+    //         @unlink($file);
+    //         $cleaned++;
+    //     }
+    // }
+    // return $cleaned;
 }
