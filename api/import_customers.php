@@ -122,11 +122,11 @@ try {
         }
         
         // قراءة البيانات
+        $maxColumns = 0;
         while (($row = fgetcsv($handle, 1000, ',', '"', '\\')) !== false) {
-            // التأكد من أن الصف له نفس عدد الأعمدة (ملء الأعمدة الفارغة)
-            $maxColumns = count($headers);
-            while (count($row) < $maxColumns) {
-                $row[] = '';
+            // تحديث العدد الأقصى للأعمدة
+            if (count($row) > $maxColumns) {
+                $maxColumns = count($row);
             }
             
             // تنظيف البيانات من BOM ومسافات إضافية
@@ -141,6 +141,11 @@ try {
                 }
                 return $cell;
             }, $row);
+            
+            // التأكد من أن الصف له نفس عدد الأعمدة (ملء الأعمدة الفارغة)
+            while (count($row) < $maxColumns) {
+                $row[] = '';
+            }
             
             // تخطي الصفوف الفارغة تماماً
             $isEmpty = true;
@@ -260,27 +265,34 @@ try {
     $regionIndex = -1;
     
     // البحث عن الأعمدة بطرق مختلفة (عربي/إنجليزي)
-    $customerIdVariations = ['ايدي العميل', 'id', 'customer_id', 'معرف العميل', 'رقم العميل', 'ايدي', 'معرف', 'م'];
-    $nameVariations = ['اسم العميل', 'الاسم', 'name', 'customer name', 'اسم', 'اسم_العميل'];
-    $phoneVariations = ['رقم الهاتف', 'الهاتف', 'phone', 'mobile', 'tel', 'رقم_الهاتف', 'رقم الهاتف (الأول)', 'تليفون', 'تلفون', 'telephone'];
-    $phone2Variations = ['رقم الهاتف (الثاني)', 'الهاتف الثاني', 'phone2', 'mobile2', 'tel2', 'رقم_الهاتف_الثاني', 'رقم الهاتف الثاني'];
-    $addressVariations = ['العنوان', 'address', 'location', 'عنوان'];
-    $balanceVariations = ['الرصيد', 'الديون', 'balance', 'debt', 'رصيد', 'ديون', 'صافى المبلغ', 'صافي المبلغ', 'صافى', 'صافي', 'المبلغ', 'net amount'];
-    $regionVariations = ['المنطقة', 'region', 'منطقة'];
+    $customerIdVariations = ['ايدي العميل', 'id', 'customer_id', 'معرف العميل', 'رقم العميل', 'ايدي', 'معرف', 'م', 'معرف العميل', 'رقم العميل'];
+    $nameVariations = ['اسم العميل', 'الاسم', 'name', 'customer name', 'اسم', 'اسم_العميل', 'اسم العميل', 'الاسم الكامل'];
+    $phoneVariations = ['رقم الهاتف', 'الهاتف', 'phone', 'mobile', 'tel', 'رقم_الهاتف', 'رقم الهاتف (الأول)', 'تليفون', 'تلفون', 'telephone', 'رقم التليفون', 'رقم التلفون', 'هاتف', 'موبايل'];
+    $phone2Variations = ['رقم الهاتف (الثاني)', 'الهاتف الثاني', 'phone2', 'mobile2', 'tel2', 'رقم_الهاتف_الثاني', 'رقم الهاتف الثاني', 'تليفون 2', 'تلفون 2', 'هاتف 2', 'هاتف ثاني'];
+    $addressVariations = ['العنوان', 'address', 'location', 'عنوان', 'العنوان الكامل', 'عنوان العميل'];
+    $balanceVariations = ['الرصيد', 'الديون', 'balance', 'debt', 'رصيد', 'ديون', 'صافى المبلغ', 'صافي المبلغ', 'صافى', 'صافي', 'المبلغ', 'net amount', 'رصيد العميل', 'رصيد العميل', 'الرصيد الحالي', 'المبلغ المستحق', 'المستحق', 'الديون المستحقة'];
+    $regionVariations = ['المنطقة', 'region', 'منطقة', 'المنطقة', 'منطقة العميل'];
     
     // قائمة لتخزين جميع أعمدة "تليفون" (لحالة وجود عمودين بنفس الاسم)
     $phoneColumns = [];
     
     foreach ($headers as $index => $header) {
+        // تنظيف اسم العمود من BOM ومسافات إضافية
+        $header = trim($header);
+        if (substr($header, 0, 3) === "\xEF\xBB\xBF") {
+            $header = substr($header, 3);
+        }
+        // إزالة المسافات الزائدة والأحرف الخاصة
+        $header = preg_replace('/\s+/', ' ', $header);
         $headerLower = mb_strtolower(trim($header), 'UTF-8');
         
         // ايدي العميل
         if ($customerIdIndex === -1 && (
             in_array($headerLower, $customerIdVariations, true) || 
             $headerLower === 'م' ||
-            strpos($headerLower, 'ايدي') !== false || 
-            strpos($headerLower, 'id') !== false ||
-            strpos($headerLower, 'معرف') !== false
+            mb_strpos($headerLower, 'ايدي') !== false || 
+            mb_strpos($headerLower, 'id') !== false ||
+            mb_strpos($headerLower, 'معرف') !== false
         )) {
             $customerIdIndex = $index;
         }
@@ -288,41 +300,44 @@ try {
         // اسم العميل
         if ($nameIndex === -1 && (
             in_array($headerLower, $nameVariations, true) || 
-            strpos($headerLower, 'اسم') !== false || 
-            strpos($headerLower, 'name') !== false
+            mb_strpos($headerLower, 'اسم') !== false || 
+            mb_strpos($headerLower, 'name') !== false
         )) {
             $nameIndex = $index;
         }
         
         // رقم الهاتف - جمع جميع أعمدة "تليفون" أولاً
         if (in_array($headerLower, $phoneVariations, true) || 
-            strpos($headerLower, 'تليفون') !== false ||
-            strpos($headerLower, 'تلفون') !== false ||
-            (strpos($headerLower, 'هاتف') !== false && strpos($headerLower, 'ثاني') === false && strpos($headerLower, '2') === false) ||
-            strpos($headerLower, 'phone') !== false ||
-            strpos($headerLower, 'mobile') !== false ||
-            strpos($headerLower, 'tel') !== false) {
+            mb_strpos($headerLower, 'تليفون') !== false ||
+            mb_strpos($headerLower, 'تلفون') !== false ||
+            (mb_strpos($headerLower, 'هاتف') !== false && mb_strpos($headerLower, 'ثاني') === false && mb_strpos($headerLower, '2') === false) ||
+            mb_strpos($headerLower, 'phone') !== false ||
+            mb_strpos($headerLower, 'mobile') !== false ||
+            mb_strpos($headerLower, 'tel') !== false) {
             $phoneColumns[] = $index;
         }
         
         // العنوان
         if ($addressIndex === -1 && (
             in_array($headerLower, $addressVariations, true) || 
-            strpos($headerLower, 'عنوان') !== false || 
-            strpos($headerLower, 'address') !== false
+            mb_strpos($headerLower, 'عنوان') !== false || 
+            mb_strpos($headerLower, 'address') !== false
         )) {
             $addressIndex = $index;
         }
         
-        // الرصيد
+        // الرصيد - تحسين البحث ليشمل المزيد من الاختلافات
         if ($balanceIndex === -1 && (
             in_array($headerLower, $balanceVariations, true) || 
-            strpos($headerLower, 'رصيد') !== false || 
-            strpos($headerLower, 'صافى') !== false ||
-            strpos($headerLower, 'صافي') !== false ||
-            strpos($headerLower, 'balance') !== false ||
-            strpos($headerLower, 'debt') !== false ||
-            strpos($headerLower, 'net') !== false
+            mb_strpos($headerLower, 'رصيد') !== false || 
+            mb_strpos($headerLower, 'صافى') !== false ||
+            mb_strpos($headerLower, 'صافي') !== false ||
+            mb_strpos($headerLower, 'balance') !== false ||
+            mb_strpos($headerLower, 'debt') !== false ||
+            mb_strpos($headerLower, 'net') !== false ||
+            mb_strpos($headerLower, 'مبلغ') !== false ||
+            mb_strpos($headerLower, 'مستحق') !== false ||
+            mb_strpos($headerLower, 'ديون') !== false
         )) {
             $balanceIndex = $index;
         }
@@ -330,8 +345,8 @@ try {
         // المنطقة
         if ($regionIndex === -1 && (
             in_array($headerLower, $regionVariations, true) || 
-            strpos($headerLower, 'منطقة') !== false || 
-            strpos($headerLower, 'region') !== false
+            mb_strpos($headerLower, 'منطقة') !== false || 
+            mb_strpos($headerLower, 'region') !== false
         )) {
             $regionIndex = $index;
         }
@@ -436,6 +451,12 @@ try {
             $phone = null;
             if ($phoneIndex !== -1 && isset($row[$phoneIndex])) {
                 $rawPhone = trim((string)$row[$phoneIndex]);
+                // إزالة أي مسافات أو أحرف غير ضرورية
+                $rawPhone = str_replace([' ', '-', '_', '(', ')', '.', '/'], '', $rawPhone);
+                // إزالة BOM إذا كان موجوداً
+                if (substr($rawPhone, 0, 3) === "\xEF\xBB\xBF") {
+                    $rawPhone = substr($rawPhone, 3);
+                }
                 if ($rawPhone !== '' && strlen($rawPhone) > 0) {
                     $phone = $rawPhone;
                 }
@@ -449,6 +470,12 @@ try {
             $phone2 = null;
             if ($phone2Index !== -1 && isset($row[$phone2Index])) {
                 $rawPhone2 = trim((string)$row[$phone2Index]);
+                // إزالة أي مسافات أو أحرف غير ضرورية
+                $rawPhone2 = str_replace([' ', '-', '_', '(', ')', '.', '/'], '', $rawPhone2);
+                // إزالة BOM إذا كان موجوداً
+                if (substr($rawPhone2, 0, 3) === "\xEF\xBB\xBF") {
+                    $rawPhone2 = substr($rawPhone2, 3);
+                }
                 if ($rawPhone2 !== '' && strlen($rawPhone2) > 0) {
                     $phone2 = $rawPhone2;
                 }
@@ -473,19 +500,31 @@ try {
                 $rawBalance = $row[$balanceIndex];
                 // تحويل إلى نص وإزالة المسافات
                 $rawBalance = trim((string)$rawBalance);
+                // إزالة BOM إذا كان موجوداً
+                if (substr($rawBalance, 0, 3) === "\xEF\xBB\xBF") {
+                    $rawBalance = substr($rawBalance, 3);
+                }
                 if ($rawBalance !== '' && $rawBalance !== null) {
-                    // إزالة الفواصل من الأرقام (مثل 1,000.50)
+                    // إزالة الفواصل من الأرقام (مثل 1,000.50 أو 1.000,50)
                     $rawBalance = str_replace(',', '', $rawBalance);
                     // إزالة أي مسافات إضافية
                     $rawBalance = str_replace(' ', '', $rawBalance);
-                    // إزالة أي أحرف غير رقمية في البداية والنهاية (مثل $ أو ر.س)
-                    $rawBalance = preg_replace('/^[^\d\-+.]*/', '', $rawBalance);
-                    $rawBalance = preg_replace('/[^\d\-+.]*$/', '', $rawBalance);
+                    // إزالة أي أحرف غير رقمية في البداية والنهاية (مثل $ أو ر.س أو ج.م)
+                    $rawBalance = preg_replace('/^[^\d\-+.]*/u', '', $rawBalance);
+                    $rawBalance = preg_replace('/[^\d\-+.]*$/u', '', $rawBalance);
+                    // إزالة الأحرف العربية الشائعة (ر.س، ج.م، د.إ، إلخ)
+                    $rawBalance = preg_replace('/[رجددإأآا]\.?[سمعإ]/u', '', $rawBalance);
                     // التحقق من أن القيمة رقمية
                     if (is_numeric($rawBalance)) {
                         $balance = (float)$rawBalance;
                     } else {
-                        error_log("WARNING: Row $i - Balance value '$rawBalance' is not numeric");
+                        // محاولة إزالة المزيد من الأحرف غير الرقمية
+                        $cleanedBalance = preg_replace('/[^\d.\-+]/', '', $rawBalance);
+                        if (is_numeric($cleanedBalance)) {
+                            $balance = (float)$cleanedBalance;
+                        } else {
+                            error_log("WARNING: Row $i - Balance value '$rawBalance' (cleaned: '$cleanedBalance') is not numeric");
+                        }
                     }
                 }
             } else {
@@ -573,10 +612,28 @@ try {
             try {
                 if ($isUpdate) {
                     // تحديث العميل الموجود
-                    $updateFields = ['name = ?', 'phone = ?', 'balance = ?', 'address = ?'];
-                    $updateValues = [$name, $phone, $balance, $address];
+                    $updateFields = ['name = ?'];
+                    $updateValues = [$name];
                     
-                    if ($hasRegionIdColumn) {
+                    // تحديث رقم الهاتف إذا كان موجوداً
+                    if ($phone !== null) {
+                        $updateFields[] = 'phone = ?';
+                        $updateValues[] = $phone;
+                    }
+                    
+                    // تحديث الرصيد فقط إذا كان موجوداً في الملف
+                    if ($balanceIndex !== -1) {
+                        $updateFields[] = 'balance = ?';
+                        $updateValues[] = $balance;
+                    }
+                    
+                    // تحديث العنوان إذا كان موجوداً
+                    if ($address !== null) {
+                        $updateFields[] = 'address = ?';
+                        $updateValues[] = $address;
+                    }
+                    
+                    if ($hasRegionIdColumn && $regionId !== null) {
                         $updateFields[] = 'region_id = ?';
                         $updateValues[] = $regionId;
                     }
@@ -587,7 +644,7 @@ try {
                         "UPDATE customers SET " . implode(', ', $updateFields) . " WHERE id = ?",
                         $updateValues
                     );
-                    error_log("✓ Customer updated: ID=$customerId, Name=$name, Balance=$balance, Phone=" . ($phone ?? 'NULL') . ", Phone2=" . ($phone2 ?? 'NULL') . ", Address=" . ($address ?? 'NULL'));
+                    error_log("✓ Customer updated: ID=$customerId, Name=$name, Balance=" . ($balanceIndex !== -1 ? $balance : 'NOT_UPDATED') . ", Phone=" . ($phone ?? 'NULL') . ", Phone2=" . ($phone2 ?? 'NULL') . ", Address=" . ($address ?? 'NULL'));
                     
                     // حذف أرقام الهواتف القديمة
                     $db->execute("DELETE FROM customer_phones WHERE customer_id = ?", [$customerId]);
