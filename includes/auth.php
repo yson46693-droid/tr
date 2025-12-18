@@ -1104,6 +1104,52 @@ function verifyPassword($password, $hash) {
 }
 
 /**
+ * التحقق من حالة وضع الصيانة
+ */
+function isMaintenanceMode() {
+    // قراءة من constant في config.php
+    return defined('MAINTENANCE_MODE') && MAINTENANCE_MODE === true;
+}
+
+/**
+ * التحقق إذا كان المستخدم الحالي مطور
+ */
+function isDeveloper() {
+    if (!isLoggedIn()) {
+        return false;
+    }
+    
+    $currentUser = getCurrentUser();
+    if (!$currentUser) {
+        return false;
+    }
+    
+    return isset($currentUser['role']) && strtolower($currentUser['role']) === 'developer';
+}
+
+/**
+ * التحقق من وضع الصيانة ورفض الوصول للمستخدمين العاديين
+ * المطورون يستطيعون الوصول دائماً حتى في وضع الصيانة
+ */
+function checkMaintenanceMode() {
+    // إذا كان وضع الصيانة معطلاً، السماح بالوصول
+    if (!isMaintenanceMode()) {
+        return ['allowed' => true];
+    }
+    
+    // إذا كان المستخدم مطوراً، السماح بالوصول دائماً
+    if (isDeveloper()) {
+        return ['allowed' => true];
+    }
+    
+    // في حالة وضع الصيانة والمستخدم ليس مطوراً، رفض الوصول
+    return [
+        'allowed' => false,
+        'message' => 'التطبيق تحت الصيانة في الوقت الحالي برجاء إعادة المحاولة في وقت لاحق'
+    ];
+}
+
+/**
  * تسجيل الدخول
  */
 function login($username, $password, $rememberMe = false) {
@@ -1134,6 +1180,13 @@ function login($username, $password, $rememberMe = false) {
     if (!verifyPassword($password, $user['password_hash'])) {
         logLoginAttempt($username, false, 'كلمة مرور خاطئة');
         return ['success' => false, 'message' => 'اسم المستخدم أو كلمة المرور غير صحيحة'];
+    }
+    
+    // التحقق من وضع الصيانة قبل السماح بتسجيل الدخول
+    // المطورون يستطيعون تسجيل الدخول دائماً حتى في وضع الصيانة
+    if (isMaintenanceMode() && strtolower($user['role']) !== 'developer') {
+        logLoginAttempt($username, false, 'وضع الصيانة مفعّل');
+        return ['success' => false, 'message' => 'التطبيق تحت الصيانة في الوقت الحالي برجاء إعادة المحاولة في وقت لاحق'];
     }
     
     // حفظ CSRF token الحالي قبل إعادة توليد الجلسة (للمساعدة في التحقق)
@@ -1725,7 +1778,26 @@ function requireLogin() {
     // isLoggedIn() يتحقق من قاعدة البيانات أولاً
     $loginCheckResult = isLoggedIn();
     if ($loginCheckResult) {
-        // المستخدم مسجل دخول - المتابعة
+        // التحقق من وضع الصيانة بعد التحقق من تسجيل الدخول
+        $maintenanceCheck = checkMaintenanceMode();
+        if (!$maintenanceCheck['allowed']) {
+            // حفظ رسالة وضع الصيانة في session
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                $_SESSION['maintenance_mode'] = true;
+                $_SESSION['maintenance_message'] = $maintenanceCheck['message'] ?? 'التطبيق تحت الصيانة في الوقت الحالي برجاء إعادة المحاولة في وقت لاحق';
+            }
+            
+            // السماح للصفحة بالتحميل ولكن وضع علامة في session
+            // سيتم عرض Modal في JavaScript بناءً على $_SESSION['maintenance_mode']
+            // نتابع التنفيذ ولكن الصفحة ستقوم بعرض Modal وتمنع التفاعلات
+        } else {
+            // إزالة علامة وضع الصيانة إذا كان الوضع معطلاً
+            if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['maintenance_mode'])) {
+                unset($_SESSION['maintenance_mode'], $_SESSION['maintenance_message']);
+            }
+        }
+        
+        // المستخدم مسجل دخول - المتابعة (سواء كان في وضع الصيانة أم لا - سيتم التعامل معه في JavaScript)
         if (!function_exists('logRequestUsage')) {
             $monitorPath = __DIR__ . '/request_monitor.php';
             if (file_exists($monitorPath)) {

@@ -349,13 +349,25 @@ try {
         }
     }
     
-    if (empty($rows) || count($rows) < 2) {
+    if (empty($rows)) {
+        logImport('ERROR: No rows found in file');
         echo json_encode([
             'success' => false,
-            'message' => 'الملف فارغ أو لا يحتوي على بيانات'
+            'message' => 'الملف فارغ أو لا يمكن قراءته'
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
+    
+    if (count($rows) < 2) {
+        logImport('ERROR: File has only ' . count($rows) . ' row(s). Need at least 2 rows (header + data).');
+        echo json_encode([
+            'success' => false,
+            'message' => 'الملف يجب أن يحتوي على رأس الأعمدة في الصف الأول وصف واحد على الأقل من البيانات. الملف الحالي يحتوي على ' . count($rows) . ' صف فقط.'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    
+    logImport('File read successfully. Total rows: ' . count($rows) . ' (1 header + ' . (count($rows) - 1) . ' data rows)');
     
     // قراءة رؤوس الأعمدة من الصف الأول
     logImport('=== READING HEADERS ===');
@@ -650,10 +662,13 @@ try {
     logImport('=== STARTING DATA PROCESSING ===');
     logImport('Total rows in file: ' . count($rows));
     logImport('Total data rows (excluding header): ' . (count($rows) - 1));
+    logImport('Current user role: ' . ($currentUser['role'] ?? 'unknown'));
+    logImport('Current user ID: ' . ($currentUser['id'] ?? 'unknown'));
     
     $imported = 0;
     $skipped = 0;
     $errors = [];
+    $emptyRows = 0;
     
     // التحقق من وجود أعمدة في جدول customers
     $hasLatitudeColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'latitude'"));
@@ -677,6 +692,7 @@ try {
             
             // تخطي الصفوف الفارغة
             if (empty($row[$nameIndex]) || trim($row[$nameIndex]) === '') {
+                $emptyRows++;
                 if ($i <= 5) {
                     logImport("Row $i - Skipping empty row (name is empty)");
                 }
@@ -979,6 +995,9 @@ try {
                 
                 if ($existing) {
                     $skipped++;
+                    if ($i <= 5) {
+                        logImport("Row $i - Skipping duplicate customer: '$name' (ID: {$existing['id']})");
+                    }
                     continue;
                 }
             }
@@ -1102,6 +1121,11 @@ try {
                     }
                     
                     try {
+                        logImport("Row $i - Attempting INSERT for customer: '$name'");
+                        logImport("  - rep_id: " . ($repId ?? 'NULL'));
+                        logImport("  - created_by: " . $currentUser['id']);
+                        logImport("  - created_by_admin: " . ($currentUser['role'] === 'sales' ? 0 : 1));
+                        
                         $db->execute(
                             "INSERT INTO customers (" . implode(', ', $customerColumns) . ") 
                              VALUES (" . implode(', ', $customerPlaceholders) . ")",
@@ -1109,6 +1133,10 @@ try {
                         );
                         
                         $customerId = $db->getLastInsertId();
+                        if ($customerId <= 0) {
+                            logImport("✗ ERROR: Insert succeeded but customerId is invalid: $customerId");
+                            throw new Exception("فشل الحصول على معرف العميل بعد الإدراج");
+                        }
                         logImport("✓ Customer inserted successfully: ID=$customerId");
                         logImport("  - Name: '$name'");
                         logImport("  - Phone: " . ($phone ?? 'NULL') . " (from index $phoneIndex)");
@@ -1230,10 +1258,40 @@ try {
         logImport("Imported: $imported customers");
         logImport("Skipped: $skipped customers");
         logImport("Errors: " . count($errors));
+        logImport("Empty rows skipped: $emptyRows");
+        logImport("Total rows processed: " . (count($rows) - 1));
         
         // مسح الكاش
         if (class_exists('Cache')) {
             Cache::flush();
+        }
+        
+        // التحقق من أن هناك استيراد فعلي
+        if ($imported === 0 && $skipped === 0 && empty($errors)) {
+            logImport('WARNING: No customers imported, skipped, or errors. File may be empty or invalid.');
+            $totalDataRows = count($rows) - 1;
+            $errorMessage = 'لم يتم استيراد أي عميل.';
+            if ($emptyRows > 0) {
+                $errorMessage .= " تم تخطي {$emptyRows} صف فارغ.";
+            }
+            if ($totalDataRows === 0) {
+                $errorMessage .= ' الملف لا يحتوي على صفوف بيانات (فقط رأس الأعمدة).';
+            } else {
+                $errorMessage .= ' يرجى التحقق من: 1) أن عمود "اسم العميل" موجود في الصف الأول، 2) أن البيانات غير فارغة، 3) أن الأعمدة مطابقة للأسماء المدعومة';
+            }
+            echo json_encode([
+                'success' => false,
+                'imported' => 0,
+                'skipped' => 0,
+                'errors' => [],
+                'message' => $errorMessage,
+                'debug_info' => [
+                    'total_rows' => $totalDataRows,
+                    'empty_rows' => $emptyRows,
+                    'name_index' => $nameIndex
+                ]
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
         }
         
         $message = "تم استيراد {$imported} عميل بنجاح";
@@ -1244,8 +1302,13 @@ try {
             $message .= ". حدثت أخطاء في " . count($errors) . " سطر";
         }
         
+        // إذا لم يتم استيراد أي عميل ولكن تم تخطي بعضها، فهذا يعني أن جميع العملاء مكررين
+        if ($imported === 0 && $skipped > 0) {
+            $message = "تم تخطي جميع العملاء ({$skipped} عميل) لأنهم موجودون مسبقاً في قاعدة البيانات";
+        }
+        
         echo json_encode([
-            'success' => true,
+            'success' => $imported > 0 || $skipped > 0, // نجاح فقط إذا تم استيراد أو تخطي عملاء
             'imported' => $imported,
             'skipped' => $skipped,
             'errors' => $errors,

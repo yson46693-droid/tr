@@ -346,6 +346,12 @@ if (!defined('ASSETS_VERSION')) {
 }
 define('COMPANY_NAME', 'شركة البركة');
 
+// إعدادات وضع الصيانة
+// تغيير هذا إلى true لتفعيل وضع الصيانة
+if (!defined('MAINTENANCE_MODE')) {
+    define('MAINTENANCE_MODE', false);
+}
+
 // إعدادات التقارير
 define('REPORTS_AUTO_DELETE', true); // حذف التقارير بعد الإرسال
 define('REPORTS_RETENTION_HOURS', 24); // الاحتفاظ بالتقارير لمدة 24 ساعة

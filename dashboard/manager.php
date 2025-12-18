@@ -150,7 +150,7 @@ if ($page === 'product_templates' && isset($_GET['ajax']) && $_GET['ajax'] === '
     require_once __DIR__ . '/../includes/path_helper.php';
     require_once __DIR__ . '/../includes/production_helper.php';
     
-    requireRole(['production', 'manager']);
+        requireRole(['production', 'manager', 'developer']);
     
     // تحميل ملف product_templates.php مباشرة للتعامل مع AJAX
     $modulePath = __DIR__ . '/../modules/production/product_templates.php';
@@ -170,7 +170,7 @@ if ($page === 'packaging_warehouse' && isset($_GET['ajax']) && isset($_GET['mate
     require_once __DIR__ . '/../includes/path_helper.php';
     require_once __DIR__ . '/../includes/production_helper.php';
     
-    requireRole(['production', 'manager']);
+        requireRole(['production', 'manager', 'developer']);
     
     // تحميل ملف packaging_warehouse.php مباشرة للتعامل مع AJAX
     $modulePath = __DIR__ . '/../modules/production/packaging_warehouse.php';
@@ -206,7 +206,7 @@ if ($page === 'company_cash' && isset($_GET['ajax']) && $_GET['ajax'] === 'get_s
     require_once __DIR__ . '/../includes/approval_system.php';
     require_once __DIR__ . '/../includes/path_helper.php';
     
-    requireRole(['manager', 'accountant']);
+    requireRole(['manager', 'accountant', 'developer']);
     
     // تحميل ملف company_cash.php مباشرة للتعامل مع AJAX
     $modulePath = __DIR__ . '/../modules/manager/company_cash.php';
@@ -314,7 +314,7 @@ require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/path_helper.php';
 require_once __DIR__ . '/../includes/table_styles.php';
 
-requireRole(['manager', 'accountant']);
+requireRole(['manager', 'accountant', 'developer']);
 
 $currentUser = getCurrentUser();
 $db = db();
@@ -1615,6 +1615,14 @@ $pageDescription = 'لوحة تحكم المدير - إدارة شاملة لل�
                 <?php 
                 header('Location: manager.php?page=security&tab=users');
                 exit;
+                ?>
+                
+            <?php elseif ($page === 'system_settings'): ?>
+                <?php
+                $modulePath = __DIR__ . '/../modules/manager/system_settings.php';
+                if (file_exists($modulePath)) {
+                    include $modulePath;
+                }
                 ?>
                 
             <?php elseif ($page === 'chat'): ?>

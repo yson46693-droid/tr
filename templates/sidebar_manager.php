@@ -167,6 +167,13 @@ $baseUrl = getDashboardUrl();
             </li>
                 
             <li class="nav-item">
+                <a class="nav-link" href="<?php echo $baseUrl; ?>manager.php?page=system_settings">
+                    <i class="bi bi-gear"></i>
+                    <span>إعدادات النظام</span>
+                </a>
+            </li>
+                
+            <li class="nav-item">
                 <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'returns_overview') ? 'active' : ''; ?>" href="<?php echo $baseUrl; ?>manager.php?page=returns_overview">
                     <i class="bi bi-arrow-left-right"></i>
                     <span><?php echo isset($lang['menu_returns_exchanges']) ? $lang['menu_returns_exchanges'] : 'المرتجعات'; ?></span>

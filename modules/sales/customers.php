@@ -4620,9 +4620,20 @@ document.addEventListener('DOMContentLoaded', function () {
                     
                     var errorsContent = document.getElementById('importErrorsContent');
                     if (errorsContent) {
-                        var html = '<p>' + (data.message || 'حدث خطأ أثناء الاستيراد') + '</p>';
+                        var html = '<p><strong>' + (data.message || 'حدث خطأ أثناء الاستيراد') + '</strong></p>';
+                        if (data.debug_info) {
+                            html += '<div class="small text-muted mt-2">';
+                            html += '<strong>معلومات إضافية:</strong><br>';
+                            html += '- عدد الصفوف: ' + (data.debug_info.total_rows || 0) + '<br>';
+                            html += '- الصفوف الفارغة: ' + (data.debug_info.empty_rows || 0) + '<br>';
+                            html += '- فهرس عمود الاسم: ' + (data.debug_info.name_index !== undefined ? data.debug_info.name_index : 'غير موجود');
+                            html += '</div>';
+                        }
                         if (data.errors && data.errors.length > 0) {
-                            html += '<ul class="mb-0"><li>' + data.errors.join('</li><li>') + '</li></ul>';
+                            html += '<ul class="mb-0 mt-2"><li>' + data.errors.join('</li><li>') + '</li></ul>';
+                        }
+                        if (data.log_file) {
+                            html += '<p class="small text-muted mt-2">يمكنك التحقق من ملف السجلات: ' + data.log_file + '</p>';
                         }
                         errorsContent.innerHTML = html;
                     }

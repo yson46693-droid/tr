@@ -1457,6 +1457,161 @@ if (!defined('ACCESS_ALLOWED')) {
     })();
     </script>
     
+    <!-- Maintenance Mode Modal -->
+    <div class="modal fade" id="maintenanceModeModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-labelledby="maintenanceModeModalLabel" aria-hidden="true" style="z-index: 9999;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title" id="maintenanceModeModalLabel">
+                        <i class="bi bi-tools me-2"></i>وضع الصيانة
+                    </h5>
+                </div>
+                <div class="modal-body text-center py-4">
+                    <div class="mb-3">
+                        <i class="bi bi-exclamation-triangle-fill text-warning" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="mb-3">التطبيق تحت الصيانة</h5>
+                    <p class="text-muted mb-0">التطبيق تحت الصيانة في الوقت الحالي برجاء إعادة المحاولة في وقت لاحق</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Maintenance Mode Overlay -->
+    <div id="maintenanceModeOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 9998; pointer-events: all;"></div>
+    
+    <style>
+        /* منع التفاعلات مع المحتوى عند وضع الصيانة */
+        body.maintenance-mode-active {
+            overflow: hidden;
+            pointer-events: none;
+        }
+        
+        body.maintenance-mode-active #maintenanceModeModal {
+            pointer-events: all;
+        }
+        
+        body.maintenance-mode-active #maintenanceModeOverlay {
+            display: block !important;
+        }
+        
+        /* إخفاء جميع العناصر التفاعلية عند وضع الصيانة */
+        body.maintenance-mode-active * {
+            pointer-events: none !important;
+        }
+        
+        body.maintenance-mode-active #maintenanceModeModal,
+        body.maintenance-mode-active #maintenanceModeModal * {
+            pointer-events: all !important;
+        }
+    </style>
+    
+    <script>
+    (function() {
+        'use strict';
+        
+        // دالة للتحقق من وضع الصيانة
+        function checkMaintenanceMode() {
+            // التحقق أولاً من session
+            <?php if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['maintenance_mode']) && $_SESSION['maintenance_mode']): ?>
+            // إذا كان وضع الصيانة مفعلاً في session، عرض Modal
+            showMaintenanceModal();
+            return;
+            <?php endif; ?>
+            
+            // التحقق عبر API
+            fetch(getApiPath('api/check_maintenance_mode.php'))
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.maintenance_mode === 'on' && !data.is_developer) {
+                        // وضع الصيانة مفعّل والمستخدم ليس مطوراً
+                        showMaintenanceModal();
+                    } else {
+                        // وضع الصيانة معطل أو المستخدم مطور
+                        hideMaintenanceModal();
+                    }
+                })
+                .catch(error => {
+                    console.warn('Error checking maintenance mode:', error);
+                    // في حالة الخطأ، لا نعرض Modal
+                });
+        }
+        
+        // عرض Modal وضع الصيانة
+        function showMaintenanceModal() {
+            const modal = document.getElementById('maintenanceModeModal');
+            const overlay = document.getElementById('maintenanceModeOverlay');
+            const body = document.body;
+            
+            if (modal && overlay) {
+                body.classList.add('maintenance-mode-active');
+                overlay.style.display = 'block';
+                
+                // استخدام Bootstrap Modal إذا كان متاحاً
+                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    const bsModal = new bootstrap.Modal(modal, {
+                        backdrop: 'static',
+                        keyboard: false
+                    });
+                    bsModal.show();
+                } else {
+                    // Fallback: عرض Modal يدوياً
+                    modal.style.display = 'block';
+                    modal.classList.add('show');
+                    modal.setAttribute('aria-hidden', 'false');
+                    document.body.classList.add('modal-open');
+                    const modalBackdrop = document.createElement('div');
+                    modalBackdrop.className = 'modal-backdrop fade show';
+                    modalBackdrop.id = 'maintenanceModalBackdrop';
+                    document.body.appendChild(modalBackdrop);
+                }
+            }
+        }
+        
+        // إخفاء Modal وضع الصيانة
+        function hideMaintenanceModal() {
+            const modal = document.getElementById('maintenanceModeModal');
+            const overlay = document.getElementById('maintenanceModeOverlay');
+            const body = document.body;
+            
+            if (modal && overlay) {
+                body.classList.remove('maintenance-mode-active');
+                overlay.style.display = 'none';
+                
+                // إغلاق Bootstrap Modal إذا كان متاحاً
+                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    const bsModal = bootstrap.Modal.getInstance(modal);
+                    if (bsModal) {
+                        bsModal.hide();
+                    }
+                } else {
+                    // Fallback: إخفاء Modal يدوياً
+                    modal.style.display = 'none';
+                    modal.classList.remove('show');
+                    modal.setAttribute('aria-hidden', 'true');
+                    document.body.classList.remove('modal-open');
+                    const backdrop = document.getElementById('maintenanceModalBackdrop');
+                    if (backdrop) {
+                        backdrop.remove();
+                    }
+                }
+            }
+        }
+        
+        // التحقق من وضع الصيانة عند تحميل الصفحة
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(checkMaintenanceMode, 500);
+            });
+        } else {
+            setTimeout(checkMaintenanceMode, 500);
+        }
+        
+        // التحقق بشكل دوري من وضع الصيانة (كل 30 ثانية)
+        setInterval(checkMaintenanceMode, 30000);
+    })();
+    </script>
+    
         </main>
     </div>
 </body>
