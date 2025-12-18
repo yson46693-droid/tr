@@ -2003,9 +2003,20 @@ function requireLogin() {
         $loginCheckResult = isLoggedIn();
     } catch (Throwable $e) {
         // إذا حدث خطأ في التحقق من الجلسة (مثلاً فشل الاتصال بقاعدة البيانات)
-        // نعتبر الجلسة منتهية ونعيد التوجيه إلى تسجيل الدخول
-        error_log("requireLogin() ERROR: Failed to check login status: " . $e->getMessage());
-        $loginCheckResult = false;
+        // في الصفحات المحمية، نتحقق من $_SESSION مباشرة قبل اعتبار الجلسة منتهية
+        if ($isProtectedPage && isset($_SESSION['user_id']) && !empty($_SESSION['user_id']) && isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+            error_log("requireLogin() WARNING: isLoggedIn() failed but $_SESSION is valid in protected page - keeping session active");
+            $loginCheckResult = true; // نعتبر الجلسة صالحة في الصفحات المحمية
+        } else {
+            error_log("requireLogin() ERROR: Failed to check login status: " . $e->getMessage());
+            $loginCheckResult = false;
+        }
+    }
+    
+    // فحص إضافي للصفحات المحمية: إذا فشل isLoggedIn() لكن $_SESSION صالحة، نعتبرها صالحة
+    if (!$loginCheckResult && $isProtectedPage && isset($_SESSION['user_id']) && !empty($_SESSION['user_id']) && isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+        error_log("requireLogin() PROTECTED PAGE: isLoggedIn() returned false but $_SESSION is valid - keeping session active");
+        $loginCheckResult = true;
     }
     
     if ($loginCheckResult) {

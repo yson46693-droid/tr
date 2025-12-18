@@ -109,14 +109,19 @@ try {
 }
 
 // التحقق مرة أخرى من أن المستخدم مسجل دخول
-if (!isLoggedIn()) {
-    header('Content-Type: application/json; charset=utf-8');
-    http_response_code(401);
-    echo json_encode([
-        'success' => false,
-        'error' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول'
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
+// ملاحظة: في API endpoints المحمية (WEBAUTHN_API_ACTIVE)، نتحقق من $_SESSION مباشرة
+// بدلاً من isLoggedIn() لأن isLoggedIn() قد يعيد false حتى لو كانت الجلسة صالحة
+if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id']) || !isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+    // محاولة أخيرة: التحقق من isLoggedIn() فقط إذا فشل التحقق من $_SESSION
+    if (!isLoggedIn()) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(401);
+        echo json_encode([
+            'success' => false,
+            'error' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 }
 
 header('Content-Type: application/json; charset=utf-8');
@@ -138,10 +143,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {
     try {
         // التحقق من أن المستخدم مسجل دخول - التحقق بعد requireLogin()
         // requireLogin() يجب أن يكون قد تحقق من الجلسة بالفعل
-        if (!isLoggedIn()) {
-            http_response_code(401);
-            echo json_encode(['success' => false, 'error' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول']);
-            exit;
+        // في API endpoints المحمية، نتحقق من $_SESSION مباشرة
+        if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id']) || !isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+            // محاولة أخيرة: التحقق من isLoggedIn() فقط إذا فشل التحقق من $_SESSION
+            if (!isLoggedIn()) {
+                http_response_code(401);
+                echo json_encode(['success' => false, 'error' => 'انتهت جلسة العمل، يرجى إعادة تسجيل الدخول']);
+                exit;
+            }
         }
         
         // الحصول على قائمة الاعتماديات للمستخدم
