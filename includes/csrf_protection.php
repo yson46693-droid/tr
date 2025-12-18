@@ -70,14 +70,17 @@ function getCSRFToken() {
     
     $token = bin2hex(random_bytes(32));
     
-    setcookie($cookieName, $token, [
-        'expires' => time() + 3600,
-        'path' => '/',
-        'domain' => '',
-        'secure' => $isHttps,
-        'httponly' => true,
-        'samesite' => 'Lax'
-    ]);
+    // التحقق من أن headers لم يتم إرسالها بعد
+    if (!headers_sent()) {
+        setcookie($cookieName, $token, [
+            'expires' => time() + 3600,
+            'path' => '/',
+            'domain' => '',
+            'secure' => $isHttps,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+    }
     
     $_COOKIE[$cookieName] = $token;
     

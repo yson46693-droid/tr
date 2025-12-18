@@ -753,7 +753,7 @@ function getErrorMessage() {
 
 /**
  * دالة مساعدة لتطبيق PRG pattern على الطلبات POST
- * تقرأ الرسائل من session وتعرضها
+ * تقرأ الرسائل من query parameters وتعرضها (تم إزالة نظام الجلسات)
  * 
  * @param string|null $defaultError متغير لرسالة الخطأ الافتراضي
  * @param string|null $defaultSuccess متغير لرسالة النجاح الافتراضي

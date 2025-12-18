@@ -485,25 +485,25 @@ function getCurrentUserFromDatabase($userId) {
     } catch (Exception $e) {
         // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
         // error_log("getCurrentUserFromDatabase - Database error for user ID {$userId}: " . $e->getMessage());
-        // في profile.php، لا نحذف الجلسة حتى لو كان هناك خطأ في قاعدة البيانات
+        // في profile.php، لا نحذف remember_token حتى لو كان هناك خطأ في قاعدة البيانات
         if ($isProfilePage) {
-            return null; // نرجع null لكن لا نحذف الجلسة
+            return null; // نرجع null لكن لا نحذف remember_token
         }
         return null;
     }
     
     // إذا كان المستخدم غير موجود أو محذوف من قاعدة البيانات
     if (!$user) {
-        // منع حذف الجلسة إذا كان الطلب من profile.php أو attendance.php أو sales.php أو إذا كان المستخدم مندوب
+        // منع حذف remember_token إذا كان الطلب من profile.php أو attendance.php أو sales.php أو إذا كان المستخدم مندوب
         if ($isProtectedPage) {
             $pageName = $isProfilePage ? 'profile.php' : ($isAttendancePage ? 'attendance.php' : ($isSalesPage ? 'sales.php' : ($isSalesUser ? 'sales user' : 'notifications.php')));
-            error_log("Security: User ID {$userId} not found in database - Skipping session destruction in {$pageName}");
+            error_log("Security: User ID {$userId} not found in database - Skipping token deletion in {$pageName}");
             return null;
         }
         
         // إلغاء تسجيل الدخول تلقائياً لأسباب أمنية
         error_log("Security: User ID {$userId} not found in database - Auto logout");
-        // تم إزالة نظام الجلسات - حذف remember_token فقط
+        // حذف remember_token فقط (تم إزالة نظام الجلسات)
         if (isset($_COOKIE['remember_token'])) {
             try {
                 if (ensureRememberTokensTable()) {
@@ -530,16 +530,16 @@ function getCurrentUserFromDatabase($userId) {
     
     // التحقق من حالة المستخدم - إذا كان غير مفعّل
     if (isset($user['status']) && $user['status'] !== 'active') {
-        // منع حذف الجلسة إذا كان الطلب من profile.php أو attendance.php أو sales.php أو إذا كان المستخدم مندوب
+        // منع حذف remember_token إذا كان الطلب من profile.php أو attendance.php أو sales.php أو إذا كان المستخدم مندوب
         if ($isProtectedPage) {
             $pageName = $isProfilePage ? 'profile.php' : ($isAttendancePage ? 'attendance.php' : ($isSalesPage ? 'sales.php' : ($isSalesUser ? 'sales user' : 'notifications.php')));
-            error_log("Security: User ID {$userId} status is '{$user['status']}' - Skipping session destruction in {$pageName}");
+            error_log("Security: User ID {$userId} status is '{$user['status']}' - Skipping token deletion in {$pageName}");
             return $user; // إرجاع بيانات المستخدم حتى لو كان غير مفعّل
         }
         
         // إلغاء تسجيل الدخول تلقائياً لأسباب أمنية
         error_log("Security: User ID {$userId} status is '{$user['status']}' - Auto logout");
-        // تم إزالة نظام الجلسات - حذف remember_token فقط
+        // حذف remember_token فقط (تم إزالة نظام الجلسات)
         if (isset($_COOKIE['remember_token'])) {
             try {
                 if (ensureRememberTokensTable()) {
@@ -1681,14 +1681,17 @@ function generateCSRFToken($forceRefresh = false) {
     $token = bin2hex(random_bytes(32));
     
     // حفظ token في cookie (صالح لمدة ساعة)
-    setcookie($cookieName, $token, [
-        'expires' => time() + 3600,
-        'path' => '/',
-        'domain' => '',
-        'secure' => $isHttps,
-        'httponly' => true,
-        'samesite' => 'Lax'
-    ]);
+    // التحقق من أن headers لم يتم إرسالها بعد
+    if (!headers_sent()) {
+        setcookie($cookieName, $token, [
+            'expires' => time() + 3600,
+            'path' => '/',
+            'domain' => '',
+            'secure' => $isHttps,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+    }
     
     // حفظ في $_COOKIE للطلبات اللاحقة في نفس الطلب
     $_COOKIE[$cookieName] = $token;
