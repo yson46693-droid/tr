@@ -99,7 +99,105 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 applyPRGPattern($error, $success);
 ?>
 
-<div class="container-fluid">
+<style>
+/* إصلاح مشاكل التصميم في صفحة إعدادات النظام */
+.system-settings-container .row {
+    margin-left: 0;
+    margin-right: 0;
+    overflow: visible;
+}
+
+.system-settings-container .col-md-8,
+.system-settings-container .col-md-4 {
+    padding-left: 15px;
+    padding-right: 15px;
+    position: relative;
+    overflow: visible;
+}
+
+/* إصلاح مشكلة التفاف النص */
+.system-settings-container code {
+    word-break: keep-all;
+    white-space: nowrap;
+    display: inline-block;
+    padding: 0.2em 0.4em;
+    font-size: 0.875em;
+}
+
+.system-settings-container .text-muted code {
+    word-break: keep-all;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+/* إصلاح مشكلة الشارة المقطوعة */
+.system-settings-container .badge {
+    padding: 0.5em 0.75em;
+    font-size: 0.875em;
+    line-height: 1.4;
+    min-height: 1.8em;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* إصلاح تخطيط البطاقات */
+.system-settings-container .card {
+    margin-bottom: 1.5rem;
+    overflow: visible;
+    position: relative;
+}
+
+.system-settings-container .card-body {
+    overflow: visible;
+}
+
+/* إصلاح مشكلة العنصر العمودي المقطوع */
+.system-settings-container .col-md-4 .card {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+}
+
+/* إصلاح مشكلة النص في قسم وضع الصيانة */
+.system-settings-container .d-flex.align-items-center {
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.system-settings-container .d-flex.align-items-center > div:first-child {
+    flex: 1;
+    min-width: 200px;
+}
+
+/* تحسين عرض النص في code tags */
+.system-settings-container small code {
+    font-size: 0.85em;
+    word-break: break-all;
+    white-space: pre-wrap;
+    max-width: 100%;
+}
+
+/* إصلاح مشكلة overflow */
+.system-settings-container {
+    overflow-x: hidden;
+}
+
+@media (max-width: 768px) {
+    .system-settings-container .col-md-8,
+    .system-settings-container .col-md-4 {
+        margin-bottom: 1rem;
+    }
+    
+    .system-settings-container .d-flex.align-items-center {
+        flex-direction: column;
+        align-items: flex-start !important;
+    }
+}
+</style>
+
+<div class="container-fluid system-settings-container">
     <div class="page-header mb-4">
         <h2><i class="bi bi-gear"></i> إعدادات النظام</h2>
         <p class="text-muted">إدارة إعدادات النظام العامة</p>
@@ -119,9 +217,9 @@ applyPRGPattern($error, $success);
         </div>
     <?php endif; ?>
 
-    <div class="row">
+    <div class="row g-3">
         <div class="col-md-8">
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5 class="mb-0"><i class="bi bi-tools me-2"></i>وضع الصيانة</h5>
                 </div>
@@ -129,7 +227,7 @@ applyPRGPattern($error, $success);
                     <p class="text-muted mb-4">
                         عند تفعيل وضع الصيانة، لن يتمكن أي مستخدم من استخدام النظام عدا حساب المطور.
                         سيتم عرض رسالة تنبيه للمستخدمين العاديين تطلب منهم إعادة المحاولة لاحقاً.
-                        <br><strong>ملاحظة:</strong> يتم حفظ إعدادات وضع الصيانة في ملف <code>includes/config.php</code>
+                        <br><strong>ملاحظة:</strong> يتم حفظ إعدادات وضع الصيانة في ملف <code class="text-break">includes/config.php</code>
                     </p>
 
                     <?php if (!is_writable($configFilePath)): ?>
@@ -145,15 +243,14 @@ applyPRGPattern($error, $success);
                         <div class="d-flex align-items-center justify-content-between p-3 border rounded">
                             <div>
                                 <h6 class="mb-1">وضع الصيانة</h6>
-                                <small class="text-muted">
+                                <small class="text-muted d-block mb-2">
                                     الحالة الحالية: 
-                                    <span class="badge <?php echo $maintenanceMode ? 'bg-danger' : 'bg-success'; ?>">
+                                    <span class="badge <?php echo $maintenanceMode ? 'bg-danger' : 'bg-success'; ?> ms-1">
                                         <?php echo $maintenanceMode ? 'مفعّل' : 'معطّل'; ?>
                                     </span>
                                 </small>
-                                <br>
-                                <small class="text-muted">
-                                    الموقع: <code>includes/config.php</code> - <code>MAINTENANCE_MODE</code>
+                                <small class="text-muted d-block mt-2">
+                                    الموقع: <code class="d-inline">includes/config.php</code> - <code class="d-inline">MAINTENANCE_MODE</code>
                                 </small>
                             </div>
                             <div class="form-check form-switch">
@@ -188,7 +285,7 @@ applyPRGPattern($error, $success);
         </div>
 
         <div class="col-md-4">
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>معلومات مهمة</h5>
                 </div>
