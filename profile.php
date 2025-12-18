@@ -4,7 +4,7 @@
  */
 
 define('ACCESS_ALLOWED', true);
-// تعريف ثابت لمنع حذف الجلسة في profile.php
+// تعريف ثابت للصفحة المحمية (profile.php)
 define('PROFILE_PAGE_ACTIVE', true);
 
 require_once __DIR__ . '/includes/config.php';
@@ -17,11 +17,7 @@ require_once __DIR__ . '/includes/audit_log.php';
 // تم إزالة نظام الجلسات بالكامل
 // استخدام requireLogin() للتحقق من تسجيل الدخول (يتعامل مع التوجيه تلقائياً)
 
-// تسجيل للتشخيص (يمكن إزالته لاحقاً)
-$hasCookie = isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token']);
-$isLoggedInResult = isLoggedIn();
-error_log("Profile.php - hasCookie: " . ($hasCookie ? 'yes' : 'no') . " | isLoggedIn: " . ($isLoggedInResult ? 'yes' : 'no'));
-
+// التحقق من تسجيل الدخول - يعتمد على remember_token فقط
 requireLogin();
 
 // تهيئة متغيرات الرسائل
@@ -30,19 +26,78 @@ $error = $_GET['error'] ?? '';
 $success = $_GET['success'] ?? '';
 
 // === تحميل بيانات المستخدم ===
-$user = getCurrentUser();
-$currentUser = $user;
+// محاولة متعددة للحصول على بيانات المستخدم
+$user = null;
+$currentUser = null;
+$userId = null;
 
-// إذا لم يتم تحميل بيانات المستخدم، محاولة تحميلها من remember_token
-if (!$user || !isset($user['id'])) {
-    $user = getUserFromToken();
+// المحاولة 1: استخدام getCurrentUser()
+$user = getCurrentUser();
+if ($user && isset($user['id']) && !empty($user['id'])) {
     $currentUser = $user;
+    $userId = $user['id'];
 }
 
-$userId = $user['id'] ?? null;
+// المحاولة 2: إذا فشلت، استخدام getUserFromToken()
+if (!$user || !isset($user['id']) || empty($user['id'])) {
+    $user = getUserFromToken();
+    if ($user && isset($user['id']) && !empty($user['id'])) {
+        $currentUser = $user;
+        $userId = $user['id'];
+    }
+}
 
-if (!$user || !isset($user['id'])) {
+// المحاولة 3: إذا فشلت، محاولة الحصول من remember_token مباشرة
+if (!$user || !isset($user['id']) || empty($user['id'])) {
+    if (isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
+        try {
+            if (ensureRememberTokensTable()) {
+                $db = db();
+                $decoded = base64_decode($_COOKIE['remember_token'], true);
+                if ($decoded) {
+                    $parts = explode(':', $decoded);
+                    if (count($parts) === 2) {
+                        $tokenUserId = intval($parts[0]);
+                        $token = trim($parts[1]);
+                        
+                        if ($tokenUserId > 0 && !empty($token)) {
+                            $tokenRecord = $db->queryOne(
+                                "SELECT rt.*, u.* FROM remember_tokens rt
+                                 INNER JOIN users u ON rt.user_id = u.id
+                                 WHERE rt.user_id = ? AND rt.token = ? AND rt.expires_at > NOW() AND u.status = 'active'",
+                                [$tokenUserId, $token]
+                            );
+                            
+                            if ($tokenRecord) {
+                                $user = [
+                                    'id' => $tokenRecord['user_id'],
+                                    'username' => $tokenRecord['username'],
+                                    'email' => $tokenRecord['email'] ?? null,
+                                    'full_name' => $tokenRecord['full_name'] ?? null,
+                                    'role' => $tokenRecord['role'],
+                                    'status' => $tokenRecord['status'],
+                                    'phone' => $tokenRecord['phone'] ?? null,
+                                    'created_at' => $tokenRecord['created_at'] ?? null,
+                                    'updated_at' => $tokenRecord['updated_at'] ?? null,
+                                    'profile_photo' => $tokenRecord['profile_photo'] ?? null,
+                                ];
+                                $currentUser = $user;
+                                $userId = $user['id'];
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            error_log("Profile.php - Failed to load user from remember_token: " . $e->getMessage());
+        }
+    }
+}
+
+// إذا فشلت جميع المحاولات
+if (!$user || !isset($user['id']) || empty($user['id'])) {
     $error = 'تعذر تحميل بيانات المستخدم. يرجى تسجيل الدخول مرة أخرى.';
+    error_log("Profile.php - CRITICAL: Failed to load user data after all attempts");
 }
 
 $db = db();
@@ -131,7 +186,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // التحقق من البريد الإلكتروني إذا تغير
             if ($user && is_array($user) && isset($user['email']) && isset($user['id']) && $email !== $user['email']) {
                 $existingUser = getUserByUsername($email);
-                $userId = ($currentUser && isset($currentUser['id'])) ? $currentUser['id'] : ($user && isset($user['id']) ? $user['id'] : ($_SESSION['user_id'] ?? null));
+                $userId = ($currentUser && isset($currentUser['id'])) ? $currentUser['id'] : ($user && isset($user['id']) ? $user['id'] : null);
+                
+                // إذا لم نجد userId، حاول الحصول من remember_token
+                if (!$userId) {
+                    $tokenUser = getUserFromToken();
+                    $userId = $tokenUser['id'] ?? null;
+                }
                 if ($existingUser && isset($existingUser['id']) && $existingUser['id'] != $userId) {
                     $error = 'البريد الإلكتروني مستخدم بالفعل';
                 }
@@ -203,10 +264,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $user = getCurrentUser();
                     $currentUser = $user;
                     
-                    $_SESSION['success_message'] = 'تم تحديث البروفايل بنجاح';
+                    // تم إزالة نظام الجلسات - استخدام query parameter للرسالة
+                    $successMessage = urlencode('تم تحديث البروفايل بنجاح');
+                    $redirectUrl = $_SERVER['PHP_SELF'] . '?success=' . $successMessage;
                     
                     // Redirect لتجنب إعادة إرسال الطلب
-                    header('Location: ' . $_SERVER['PHP_SELF']);
+                    header('Location: ' . $redirectUrl);
                     exit;
                     }
                 }
