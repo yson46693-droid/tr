@@ -4586,53 +4586,85 @@ document.addEventListener('DOMContentLoaded', function () {
             if (statusDiv) statusDiv.textContent = 'جاري رفع الملف...';
             if (submitBtn) submitBtn.disabled = true;
             
-            // استخدام مسار مطلق لضمان الوصول الصحيح
-            var apiUrl = '<?php 
-                $apiPath = getRelativeUrl("api/import_customers.php");
-                // التأكد من أن المسار يبدأ بـ /
-                if (strpos($apiPath, '/') !== 0) {
-                    $apiPath = '/' . $apiPath;
-                }
-                echo $apiPath;
-            ?>';
+            // استخدام مسار مباشر لضمان الوصول الصحيح
+            // محاولة استخدام مسار نسبي من الصفحة الحالية
+            var apiUrl = 'api/import_customers.php';
             
+            // إذا كان المسار الحالي يحتوي على dashboard، استخدم مسار مطلق
+            if (window.location.pathname.includes('/dashboard/')) {
+                // استخراج المسار الأساسي
+                var basePath = window.location.pathname.split('/dashboard/')[0];
+                apiUrl = basePath + '/api/import_customers.php';
+            } else {
+                // استخدام مسار نسبي
+                var currentPath = window.location.pathname;
+                var pathParts = currentPath.split('/').filter(function(p) { return p; });
+                // إزالة آخر جزء (اسم الملف)
+                if (pathParts.length > 0) {
+                    pathParts.pop();
+                }
+                // بناء المسار
+                if (pathParts.length > 0) {
+                    apiUrl = '/' + pathParts.join('/') + '/api/import_customers.php';
+                } else {
+                    apiUrl = '/api/import_customers.php';
+                }
+            }
+            
+            console.log('Current pathname:', window.location.pathname);
             console.log('Import API URL:', apiUrl);
             console.log('FormData entries:');
             for (var pair of formData.entries()) {
-                console.log(pair[0] + ': ' + (pair[1] instanceof File ? pair[1].name : pair[1]));
+                console.log(pair[0] + ': ' + (pair[1] instanceof File ? pair[1].name + ' (' + pair[1].size + ' bytes)' : pair[1]));
             }
+            
+            // إضافة timeout للطلب
+            var controller = new AbortController();
+            var timeoutId = setTimeout(() => controller.abort(), 300000); // 5 دقائق
             
             fetch(apiUrl, {
                 method: 'POST',
                 body: formData,
                 credentials: 'same-origin',
+                signal: controller.signal,
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest'
                 }
             })
             .then(response => {
+                clearTimeout(timeoutId);
                 console.log('Response status:', response.status);
-                console.log('Response headers:', response.headers);
+                console.log('Response statusText:', response.statusText);
+                console.log('Response Content-Type:', response.headers.get('Content-Type'));
                 
-                if (!response.ok) {
-                    // محاولة قراءة رسالة الخطأ من الاستجابة
-                    return response.text().then(text => {
-                        console.error('Error response:', text);
+                // قراءة النص أولاً للتحقق من نوع الاستجابة
+                return response.text().then(text => {
+                    console.log('Response text (first 500 chars):', text.substring(0, 500));
+                    
+                    if (!response.ok) {
+                        console.error('Error response (full):', text);
                         try {
                             var errorData = JSON.parse(text);
                             throw new Error(errorData.message || 'خطأ في الاتصال بالخادم: ' + response.status);
-                        } catch (e) {
-                            throw new Error('خطأ في الاتصال بالخادم: ' + response.status + ' - ' + text.substring(0, 100));
+                        } catch (parseError) {
+                            if (parseError instanceof Error && parseError.message.includes('خطأ في الاتصال')) {
+                                throw parseError;
+                            }
+                            // إذا لم يكن JSON، استخدم النص مباشرة
+                            throw new Error('خطأ في الاتصال بالخادم: ' + response.status + ' - ' + (text.substring(0, 200) || response.statusText));
                         }
-                    });
-                }
-                
-                return response.json().catch(error => {
-                    console.error('JSON parse error:', error);
-                    return response.text().then(text => {
-                        console.error('Response text:', text);
-                        throw new Error('خطأ في قراءة الاستجابة من الخادم');
-                    });
+                    }
+                    
+                    // محاولة تحليل JSON
+                    try {
+                        var data = JSON.parse(text);
+                        console.log('Parsed JSON data:', data);
+                        return data;
+                    } catch (jsonError) {
+                        console.error('JSON parse error:', jsonError);
+                        console.error('Response text (full):', text);
+                        throw new Error('خطأ في قراءة الاستجابة من الخادم. الاستجابة ليست JSON صحيح.');
+                    }
                 });
             })
             .then(data => {
@@ -4686,10 +4718,23 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (submitBtn) submitBtn.disabled = false;
             })
             .catch(error => {
+                clearTimeout(timeoutId);
                 console.error('Import error:', error);
+                console.error('Error name:', error.name);
+                console.error('Error message:', error.message);
                 console.error('Error stack:', error.stack);
                 
                 if (progressBar) progressBar.style.width = '100%';
+                
+                var errorMessage = 'حدث خطأ غير متوقع';
+                
+                if (error.name === 'AbortError') {
+                    errorMessage = 'انتهت مهلة الاتصال. يرجى المحاولة مرة أخرى أو اختيار ملف أصغر.';
+                } else if (error.message) {
+                    errorMessage = error.message;
+                } else if (error.toString) {
+                    errorMessage = error.toString();
+                }
                 
                 if (statusDiv) {
                     statusDiv.textContent = 'حدث خطأ في الاتصال بالخادم';
@@ -4700,10 +4745,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     errorsDiv.classList.remove('d-none');
                     var errorsContent = document.getElementById('importErrorsContent');
                     if (errorsContent) {
-                        var errorMessage = error.message || 'حدث خطأ غير متوقع';
                         errorsContent.innerHTML = '<div class="alert alert-danger">' +
-                            '<strong>خطأ:</strong> ' + errorMessage + '<br>' +
-                            '<small>يرجى التحقق من: console.log في المتصفح لمزيد من التفاصيل</small>' +
+                            '<strong>خطأ:</strong> ' + errorMessage + '<br><br>' +
+                            '<small><strong>تفاصيل تقنية:</strong><br>' +
+                            'اسم الخطأ: ' + (error.name || 'غير معروف') + '<br>' +
+                            'يرجى التحقق من: console.log في المتصفح (F12) لمزيد من التفاصيل<br>' +
+                            'أو تحقق من ملف السجلات: storage/logs/import_customers.log' +
+                            '</small>' +
                             '</div>';
                     }
                 }

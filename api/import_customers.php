@@ -12,10 +12,27 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/audit_log.php';
 
+// تنظيف أي output buffer قبل البدء
+if (ob_get_level() > 0) {
+    ob_clean();
+}
+
 header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST');
+header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
 
 // التحقق من الصلاحيات
-requireRole(['manager', 'accountant', 'sales']);
+try {
+    requireRole(['manager', 'accountant', 'sales']);
+} catch (Exception $authError) {
+    http_response_code(403);
+    echo json_encode([
+        'success' => false,
+        'message' => 'غير مصرح لك بالوصول إلى هذه الصفحة: ' . $authError->getMessage()
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 $currentUser = getCurrentUser();
 $db = db();
