@@ -1247,25 +1247,70 @@ try {
                 }
                 
                 $imported++;
+                logImport("Row $i - Customer imported successfully. Total imported so far: $imported");
             } catch (Exception $insertError) {
+                logImport("Row $i - ERROR: " . $insertError->getMessage());
                 $errors[] = "سطر " . ($i + 1) . ": " . $insertError->getMessage();
             }
         }
+        
+        logImport("=== LOOP COMPLETED ===");
+        logImport("Total imported: $imported");
+        logImport("Total skipped: $skipped");
+        logImport("Total errors: " . count($errors));
+        logImport("Transaction started: " . ($transactionStarted ? 'YES' : 'NO'));
         
         // تأكيد المعاملة - يجب أن يتم قبل أي شيء آخر
         logImport('=== COMMITTING TRANSACTION ===');
         $transactionCommitted = false;
         try {
             if ($transactionStarted) {
-                $db->commit();
+                logImport('Attempting to commit transaction...');
+                $commitResult = $db->commit();
+                logImport('Commit result: ' . ($commitResult ? 'SUCCESS' : 'FAILED'));
+                
+                if ($commitResult === false) {
+                    $errorMsg = 'Commit returned false - transaction may have failed';
+                    logImport('✗ ERROR: ' . $errorMsg);
+                    throw new Exception($errorMsg);
+                }
+                
                 $transactionCommitted = true;
                 $transactionStarted = false; // تم commit، لا نحتاج rollback
                 logImport('✓ Transaction committed successfully');
+                
+                // التحقق النهائي من البيانات المحفوظة - بعد commit مباشرة
+                if ($imported > 0) {
+                    logImport('=== VERIFYING SAVED DATA AFTER COMMIT ===');
+                    try {
+                        // استخدام استعلام بسيط للتحقق
+                        $verifyQuery = "SELECT COUNT(*) as count FROM customers WHERE created_by = ?";
+                        $verifyResult = $db->queryOne($verifyQuery, [$currentUser['id']]);
+                        $totalCount = (int)($verifyResult['count'] ?? 0);
+                        logImport("Total customers for user: $totalCount");
+                        
+                        // التحقق من العملاء المضافة حديثاً (في آخر دقيقة)
+                        $recentQuery = "SELECT COUNT(*) as count FROM customers WHERE created_by = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)";
+                        $recentResult = $db->queryOne($recentQuery, [$currentUser['id']]);
+                        $recentCount = (int)($recentResult['count'] ?? 0);
+                        logImport("Recent customers (last 2 minutes): $recentCount (expected: $imported)");
+                        
+                        if ($recentCount < $imported) {
+                            logImport("⚠ WARNING: Recent count ($recentCount) is less than imported count ($imported)");
+                            logImport("  This may indicate that data was not saved properly");
+                        } else {
+                            logImport("✓ SUCCESS: All imported customers are saved in database");
+                        }
+                    } catch (Exception $verifyError) {
+                        logImport('⚠ Warning: Could not verify saved data: ' . $verifyError->getMessage());
+                    }
+                }
             } else {
                 logImport('⚠ No transaction to commit');
             }
         } catch (Exception $commitError) {
             logImport('✗ ERROR committing transaction: ' . $commitError->getMessage());
+            logImport('✗ Stack trace: ' . $commitError->getTraceAsString());
             if ($transactionStarted) {
                 try {
                     $db->rollBack();
