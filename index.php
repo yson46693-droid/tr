@@ -1479,7 +1479,12 @@ $lang = $translations;
                             
                             loadingMessage.textContent = 'جاري التحقق من الجلسة...';
                             setTimeout(() => {
-                                window.location.href = dashboardUrl;
+                                // التأكد من أن URL نسبي فقط
+                                if (!dashboardUrl.startsWith('/')) {
+                                    dashboardUrl = '/' + dashboardUrl;
+                                }
+                                dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                                window.location.replace(dashboardUrl);
                             }, 1000);
                             return;
                         }
@@ -1514,7 +1519,12 @@ $lang = $translations;
                         }
                         
                         setTimeout(() => {
-                            window.location.href = dashboardUrl;
+                            // التأكد من أن URL نسبي فقط
+                            if (!dashboardUrl.startsWith('/')) {
+                                dashboardUrl = '/' + dashboardUrl;
+                            }
+                            dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                            window.location.replace(dashboardUrl);
                         }, 1500);
                         return;
                     }
@@ -1549,14 +1559,22 @@ $lang = $translations;
                         // التوجيه مباشرة بعد 500ms
                         setTimeout(() => {
                             console.log('Executing redirect to:', dashboardUrl);
-                            // استخدام replace بدلاً من href لتجنب إضافة URL للتاريخ
-                            try {
-                                window.location.replace(dashboardUrl);
-                            } catch (e) {
-                                // إذا فشل replace، استخدم href
-                                console.warn('window.location.replace failed, using href:', e);
-                                window.location.href = dashboardUrl;
+                            // التأكد من أن URL نسبي فقط (يبدأ بـ /)
+                            if (!dashboardUrl.startsWith('/')) {
+                                dashboardUrl = '/' + dashboardUrl;
                             }
+                            // إزالة أي بروتوكول أو hostname نهائياً
+                            dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '');
+                            dashboardUrl = dashboardUrl.replace(/^\/\//, '/');
+                            // إزالة أي hostname مع منفذ
+                            dashboardUrl = dashboardUrl.replace(/^[^\/]+:[0-9]+\//, '/');
+                            // التأكد من أن المسار يبدأ بـ /
+                            if (!dashboardUrl.startsWith('/')) {
+                                dashboardUrl = '/' + dashboardUrl;
+                            }
+                            console.log('Final redirect URL:', dashboardUrl);
+                            // استخدام replace بدلاً من href لتجنب إضافة URL للتاريخ
+                            window.location.replace(dashboardUrl);
                         }, 500);
                         return;
                     }
@@ -1609,8 +1627,13 @@ $lang = $translations;
                         }
                         
                         setTimeout(() => {
+                            // التأكد من أن URL نسبي فقط
+                            if (!dashboardUrl.startsWith('/')) {
+                                dashboardUrl = '/' + dashboardUrl;
+                            }
+                            dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
                             console.log('Redirecting to:', dashboardUrl);
-                            window.location.href = dashboardUrl;
+                            window.location.replace(dashboardUrl);
                         }, 500);
                     } else {
                         // الجلسة غير موجودة - لكن إذا كان تسجيل الدخول ناجحاً، قد يكون السبب بطء في قاعدة البيانات
@@ -1631,7 +1654,12 @@ $lang = $translations;
                             }
                             
                             setTimeout(() => {
-                                window.location.href = dashboardUrl;
+                                // التأكد من أن URL نسبي فقط
+                                if (!dashboardUrl.startsWith('/')) {
+                                    dashboardUrl = '/' + dashboardUrl;
+                                }
+                                dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                                window.location.replace(dashboardUrl);
                             }, 500);
                             return;
                         }
@@ -1671,7 +1699,12 @@ $lang = $translations;
                             
                             loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
                             setTimeout(() => {
-                                window.location.href = dashboardUrl;
+                                // التأكد من أن URL نسبي فقط
+                                if (!dashboardUrl.startsWith('/')) {
+                                    dashboardUrl = '/' + dashboardUrl;
+                                }
+                                dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                                window.location.replace(dashboardUrl);
                             }, 500);
                             return;
                         }
@@ -1725,7 +1758,12 @@ $lang = $translations;
                             }
                             
                             setTimeout(() => {
-                                window.location.href = dashboardUrl;
+                                // التأكد من أن URL نسبي فقط
+                                if (!dashboardUrl.startsWith('/')) {
+                                    dashboardUrl = '/' + dashboardUrl;
+                                }
+                                dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                                window.location.replace(dashboardUrl);
                             }, 500);
                         } else {
                             // فشلت المحاولة الثانية - لكن إذا كان تسجيل الدخول ناجحاً، نوجه مباشرة
@@ -1746,7 +1784,12 @@ $lang = $translations;
                                 }
                                 
                                 setTimeout(() => {
-                                    window.location.href = dashboardUrl;
+                                    // التأكد من أن URL نسبي فقط
+                                    if (!dashboardUrl.startsWith('/')) {
+                                        dashboardUrl = '/' + dashboardUrl;
+                                    }
+                                    dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                                    window.location.replace(dashboardUrl);
                                 }, 500);
                             } else {
                                 // فشل تسجيل الدخول فعلياً
@@ -1783,7 +1826,12 @@ $lang = $translations;
                         
                         loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
                         setTimeout(() => {
-                            window.location.href = dashboardUrl;
+                            // التأكد من أن URL نسبي فقط
+                            if (!dashboardUrl.startsWith('/')) {
+                                dashboardUrl = '/' + dashboardUrl;
+                            }
+                            dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                            window.location.replace(dashboardUrl);
                         }, 500);
                         return;
                     }
@@ -1810,7 +1858,12 @@ $lang = $translations;
                             
                             loadingMessage.textContent = 'يوجد جلسة نشطة بالفعل جاري التحويل إلى النظام';
                             setTimeout(() => {
-                                window.location.href = dashboardUrl;
+                                // التأكد من أن URL نسبي فقط
+                                if (!dashboardUrl.startsWith('/')) {
+                                    dashboardUrl = '/' + dashboardUrl;
+                                }
+                                dashboardUrl = dashboardUrl.replace(/^https?:\/\//, '').replace(/^\/\//, '/');
+                                window.location.replace(dashboardUrl);
                             }, 1500);
                             return;
                         } else {
