@@ -166,23 +166,39 @@ function checkRememberToken($cookieValue, $createSession = true) {
         
         if (!$tokenRecord) {
             error_log("checkRememberToken: Token not found or expired for user_id: {$userId}");
-            // حذف cookie غير صالح
-            $isHttps = (
-                (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-                (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
+            
+            // التحقق من أننا في صفحة محمية (مثل profile.php)
+            // لا نحذف cookie في الصفحات المحمية لأن token قد يكون موجوداً لكن هناك تأخير في قاعدة البيانات
+            $isProtectedPage = (
+                (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) ||
+                (defined('ATTENDANCE_PAGE_ACTIVE') && ATTENDANCE_PAGE_ACTIVE === true) ||
+                (defined('SALES_PAGE_ACTIVE') && SALES_PAGE_ACTIVE === true) ||
+                (defined('NOTIFICATIONS_API_ACTIVE') && NOTIFICATIONS_API_ACTIVE === true) ||
+                (defined('WEBAUTHN_API_ACTIVE') && WEBAUTHN_API_ACTIVE === true)
             );
-            setcookie(
-                'remember_token',
-                '',
-                [
-                    'expires' => time() - 3600,
-                    'path' => '/',
-                    'domain' => '',
-                    'secure' => $isHttps,
-                    'httponly' => true,
-                    'samesite' => 'Lax'
-                ]
-            );
+            
+            // إذا لم نكن في صفحة محمية، احذف cookie غير صالح
+            if (!$isProtectedPage) {
+                $isHttps = (
+                    (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+                    (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
+                );
+                setcookie(
+                    'remember_token',
+                    '',
+                    [
+                        'expires' => time() - 3600,
+                        'path' => '/',
+                        'domain' => '',
+                        'secure' => $isHttps,
+                        'httponly' => true,
+                        'samesite' => 'Lax'
+                    ]
+                );
+            } else {
+                error_log("checkRememberToken: Token not found but keeping cookie for protected page");
+            }
+            
             return false;
         }
         
@@ -1096,17 +1112,46 @@ function requireLogin() {
             $loginCheckResult = isLoggedIn();
             
             // إذا استمر الفشل، حاول الحصول على المستخدم مباشرة من token
+            // هذا مهم جداً للصفحات المحمية مثل profile.php
             if (!$loginCheckResult) {
                 $userFromToken = getUserFromToken();
-                if ($userFromToken && isset($userFromToken['id'])) {
+                if ($userFromToken && isset($userFromToken['id']) && !empty($userFromToken['id'])) {
+                    // إذا وجدنا المستخدم من token، نعتبره مسجل دخول
                     $loginCheckResult = true;
                     error_log("requireLogin() - Retry successful for protected page using getUserFromToken()");
                 }
             }
         }
+        
+        // للصفحات المحمية (مثل profile.php)، إذا كان هناك remember_token، نسمح بالوصول
+        // حتى لو فشل isLoggedIn() - لأن getUserFromToken() قد يعمل
+        if (!$loginCheckResult && $isProtectedPage && isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
+            $userFromToken = getUserFromToken();
+            if ($userFromToken && isset($userFromToken['id']) && !empty($userFromToken['id'])) {
+                $loginCheckResult = true;
+                error_log("requireLogin() - Allowing access to protected page based on getUserFromToken()");
+            }
+        }
     } catch (Throwable $e) {
         error_log("requireLogin() ERROR: Failed to check login status: " . $e->getMessage());
-        $loginCheckResult = false;
+        
+        // للصفحات المحمية، حاول getUserFromToken() كحل أخير
+        if ($isProtectedPage && isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
+            try {
+                $userFromToken = getUserFromToken();
+                if ($userFromToken && isset($userFromToken['id']) && !empty($userFromToken['id'])) {
+                    $loginCheckResult = true;
+                    error_log("requireLogin() - Exception occurred but getUserFromToken() succeeded for protected page");
+                } else {
+                    $loginCheckResult = false;
+                }
+            } catch (Throwable $e2) {
+                error_log("requireLogin() ERROR: getUserFromToken() also failed: " . $e2->getMessage());
+                $loginCheckResult = false;
+            }
+        } else {
+            $loginCheckResult = false;
+        }
     }
     
     if ($loginCheckResult) {

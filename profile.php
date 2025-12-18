@@ -27,11 +27,18 @@ $success = $_GET['success'] ?? '';
 
 // === تحميل بيانات المستخدم ===
 // استخدام getUserFromToken() مباشرة - لا نعتمد على getCurrentUser() لأنه يعتمد على isLoggedIn()
-$user = getUserFromToken();
-$currentUser = $user;
-$userId = $user['id'] ?? null;
+$user = null;
+$currentUser = null;
+$userId = null;
 
-// إذا فشلت المحاولة الأولى، محاولة الحصول من remember_token مباشرة
+// المحاولة 1: استخدام getUserFromToken()
+$user = getUserFromToken();
+if ($user && isset($user['id']) && !empty($user['id'])) {
+    $currentUser = $user;
+    $userId = $user['id'];
+}
+
+// المحاولة 2: إذا فشلت، محاولة الحصول من remember_token مباشرة
 if (!$user || !isset($user['id']) || empty($user['id'])) {
     if (isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
         try {
@@ -79,22 +86,41 @@ if (!$user || !isset($user['id']) || empty($user['id'])) {
     }
 }
 
-// إذا فشلت جميع المحاولات، إعادة التوجيه لتسجيل الدخول
+// المحاولة 3: إذا فشلت، محاولة استخدام getCurrentUser() كحل أخير
 if (!$user || !isset($user['id']) || empty($user['id'])) {
-    error_log("Profile.php - CRITICAL: Failed to load user data. Redirecting to login.");
-    $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
-    $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
-    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
-    if (strpos($loginUrl, '/') !== 0) {
-        $loginUrl = '/' . $loginUrl;
+    $user = getCurrentUser();
+    if ($user && isset($user['id']) && !empty($user['id'])) {
+        $currentUser = $user;
+        $userId = $user['id'];
     }
-    
-    if (!headers_sent()) {
-        header('Location: ' . $loginUrl);
-        exit;
+}
+
+// إذا فشلت جميع المحاولات وكان هناك remember_token، لا نعيد التوجيه
+// لأن requireLogin() قد يكون سمح بالوصول بناءً على getUserFromToken()
+// فقط نعرض رسالة خطأ
+if (!$user || !isset($user['id']) || empty($user['id'])) {
+    if (isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
+        // إذا كان هناك cookie، نعرض رسالة خطأ بدلاً من إعادة التوجيه
+        // لأن requireLogin() قد يكون سمح بالوصول
+        $error = 'تعذر تحميل بيانات المستخدم. يرجى إعادة تحميل الصفحة.';
+        error_log("Profile.php - WARNING: Failed to load user data but remember_token exists");
     } else {
-        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
-        exit;
+        // إذا لم يكن هناك cookie، إعادة التوجيه لتسجيل الدخول
+        error_log("Profile.php - CRITICAL: No remember_token found. Redirecting to login.");
+        $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+        $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
+        $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+        if (strpos($loginUrl, '/') !== 0) {
+            $loginUrl = '/' . $loginUrl;
+        }
+        
+        if (!headers_sent()) {
+            header('Location: ' . $loginUrl);
+            exit;
+        } else {
+            echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+            exit;
+        }
     }
 }
 
