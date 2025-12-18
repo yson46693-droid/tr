@@ -1201,24 +1201,46 @@ function requireLogin() {
     }
     
     if ($loginCheckResult) {
-        // التحقق من وضع الصيانة بعد التحقق من تسجيل الدخول
-        $maintenanceCheck = checkMaintenanceMode();
-        if (!$maintenanceCheck['allowed']) {
-            // تم إزالة نظام الجلسات - يمكن استخدام cookies أو JavaScript للتعامل مع وضع الصيانة
-            // السماح للصفحة بالتحميل - سيتم التعامل مع وضع الصيانة في JavaScript
-        }
-        
-        // المستخدم مسجل دخول - المتابعة (سواء كان في وضع الصيانة أم لا - سيتم التعامل معه في JavaScript)
-        if (!function_exists('logRequestUsage')) {
-            $monitorPath = __DIR__ . '/request_monitor.php';
-            if (file_exists($monitorPath)) {
-                require_once $monitorPath;
+        // للصفحات المحمية مثل profile.php، نتحقق من أن getUserFromToken() يعمل بشكل صحيح
+        // لأن الصفحة تحتاج بيانات المستخدم لتعمل
+        if ($isProtectedPage && ($isProfilePage || $isAttendancePage || $isSalesPage)) {
+            $userFromToken = getUserFromToken();
+            if (!$userFromToken || !isset($userFromToken['id']) || empty($userFromToken['id'])) {
+                // إذا فشل getUserFromToken()، نحاول مرة أخرى مع retry
+                error_log("requireLogin() - getUserFromToken() failed for protected page, retrying...");
+                usleep(100000); // 100ms
+                $userFromToken = getUserFromToken();
+                
+                if (!$userFromToken || !isset($userFromToken['id']) || empty($userFromToken['id'])) {
+                    // إذا فشل مرة أخرى، نعتبر أن المستخدم غير مسجل دخول
+                    error_log("requireLogin() - getUserFromToken() failed after retry for protected page");
+                    $loginCheckResult = false;
+                } else {
+                    error_log("requireLogin() - getUserFromToken() succeeded on retry for protected page");
+                }
             }
         }
-        if (function_exists('logRequestUsage')) {
-            logRequestUsage();
+        
+        if ($loginCheckResult) {
+            // التحقق من وضع الصيانة بعد التحقق من تسجيل الدخول
+            $maintenanceCheck = checkMaintenanceMode();
+            if (!$maintenanceCheck['allowed']) {
+                // تم إزالة نظام الجلسات - يمكن استخدام cookies أو JavaScript للتعامل مع وضع الصيانة
+                // السماح للصفحة بالتحميل - سيتم التعامل مع وضع الصيانة في JavaScript
+            }
+            
+            // المستخدم مسجل دخول - المتابعة (سواء كان في وضع الصيانة أم لا - سيتم التعامل معه في JavaScript)
+            if (!function_exists('logRequestUsage')) {
+                $monitorPath = __DIR__ . '/request_monitor.php';
+                if (file_exists($monitorPath)) {
+                    require_once $monitorPath;
+                }
+            }
+            if (function_exists('logRequestUsage')) {
+                logRequestUsage();
+            }
+            return;
         }
-        return;
     }
 
     // === المستخدم غير مسجل دخول - الجلسة غير موجودة في قاعدة البيانات ===
