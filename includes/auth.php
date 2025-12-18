@@ -339,21 +339,25 @@ function isLoggedIn() {
                             error_log("isLoggedIn() RESTORED in protected page: Recreated session for user_id: {$userId}");
                             // نتابع التنفيذ بدلاً من إرجاع false
                         } else {
-                            // فشلنا في استعادة الجلسة - لكن في الصفحات المحمية، لا نحذف الجلسة
-                            error_log("isLoggedIn() WARNING in protected page: Failed to restore session for user_id: {$userId} - but keeping session active");
-                            // نعتبر الجلسة صالحة مؤقتاً في الصفحات المحمية
-                            $sessionValidInDB = true;
+                            // فشلنا في استعادة الجلسة - لكن في الصفحات المحمية، نعتبر الجلسة صالحة مؤقتاً
+                            error_log("isLoggedIn() WARNING in protected page: Failed to restore session for user_id: {$userId} - but keeping session active temporarily");
+                            // نعتبر الجلسة صالحة مؤقتاً في الصفحات المحمية - نرجع true
+                            return true; // نرجع true في الصفحات المحمية حتى لو فشلنا في استعادة الجلسة
                         }
+                    } else {
+                        // فشل في إنشاء جدول الجلسات - لكن في الصفحات المحمية، نعتبر الجلسة صالحة مؤقتاً
+                        error_log("isLoggedIn() WARNING in protected page: Failed to ensure sessions table for user_id: {$userId} - but keeping session active temporarily");
+                        return true; // نرجع true في الصفحات المحمية
                     }
                 } catch (Exception $restoreError) {
-                    // في الصفحات المحمية، حتى لو فشلنا، لا نحذف الجلسة
-                    error_log("isLoggedIn() WARNING in protected page: Exception during session restore for user_id: {$userId}: " . $restoreError->getMessage() . " - but keeping session active");
-                    $sessionValidInDB = true; // نعتبر الجلسة صالحة مؤقتاً
+                    // في الصفحات المحمية، حتى لو فشلنا، لا نحذف الجلسة - نرجع true
+                    error_log("isLoggedIn() WARNING in protected page: Exception during session restore for user_id: {$userId}: " . $restoreError->getMessage() . " - but keeping session active temporarily");
+                    return true; // نرجع true في الصفحات المحمية حتى لو فشلنا
                 }
             }
             
             // إذا لم نكن في صفحة محمية أو فشلت محاولة الاستعادة، نحذف الجلسة
-            if (!$sessionValidInDB) {
+            if (!$sessionValidInDB && !$isProtectedPage) {
                 // في حالة الخطأ في قاعدة البيانات أو عدم وجود الجلسة، نعتبر الجلسة غير صالحة للأمان
                 $_SESSION = [];
                 @session_unset();
@@ -367,6 +371,12 @@ function isLoggedIn() {
                 // تعطيل التسجيل لتقليل الضغط على السيرفر
                 // error_log("isLoggedIn() SECURITY FAIL: Session not found in database - Access denied");
                 return false;
+            }
+            
+            // إذا كنا في صفحة محمية ولم نستطع استعادة الجلسة، نرجع true مؤقتاً
+            if ($isProtectedPage && !$sessionValidInDB) {
+                error_log("isLoggedIn() WARNING in protected page: Session not valid but keeping active temporarily for user_id: {$userId}");
+                return true; // نرجع true في الصفحات المحمية حتى لو فشلنا في استعادة الجلسة
             }
         }
         
