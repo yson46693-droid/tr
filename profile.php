@@ -26,35 +26,41 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     }
 }
 
-requireLogin();
-
-// === تحديث الجلسة في قاعدة البيانات عند تحميل الصفحة ===
+// === تحديث/إنشاء الجلسة في قاعدة البيانات قبل requireLogin() ===
+// هذا يضمن أن الجلسة موجودة في قاعدة البيانات قبل التحقق منها
 try {
-    if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
-        $sessionId = session_id();
-        $userId = $_SESSION['user_id'] ?? null;
-        if (!empty($sessionId) && !empty($userId)) {
-            $db = db();
-            $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-            $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-            
-            // محاولة تحديث الجلسة الموجودة
-            $sessionUpdated = $db->execute(
-                "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
-                [$newExpiresAt, $userId, $sessionId]
-            );
-            
-            // إذا لم توجد جلسة، إنشاء واحدة جديدة
-            if (!$sessionUpdated || ($sessionUpdated['affected_rows'] ?? 0) === 0) {
-                $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-                $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id']) && isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
+        if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+            $sessionId = session_id();
+            $userId = $_SESSION['user_id'];
+            if (!empty($sessionId) && !empty($userId)) {
+                $db = db();
+                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
                 
-                $db->execute(
-                    "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                     VALUES (?, ?, ?, ?, ?, NOW())
-                     ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?",
-                    [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt]
+                // محاولة تحديث الجلسة الموجودة أولاً
+                $sessionUpdated = $db->execute(
+                    "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
+                    [$newExpiresAt, $userId, $sessionId]
                 );
+                
+                // إذا لم توجد جلسة (لم يتم تحديث أي صف)، إنشاء واحدة جديدة
+                if (!$sessionUpdated || ($sessionUpdated['affected_rows'] ?? 0) === 0) {
+                    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                    
+                    try {
+                        $db->execute(
+                            "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                             VALUES (?, ?, ?, ?, ?, NOW())
+                             ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?",
+                            [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt]
+                        );
+                    } catch (Exception $insertError) {
+                        // إذا فشل INSERT، قد تكون الجلسة موجودة بالفعل - لا مشكلة
+                        error_log("Profile page - Session insert failed (may already exist): " . $insertError->getMessage());
+                    }
+                }
             }
         }
     }
@@ -62,6 +68,8 @@ try {
     // لا نوقف العملية إذا فشل تحديث الجلسة، فقط نسجل الخطأ
     error_log("Profile page load - Error updating session in database: " . $e->getMessage());
 }
+
+requireLogin();
 
 // تهيئة متغيرات الرسائل
 $error = $_SESSION['error_message'] ?? '';

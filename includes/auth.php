@@ -115,29 +115,6 @@ function isLoggedIn() {
     // === التحقق الإجباري من الجلسة في قاعدة البيانات (المصدر الوحيد الموثوق) ===
     // لا يمكن الاعتماد على $_SESSION['logged_in'] فقط - يجب التحقق من قاعدة البيانات دائماً
     
-    // === في profile.php، نحدث الجلسة تلقائياً قبل التحقق ===
-    if ($isProtectedPage && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            if (ensureSessionsTable()) {
-                $sessionId = session_id();
-                if (!empty($sessionId)) {
-                    $db = db();
-                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                    
-                    // محاولة تحديث الجلسة الموجودة
-                    $db->execute(
-                        "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
-                        [$newExpiresAt, $_SESSION['user_id'], $sessionId]
-                    );
-                }
-            }
-        } catch (Exception $e) {
-            // لا نوقف العملية إذا فشل تحديث الجلسة
-            error_log("isLoggedIn() - Error pre-updating session in protected page: " . $e->getMessage());
-        }
-    }
-    
     // إذا كانت الجلسة نشطة لكن user_id مفقود، نحاول استعادته من قاعدة البيانات
     if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && (!isset($_SESSION['user_id']) || empty($_SESSION['user_id']))) {
         $sessionId = session_id();
@@ -250,47 +227,89 @@ function isLoggedIn() {
                 // لا نحاول البحث عن جلسات أخرى أو إصلاح الجلسة لأن ذلك سيسمح للجهاز القديم
                 // بإعادة إنشاء الجلسة بعد حذفها عند تسجيل الدخول من جهاز جديد
                 
-                // إذا لم توجد الجلسة في قاعدة البيانات، الجلسة غير صالحة - حذفها فوراً
+                // إذا لم توجد الجلسة في قاعدة البيانات، الجلسة غير صالحة
                 if (!$sessionRecord) {
-                    // تعطيل التسجيلات التفصيلية لتقليل الضغط على السيرفر
-                    // الاحتفاظ فقط بتسجيل واحد مختصر للأخطاء الحرجة
-                    // error_log("isLoggedIn() SECURITY: Session not found in database for user_id: {$userId}");
-                    
-                    // === حذف فوري للجلسة PHP والـ cookies ===
-                    // هذا يمنع الجهاز القديم من الوصول حتى لو كان لديه session cookie
-                    $_SESSION = [];
-                    @session_unset();
-                    @session_destroy();
-                    
-                    // حذف session cookie من المتصفح
-                    $sessionName = session_name();
-                    if (isset($_COOKIE[$sessionName])) {
-                        // حذف cookie من جميع المسارات
-                        setcookie($sessionName, '', time() - 3600, '/');
-                        setcookie($sessionName, '', time() - 3600, '/', '');
-                        unset($_COOKIE[$sessionName]);
+                    // في profile.php و attendance.php، لا نحذف الجلسة مباشرة
+                    // بل نحاول إنشاء جلسة جديدة في قاعدة البيانات
+                    if ($isProtectedPage) {
+                        // محاولة إنشاء جلسة جديدة في قاعدة البيانات
+                        try {
+                            $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                            $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                            $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                            
+                            $db->execute(
+                                "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                                 VALUES (?, ?, ?, ?, ?, NOW())
+                                 ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?",
+                                [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt]
+                            );
+                            
+                            // بعد إنشاء الجلسة، نعتبرها صالحة ونحدث expires_at
+                            $sessionValidInDB = true;
+                            error_log("isLoggedIn() RESTORED: Created missing session in database for protected page - user_id: {$userId}");
+                            
+                            // تحديث expires_at مباشرة بعد الإنشاء
+                            $db->execute(
+                                "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
+                                [$newExpiresAt, $userId, $sessionId]
+                            );
+                        } catch (Exception $createError) {
+                            // إذا فشل إنشاء الجلسة، نعتبرها غير صالحة
+                            error_log("isLoggedIn() ERROR: Failed to create session in protected page: " . $createError->getMessage());
+                            $sessionValidInDB = false;
+                        }
+                    } else {
+                        // في الصفحات الأخرى، حذف الجلسة مباشرة
+                        // تعطيل التسجيلات التفصيلية لتقليل الضغط على السيرفر
+                        // error_log("isLoggedIn() SECURITY: Session not found in database for user_id: {$userId}");
+                        
+                        // === حذف فوري للجلسة PHP والـ cookies ===
+                        // هذا يمنع الجهاز القديم من الوصول حتى لو كان لديه session cookie
+                        $_SESSION = [];
+                        @session_unset();
+                        @session_destroy();
+                        
+                        // حذف session cookie من المتصفح
+                        $sessionName = session_name();
+                        if (isset($_COOKIE[$sessionName])) {
+                            // حذف cookie من جميع المسارات
+                            setcookie($sessionName, '', time() - 3600, '/');
+                            setcookie($sessionName, '', time() - 3600, '/', '');
+                            unset($_COOKIE[$sessionName]);
+                        }
+                        
+                        // تعطيل التسجيل لتقليل الضغط على السيرفر
+                        // error_log("isLoggedIn() ACCESS DENIED: Old device session invalidated - user must login again");
+                        return false;
                     }
+                } else {
+                    // الجلسة موجودة في قاعدة البيانات - صالحة
+                    $sessionValidInDB = true;
                     
-                    // تعطيل التسجيل لتقليل الضغط على السيرفر
-                    // error_log("isLoggedIn() ACCESS DENIED: Old device session invalidated - user must login again");
-                    return false;
+                    // === تحديث last_activity و expires_at في قاعدة البيانات ===
+                    // نحدث expires_at دائماً لضمان بقاء الجلسة صالحة - لا نهي الجلسة أبداً بناءً على الخمول
+                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                    $currentTime = time();
+                    
+                    // تحديث expires_at دائماً إلى 7 أيام من الآن - لا نهي الجلسة أبداً
+                    $newExpiresAt = date('Y-m-d H:i:s', $currentTime + $sessionLifetime);
+                    $db->execute(
+                        "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE id = ?",
+                        [$newExpiresAt, $sessionRecord['id']]
+                    );
                 }
                 
-                // الجلسة موجودة في قاعدة البيانات - صالحة
-                $sessionValidInDB = true;
-                
-                // === تحديث last_activity و expires_at في قاعدة البيانات ===
-                // نحدث expires_at دائماً لضمان بقاء الجلسة صالحة - لا نهي الجلسة أبداً بناءً على الخمول
-                // تحديث دائماً لضمان أن الجلسة لا تنتهي أبداً
-                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                $currentTime = time();
-                
-                // تحديث expires_at دائماً إلى 7 أيام من الآن - لا نهي الجلسة أبداً
-                $newExpiresAt = date('Y-m-d H:i:s', $currentTime + $sessionLifetime);
-                $db->execute(
-                    "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE id = ?",
-                    [$newExpiresAt, $sessionRecord['id']]
-                );
+                // إذا تم إنشاء الجلسة في profile.php، نحدث expires_at أيضاً
+                if ($sessionValidInDB && !$sessionRecord && $isProtectedPage) {
+                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                    $db->execute(
+                        "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
+                        [$newExpiresAt, $userId, $sessionId]
+                    );
+                }
             } else {
                 // فشل في إنشاء جدول الجلسات - خطأ في قاعدة البيانات
                 // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
