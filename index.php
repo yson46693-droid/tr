@@ -1729,7 +1729,30 @@ $lang = $translations;
                             window.location.href = dashboardUrl;
                         }, 500);
                     } else {
-                        // الجلسة غير موجودة - إعادة المحاولة
+                        // الجلسة غير موجودة - لكن إذا كان تسجيل الدخول ناجحاً، قد يكون السبب بطء في قاعدة البيانات
+                        // نتحقق أولاً إذا كان تسجيل الدخول ناجحاً قبل إعادة المحاولة
+                        if (loginResult.success && loginResult.user) {
+                            console.warn('Session check failed but login was successful, may be database delay. Redirecting anyway.');
+                            loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                            
+                            const userRole = loginResult.user?.role || 'accountant';
+                            const currentPath = window.location.pathname || '/';
+                            const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                            const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                            let dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                            dashboardUrl = cleanUrl(dashboardUrl);
+                            
+                            if (userRole && !dashboardUrl.includes('/dashboard/')) {
+                                dashboardUrl = `/dashboard/${userRole}.php`;
+                            }
+                            
+                            setTimeout(() => {
+                                window.location.href = dashboardUrl;
+                            }, 500);
+                            return;
+                        }
+                        
+                        // إذا لم يكن تسجيل الدخول ناجحاً، نعيد المحاولة
                         loadingMessage.textContent = 'الجلسة غير موجودة. جاري إعادة المحاولة...';
                         
                         // إعادة المحاولة مرة واحدة
@@ -1821,8 +1844,30 @@ $lang = $translations;
                                 window.location.href = dashboardUrl;
                             }, 500);
                         } else {
-                            // فشلت المحاولة الثانية
-                            throw new Error('حدث خطأ غير متوقع عند محاولة تسجيل الدخول قد يكون السبب بطئ في الانترنت او بطئ في قاعدة البيانات , اعد المحاوله مره اخري');
+                            // فشلت المحاولة الثانية - لكن إذا كان تسجيل الدخول ناجحاً، نوجه مباشرة
+                            // قد يكون السبب بطء في قاعدة البيانات أو الإنترنت، لكن تسجيل الدخول قد يكون ناجحاً
+                            if (retryResult.success && retryResult.user) {
+                                console.warn('Session check failed but login was successful, redirecting anyway');
+                                loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                                
+                                const userRole = retryResult.user?.role || 'accountant';
+                                const currentPath = window.location.pathname || '/';
+                                const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
+                                const basePath = pathParts.length ? '/' + pathParts[0] : '';
+                                let dashboardUrl = basePath ? `${basePath}/dashboard/${userRole}.php` : `/dashboard/${userRole}.php`;
+                                dashboardUrl = cleanUrl(dashboardUrl);
+                                
+                                if (userRole && !dashboardUrl.includes('/dashboard/')) {
+                                    dashboardUrl = `/dashboard/${userRole}.php`;
+                                }
+                                
+                                setTimeout(() => {
+                                    window.location.href = dashboardUrl;
+                                }, 500);
+                            } else {
+                                // فشل تسجيل الدخول فعلياً
+                                throw new Error('حدث خطأ غير متوقع عند محاولة تسجيل الدخول. قد يكون السبب بطء في الإنترنت أو بطء في قاعدة البيانات. يرجى إعادة المحاولة مرة أخرى.');
+                            }
                         }
                     }
                 } catch (error) {
