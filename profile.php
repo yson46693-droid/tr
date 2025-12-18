@@ -19,92 +19,6 @@ require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/audit_log.php';
 
 // التحقق من تسجيل الدخول فقط
-// التأكد من أن الجلسة نشطة قبل التحقق
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    if (!headers_sent()) {
-        @session_start();
-    }
-}
-
-// === تحديث/إنشاء الجلسة في قاعدة البيانات قبل requireLogin() ===
-// هذا يضمن أن الجلسة موجودة في قاعدة البيانات قبل التحقق منها
-// هذا مهم لجميع المستخدمين (ليس فقط المدير) لضمان عمل الجلسة بشكل صحيح
-try {
-    // التأكد من أن الجلسة نشطة
-    if (session_status() === PHP_SESSION_NONE) {
-        if (!headers_sent()) {
-            @session_start();
-        }
-    }
-    
-    // التحقق من وجود بيانات الجلسة الأساسية
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        $userId = $_SESSION['user_id'];
-        $sessionId = session_id();
-        
-        if (!empty($sessionId) && !empty($userId)) {
-            if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
-                try {
-                    $db = db();
-                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-                    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
-                    
-                    // محاولة تحديث الجلسة الموجودة أولاً
-                    $sessionUpdated = $db->execute(
-                        "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
-                        [$newExpiresAt, $userId, $sessionId]
-                    );
-                    
-                    // إذا لم توجد جلسة (لم يتم تحديث أي صف)، إنشاء واحدة جديدة
-                    if (!$sessionUpdated || ($sessionUpdated['affected_rows'] ?? 0) === 0) {
-                        try {
-                            $db->execute(
-                                "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                                 VALUES (?, ?, ?, ?, ?, NOW())
-                                 ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?, user_id = ?",
-                                [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt, $userId]
-                            );
-                            error_log("Profile page - Created new session in database for user_id: {$userId}");
-                        } catch (Exception $insertError) {
-                            // إذا فشل INSERT بسبب duplicate key، جرب UPDATE مرة أخرى
-                            try {
-                                $db->execute(
-                                    "UPDATE sessions SET last_activity = NOW(), expires_at = ?, user_id = ? WHERE session_id = ?",
-                                    [$newExpiresAt, $userId, $sessionId]
-                                );
-                                error_log("Profile page - Updated existing session by session_id for user_id: {$userId}");
-                            } catch (Exception $updateError) {
-                                error_log("Profile page - Session insert/update failed: " . $insertError->getMessage() . " | Update error: " . $updateError->getMessage());
-                            }
-                        }
-                    } else {
-                        // تم تحديث الجلسة بنجاح
-                        error_log("Profile page - Updated existing session for user_id: {$userId}");
-                    }
-                    
-                    // التأكد من أن $_SESSION['logged_in'] مضبوط بشكل صحيح
-                    if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
-                        $_SESSION['logged_in'] = true;
-                    }
-                    
-                } catch (Exception $dbError) {
-                    // خطأ في قاعدة البيانات - نسجل الخطأ لكن لا نوقف العملية
-                    error_log("Profile page load - Database error while updating session: " . $dbError->getMessage());
-                }
-            }
-        } else {
-            error_log("Profile page - Missing session_id or user_id. session_id: " . (empty($sessionId) ? 'empty' : 'set') . ", user_id: " . (empty($userId) ? 'empty' : $userId));
-        }
-    } else {
-        error_log("Profile page - Missing user_id in session. Session data: " . json_encode(array_keys($_SESSION ?? [])));
-    }
-} catch (Exception $e) {
-    // لا نوقف العملية إذا فشل تحديث الجلسة، فقط نسجل الخطأ
-    error_log("Profile page load - Error updating session in database: " . $e->getMessage());
-}
-
 requireLogin();
 
 // تهيئة متغيرات الرسائل
@@ -112,154 +26,13 @@ $error = $_SESSION['error_message'] ?? '';
 $success = $_SESSION['success_message'] ?? '';
 unset($_SESSION['error_message'], $_SESSION['success_message']);
 
-// === تحميل بيانات المستخدم - حل نهائي محسّن ===
-$currentUser = null;
-$user = null;
-$userId = null;
+// === تحميل بيانات المستخدم ===
+$user = getCurrentUser();
+$currentUser = $user;
+$userId = $user['id'] ?? null;
 
-// التحقق 1: من $_SESSION مباشرة
-if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-    $userId = $_SESSION['user_id'];
-}
-
-// التحقق 2: إذا لم يكن موجوداً في $_SESSION، جرب البحث في قاعدة البيانات
-if (!$userId || empty($userId)) {
-    try {
-        $sessionId = session_id();
-        if (!empty($sessionId) && function_exists('ensureSessionsTable') && ensureSessionsTable()) {
-            $db = db();
-            // البحث عن الجلسة حتى لو كانت منتهية الصلاحية (لإعطاء فرصة للتجديد)
-            $sessionRecord = $db->queryOne(
-                "SELECT user_id, expires_at FROM sessions WHERE session_id = ? ORDER BY last_activity DESC LIMIT 1",
-                [$sessionId]
-            );
-            if ($sessionRecord && isset($sessionRecord['user_id'])) {
-                $foundUserId = $sessionRecord['user_id'];
-                // التحقق من أن الجلسة لم تنتهِ أو تجديدها إذا كانت قريبة من الانتهاء
-                $expiresAt = $sessionRecord['expires_at'];
-                $isExpired = strtotime($expiresAt) < time();
-                
-                // إذا كانت الجلسة منتهية لكنها حديثة (أقل من ساعة)، نجددها
-                if ($isExpired && (time() - strtotime($expiresAt)) < 3600) {
-                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                    $db->execute(
-                        "UPDATE sessions SET expires_at = ?, last_activity = NOW() WHERE session_id = ?",
-                        [$newExpiresAt, $sessionId]
-                    );
-                    $expiresAt = $newExpiresAt;
-                }
-                
-                // إذا كانت الجلسة صالحة (أو تم تجديدها)، نستخدم user_id
-                if (strtotime($expiresAt) > time()) {
-                    $userId = $foundUserId;
-                    $_SESSION['user_id'] = $userId;
-                    $_SESSION['logged_in'] = true;
-                }
-            }
-        }
-    } catch (Exception $e) {
-        error_log("Profile page - Session lookup from database failed: " . $e->getMessage());
-    }
-}
-
-// التحقق 3: إذا لم يكن موجوداً، جرب getCurrentUser()
-if (!$userId || empty($userId)) {
-    try {
-        $currentUser = getCurrentUser();
-        if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
-            $userId = $currentUser['id'];
-            $_SESSION['user_id'] = $userId;
-            if (!isset($_SESSION['username']) || $_SESSION['username'] !== $currentUser['username']) {
-                $_SESSION['username'] = $currentUser['username'];
-            }
-            if (!isset($_SESSION['role']) || $_SESSION['role'] !== $currentUser['role']) {
-                $_SESSION['role'] = $currentUser['role'];
-            }
-            $_SESSION['logged_in'] = true;
-        }
-    } catch (Exception $e) {
-        error_log("Profile page - getCurrentUser() failed: " . $e->getMessage());
-    }
-}
-
-// إذا لم نجد user_id بعد كل المحاولات
-if (!$userId || empty($userId)) {
-    error_log("Profile page - Missing user_id after all attempts. Session data: " . json_encode(array_keys($_SESSION ?? [])));
+if (!$user || !isset($user['id'])) {
     $error = 'تعذر تحميل بيانات المستخدم. يرجى تسجيل الدخول مرة أخرى.';
-} else {
-    // الآن نحاول تحميل بيانات المستخدم الكاملة
-    // الطريقة 1: محاولة استخدام getCurrentUser() أولاً
-    try {
-        $currentUser = getCurrentUser();
-        if ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
-            $user = $currentUser;
-        }
-    } catch (Exception $e) {
-        error_log("Profile page - getCurrentUser() failed: " . $e->getMessage());
-    }
-    
-    // الطريقة 2: إذا فشلت، جرب getUserById()
-    if (!$user || !isset($user['id'])) {
-        try {
-            $user = getUserById($userId);
-            if ($user && isset($user['id'])) {
-                $currentUser = $user;
-                // تحديث الجلسة ببيانات المستخدم
-                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $user['username']) {
-                    $_SESSION['username'] = $user['username'];
-                }
-                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $user['role']) {
-                    $_SESSION['role'] = $user['role'];
-                }
-                if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
-                    $_SESSION['logged_in'] = true;
-                }
-            }
-        } catch (Exception $e) {
-            error_log("Profile page - getUserById() failed: " . $e->getMessage());
-        }
-    }
-    
-    // الطريقة 3: إذا فشلت، جرب مباشرة من قاعدة البيانات
-    if (!$user || !isset($user['id'])) {
-        try {
-            if (!isset($db)) {
-                $db = db();
-            }
-            // لا نتحقق من status هنا لأن getUserById() و getCurrentUser() لا يتحققان منه أيضاً
-            // في profile.php نريد عرض بيانات المستخدم حتى لو كان status غير active
-            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$userId]);
-            if ($userFromDb && isset($userFromDb['id'])) {
-                $user = $userFromDb;
-                $currentUser = $userFromDb;
-                // تحديث الجلسة ببيانات المستخدم
-                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
-                    $_SESSION['username'] = $userFromDb['username'];
-                }
-                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
-                    $_SESSION['role'] = $userFromDb['role'];
-                }
-                if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
-                    $_SESSION['logged_in'] = true;
-                }
-            } else {
-                // المستخدم غير موجود في قاعدة البيانات
-                error_log("Profile page - User ID {$userId} not found in database");
-            }
-        } catch (Exception $e) {
-            error_log("Profile page - Direct database query failed: " . $e->getMessage());
-        }
-    }
-    
-    // إذا فشلت جميع المحاولات
-    if (!$user || !isset($user['id']) || empty($user['id'])) {
-        error_log("Profile page - Failed to load user. user_id: " . $userId . ", Session data: " . json_encode(array_keys($_SESSION ?? [])));
-        // لا نضيف رسالة خطأ هنا إذا كانت موجودة بالفعل من السطر 189
-        if (empty($error)) {
-            $error = 'تعذر تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى أو تحديث الصفحة.';
-        }
-    }
 }
 
 $db = db();
@@ -275,92 +48,16 @@ try {
     $profilePhotoSupported = false;
 }
 
-// === التأكد من تحميل بيانات المستخدم الكاملة ===
-// إذا كان $user محمّل بالفعل من الكود السابق، لا حاجة لإعادة التحميل
-// لكن نتحقق من أن البيانات محدثة
-if ($user && isset($user['id']) && !empty($user['id'])) {
-    // البيانات محمّلة بالفعل - لا حاجة لإعادة التحميل
-    // فقط نتحقق من أن $currentUser محدث
-    if (!$currentUser || !isset($currentUser['id']) || $currentUser['id'] != $user['id']) {
-        $currentUser = $user;
-    }
-} elseif ($currentUser && isset($currentUser['id']) && !empty($currentUser['id'])) {
-    // إذا كان $currentUser موجود لكن $user غير موجود، استخدم $currentUser
-    $user = $currentUser;
-} else {
-    // محاولة أخيرة: تحميل مباشر من قاعدة البيانات
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            if (!isset($db)) {
-                $db = db();
-            }
-            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
-            if ($userFromDb && isset($userFromDb['id'])) {
-                $user = $userFromDb;
-                $currentUser = $userFromDb;
-                // تحديث الجلسة
-                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
-                    $_SESSION['username'] = $userFromDb['username'];
-                }
-                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
-                    $_SESSION['role'] = $userFromDb['role'];
-                }
-                if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
-                    $_SESSION['logged_in'] = true;
-                }
-            }
-        } catch (Exception $e) {
-            error_log("Profile page - Final user load attempt failed: " . $e->getMessage());
-        }
-    }
-}
-
 // معالجة تحديث البروفايل
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
         if ($action === 'update_profile') {
-        // === إعادة تحميل بيانات المستخدم قبل المعالجة ===
+        // إعادة تحميل بيانات المستخدم قبل المعالجة
         if (!$user || !is_array($user) || !isset($user['id']) || empty($user['id'])) {
-            $userId = $_SESSION['user_id'] ?? null;
-            
-            if ($userId) {
-                // محاولة 1: استخدام getUserById()
-                try {
-                    $user = getUserById($userId);
-                    if ($user && isset($user['id'])) {
-                        $currentUser = $user;
-                    }
-                } catch (Exception $e) {
-                    error_log("Profile update - getUserById() failed: " . $e->getMessage());
-                }
-                
-                // محاولة 2: تحميل مباشر من قاعدة البيانات
-                if (!$user || !isset($user['id'])) {
-                    try {
-                        if (!isset($db)) {
-                            $db = db();
-                        }
-                        $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$userId]);
-                        if ($userFromDb && isset($userFromDb['id'])) {
-                            $user = $userFromDb;
-                            $currentUser = $userFromDb;
-                            // تحديث الجلسة
-                            if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
-                                $_SESSION['username'] = $userFromDb['username'];
-                            }
-                            if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
-                                $_SESSION['role'] = $userFromDb['role'];
-                            }
-                            if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
-                                $_SESSION['logged_in'] = true;
-                            }
-                        }
-                    } catch (Exception $e) {
-                        error_log("Profile update - Direct database query failed: " . $e->getMessage());
-                    }
-                }
-            }
+            $user = getCurrentUser();
+            $currentUser = $user;
+            $userId = $user['id'] ?? null;
         }
         
         $fullName = trim($_POST['full_name'] ?? '');
@@ -484,95 +181,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             );
                             
                             logAudit($userId, 'change_password', 'user', $userId, null, null);
-                            
-                            // === تحديث الجلسة في قاعدة البيانات بعد تغيير كلمة المرور ===
-                            try {
-                                if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
-                                    $sessionId = session_id();
-                                    if (!empty($sessionId) && !empty($userId)) {
-                                        $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                                        $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                                        
-                                        // محاولة تحديث الجلسة الموجودة
-                                        $sessionUpdated = $db->execute(
-                                            "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
-                                            [$newExpiresAt, $userId, $sessionId]
-                                        );
-                                        
-                                        // إذا لم توجد جلسة، إنشاء واحدة جديدة
-                                        if (!$sessionUpdated || ($sessionUpdated['affected_rows'] ?? 0) === 0) {
-                                            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-                                            $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
-                                            
-                                            $db->execute(
-                                                "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                                                 VALUES (?, ?, ?, ?, ?, NOW())
-                                                 ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?",
-                                                [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt]
-                                            );
-                                        }
-                                    }
-                                }
-                            } catch (Exception $e) {
-                                error_log("Profile password change - Error updating session in database: " . $e->getMessage());
-                            }
                         }
                     }
                     
                     if (empty($error)) {
                         logAudit($userId, 'update_profile', 'user', $userId, null, ['full_name' => $fullName, 'email' => $email]);
                         
-                    // إعادة تحميل بيانات المستخدم المحدثة من قاعدة البيانات
-                    $updatedUser = getUserById($userId);
-                    if ($updatedUser) {
-                        $user = $updatedUser;
-                        
-                        // تحديث بيانات الجلسة
-                        if (isset($user['username'])) {
-                            $_SESSION['username'] = $user['username'];
-                        }
-                        if (isset($user['id'])) {
-                            $_SESSION['user_id'] = $user['id'];
-                        }
-                        if (isset($user['role'])) {
-                            $_SESSION['role'] = $user['role'];
-                        }
-                        $_SESSION['logged_in'] = true;
-                        $_SESSION['last_activity'] = time();
-                    }
-                    
-                    // === تحديث الجلسة في قاعدة البيانات لضمان بقائها نشطة ===
-                    try {
-                        if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
-                            $sessionId = session_id();
-                            if (!empty($sessionId) && !empty($userId)) {
-                                $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
-                                $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
-                                
-                                // محاولة تحديث الجلسة الموجودة
-                                $sessionUpdated = $db->execute(
-                                    "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
-                                    [$newExpiresAt, $userId, $sessionId]
-                                );
-                                
-                                // إذا لم توجد جلسة، إنشاء واحدة جديدة
-                                if (!$sessionUpdated || ($sessionUpdated['affected_rows'] ?? 0) === 0) {
-                                    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-                                    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
-                                    
-                                    $db->execute(
-                                        "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
-                                         VALUES (?, ?, ?, ?, ?, NOW())
-                                         ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?",
-                                        [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt]
-                                    );
-                                }
-                            }
-                        }
-                    } catch (Exception $e) {
-                        // لا نوقف العملية إذا فشل تحديث الجلسة، فقط نسجل الخطأ
-                        error_log("Profile update - Error updating session in database: " . $e->getMessage());
-                    }
+                    // إعادة تحميل بيانات المستخدم المحدثة
+                    $user = getCurrentUser();
+                    $currentUser = $user;
                     
                     $_SESSION['success_message'] = 'تم تحديث البروفايل بنجاح';
                     
@@ -650,43 +267,10 @@ $dashboardUrl = getDashboardUrl($userRole);
 <?php endif; ?>
 
 <?php
-// === التحقق النهائي من وجود بيانات المستخدم قبل عرض النموذج ===
+// التحقق من وجود بيانات المستخدم
 if (!$user || !is_array($user) || !isset($user['id']) || empty($user['id'])) {
-    // محاولة أخيرة: تحميل مباشر من قاعدة البيانات
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            if (!isset($db)) {
-                $db = db();
-            }
-            $userFromDb = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
-            if ($userFromDb && isset($userFromDb['id'])) {
-                $user = $userFromDb;
-                $currentUser = $userFromDb;
-                // تحديث الجلسة
-                if (!isset($_SESSION['username']) || $_SESSION['username'] !== $userFromDb['username']) {
-                    $_SESSION['username'] = $userFromDb['username'];
-                }
-                if (!isset($_SESSION['role']) || $_SESSION['role'] !== $userFromDb['role']) {
-                    $_SESSION['role'] = $userFromDb['role'];
-                }
-                if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
-                    $_SESSION['logged_in'] = true;
-                }
-            }
-        } catch (Exception $e) {
-            error_log("Profile display - Final user load failed: " . $e->getMessage());
-        }
-    }
-    
-    // إذا استمرت المشكلة بعد جميع المحاولات، عرض رسالة خطأ واحدة فقط
-    if (!$user || !is_array($user) || !isset($user['id']) || empty($user['id'])) {
-        // إذا كانت هناك رسالة خطأ موجودة بالفعل من الكود السابق، نستخدمها
-        // وإلا نعرض رسالة خطأ نهائية
-        if (empty($error)) {
-            $error = 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . htmlspecialchars($dashboardUrl) . '">العودة</a> والمحاولة مرة أخرى.';
-        }
-        // عرض رسالة الخطأ في مكان واحد فقط (في قسم عرض الرسائل)
-        // لا نعرض رسالة منفصلة هنا لتجنب التكرار
+    if (empty($error)) {
+        $error = 'تعذر تحميل بيانات المستخدم. يرجى <a href="' . htmlspecialchars($dashboardUrl) . '">العودة</a> والمحاولة مرة أخرى.';
     }
 }
 ?>
@@ -1000,13 +584,6 @@ async function loadCredentials() {
         
         console.log('Loading credentials from:', apiPath);
         
-        // تحديث الجلسة قبل استدعاء API
-        try {
-            await refreshSession();
-        } catch (refreshError) {
-            console.warn('Failed to refresh session before loading credentials:', refreshError);
-        }
-        
         // إنشاء AbortController للتحكم في timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -1024,111 +601,10 @@ async function loadCredentials() {
         
         clearTimeout(timeoutId);
         
-        // معالجة خاصة لخطأ 401
-        if (response.status === 401) {
-            // محاولة تحديث الجلسة مرة أخرى
-            try {
-                await refreshSession();
-                // إعادة المحاولة مرة واحدة فقط
-                const retryResponse = await fetch(apiPath + '?action=list', {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Cache-Control': 'no-cache'
-                    },
-                    cache: 'no-store'
-                });
-                
-                if (retryResponse.status === 401) {
-                    throw new Error('انتهت جلسة العمل. يرجى إعادة تحميل الصفحة.');
-                }
-                
-                // استخدام الاستجابة من المحاولة الثانية
-                if (!retryResponse.ok) {
-                    throw new Error(`HTTP error! status: ${retryResponse.status}`);
-                }
-                
-                // معالجة الاستجابة الناجحة
-                const contentType = retryResponse.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    const text = await retryResponse.text();
-                    console.error('Non-JSON response from credentials API:', text);
-                    throw new Error('استجابة غير صحيحة من الخادم');
-                }
-                
-                const data = await retryResponse.json();
-                
-                if (!data.success) {
-                    listContainer.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>خطأ في تحميل البصمات: ' + (data.error || 'حدث خطأ غير معروف') + '</div>';
-                    console.error('API Error:', data);
-                    return;
-                }
-                
-                if (data.credentials.length === 0) {
-                    listContainer.innerHTML = `
-                        <div class="alert alert-secondary mb-0">
-                            <i class="bi bi-info-circle me-2"></i>
-                            لا توجد بصمات مسجلة حالياً
-                        </div>
-                    `;
-                    return;
-                }
-                
-                let html = '<div class="list-group">';
-                data.credentials.forEach(cred => {
-                    const createdDate = new Date(cred.created_at).toLocaleDateString('ar-EG');
-                    const lastUsed = cred.last_used ? new Date(cred.last_used).toLocaleDateString('ar-EG') : 'لم يتم الاستخدام';
-                    
-                    html += `
-                        <div class="list-group-item d-flex justify-content-between align-items-center" data-credential-id="${cred.id}">
-                            <div>
-                                <div class="fw-bold">
-                                    <i class="bi bi-fingerprint me-2"></i>
-                                    ${cred.device_name || 'جهاز غير معروف'}
-                                </div>
-                                <small class="text-muted">
-                                    <div>تاريخ التسجيل: ${createdDate}</div>
-                                    <div>آخر استخدام: ${lastUsed}</div>
-                                </small>
-                            </div>
-                            <button class="btn btn-sm btn-danger delete-credential-btn" data-credential-id="${cred.id}" data-device-name="${(cred.device_name || 'البصمة').replace(/"/g, '&quot;')}">
-                                <i class="bi bi-trash"></i> حذف
-                            </button>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-                
-                listContainer.innerHTML = html;
-                
-                // إضافة event listeners لأزرار الحذف
-                listContainer.querySelectorAll('.delete-credential-btn').forEach(btn => {
-                    btn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const credentialId = this.getAttribute('data-credential-id');
-                        const deviceName = this.getAttribute('data-device-name');
-                        deleteCredential(credentialId, deviceName);
-                    });
-                });
-                
-                // إخفاء علامة التحميل بعد نجاح التحميل
-                if (statusLoader) {
-                    statusLoader.classList.remove('show');
-                    statusLoader.style.display = 'none';
-                    statusLoader.style.visibility = 'hidden';
-                    statusLoader.style.pointerEvents = 'none';
-                    statusLoader.style.opacity = '0';
-                }
-                
-                return; // إنهاء الدالة بنجاح
-            } catch (retryError) {
+        if (!response.ok) {
+            if (response.status === 401) {
                 throw new Error('انتهت جلسة العمل. يرجى إعادة تحميل الصفحة.');
             }
-        }
-        
-        if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
@@ -1297,42 +773,6 @@ function initWebAuthn() {
     }
 })();
 
-// دالة مساعدة لتحديث الجلسة قبل إرسال أي طلب API
-async function refreshSession() {
-    try {
-        // إرسال طلب HEAD لتحديث الجلسة بدون تحميل المحتوى الكامل
-        const response = await fetch(window.location.href, {
-            method: 'HEAD',
-            credentials: 'same-origin',
-            cache: 'no-store',
-            headers: {
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache'
-            }
-        });
-        
-        // إذا فشل الطلب، جرب طلب GET بسيط
-        if (!response.ok) {
-            const getResponse = await fetch(window.location.href + '?refresh_session=1', {
-                method: 'GET',
-                credentials: 'same-origin',
-                cache: 'no-store',
-                headers: {
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
-            return getResponse.ok;
-        }
-        
-        return response.ok;
-    } catch (error) {
-        console.warn('Failed to refresh session:', error);
-        // في حالة الفشل، نرجع true لأن الجلسة قد تكون صالحة بالفعل
-        return true;
-    }
-}
 
 // تسجيل بصمة جديدة - نظام جديد مبسط
 async function registerNewCredential() {
@@ -1354,9 +794,6 @@ async function registerNewCredential() {
             statusLoader.style.display = 'block';
             statusLoader.style.visibility = 'visible';
         }
-        
-        // تحديث الجلسة قبل البدء
-        await refreshSession();
         
         // استخدام النظام الجديد المبسط
         if (typeof simpleWebAuthn === 'undefined') {
