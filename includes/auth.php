@@ -52,10 +52,11 @@ function isLoggedIn() {
     $requestUri = $_SERVER['REQUEST_URI'] ?? 'unknown';
     $scriptName = $_SERVER['SCRIPT_NAME'] ?? 'unknown';
     
-    // التحقق من أننا في profile.php أو attendance.php أو notifications API - منع حذف الجلسة
+    // التحقق من أننا في profile.php أو attendance.php أو notifications API أو webauthn API - منع حذف الجلسة
     $isProfilePage = false;
     $isAttendancePage = false;
     $isNotificationsAPI = false;
+    $isWebAuthnAPI = false;
     
     // الطريقة 1: التحقق من الثوابت (الأكثر موثوقية)
     if (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) {
@@ -67,9 +68,12 @@ function isLoggedIn() {
     if (defined('NOTIFICATIONS_API_ACTIVE') && NOTIFICATIONS_API_ACTIVE === true) {
         $isNotificationsAPI = true;
     }
+    if (defined('WEBAUTHN_API_ACTIVE') && WEBAUTHN_API_ACTIVE === true) {
+        $isWebAuthnAPI = true;
+    }
     
     // الطريقة 2: التحقق من SCRIPT_NAME و PHP_SELF
-    if (!$isProfilePage && !$isAttendancePage && !$isNotificationsAPI) {
+    if (!$isProfilePage && !$isAttendancePage && !$isNotificationsAPI && !$isWebAuthnAPI) {
         $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
         if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
             $isProfilePage = true;
@@ -77,11 +81,13 @@ function isLoggedIn() {
             $isAttendancePage = true;
         } elseif (strpos($currentScript, 'notifications.php') !== false || basename($currentScript) === 'notifications.php') {
             $isNotificationsAPI = true;
+        } elseif (strpos($currentScript, 'webauthn_credentials.php') !== false || basename($currentScript) === 'webauthn_credentials.php') {
+            $isWebAuthnAPI = true;
         }
     }
     
     // الطريقة 3: التحقق من REQUEST_URI
-    if (!$isProfilePage && !$isAttendancePage && !$isNotificationsAPI) {
+    if (!$isProfilePage && !$isAttendancePage && !$isNotificationsAPI && !$isWebAuthnAPI) {
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         if (strpos($requestUri, 'profile.php') !== false) {
             $isProfilePage = true;
@@ -89,10 +95,12 @@ function isLoggedIn() {
             $isAttendancePage = true;
         } elseif (strpos($requestUri, 'notifications.php') !== false || strpos($requestUri, '/api/notifications') !== false) {
             $isNotificationsAPI = true;
+        } elseif (strpos($requestUri, 'webauthn_credentials.php') !== false || strpos($requestUri, '/api/webauthn_credentials') !== false) {
+            $isWebAuthnAPI = true;
         }
     }
     
-    $isProtectedPage = $isProfilePage || $isAttendancePage || $isNotificationsAPI;
+    $isProtectedPage = $isProfilePage || $isAttendancePage || $isNotificationsAPI || $isWebAuthnAPI;
     
     // التأكد من أن الجلسة نشطة قبل أي فحص
     if (session_status() === PHP_SESSION_NONE) {
@@ -985,12 +993,13 @@ function getCurrentUser() {
  * @return array|null بيانات المستخدم أو null
  */
 function getCurrentUserFromDatabase($userId) {
-    // التحقق من الملف الذي يستدعي هذه الدالة - منع حذف الجلسة في profile.php و attendance.php و sales.php و notifications API
+    // التحقق من الملف الذي يستدعي هذه الدالة - منع حذف الجلسة في profile.php و attendance.php و sales.php و notifications API و webauthn API
     // استخدام طرق متعددة للتحقق لضمان العمل على جميع الأجهزة (Windows, Android, iOS)
     $isProfilePage = false;
     $isAttendancePage = false;
     $isSalesPage = false;
     $isNotificationsAPI = false;
+    $isWebAuthnAPI = false;
     
     // الطريقة 1: التحقق من الثوابت (الأكثر موثوقية)
     if (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) {
@@ -1005,9 +1014,12 @@ function getCurrentUserFromDatabase($userId) {
     if (defined('NOTIFICATIONS_API_ACTIVE') && NOTIFICATIONS_API_ACTIVE === true) {
         $isNotificationsAPI = true;
     }
+    if (defined('WEBAUTHN_API_ACTIVE') && WEBAUTHN_API_ACTIVE === true) {
+        $isWebAuthnAPI = true;
+    }
     
     // الطريقة 2: التحقق من SCRIPT_NAME و PHP_SELF
-    if (!$isProfilePage && !$isAttendancePage && !$isSalesPage && !$isNotificationsAPI) {
+    if (!$isProfilePage && !$isAttendancePage && !$isSalesPage && !$isNotificationsAPI && !$isWebAuthnAPI) {
         $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
         if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
             $isProfilePage = true;
@@ -1017,11 +1029,13 @@ function getCurrentUserFromDatabase($userId) {
             $isSalesPage = true;
         } elseif (strpos($currentScript, 'notifications.php') !== false || basename($currentScript) === 'notifications.php') {
             $isNotificationsAPI = true;
+        } elseif (strpos($currentScript, 'webauthn_credentials.php') !== false || basename($currentScript) === 'webauthn_credentials.php') {
+            $isWebAuthnAPI = true;
         }
     }
     
     // الطريقة 3: استخدام debug_backtrace كبديل
-    if (!$isProfilePage && !$isAttendancePage && !$isSalesPage && !$isNotificationsAPI) {
+    if (!$isProfilePage && !$isAttendancePage && !$isSalesPage && !$isNotificationsAPI && !$isWebAuthnAPI) {
         $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
         foreach ($backtrace as $trace) {
             if (isset($trace['file'])) {
@@ -1038,13 +1052,16 @@ function getCurrentUserFromDatabase($userId) {
                 } elseif ($fileName === 'notifications.php' || strpos($trace['file'], 'notifications.php') !== false) {
                     $isNotificationsAPI = true;
                     break;
+                } elseif ($fileName === 'webauthn_credentials.php' || strpos($trace['file'], 'webauthn_credentials.php') !== false) {
+                    $isWebAuthnAPI = true;
+                    break;
                 }
             }
         }
     }
     
     // الطريقة 4: التحقق من REQUEST_URI
-    if (!$isProfilePage && !$isAttendancePage && !$isSalesPage && !$isNotificationsAPI) {
+    if (!$isProfilePage && !$isAttendancePage && !$isSalesPage && !$isNotificationsAPI && !$isWebAuthnAPI) {
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         if (strpos($requestUri, 'profile.php') !== false) {
             $isProfilePage = true;
@@ -1054,6 +1071,8 @@ function getCurrentUserFromDatabase($userId) {
             $isSalesPage = true;
         } elseif (strpos($requestUri, 'notifications.php') !== false || strpos($requestUri, '/api/notifications') !== false) {
             $isNotificationsAPI = true;
+        } elseif (strpos($requestUri, 'webauthn_credentials.php') !== false || strpos($requestUri, '/api/webauthn_credentials') !== false) {
+            $isWebAuthnAPI = true;
         }
     }
     
@@ -1063,8 +1082,8 @@ function getCurrentUserFromDatabase($userId) {
         $isSalesUser = true;
     }
     
-    // تحديد إذا كان الصفحة محمية (profile أو attendance أو sales أو notifications API أو مستخدم مندوب)
-    $isProtectedPage = $isProfilePage || $isAttendancePage || $isSalesPage || $isNotificationsAPI || $isSalesUser;
+    // تحديد إذا كان الصفحة محمية (profile أو attendance أو sales أو notifications API أو webauthn API أو مستخدم مندوب)
+    $isProtectedPage = $isProfilePage || $isAttendancePage || $isSalesPage || $isNotificationsAPI || $isWebAuthnAPI || $isSalesUser;
     
     // جلب جميع بيانات المستخدم من قاعدة البيانات
     try {
@@ -1881,10 +1900,12 @@ function hasAllRoles($roles) {
  * التحقق من الوصول - إعادة توجيه إذا لم يكن مسجلاً
  */
 function requireLogin() {
-    // التحقق من أننا في profile.php أو attendance.php أو sales.php - منع إعادة التوجيه
+    // التحقق من أننا في profile.php أو attendance.php أو sales.php أو APIs - منع إعادة التوجيه
     $isProfilePage = false;
     $isAttendancePage = false;
     $isSalesPage = false;
+    $isNotificationsAPI = false;
+    $isWebAuthnAPI = false;
     
     // الطريقة 1: التحقق من الثوابت (الأكثر موثوقية)
     if (defined('PROFILE_PAGE_ACTIVE') && PROFILE_PAGE_ACTIVE === true) {
@@ -1896,9 +1917,15 @@ function requireLogin() {
     if (defined('SALES_PAGE_ACTIVE') && SALES_PAGE_ACTIVE === true) {
         $isSalesPage = true;
     }
+    if (defined('NOTIFICATIONS_API_ACTIVE') && NOTIFICATIONS_API_ACTIVE === true) {
+        $isNotificationsAPI = true;
+    }
+    if (defined('WEBAUTHN_API_ACTIVE') && WEBAUTHN_API_ACTIVE === true) {
+        $isWebAuthnAPI = true;
+    }
     
     // الطريقة 2: التحقق من SCRIPT_NAME و PHP_SELF
-    if (!$isProfilePage && !$isAttendancePage && !$isSalesPage) {
+    if (!$isProfilePage && !$isAttendancePage && !$isSalesPage && !$isNotificationsAPI && !$isWebAuthnAPI) {
         $currentScript = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
         if (strpos($currentScript, 'profile.php') !== false || basename($currentScript) === 'profile.php') {
             $isProfilePage = true;
@@ -1906,11 +1933,15 @@ function requireLogin() {
             $isAttendancePage = true;
         } elseif (strpos($currentScript, 'sales.php') !== false || basename($currentScript) === 'sales.php' || strpos($currentScript, 'dashboard/sales.php') !== false || strpos($currentScript, 'modules/sales') !== false) {
             $isSalesPage = true;
+        } elseif (strpos($currentScript, 'notifications.php') !== false || basename($currentScript) === 'notifications.php') {
+            $isNotificationsAPI = true;
+        } elseif (strpos($currentScript, 'webauthn_credentials.php') !== false || basename($currentScript) === 'webauthn_credentials.php') {
+            $isWebAuthnAPI = true;
         }
     }
     
     // الطريقة 3: التحقق من REQUEST_URI
-    if (!$isProfilePage && !$isAttendancePage && !$isSalesPage) {
+    if (!$isProfilePage && !$isAttendancePage && !$isSalesPage && !$isNotificationsAPI && !$isWebAuthnAPI) {
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         if (strpos($requestUri, 'profile.php') !== false) {
             $isProfilePage = true;
@@ -1918,6 +1949,10 @@ function requireLogin() {
             $isAttendancePage = true;
         } elseif (strpos($requestUri, 'sales.php') !== false || strpos($requestUri, 'dashboard/sales') !== false || strpos($requestUri, 'modules/sales') !== false) {
             $isSalesPage = true;
+        } elseif (strpos($requestUri, 'notifications.php') !== false || strpos($requestUri, '/api/notifications') !== false) {
+            $isNotificationsAPI = true;
+        } elseif (strpos($requestUri, 'webauthn_credentials.php') !== false || strpos($requestUri, '/api/webauthn_credentials') !== false) {
+            $isWebAuthnAPI = true;
         }
     }
     
@@ -1927,7 +1962,7 @@ function requireLogin() {
         $isSalesUser = true;
     }
     
-    $isProtectedPage = $isProfilePage || $isAttendancePage || $isSalesPage || $isSalesUser;
+    $isProtectedPage = $isProfilePage || $isAttendancePage || $isSalesPage || $isNotificationsAPI || $isWebAuthnAPI || $isSalesUser;
     
     // التأكد من أن الجلسة نشطة قبل أي فحص
     if (session_status() === PHP_SESSION_NONE) {

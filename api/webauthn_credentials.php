@@ -4,10 +4,94 @@
  */
 
 define('ACCESS_ALLOWED', true);
+// تعريف ثابت لمنع حذف الجلسة في webauthn_credentials API
+define('WEBAUTHN_API_ACTIVE', true);
+
+// التأكد من بدء الجلسة قبل أي شيء
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/path_helper.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/audit_log.php';
+
+// === تحديث/إنشاء الجلسة في قاعدة البيانات قبل requireLogin() ===
+// هذا يضمن أن الجلسة موجودة في قاعدة البيانات قبل التحقق منها
+// هذا مهم لجميع المستخدمين (ليس فقط المدير) لضمان عمل الجلسة بشكل صحيح
+try {
+    // التأكد من أن الجلسة نشطة
+    if (session_status() === PHP_SESSION_NONE) {
+        if (!headers_sent()) {
+            @session_start();
+        }
+    }
+    
+    // التحقق من وجود بيانات الجلسة الأساسية
+    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+        $userId = $_SESSION['user_id'];
+        $sessionId = session_id();
+        
+        if (!empty($sessionId) && !empty($userId)) {
+            if (function_exists('ensureSessionsTable') && ensureSessionsTable()) {
+                try {
+                    $db = db();
+                    $sessionLifetime = defined('SESSION_LIFETIME') ? SESSION_LIFETIME : (3600 * 24 * 7);
+                    $newExpiresAt = date('Y-m-d H:i:s', time() + $sessionLifetime);
+                    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
+                    
+                    // محاولة تحديث الجلسة الموجودة أولاً
+                    $sessionUpdated = $db->execute(
+                        "UPDATE sessions SET last_activity = NOW(), expires_at = ? WHERE user_id = ? AND session_id = ?",
+                        [$newExpiresAt, $userId, $sessionId]
+                    );
+                    
+                    // إذا لم توجد جلسة (لم يتم تحديث أي صف)، إنشاء واحدة جديدة
+                    if (!$sessionUpdated || ($sessionUpdated['affected_rows'] ?? 0) === 0) {
+                        try {
+                            $db->execute(
+                                "INSERT INTO sessions (user_id, session_id, ip_address, user_agent, expires_at, last_activity) 
+                                 VALUES (?, ?, ?, ?, ?, NOW())
+                                 ON DUPLICATE KEY UPDATE last_activity = NOW(), expires_at = ?, user_id = ?",
+                                [$userId, $sessionId, $ipAddress, $userAgent, $newExpiresAt, $newExpiresAt, $userId]
+                            );
+                            error_log("WebAuthn API - Created new session in database for user_id: {$userId}");
+                        } catch (Exception $insertError) {
+                            // إذا فشل INSERT بسبب duplicate key، جرب UPDATE مرة أخرى
+                            try {
+                                $db->execute(
+                                    "UPDATE sessions SET last_activity = NOW(), expires_at = ?, user_id = ? WHERE session_id = ?",
+                                    [$newExpiresAt, $userId, $sessionId]
+                                );
+                                error_log("WebAuthn API - Updated existing session by session_id for user_id: {$userId}");
+                            } catch (Exception $updateError) {
+                                error_log("WebAuthn API - Session insert/update failed: " . $insertError->getMessage() . " | Update error: " . $updateError->getMessage());
+                            }
+                        }
+                    } else {
+                        // تم تحديث الجلسة بنجاح
+                        error_log("WebAuthn API - Updated existing session for user_id: {$userId}");
+                    }
+                    
+                    // التأكد من أن $_SESSION['logged_in'] مضبوط بشكل صحيح
+                    if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+                        $_SESSION['logged_in'] = true;
+                    }
+                    
+                } catch (Exception $dbError) {
+                    // خطأ في قاعدة البيانات - نسجل الخطأ لكن لا نوقف العملية
+                    error_log("WebAuthn API load - Database error while updating session: " . $dbError->getMessage());
+                }
+            }
+        }
+    }
+} catch (Exception $e) {
+    // لا نوقف العملية إذا فشل تحديث الجلسة، فقط نسجل الخطأ
+    error_log("WebAuthn API load - Error updating session in database: " . $e->getMessage());
+}
 
 requireLogin();
 
