@@ -814,7 +814,12 @@ $totalRow = $db->queryOne('SELECT COUNT(*) AS total FROM tasks t ' . $whereClaus
 $totalTasks = isset($totalRow['total']) ? (int) $totalRow['total'] : 0;
 $totalPages = max(1, (int) ceil($totalTasks / $perPage));
 
-$taskSql = "SELECT t.*, 
+// SQL query لجلب المهام مع استخدام t.product_name مباشرة من الجدول (نفس طريقة طلبات العملاء)
+// استخدام t.product_name مباشرة قبل t.* لتجنب أي تعارض
+$taskSql = "SELECT t.id, t.title, t.description, t.assigned_to, t.created_by, t.priority, t.status,
+    t.due_date, t.completed_at, t.received_at, t.started_at, t.related_type, t.related_id,
+    t.product_id, t.quantity, t.notes, t.created_at, t.updated_at,
+    t.product_name,
     uAssign.full_name AS assigned_to_name,
     uCreate.full_name AS created_by_name,
     p.name AS product_name_from_db
@@ -864,22 +869,22 @@ foreach ($tasks as &$task) {
     }
     
     // استخدام اسم المنتج/القالب مباشرة من حقل product_name في جدول tasks
-    // نفس الطريقة المستخدمة في طلبات العملاء: أولاً التحقق من product_name المحفوظ مباشرة
-    // الأولوية: 1) product_name من الجدول مباشرة (الحل الجذري - نفس طريقة طلبات العملاء)
-    //           2) product_name_from_db من JOIN مع products (للتوافق مع المهام القديمة)
-    //           3) استخراج من notes (للتوافق مع المهام القديمة جداً)
-    
+    // نفس الطريقة المستخدمة في طلبات العملاء (السطر 1107-1109 في customer_orders.php):
+    // أولاً التحقق من product_name المحفوظ مباشرة في الجدول
     $finalProductName = null;
     
     // الأولوية الأولى: استخدام product_name من الجدول مباشرة (نفس طريقة طلبات العملاء)
+    // نفس الكود في customer_orders.php السطر 1107: if (!empty($item['product_name']))
     if (!empty($task['product_name']) && trim($task['product_name']) !== '') {
         $finalProductName = trim($task['product_name']);
+        // تسجيل للتشخيص (يمكن حذفه لاحقاً)
+        error_log("Task #{$task['id']}: Using product_name from table: '$finalProductName'");
     }
-    // الأولوية الثانية: استخدام product_name_from_db من JOIN
+    // الأولوية الثانية: استخدام product_name_from_db من JOIN مع products (للتوافق مع المهام القديمة)
     elseif (!empty($task['product_name_from_db'])) {
         $finalProductName = trim($task['product_name_from_db']);
     }
-    // الأولوية الثالثة: استخراج من notes (للتوافق مع المهام القديمة)
+    // الأولوية الثالثة: استخراج من notes (للتوافق مع المهام القديمة جداً)
     elseif (!empty($notes)) {
         // البحث عن "المنتج: " متبوعاً باسم المنتج
         if (preg_match('/المنتج:\s*([^\n\r]+?)\s*-\s*الكمية:/i', $notes, $productMatches)) {
@@ -900,8 +905,16 @@ foreach ($tasks as &$task) {
         }
     }
     
-    // تعيين اسم المنتج النهائي
+    // تعيين اسم المنتج النهائي (نفس طريقة طلبات العملاء - السطر 1971)
+    // في customer_orders.php: echo htmlspecialchars($item['product_name'] ?? '-');
     $task['product_name'] = $finalProductName ?: null;
+    
+    // تسجيل نهائي للتشخيص (يمكن حذفه لاحقاً)
+    if ($finalProductName) {
+        error_log("Task #{$task['id']}: Final product_name set to: '$finalProductName'");
+    } else {
+        error_log("Task #{$task['id']}: Final product_name is NULL. Original from DB: " . var_export($task['product_name'] ?? 'NOT SET', true));
+    }
     
     // إزالة product_name_from_db لأنه لم يعد مطلوباً
     unset($task['product_name_from_db']);
