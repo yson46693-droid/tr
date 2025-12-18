@@ -420,13 +420,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 // حفظ template_id و product_name و product_id - نفس طريقة customer_orders
+                // حفظ template_id إذا وُجد
                 if ($templateId) {
-                    // إذا وُجد template_id، حفظه مع product_name = NULL
                     $columns[] = 'template_id';
                     $values[] = $templateId;
                     $placeholders[] = '?';
-                } elseif ($productName !== '') {
-                    // إذا لم يُعثر على template_id، حفظ product_name
+                }
+                
+                // حفظ product_name دائماً إذا كان موجوداً (حتى لو كان هناك template_id)
+                // هذا يضمن عرض اسم القالب في الجدول حتى لو فشل JOIN مع جداول القوالب
+                // نفس الطريقة المستخدمة في production/tasks.php (السطر 502-519)
+                if ($productName !== '') {
                     $columns[] = 'product_name';
                     $values[] = $productName;
                     $placeholders[] = '?';

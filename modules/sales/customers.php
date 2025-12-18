@@ -4555,18 +4555,18 @@ document.addEventListener('DOMContentLoaded', function () {
             
             // إظهار شريط التقدم
             var progressDiv = document.getElementById('importProgress');
-            var progressBar = progressDiv.querySelector('.progress-bar');
+            var progressBar = progressDiv ? progressDiv.querySelector('.progress-bar') : null;
             var statusDiv = document.getElementById('importStatus');
             var resultsDiv = document.getElementById('importResults');
             var errorsDiv = document.getElementById('importErrors');
             var submitBtn = document.getElementById('importSubmitBtn');
             
-            progressDiv.classList.remove('d-none');
-            resultsDiv.classList.add('d-none');
-            errorsDiv.classList.add('d-none');
-            progressBar.style.width = '0%';
-            statusDiv.textContent = 'جاري رفع الملف...';
-            submitBtn.disabled = true;
+            if (progressDiv) progressDiv.classList.remove('d-none');
+            if (resultsDiv) resultsDiv.classList.add('d-none');
+            if (errorsDiv) errorsDiv.classList.add('d-none');
+            if (progressBar) progressBar.style.width = '0%';
+            if (statusDiv) statusDiv.textContent = 'جاري رفع الملف...';
+            if (submitBtn) submitBtn.disabled = true;
             
             fetch('<?php echo getRelativeUrl("api/import_customers.php"); ?>', {
                 method: 'POST',
