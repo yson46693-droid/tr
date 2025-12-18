@@ -1498,7 +1498,8 @@ if ($shouldAutoCreate) {
         try {
                 // استخدام transaction مع SELECT FOR UPDATE لمنع race conditions
                 $conn = $db->getConnection();
-                $wasInTransaction = $conn->in_transaction;
+                // التحقق من وجود property in_transaction (متوفر في PHP 8.1+)
+                $wasInTransaction = property_exists($conn, 'in_transaction') ? $conn->in_transaction : false;
                 
                 if (!$wasInTransaction) {
                     $conn->begin_transaction();
@@ -1529,14 +1530,16 @@ if ($shouldAutoCreate) {
                 }
                 
                 // إذا لم يكن في transaction من قبل، نغلق transaction الآن
-                if (!$wasInTransaction && $conn->in_transaction) {
+                $isInTransaction = property_exists($conn, 'in_transaction') ? $conn->in_transaction : false;
+                if (!$wasInTransaction && $isInTransaction) {
                     $conn->commit();
                 }
             } catch (Exception $checkEx) {
                 // في حالة الخطأ في التحقق، نغلق transaction إذا كنا قد بدأناه
                 try {
                     $conn = $db->getConnection();
-                    if ($conn->in_transaction && !$wasInTransaction) {
+                    $isInTransaction = property_exists($conn, 'in_transaction') ? $conn->in_transaction : false;
+                    if ($isInTransaction && !$wasInTransaction) {
                         $conn->rollback();
                     }
                 } catch (Exception $rollbackEx) {

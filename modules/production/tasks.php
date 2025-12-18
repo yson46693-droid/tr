@@ -1634,6 +1634,8 @@ function tasksHtml(string $value): string
             // الحصول على المنتج المحدد
             const selectedOption = productSelect.options[productSelect.selectedIndex];
             let productName = '';
+            const productId = productSelect ? parseInt(productSelect.value, 10) : 0;
+            const quantity = quantityInput ? parseFloat(quantityInput.value) : 0;
             
             if (selectedOption && selectedOption.value !== '0' && selectedOption.value !== '') {
                 // الأولوية لـ data-product-name
@@ -1645,14 +1647,31 @@ function tasksHtml(string $value): string
                 productName = productName.trim();
             }
             
-            // تحديث الحقل المخفي مباشرة قبل الإرسال
+            // تحديث الحقل المخفي مباشرة قبل الإرسال - دائماً إذا كان هناك منتج محدد
             productNameInput.value = productName;
             
             console.log('=== FORM SUBMIT DEBUG ===');
             console.log('Product select value:', productSelect.value);
+            console.log('Product ID:', productId);
+            console.log('Quantity:', quantity);
             console.log('Product name from option:', productName);
             console.log('Product name input value (before):', productNameInput.value);
             console.log('Task type:', taskTypeSelect ? taskTypeSelect.value : 'NOT FOUND');
+            
+            // إذا كان هناك منتج محدد أو كمية، يجب أن يكون product_name موجوداً
+            // أو تغيير task_type تلقائياً إلى production
+            if ((productId > 0 || quantity > 0) && !productName) {
+                console.warn('⚠ Product ID or quantity exists but product_name is empty!');
+                console.warn('  - Selected option:', selectedOption ? selectedOption.text : 'NONE');
+                console.warn('  - data-product-name:', selectedOption ? selectedOption.getAttribute('data-product-name') : 'NONE');
+            }
+            
+            // إذا كان هناك منتج وكمية، تغيير task_type تلقائياً إلى production
+            if (productId > 0 && quantity > 0 && taskTypeSelect && taskTypeSelect.value !== 'production') {
+                console.log('⚠ Auto-changing task_type to production (product and quantity detected)');
+                taskTypeSelect.value = 'production';
+                toggleProductionFields();
+            }
             
             // التحقق النهائي - إذا كان product_name فارغاً ولكن task_type هو production، منع الإرسال
             if (taskTypeSelect && taskTypeSelect.value === 'production') {
@@ -1670,6 +1689,7 @@ function tasksHtml(string $value): string
             }
             
             console.log('Product name input value (after):', productNameInput.value);
+            console.log('Final task type:', taskTypeSelect ? taskTypeSelect.value : 'NOT FOUND');
             console.log('=== END FORM SUBMIT DEBUG ===');
         });
     }

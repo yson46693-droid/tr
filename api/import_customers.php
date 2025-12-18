@@ -20,6 +20,20 @@ requireRole(['manager', 'accountant']);
 $currentUser = getCurrentUser();
 $db = db();
 
+// دالة تسجيل مخصصة تكتب مباشرة في ملف السجلات
+function logImport($message) {
+    $logFile = __DIR__ . '/../storage/logs/import_customers.log';
+    $logDir = dirname($logFile);
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+    $timestamp = date('Y-m-d H:i:s');
+    $logMessage = "[$timestamp] $message\n";
+    @file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
+    // أيضاً كتابة في error_log العادي
+    error_log($message);
+}
+
 // التأكد من وجود جدول customer_phones
 try {
     $customerPhonesTable = $db->queryOne("SHOW TABLES LIKE 'customer_phones'");
@@ -105,6 +119,11 @@ if ($fileSize > 10 * 1024 * 1024) {
 }
 
 try {
+    logImport('=== STARTING CSV IMPORT ===');
+    logImport('File: ' . $fileName);
+    logImport('File size: ' . $fileSize . ' bytes');
+    logImport('File extension: ' . $fileExtension);
+    
     $rows = [];
     
     // قراءة الملف حسب نوعه
@@ -261,10 +280,10 @@ try {
     }, $rows[0]);
     
     // تسجيل رؤوس الأعمدة الأصلية
-    error_log('=== ORIGINAL CSV HEADERS ===');
-    error_log(json_encode($originalHeaders, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-    error_log('=== NORMALIZED HEADERS ===');
-    error_log(json_encode($headers, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    logImport('=== ORIGINAL CSV HEADERS ===');
+    logImport(json_encode($originalHeaders, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    logImport('=== NORMALIZED HEADERS ===');
+    logImport(json_encode($headers, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
     
     // البحث عن أعمدة البيانات المطلوبة
     $customerIdIndex = -1;
@@ -407,43 +426,67 @@ try {
         'regionIndex' => $regionIndex,
         'phoneColumns' => $phoneColumns
     ];
-    error_log('=== IMPORT COLUMNS FOUND ===');
-    error_log(json_encode($foundColumns, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-    error_log('Headers (all): ' . json_encode($headers, JSON_UNESCAPED_UNICODE));
+    logImport('=== IMPORT COLUMNS FOUND (BEFORE FLEXIBLE SEARCH) ===');
+    logImport(json_encode($foundColumns, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    logImport('Headers (all): ' . json_encode($headers, JSON_UNESCAPED_UNICODE));
     
     // تسجيل تفصيلي لكل عمود
     foreach ($headers as $idx => $hdr) {
-        error_log("Column $idx: '$hdr' (original: '{$originalHeaders[$idx]}')");
+        logImport("Column $idx: '$hdr' (original: '{$originalHeaders[$idx]}')");
     }
     
-    // التحقق من أن الأعمدة المهمة موجودة
+    // التحقق من أن الأعمدة المهمة موجودة - بحث مرن جداً
     if ($balanceIndex === -1) {
-        error_log('WARNING: balanceIndex not found! Available headers: ' . implode(' | ', $headers));
-        error_log('WARNING: Original headers: ' . implode(' | ', $originalHeaders));
-        // محاولة البحث بطريقة أكثر مرونة
-        foreach ($headers as $idx => $hdr) {
-            if (preg_match('/رصيد|مبلغ|balance|debt|مستحق|ديون/i', $hdr)) {
+        logImport('WARNING: balanceIndex not found! Available headers: ' . implode(' | ', $headers));
+        logImport('WARNING: Original headers: ' . implode(' | ', $originalHeaders));
+        // محاولة البحث بطريقة أكثر مرونة - البحث في كل شيء
+        foreach ($originalHeaders as $idx => $hdr) {
+            $hdrLower = mb_strtolower(trim($hdr), 'UTF-8');
+            // البحث عن أي كلمة متعلقة بالرصيد أو المبلغ
+            if (preg_match('/رصيد|مبلغ|balance|debt|مستحق|ديون|صاف|صافي|المبلغ|الرصيد/i', $hdr) ||
+                mb_strpos($hdrLower, 'رصيد') !== false ||
+                mb_strpos($hdrLower, 'مبلغ') !== false ||
+                mb_strpos($hdrLower, 'balance') !== false ||
+                mb_strpos($hdrLower, 'debt') !== false) {
                 $balanceIndex = $idx;
-                error_log("FOUND balance column by flexible search at index $idx: '$hdr'");
+                logImport("FOUND balance column by flexible search at index $idx: '$hdr' (normalized: '$hdrLower')");
                 break;
             }
         }
     }
     if ($phoneIndex === -1) {
-        error_log('WARNING: phoneIndex not found! Available headers: ' . implode(' | ', $headers));
-        error_log('WARNING: Original headers: ' . implode(' | ', $originalHeaders));
-        // محاولة البحث بطريقة أكثر مرونة
-        foreach ($headers as $idx => $hdr) {
-            if (preg_match('/هاتف|تليفون|تلفون|phone|mobile|tel/i', $hdr) && 
-                !preg_match('/ثاني|2|second/i', $hdr)) {
+        logImport('WARNING: phoneIndex not found! Available headers: ' . implode(' | ', $headers));
+        logImport('WARNING: Original headers: ' . implode(' | ', $originalHeaders));
+        // محاولة البحث بطريقة أكثر مرونة - البحث في كل شيء
+        foreach ($originalHeaders as $idx => $hdr) {
+            $hdrLower = mb_strtolower(trim($hdr), 'UTF-8');
+            // البحث عن أي كلمة متعلقة بالهاتف
+            if ((preg_match('/هاتف|تليفون|تلفون|phone|mobile|tel/i', $hdr) && 
+                !preg_match('/ثاني|2|second/i', $hdr)) ||
+                (mb_strpos($hdrLower, 'هاتف') !== false && mb_strpos($hdrLower, 'ثاني') === false) ||
+                (mb_strpos($hdrLower, 'تليفون') !== false && mb_strpos($hdrLower, 'ثاني') === false) ||
+                mb_strpos($hdrLower, 'phone') !== false ||
+                mb_strpos($hdrLower, 'mobile') !== false) {
                 $phoneIndex = $idx;
-                error_log("FOUND phone column by flexible search at index $idx: '$hdr'");
+                logImport("FOUND phone column by flexible search at index $idx: '$hdr' (normalized: '$hdrLower')");
                 break;
             }
         }
     }
     
+    // تسجيل النتيجة النهائية
+    logImport('=== FINAL COLUMN INDICES ===');
+    logImport("nameIndex: $nameIndex");
+    logImport("phoneIndex: $phoneIndex");
+    logImport("phone2Index: $phone2Index");
+    logImport("balanceIndex: $balanceIndex");
+    logImport("addressIndex: $addressIndex");
+    
     // معالجة البيانات
+    logImport('=== STARTING DATA PROCESSING ===');
+    logImport('Total rows in file: ' . count($rows));
+    logImport('Total data rows (excluding header): ' . (count($rows) - 1));
+    
     $imported = 0;
     $skipped = 0;
     $errors = [];
@@ -461,8 +504,18 @@ try {
         for ($i = 1; $i < count($rows); $i++) {
             $row = $rows[$i];
             
+            // تسجيل الصف الكامل للأول 5 صفوف
+            if ($i <= 5) {
+                logImport("=== Processing Row $i ===");
+                logImport("Row length: " . count($row));
+                logImport("Full row data: " . json_encode($row, JSON_UNESCAPED_UNICODE));
+            }
+            
             // تخطي الصفوف الفارغة
             if (empty($row[$nameIndex]) || trim($row[$nameIndex]) === '') {
+                if ($i <= 5) {
+                    logImport("Row $i - Skipping empty row (name is empty)");
+                }
                 continue;
             }
             
@@ -484,30 +537,36 @@ try {
             
             // قراءة رقم الهاتف الأول
             $phone = null;
-            if ($phoneIndex !== -1 && isset($row[$phoneIndex])) {
+            if ($phoneIndex !== -1 && isset($row[$phoneIndex]) && $row[$phoneIndex] !== null && $row[$phoneIndex] !== '') {
                 $rawPhone = trim((string)$row[$phoneIndex]);
                 // تسجيل القيمة الأصلية
                 if ($i <= 5) {
-                    error_log("Row $i - Raw phone value from CSV: '" . var_export($rawPhone, true) . "' (type: " . gettype($row[$phoneIndex]) . ")");
+                    logImport("Row $i - Raw phone value from CSV: '" . var_export($rawPhone, true) . "' (type: " . gettype($row[$phoneIndex]) . ")");
                 }
                 // إزالة أي مسافات أو أحرف غير ضرورية
-                $rawPhone = str_replace([' ', '-', '_', '(', ')', '.', '/'], '', $rawPhone);
+                $rawPhone = str_replace([' ', '-', '_', '(', ')', '.', '/', '+'], '', $rawPhone);
                 // إزالة BOM إذا كان موجوداً
                 if (substr($rawPhone, 0, 3) === "\xEF\xBB\xBF") {
                     $rawPhone = substr($rawPhone, 3);
                 }
+                // إزالة أي أحرف غير رقمية
+                $rawPhone = preg_replace('/[^\d]/', '', $rawPhone);
                 if ($rawPhone !== '' && strlen($rawPhone) > 0) {
                     $phone = $rawPhone;
                     if ($i <= 5) {
-                        error_log("Row $i - Cleaned phone: '$phone'");
+                        logImport("Row $i - Cleaned phone: '$phone'");
+                    }
+                } else {
+                    if ($i <= 5) {
+                        logImport("Row $i - Phone became empty after cleaning");
                     }
                 }
             } else {
                 if ($i <= 5) {
-                    error_log("WARNING: Row $i - phoneIndex is -1 or row[$phoneIndex] not set. phoneIndex=$phoneIndex, row length=" . count($row));
+                    logImport("WARNING: Row $i - phoneIndex is -1 or row[$phoneIndex] not set. phoneIndex=$phoneIndex, row length=" . count($row));
                     if ($phoneIndex !== -1) {
-                        error_log("  - Row[$phoneIndex] exists: " . (isset($row[$phoneIndex]) ? 'YES' : 'NO'));
-                        error_log("  - Row[$phoneIndex] value: " . (isset($row[$phoneIndex]) ? var_export($row[$phoneIndex], true) : 'NOT_SET'));
+                        logImport("  - Row[$phoneIndex] exists: " . (isset($row[$phoneIndex]) ? 'YES' : 'NO'));
+                        logImport("  - Row[$phoneIndex] value: " . (isset($row[$phoneIndex]) ? var_export($row[$phoneIndex], true) : 'NOT_SET'));
                     }
                 }
             }
@@ -527,7 +586,7 @@ try {
                 }
             } else {
                 if ($i <= 5 && $phone2Index !== -1) {
-                    error_log("WARNING: Row $i - phone2Index exists but row[$phone2Index] is empty. phone2Index=$phone2Index");
+                    logImport("WARNING: Row $i - phone2Index exists but row[$phone2Index] is empty. phone2Index=$phone2Index");
                 }
             }
             
@@ -542,11 +601,11 @@ try {
             
             // قراءة الرصيد
             $balance = 0.0;
-            if ($balanceIndex !== -1 && isset($row[$balanceIndex])) {
+            if ($balanceIndex !== -1 && isset($row[$balanceIndex]) && $row[$balanceIndex] !== null && $row[$balanceIndex] !== '') {
                 $rawBalance = $row[$balanceIndex];
                 // تسجيل القيمة الأصلية
                 if ($i <= 5) {
-                    error_log("Row $i - Raw balance value from CSV: '" . var_export($rawBalance, true) . "' (type: " . gettype($rawBalance) . ")");
+                    logImport("Row $i - Raw balance value from CSV: '" . var_export($rawBalance, true) . "' (type: " . gettype($rawBalance) . ")");
                 }
                 // تحويل إلى نص وإزالة المسافات
                 $rawBalance = trim((string)$rawBalance);
@@ -568,7 +627,7 @@ try {
                     if (is_numeric($rawBalance)) {
                         $balance = (float)$rawBalance;
                         if ($i <= 5) {
-                            error_log("Row $i - Parsed balance: $balance");
+                            logImport("Row $i - Parsed balance: $balance");
                         }
                     } else {
                         // محاولة إزالة المزيد من الأحرف غير الرقمية
@@ -576,23 +635,23 @@ try {
                         if (is_numeric($cleanedBalance)) {
                             $balance = (float)$cleanedBalance;
                             if ($i <= 5) {
-                                error_log("Row $i - Parsed balance (after cleaning): $balance");
+                                logImport("Row $i - Parsed balance (after cleaning): $balance");
                             }
                         } else {
-                            error_log("WARNING: Row $i - Balance value '$rawBalance' (cleaned: '$cleanedBalance') is not numeric");
+                            logImport("WARNING: Row $i - Balance value '$rawBalance' (cleaned: '$cleanedBalance') is not numeric");
                         }
                     }
                 } else {
                     if ($i <= 5) {
-                        error_log("Row $i - Balance value is empty or null after trimming");
+                        logImport("Row $i - Balance value is empty or null after trimming");
                     }
                 }
             } else {
                 if ($i <= 5) {
-                    error_log("WARNING: Row $i - balanceIndex is -1 or row[$balanceIndex] not set. balanceIndex=$balanceIndex, row length=" . count($row));
+                    logImport("WARNING: Row $i - balanceIndex is -1 or row[$balanceIndex] not set. balanceIndex=$balanceIndex, row length=" . count($row));
                     if ($balanceIndex !== -1) {
-                        error_log("  - Row[$balanceIndex] exists: " . (isset($row[$balanceIndex]) ? 'YES' : 'NO'));
-                        error_log("  - Row[$balanceIndex] value: " . (isset($row[$balanceIndex]) ? var_export($row[$balanceIndex], true) : 'NOT_SET'));
+                        logImport("  - Row[$balanceIndex] exists: " . (isset($row[$balanceIndex]) ? 'YES' : 'NO'));
+                        logImport("  - Row[$balanceIndex] value: " . (isset($row[$balanceIndex]) ? var_export($row[$balanceIndex], true) : 'NOT_SET'));
                     }
                 }
             }
@@ -637,8 +696,8 @@ try {
                     $rowData['headers_mapping'][$colName] = isset($row[$colIdx]) ? $row[$colIdx] : '';
                 }
                 
-                error_log("=== ROW $i DATA ===");
-                error_log(json_encode($rowData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+                logImport("=== ROW $i DATA ===");
+                logImport(json_encode($rowData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
             }
             
             // البحث عن region_id إذا كان اسم المنطقة موجوداً
@@ -713,26 +772,26 @@ try {
                     
                     // تسجيل البيانات قبل التحديث
                     if ($i <= 5) {
-                        error_log("Row $i - About to UPDATE customer ID=$customerId:");
-                        error_log("  - Update fields: " . implode(', ', $updateFields));
-                        error_log("  - Update values: " . json_encode($updateValues, JSON_UNESCAPED_UNICODE));
+                        logImport("Row $i - About to UPDATE customer ID=$customerId:");
+                        logImport("  - Update fields: " . implode(', ', $updateFields));
+                        logImport("  - Update values: " . json_encode($updateValues, JSON_UNESCAPED_UNICODE));
                     }
                     
                     $db->execute(
                         "UPDATE customers SET " . implode(', ', $updateFields) . " WHERE id = ?",
                         $updateValues
                     );
-                    error_log("✓ Customer updated: ID=$customerId, Name=$name, Balance=" . ($balanceIndex !== -1 ? $balance : 'NOT_UPDATED') . " (from index $balanceIndex), Phone=" . ($phone ?? 'NULL') . " (from index $phoneIndex), Phone2=" . ($phone2 ?? 'NULL') . " (from index $phone2Index), Address=" . ($address ?? 'NULL'));
+                    logImport("✓ Customer updated: ID=$customerId, Name=$name, Balance=" . ($balanceIndex !== -1 ? $balance : 'NOT_UPDATED') . " (from index $balanceIndex), Phone=" . ($phone ?? 'NULL') . " (from index $phoneIndex), Phone2=" . ($phone2 ?? 'NULL') . " (from index $phone2Index), Address=" . ($address ?? 'NULL'));
                     
                     // التحقق من البيانات المحفوظة
                     $savedCustomer = $db->queryOne("SELECT name, phone, balance, address FROM customers WHERE id = ?", [$customerId]);
                     if ($savedCustomer) {
-                        error_log("✓ Verified saved data - Name: {$savedCustomer['name']}, Phone: {$savedCustomer['phone']}, Balance: {$savedCustomer['balance']}, Address: {$savedCustomer['address']}");
+                        logImport("✓ Verified saved data - Name: {$savedCustomer['name']}, Phone: {$savedCustomer['phone']}, Balance: {$savedCustomer['balance']}, Address: {$savedCustomer['address']}");
                     }
                     
                     // حذف أرقام الهواتف القديمة
                     $db->execute("DELETE FROM customer_phones WHERE customer_id = ?", [$customerId]);
-                    error_log("Deleted old phones for customer $customerId");
+                    logImport("Deleted old phones for customer $customerId");
                     
                     logAudit($currentUser['id'], 'update_customer', 'customer', $customerId, null, [
                         'name' => $name,
@@ -742,11 +801,11 @@ try {
                     // إدراج عميل جديد
                     // تسجيل البيانات قبل الحفظ
                     if ($i <= 5) {
-                        error_log("Row $i - About to INSERT customer:");
-                        error_log("  - Name: '$name'");
-                        error_log("  - Phone: " . ($phone ?? 'NULL') . " (from index $phoneIndex)");
-                        error_log("  - Balance: $balance (from index $balanceIndex)");
-                        error_log("  - Address: " . ($address ?? 'NULL'));
+                        logImport("Row $i - About to INSERT customer:");
+                        logImport("  - Name: '$name'");
+                        logImport("  - Phone: " . ($phone ?? 'NULL') . " (from index $phoneIndex)");
+                        logImport("  - Balance: $balance (from index $balanceIndex)");
+                        logImport("  - Address: " . ($address ?? 'NULL'));
                     }
                     
                     $customerColumns = ['name', 'phone', 'balance', 'address', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
@@ -777,12 +836,12 @@ try {
                     );
                     
                     $customerId = $db->getLastInsertId();
-                    error_log("✓ Customer inserted: ID=$customerId, Name=$name, Balance=$balance (from index $balanceIndex), Phone=" . ($phone ?? 'NULL') . " (from index $phoneIndex), Phone2=" . ($phone2 ?? 'NULL') . " (from index $phone2Index), Address=" . ($address ?? 'NULL'));
+                    logImport("✓ Customer inserted: ID=$customerId, Name=$name, Balance=$balance (from index $balanceIndex), Phone=" . ($phone ?? 'NULL') . " (from index $phoneIndex), Phone2=" . ($phone2 ?? 'NULL') . " (from index $phone2Index), Address=" . ($address ?? 'NULL'));
                     
                     // التحقق من البيانات المحفوظة
                     $savedCustomer = $db->queryOne("SELECT name, phone, balance, address FROM customers WHERE id = ?", [$customerId]);
                     if ($savedCustomer) {
-                        error_log("✓ Verified saved data - Name: {$savedCustomer['name']}, Phone: {$savedCustomer['phone']}, Balance: {$savedCustomer['balance']}, Address: {$savedCustomer['address']}");
+                        logImport("✓ Verified saved data - Name: {$savedCustomer['name']}, Phone: {$savedCustomer['phone']}, Balance: {$savedCustomer['balance']}, Address: {$savedCustomer['address']}");
                     }
                     
                     logAudit($currentUser['id'], 'import_customer', 'customer', $customerId, null, [
@@ -801,15 +860,15 @@ try {
                         $phonesToSave[] = trim($phone2);
                     }
                     
-                    error_log("Customer $customerId ($name) - Phones to save: " . json_encode($phonesToSave, JSON_UNESCAPED_UNICODE));
-                    error_log("  - Phone1 (index $phoneIndex): " . ($phone ?? 'NULL'));
-                    error_log("  - Phone2 (index $phone2Index): " . ($phone2 ?? 'NULL'));
+                    logImport("Customer $customerId ($name) - Phones to save: " . json_encode($phonesToSave, JSON_UNESCAPED_UNICODE));
+                    logImport("  - Phone1 (index $phoneIndex): " . ($phone ?? 'NULL'));
+                    logImport("  - Phone2 (index $phone2Index): " . ($phone2 ?? 'NULL'));
                     
                     if (!empty($phonesToSave)) {
                         // حذف أرقام الهواتف القديمة أولاً (في حالة التحديث)
                         if ($isUpdate) {
                             $db->execute("DELETE FROM customer_phones WHERE customer_id = ?", [$customerId]);
-                            error_log("Deleted old phones for customer $customerId");
+                            logImport("Deleted old phones for customer $customerId");
                         }
                         
                         $firstPhone = true;
@@ -831,29 +890,29 @@ try {
                                         );
                                         $savedCount++;
                                         $phoneId = $db->getLastInsertId();
-                                        error_log("✓ Phone saved: ID=$phoneId, Customer ID=$customerId ($name), Phone=$phoneNumber, Primary=" . ($firstPhone ? '1' : '0'));
+                                        logImport("✓ Phone saved: ID=$phoneId, Customer ID=$customerId ($name), Phone=$phoneNumber, Primary=" . ($firstPhone ? '1' : '0'));
                                     } else {
-                                        error_log("⚠ Phone already exists: Customer ID $customerId, Phone: $phoneNumber");
+                                        logImport("⚠ Phone already exists: Customer ID $customerId, Phone: $phoneNumber");
                                     }
                                     $firstPhone = false;
                                 } catch (Exception $phoneInsertError) {
                                     // تسجيل الخطأ ولكن لا نوقف العملية
-                                    error_log('✗ Error inserting phone number "' . $phoneNumber . '" for customer ' . $customerId . ': ' . $phoneInsertError->getMessage());
+                                    logImport('✗ Error inserting phone number "' . $phoneNumber . '" for customer ' . $customerId . ': ' . $phoneInsertError->getMessage());
                                 }
                             }
                         }
-                        error_log("Total phones saved for customer $customerId: $savedCount");
+                        logImport("Total phones saved for customer $customerId: $savedCount");
                         
                         // التحقق من الأرقام المحفوظة
                         $savedPhones = $db->query("SELECT phone, is_primary FROM customer_phones WHERE customer_id = ?", [$customerId]);
-                        error_log("✓ Verified saved phones for customer $customerId: " . json_encode($savedPhones, JSON_UNESCAPED_UNICODE));
+                        logImport("✓ Verified saved phones for customer $customerId: " . json_encode($savedPhones, JSON_UNESCAPED_UNICODE));
                     } else {
-                        error_log("⚠ No phones to save for customer: $name (ID: $customerId) - Phone1: " . ($phone ?? 'NULL') . " (index: $phoneIndex), Phone2: " . ($phone2 ?? 'NULL') . " (index: $phone2Index)");
+                        logImport("⚠ No phones to save for customer: $name (ID: $customerId) - Phone1: " . ($phone ?? 'NULL') . " (index: $phoneIndex), Phone2: " . ($phone2 ?? 'NULL') . " (index: $phone2Index)");
                     }
                 } catch (Exception $phonesError) {
                     // تسجيل الخطأ ولكن لا نوقف العملية
-                    error_log('✗ Error saving phone numbers for customer ' . $customerId . ': ' . $phonesError->getMessage());
-                    error_log('Stack trace: ' . $phonesError->getTraceAsString());
+                    logImport('✗ Error saving phone numbers for customer ' . $customerId . ': ' . $phonesError->getMessage());
+                    logImport('Stack trace: ' . $phonesError->getTraceAsString());
                 }
                 
                 $imported++;
@@ -864,6 +923,11 @@ try {
         
         // تأكيد المعاملة
         $db->commit();
+        
+        logImport('=== IMPORT COMPLETED ===');
+        logImport("Imported: $imported customers");
+        logImport("Skipped: $skipped customers");
+        logImport("Errors: " . count($errors));
         
         // مسح الكاش
         if (class_exists('Cache')) {
@@ -883,7 +947,8 @@ try {
             'imported' => $imported,
             'skipped' => $skipped,
             'errors' => $errors,
-            'message' => $message
+            'message' => $message,
+            'log_file' => 'storage/logs/import_customers.log'
         ], JSON_UNESCAPED_UNICODE);
         
     } catch (Exception $e) {
