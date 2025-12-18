@@ -4530,14 +4530,30 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // معالج استيراد العملاء من CSV
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/35d1bc17-d4bf-4d98-8adf-b388a32a7375',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'customers.php:4533',message:'Checking import form elements',data:{formExists:!!document.getElementById('importCustomersForm'),modalExists:!!document.getElementById('importCustomersModal')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     var importCustomersForm = document.getElementById('importCustomersForm');
     var importCustomersModal = document.getElementById('importCustomersModal');
     
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/35d1bc17-d4bf-4d98-8adf-b388a32a7375',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'customers.php:4536',message:'Form elements found',data:{form:!!importCustomersForm,modal:!!importCustomersModal},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    
     if (importCustomersForm) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/35d1bc17-d4bf-4d98-8adf-b388a32a7375',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'customers.php:4537',message:'Adding event listener to form',data:{formId:importCustomersForm.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         importCustomersForm.addEventListener('submit', function(e) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/35d1bc17-d4bf-4d98-8adf-b388a32a7375',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'customers.php:4538',message:'Form submit event triggered',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             e.preventDefault();
             
             var fileInput = document.getElementById('excelFileInput');
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/35d1bc17-d4bf-4d98-8adf-b388a32a7375',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'customers.php:4540',message:'File input check',data:{fileInputExists:!!fileInput,hasFiles:!!(fileInput&&fileInput.files&&fileInput.files.length>0)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
             if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
                 alert('يرجى اختيار ملف CSV أو Excel');
                 return;
@@ -4568,7 +4584,11 @@ document.addEventListener('DOMContentLoaded', function () {
             statusDiv.textContent = 'جاري رفع الملف...';
             submitBtn.disabled = true;
             
-            fetch('<?php echo getRelativeUrl("api/import_customers.php"); ?>', {
+            var apiUrl = '<?php echo getRelativeUrl("api/import_customers.php"); ?>';
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/35d1bc17-d4bf-4d98-8adf-b388a32a7375',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'customers.php:4571',message:'Starting fetch request',data:{apiUrl:apiUrl,fileName:file.name,fileSize:file.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
+            fetch(apiUrl, {
                 method: 'POST',
                 body: formData,
                 credentials: 'same-origin'

@@ -852,7 +852,7 @@ $totalPages = max(1, (int) ceil($totalTasks / $perPage));
 $unifiedTemplatesExists = !empty($db->queryOne("SHOW TABLES LIKE 'unified_product_templates'"));
 $productTemplatesExists = !empty($db->queryOne("SHOW TABLES LIKE 'product_templates'"));
 // #region agent log
-file_put_contents('c:\\xampp\\htdocs\\v1\\.cursor\\debug.log', json_encode([
+file_put_contents('../../.cursor/debug.log', json_encode([
     'timestamp' => time() * 1000,
     'location' => 'tasks.php:' . __LINE__,
     'message' => 'Template tables check',
@@ -913,7 +913,7 @@ LIMIT ? OFFSET ?";
 
 $queryParams = array_merge($params, [$perPage, $offset]);
 // #region agent log
-file_put_contents('c:\\xampp\\htdocs\\v1\\.cursor\\debug.log', json_encode([
+file_put_contents('../../.cursor/debug.log', json_encode([
     'timestamp' => time() * 1000,
     'location' => 'tasks.php:' . __LINE__,
     'message' => 'SQL query with template joins',
@@ -932,7 +932,7 @@ $tasks = $db->query($taskSql, $queryParams);
 // استخراج جميع العمال من notes لكل مهمة واستخراج اسم المنتج من notes إذا لم يكن موجوداً
 foreach ($tasks as &$task) {
     // #region agent log
-    $logPath = 'c:\\xampp\\htdocs\\v1\\.cursor\\debug.log';
+    $logPath = '../../.cursor/debug.log';
     $logData = [
         'task_id' => $task['id'] ?? 0,
         'template_id' => $task['template_id'] ?? null,
@@ -995,7 +995,7 @@ foreach ($tasks as &$task) {
     // الأولوية الثانية: استخدام template_name من JOIN مع جداول القوالب (عند وجود template_id)
     // هذا يحل المشكلة عندما يتم حفظ template_id ولكن product_name يكون NULL
     // #region agent log
-    $logPath = 'c:\\xampp\\htdocs\\v1\\.cursor\\debug.log';
+    $logPath = '../../.cursor/debug.log';
     $logData = [
         'task_id' => $task['id'] ?? 0,
         'template_id' => $task['template_id'] ?? null,
