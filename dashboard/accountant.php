@@ -1987,8 +1987,19 @@ $pageDescription = 'لوحة تحكم المحاسب - إدارة المعامل
                     })();
                 </script>
                 
+            <?php elseif ($page === 'company_payment_schedules'): ?>
+                <!-- صفحة جداول التحصيل - عملاء الشركة -->
+                <?php
+                $modulePath = __DIR__ . '/../modules/manager/company_payment_schedules.php';
+                if (file_exists($modulePath)) {
+                    include $modulePath;
+                } else {
+                    echo '<div class="alert alert-danger">الصفحة غير متاحة حالياً.</div>';
+                }
+                ?>
+
             <?php elseif ($page === 'local_customers'): ?>
-                <?php 
+                <?php
                 $modulePath = __DIR__ . '/../modules/manager/local_customers.php';
                 if (file_exists($modulePath)) {
                     include $modulePath;

@@ -178,6 +178,13 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'جداول التحصيل - عملاء الشركة',
+                'icon' => 'bi-calendar-check',
+                'url' => $baseUrl . 'manager.php?page=company_payment_schedules',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'company_payment_schedules'),
+                'badge' => null
+            ],
+            [
                 'title' => isset($lang['menu_warehouse_transfers']) ? $lang['menu_warehouse_transfers'] : 'نقل المخازن',
                 'icon' => 'bi-arrow-left-right',
                 'url' => $baseUrl . 'manager.php?page=warehouse_transfers',
@@ -338,6 +345,13 @@ switch ($role) {
                 'icon' => 'bi-wallet2',
                 'url' => $baseUrl . 'accountant.php?page=customer_credit_balances',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'customer_credit_balances'),
+                'badge' => null
+            ],
+            [
+                'title' => 'جداول التحصيل - عملاء الشركة',
+                'icon' => 'bi-calendar-check',
+                'url' => $baseUrl . 'accountant.php?page=company_payment_schedules',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'company_payment_schedules'),
                 'badge' => null
             ],
             [
