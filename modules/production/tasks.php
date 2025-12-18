@@ -32,8 +32,16 @@ try {
         }
         error_log('Added product_name column to tasks table in production/tasks.php');
     }
+    
+    // التحقق من وجود عمود task_type في جدول tasks وإضافته إذا لم يكن موجوداً
+    $taskTypeColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'task_type'");
+    if (empty($taskTypeColumn)) {
+        // إضافة الحقل بعد status
+        $db->execute("ALTER TABLE tasks ADD COLUMN task_type VARCHAR(50) NULL DEFAULT 'general' AFTER status");
+        error_log('Added task_type column to tasks table in production/tasks.php');
+    }
 } catch (Exception $e) {
-    error_log('Error checking/adding product_name column in production/tasks.php: ' . $e->getMessage());
+    error_log('Error checking/adding columns in production/tasks.php: ' . $e->getMessage());
 }
 
 // إضافة cache headers لمنع تخزين الصفحة والتأكد من جلب البيانات المحدثة
@@ -429,8 +437,9 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     }
                 }
                 
-                // إذا كان task_type هو production، يجب أن يكون لدينا product_name
-                if ($taskType === 'production' && empty($displayProductName)) {
+                // إذا كان task_type هو production أو كان هناك product_id/quantity، يجب أن يكون لدينا product_name
+                $hasProductData = ($productId > 0 || $quantity > 0);
+                if (($taskType === 'production' || $hasProductData) && empty($displayProductName)) {
                     // محاولة أخيرة: جلب الاسم من product_id إذا كان موجوداً
                     if ($productId > 0) {
                         $product = $db->queryOne('SELECT name FROM products WHERE id = ?', [$productId]);
@@ -441,12 +450,20 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     
                     // إذا كان لا يزال فارغاً، هذا خطأ - لكن سنحاول الاستمرار
                     if (empty($displayProductName)) {
-                        error_log("✗ ERROR: task_type is production but product_name is empty!");
+                        error_log("✗ ERROR: task_type is '$taskType' but product_name is empty!");
                         error_log("  - productName: '$productName'");
                         error_log("  - rawProductName: '$rawProductName'");
                         error_log("  - productId: $productId");
-                        error_log("  - POST data: " . json_encode(['product_name' => $rawProductName, 'product_id' => $productId]));
+                        error_log("  - quantity: $quantity");
+                        error_log("  - hasProductData: " . ($hasProductData ? 'true' : 'false'));
+                        error_log("  - POST data: " . json_encode(['product_name' => $rawProductName, 'product_id' => $productId, 'quantity' => $quantity]));
                     }
+                }
+                
+                // إذا كان هناك product_id أو quantity ولكن task_type ليس production، تغييره تلقائياً
+                if ($hasProductData && $taskType !== 'production') {
+                    error_log("⚠ WARNING: Product data exists (product_id: $productId, quantity: $quantity) but task_type is '$task_type'. Auto-changing to 'production'.");
+                    $taskType = 'production';
                 }
                 
                 // حفظ product_name مباشرة في حقل product_name (نفس طريقة طلبات العملاء - السطر 444-448)
@@ -494,6 +511,12 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     $values[] = $notes;
                     $placeholders[] = '?';
                 }
+
+                // حفظ task_type دائماً
+                $columns[] = 'task_type';
+                $values[] = $taskType;
+                $placeholders[] = '?';
+                error_log("✓ Saving task_type: '$taskType' to tasks table");
 
                 $sql = 'INSERT INTO tasks (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')';
                 $insertResult = $db->execute($sql, $values);
