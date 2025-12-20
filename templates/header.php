@@ -3157,7 +3157,7 @@ if (ob_get_level() > 0) {
             <div class="topbar-right">
                 <!-- Logout -->
                 <a href="<?php echo getRelativeUrl('logout.php'); ?>" 
-                   class="topbar-action" 
+                   class="topbar-action desktop-logout-btn" 
                    data-bs-toggle="tooltip" 
                    title="<?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?>"
                    aria-label="<?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?>">

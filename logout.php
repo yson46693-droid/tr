@@ -9,6 +9,10 @@ if (!ob_get_level()) {
 
 define('ACCESS_ALLOWED', true);
 
+// إعدادات SOAP WSDL Cache - منع خطأ open_basedir restriction
+@ini_set('soap.wsdl_cache_enabled', '0');
+@ini_set('soap.wsdl_cache_ttl', '0');
+
 try {
     require_once __DIR__ . '/includes/config.php';
     
@@ -18,15 +22,37 @@ try {
     
     require_once __DIR__ . '/includes/auth.php';
     
+    // التأكد من أن دالة logout موجودة واستدعاؤها
     if (function_exists('logout')) {
         try {
             logout();
         } catch (Exception $e) {
             error_log("Logout Function Error: " . $e->getMessage());
+        } catch (Throwable $e) {
+            error_log("Logout Function Error (Throwable): " . $e->getMessage());
+        }
+    } else {
+        error_log("Logout Error: logout() function not found");
+        // محاولة تدمير الجلسة يدوياً إذا لم تكن الدالة موجودة
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION = [];
+            session_destroy();
         }
     }
 } catch (Exception $e) {
     error_log("Logout Page Error: " . $e->getMessage());
+    // محاولة تدمير الجلسة حتى في حالة الخطأ
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION = [];
+        @session_destroy();
+    }
+} catch (Throwable $e) {
+    error_log("Logout Page Error (Throwable): " . $e->getMessage());
+    // محاولة تدمير الجلسة حتى في حالة الخطأ
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION = [];
+        @session_destroy();
+    }
 }
 
 while (ob_get_level()) {
@@ -81,37 +107,60 @@ try {
         (function() {
             var redirectUrl = <?php echo json_encode($redirectUrl, JSON_UNESCAPED_UNICODE); ?>;
             
-            try {
-                if (typeof window !== 'undefined' && window.location && window.location.replace) {
-                    window.location.replace(redirectUrl);
-                    return;
+            // تأخير صغير لضمان اكتمال تدمير الجلسة على السيرفر
+            setTimeout(function() {
+                try {
+                    // محاولة إزالة أي بيانات محلية قد تكون مخزنة
+                    if (typeof localStorage !== 'undefined') {
+                        try {
+                            localStorage.removeItem('user_session');
+                            localStorage.removeItem('user_id');
+                            localStorage.removeItem('user_data');
+                        } catch(e) {}
+                    }
+                    
+                    if (typeof sessionStorage !== 'undefined') {
+                        try {
+                            sessionStorage.clear();
+                        } catch(e) {}
+                    }
+                    
+                    // إعادة التوجيه
+                    if (typeof window !== 'undefined' && window.location && window.location.replace) {
+                        window.location.replace(redirectUrl);
+                        return;
+                    }
+                } catch(e) {
+                    console.error('Redirect error:', e);
                 }
-            } catch(e) {}
-            
-            try {
-                if (typeof window !== 'undefined' && window.location && window.location.href) {
-                    window.location.href = redirectUrl;
-                    return;
+                
+                try {
+                    if (typeof window !== 'undefined' && window.location && window.location.href) {
+                        window.location.href = redirectUrl;
+                        return;
+                    }
+                } catch(e) {
+                    console.error('Redirect error (href):', e);
                 }
-            } catch(e) {}
-            
-            if (typeof document !== 'undefined') {
-                if (document.readyState === 'complete' || document.readyState === 'interactive') {
-                    setTimeout(function() {
-                        if (window.location) {
-                            window.location = redirectUrl;
-                        }
-                    }, 100);
-                } else {
-                    document.addEventListener('DOMContentLoaded', function() {
+                
+                if (typeof document !== 'undefined') {
+                    if (document.readyState === 'complete' || document.readyState === 'interactive') {
                         setTimeout(function() {
                             if (window.location) {
                                 window.location = redirectUrl;
                             }
                         }, 100);
-                    });
+                    } else {
+                        document.addEventListener('DOMContentLoaded', function() {
+                            setTimeout(function() {
+                                if (window.location) {
+                                    window.location = redirectUrl;
+                                }
+                            }, 100);
+                        });
+                    }
                 }
-            }
+            }, 200); // تأخير 200ms لضمان اكتمال العملية على السيرفر
         })();
     </script>
     <meta http-equiv="refresh" content="0;url=<?php echo htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8'); ?>">

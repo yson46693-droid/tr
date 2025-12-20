@@ -139,6 +139,27 @@
     }
 }
 
+/* إخفاء زر تسجيل الخروج الأول على الكمبيوتر (الشاشات الكبيرة) */
+@media (min-width: 769px) {
+    .desktop-logout-btn {
+        display: none !important;
+    }
+}
+
+/* إظهار زر تسجيل الخروج الأول على الهاتف (لكن إخفاؤه على الشاشات الصغيرة جداً حيث يظهر mobile-logout-btn) */
+@media (max-width: 768px) {
+    .desktop-logout-btn {
+        display: flex !important;
+    }
+}
+
+/* إخفاء desktop-logout-btn على الشاشات الصغيرة جداً (حيث يظهر mobile-logout-btn) */
+@media (max-width: 480px) {
+    .desktop-logout-btn {
+        display: none !important;
+    }
+}
+
 /* ===== Top Bar Sections ===== */
 .topbar-left,
 .topbar-center,

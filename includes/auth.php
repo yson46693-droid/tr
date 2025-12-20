@@ -469,12 +469,21 @@ function clearUserCache($userId = null) {
  * تسجيل الخروج - يعتمد على الجلسات (PHP Sessions)
  */
 function logout() {
+    // التأكد من بدء الجلسة قبل محاولة الوصول إليها
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    
     // الحصول على user_id من الجلسة قبل حذفها
-    $userId = $_SESSION['user_id'] ?? null;
+    $userId = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : null;
     
     // تنظيف Cache قبل تسجيل الخروج
-    if (function_exists('clearUserCache')) {
-        clearUserCache($userId);
+    if ($userId && function_exists('clearUserCache')) {
+        try {
+            clearUserCache($userId);
+        } catch (Exception $e) {
+            error_log("Logout Cache Clear Error: " . $e->getMessage());
+        }
     }
     
     // تسجيل سجل التدقيق قبل حذف الجلسة
@@ -492,17 +501,40 @@ function logout() {
     // حذف جميع بيانات الجلسة
     $_SESSION = [];
     
-    // حذف cookie الجلسة
-    if (isset($_COOKIE[session_name()])) {
-        $isHttps = (
-            (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-            (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
-        );
-        setcookie(session_name(), '', time() - 3600, '/', '', $isHttps, true);
+    // الحصول على اسم الجلسة
+    $sessionName = session_name();
+    
+    // حذف cookie الجلسة من المتصفح
+    $isHttps = (
+        (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+        (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443') ||
+        (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+    );
+    
+    // حذف cookie الجلسة بطرق متعددة لضمان الحذف
+    if (isset($_COOKIE[$sessionName])) {
+        // حذف من جميع المسارات الممكنة
+        setcookie($sessionName, '', time() - 3600, '/', '', $isHttps, true);
+        setcookie($sessionName, '', time() - 3600, '/', null, false, true);
+        setcookie($sessionName, '', time() - 3600);
+    }
+    
+    // تنظيف $_COOKIE array
+    if (isset($_COOKIE[$sessionName])) {
+        unset($_COOKIE[$sessionName]);
     }
     
     // تدمير الجلسة
-    session_destroy();
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_destroy();
+    }
+    
+    // إعادة تهيئة الجلسة الفارغة لمنع إعادة استخدام الجلسة القديمة
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+        $_SESSION = [];
+        session_destroy();
+    }
 }
 
 /**
