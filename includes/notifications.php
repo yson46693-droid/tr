@@ -110,9 +110,16 @@ function createNotificationForRole($role, $title, $message, $type = 'info', $lin
     try {
         $db = db();
         
-        $users = $db->query("SELECT id FROM users WHERE role = ? AND status = 'active'", [$role]);
+        // التأكد من أن الاستعلام يطابق الدور فقط مع التحقق الإضافي
+        $users = $db->query("SELECT id, role FROM users WHERE role = ? AND status = 'active'", [$role]);
         
         foreach ($users as $user) {
+            // التحقق الإضافي من تطابق الدور لمنع أي خلط في البيانات
+            if (!isset($user['role']) || $user['role'] !== $role) {
+                error_log("Warning: User ID {$user['id']} has role mismatch. Expected: {$role}, Found: " . ($user['role'] ?? 'NULL'));
+                continue; // تخطي هذا المستخدم
+            }
+            
             createNotification($user['id'], $title, $message, $type, $link, false);
         }
         

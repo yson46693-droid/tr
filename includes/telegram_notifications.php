@@ -22,14 +22,18 @@ function sendTelegramNotificationByRole($role, $message, $priority = 'normal') {
     $db = db();
     
     // الحصول على المستخدمين الذين لديهم إشعارات Telegram مفعلة لهذا الدور
+    // إصلاح: التأكد من أن JOIN يطابق فقط الإعدادات المرتبطة بالدور المحدد أو المستخدم المحدد
     $users = $db->query(
-        "SELECT u.id, u.full_name, u.username
+        "SELECT DISTINCT u.id, u.full_name, u.username
          FROM users u
-         INNER JOIN notification_settings ns ON (ns.user_id = u.id OR ns.role = u.role)
+         INNER JOIN notification_settings ns ON (
+             (ns.user_id = u.id AND (ns.role IS NULL OR ns.role = ?))
+             OR (ns.user_id IS NULL AND ns.role = ? AND u.role = ?)
+         )
          WHERE u.role = ? AND u.status = 'active' 
          AND ns.telegram_enabled = 1
          AND ns.notification_type = ?",
-        [$role, $priority]
+        [$role, $role, $role, $role, $priority]
     );
     
     $sent = 0;
