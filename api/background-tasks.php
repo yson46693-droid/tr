@@ -81,13 +81,46 @@ function releaseBackgroundTasksLock($fp) {
 $isLoggedIn = false;
 $currentUser = null;
 
+// التحقق من وجود الجلسة أولاً (دون الوصول لقاعدة البيانات)
+if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
+    http_response_code(401);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit;
+}
+
+// محاولة التحقق من المستخدم مع معالجة الأخطاء
 try {
     $isLoggedIn = isLoggedIn();
 } catch (Throwable $e) {
-    // في حالة خطأ في قاعدة البيانات، لا نحذف الجلسة
+    // في حالة خطأ في قاعدة البيانات، نعتبر المستخدم مسجل دخول إذا كانت الجلسة موجودة
     error_log('Background tasks: isLoggedIn() error (non-critical): ' . $e->getMessage());
-    // نعتبر المستخدم مسجل دخول إذا كانت الجلسة موجودة
     $isLoggedIn = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
+}
+
+// إذا فشل التحقق من isLoggedIn، حاول التحقق من الجلسة مباشرة
+if (!$isLoggedIn && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+    // محاولة جلب المستخدم مباشرة
+    try {
+        $db = db();
+        $currentUser = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$_SESSION['user_id']]);
+        if ($currentUser) {
+            $isLoggedIn = true;
+        }
+    } catch (Throwable $dbError) {
+        error_log('Background tasks: Direct user fetch error: ' . $dbError->getMessage());
+        // في حالة timeout في قاعدة البيانات، نعتبر أن الجلسة صحيحة لكن لا يمكننا تنفيذ المهام
+        // نرجع 503 Service Unavailable بدلاً من 401 لتجنب إظهار رسالة تسجيل دخول
+        http_response_code(503);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Retry-After: 30');
+        echo json_encode([
+            'success' => false, 
+            'message' => 'Service temporarily unavailable',
+            'retry_after' => 30
+        ]);
+        exit;
+    }
 }
 
 if (!$isLoggedIn) {
@@ -97,18 +130,30 @@ if (!$isLoggedIn) {
     exit;
 }
 
-try {
-    $currentUser = getCurrentUser();
-} catch (Throwable $e) {
-    // في حالة خطأ في قاعدة البيانات، لا نحذف الجلسة
-    error_log('Background tasks: getCurrentUser() error (non-critical): ' . $e->getMessage());
-    // إذا كانت الجلسة موجودة، نحاول جلب المستخدم مباشرة
-    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        try {
-            $db = db();
-            $currentUser = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
-        } catch (Throwable $dbError) {
-            error_log('Background tasks: Direct user fetch error: ' . $dbError->getMessage());
+// محاولة جلب معلومات المستخدم (إذا لم يتم جلبها مسبقاً)
+if (!$currentUser) {
+    try {
+        $currentUser = getCurrentUser();
+    } catch (Throwable $e) {
+        // في حالة خطأ في getCurrentUser، حاول جلب المستخدم مباشرة
+        error_log('Background tasks: getCurrentUser() error (non-critical): ' . $e->getMessage());
+        if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+            try {
+                $db = db();
+                $currentUser = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$_SESSION['user_id']]);
+            } catch (Throwable $dbError) {
+                error_log('Background tasks: Direct user fetch error (fallback): ' . $dbError->getMessage());
+                // في حالة timeout في قاعدة البيانات، نعتبر أن الجلسة صحيحة لكن لا يمكننا تنفيذ المهام
+                http_response_code(503);
+                header('Content-Type: application/json; charset=utf-8');
+                header('Retry-After: 30');
+                echo json_encode([
+                    'success' => false, 
+                    'message' => 'Service temporarily unavailable',
+                    'retry_after' => 30
+                ]);
+                exit;
+            }
         }
     }
 }

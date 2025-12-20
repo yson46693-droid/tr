@@ -85,6 +85,9 @@ if ($json && isset($json['icons'])) {
 
 // تحديث shortcuts icons أيضاً
 if (isset($json['shortcuts'])) {
+    // الحصول على scope النهائي (سيتم تحديثه لاحقاً إذا لم يكن محدداً)
+    $finalScope = isset($json['scope']) ? $json['scope'] : ($basePath ? $basePath . '/' : '/');
+    
     foreach ($json['shortcuts'] as &$shortcut) {
         if (isset($shortcut['icons'])) {
             foreach ($shortcut['icons'] as &$icon) {
@@ -101,14 +104,32 @@ if (isset($json['shortcuts'])) {
             }
             unset($icon);
         }
+        
+        // معالجة url في shortcuts - يجب أن تكون ضمن scope
         if (isset($shortcut['url'])) {
+            $shortcutUrl = $shortcut['url'];
+            
             // إذا كان المسار نسبي (لا يبدأ بـ /)، أضف basePath
-            if (strpos($shortcut['url'], '/') !== 0) {
-                $shortcut['url'] = $basePath . '/' . $shortcut['url'];
+            if (strpos($shortcutUrl, '/') !== 0 && strpos($shortcutUrl, 'http') !== 0) {
+                $shortcutUrl = $basePath . '/' . $shortcutUrl;
             }
             // إذا كان المسار مطلق (يبدأ بـ /) ولم يكن يحتوي على basePath، أضفه
-            elseif (strpos($shortcut['url'], $basePath) !== 0) {
-                $shortcut['url'] = $basePath . $shortcut['url'];
+            elseif (strpos($shortcutUrl, '/') === 0 && strpos($shortcutUrl, $basePath) !== 0 && $basePath) {
+                $shortcutUrl = $basePath . $shortcutUrl;
+            }
+            
+            // التأكد من أن URL ضمن scope (يبدأ بنفس scope)
+            // إزالة أي query parameters للتحقق
+            $urlPath = parse_url($shortcutUrl, PHP_URL_PATH) ?? $shortcutUrl;
+            $scopePath = rtrim($finalScope, '/');
+            
+            // التحقق من أن URL ضمن scope
+            if ($scopePath && strpos($urlPath, $scopePath) === 0) {
+                $shortcut['url'] = $shortcutUrl;
+            } else {
+                // إذا كان خارج scope، احذف url (سيستخدم start_url بدلاً منه)
+                // هذا يمنع تحذير Manifest "property 'url' ignored"
+                unset($shortcut['url']);
             }
         }
     }
