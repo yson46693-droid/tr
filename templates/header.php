@@ -1096,7 +1096,7 @@ if (ob_get_level() > 0) {
             let registration;
             let updateCheckInterval;
             
-            window.addEventListener('load', function() {
+            window.addEventListener('load', async function() {
                 // حساب مسار Service Worker - استخدام مسار مطلق بسيط
                 const currentPath = window.location.pathname;
                 const pathParts = currentPath.split('/').filter(p => p && p !== 'dashboard' && !p.endsWith('.php'));
@@ -1110,6 +1110,48 @@ if (ob_get_level() > 0) {
                 
                 const scope = pathParts.length > 0 ? '/' + pathParts[0] + '/' : '/';
                 
+                // CRITICAL FIX: إجبار إلغاء تسجيل service worker ثم إعادة تسجيله
+                // هذا يضمن استخدام النسخة الجديدة دائماً وعدم استخدام النسخة القديمة
+                try {
+                    // الحصول على جميع service workers المسجلة
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    
+                    // إلغاء تسجيل جميع service workers الموجودة
+                    const unregisterPromises = [];
+                    for (let reg of registrations) {
+                        const regScope = reg.scope;
+                        const currentOrigin = window.location.origin;
+                        
+                        // إلغاء تسجيل service workers في نفس النطاق
+                        if (regScope.startsWith(currentOrigin)) {
+                            console.log('Unregistering old service worker:', regScope);
+                            unregisterPromises.push(
+                                reg.unregister().then(success => {
+                                    if (success) {
+                                        console.log('Service worker unregistered successfully:', regScope);
+                                    } else {
+                                        console.log('Failed to unregister service worker:', regScope);
+                                    }
+                                }).catch(err => {
+                                    console.log('Error unregistering service worker:', regScope, err);
+                                })
+                            );
+                        }
+                    }
+                    
+                    // انتظار إكمال جميع عمليات إلغاء التسجيل
+                    if (unregisterPromises.length > 0) {
+                        await Promise.allSettled(unregisterPromises);
+                        // الانتظار قليلاً للتأكد من إكمال إلغاء التسجيل
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                    }
+                    
+                    console.log('Old service workers unregistered, registering new one...');
+                } catch (error) {
+                    console.log('Error unregistering service workers:', error);
+                }
+                
+                // إعادة تسجيل service worker الجديد
                 navigator.serviceWorker.register(swPath, { scope: scope })
                     .then(function(reg) {
                         registration = reg;

@@ -44,6 +44,26 @@ function isRedirectResponse(response) {
   return false;
 }
 
+// Helper function to check if redirect is to login page
+function isLoginRedirect(response) {
+  if (!isRedirectResponse(response)) return false;
+  try {
+    const location = response.headers.get('Location');
+    if (!location) return false;
+    // إنشاء URL كامل من location header
+    const locationUrl = new URL(location, self.location.origin);
+    const pathname = locationUrl.pathname.toLowerCase();
+    // التحقق من أن redirect يشير إلى صفحة تسجيل الدخول
+    return pathname.includes('index.php') || 
+           pathname.includes('login') ||
+           pathname.endsWith('/') && pathname.split('/').filter(p => p).length <= 1;
+  } catch (e) {
+    // في حالة الخطأ، التحقق البسيط من location header
+    const location = response.headers.get('Location') || '';
+    return location.includes('index.php') || location.includes('login');
+  }
+}
+
 // Helper to clean redirect responses from cache
 async function cleanRedirectsFromCache(cacheName) {
   try {
@@ -358,8 +378,13 @@ self.addEventListener('fetch', event => {
             cache: 'reload'
           });
           
-          // CRITICAL FIX: إذا كانت redirect، التحقق من نوع الطلب
+          // CRITICAL FIX: التحقق من redirect إلى login
           if (isRedirectResponse(response)) {
+            // إذا كان redirect إلى login، لا نعيده (للملفات الثابتة لا يجب أن يكون هناك redirect إلى login)
+            if (isLoginRedirect(response)) {
+              // للملفات الثابتة، إذا كان redirect إلى login، نعيد الطلب بدون intercept
+              return fetch(event.request, { redirect: 'follow', cache: 'reload' });
+            }
             // للملفات الثابتة، إرجاع redirect مباشرة (عادة ما تكون 301/302 للـ CDN)
             // Safari يتعامل معها بشكل جيد للطلبات غير التنقلية
             return response;
@@ -390,7 +415,20 @@ self.addEventListener('fetch', event => {
             credentials: 'same-origin'
           });
           
-          // CRITICAL FIX: إذا كانت redirect، إرجاعها مباشرة (API requests عادة لا تكون navigation)
+          // CRITICAL FIX: التحقق من 401 Unauthorized (انتهاء الجلسة)
+          if (response.status === 401 || response.status === 403) {
+            // إرجاع response مباشرة للسماح لـ JavaScript بالتعامل معه
+            // لا نقوم بأي intercept أو cache
+            return response;
+          }
+          
+          // CRITICAL FIX: التحقق من redirect إلى login
+          if (isRedirectResponse(response) && isLoginRedirect(response)) {
+            // إذا كان redirect إلى login، نرجعه مباشرة للسماح لـ JavaScript بالتعامل معه
+            return response;
+          }
+          
+          // CRITICAL FIX: إذا كانت redirect عادية (ليست إلى login)، إرجاعها مباشرة
           if (isRedirectResponse(response)) {
             return response;
           }
@@ -431,9 +469,14 @@ self.addEventListener('fetch', event => {
           redirect: 'follow'
         });
         
-        // CRITICAL FIX: إذا كانت redirect، إرجاعها مباشرة بدون حفظ في الكاش
-        // للطلبات غير التنقلية، Safari يتعامل مع redirects بشكل جيد
+        // CRITICAL FIX: التحقق من redirect إلى login
         if (isRedirectResponse(response)) {
+          // إذا كان redirect إلى login، نرجعه مباشرة للسماح لـ JavaScript بالتعامل معه
+          if (isLoginRedirect(response)) {
+            // لا نحفظ redirects إلى login في الكاش
+            return response;
+          }
+          // للطلبات غير التنقلية، Safari يتعامل مع redirects بشكل جيد
           return response;
         }
         
