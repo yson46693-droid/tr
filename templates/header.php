@@ -3004,15 +3004,15 @@ if (ob_get_level() > 0) {
             </div>
             
             <div class="topbar-right">
-                <!-- Settings -->
-                <span class="topbar-action disabled-action" 
-                      data-bs-toggle="tooltip" 
-                      title="الصفحة تحت التطوير"
-                      aria-label="الصفحة تحت التطوير"
-                      style="cursor: not-allowed; opacity: 0.5; pointer-events: none !important;">
-                    <i class="bi bi-gear" aria-hidden="true"></i>
-                    <span class="visually-hidden"><?php echo isset($lang['settings']) ? $lang['settings'] : 'الإعدادات'; ?></span>
-                </span>
+                <!-- Logout -->
+                <a href="<?php echo getRelativeUrl('logout.php'); ?>" 
+                   class="topbar-action" 
+                   data-bs-toggle="tooltip" 
+                   title="<?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?>"
+                   aria-label="<?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?>">
+                    <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                    <span class="visually-hidden"><?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?></span>
+                </a>
                 
                 <!-- Notifications -->
                 <?php if (isLoggedIn()): ?>
@@ -3079,7 +3079,7 @@ if (ob_get_level() > 0) {
                     </div>
                 </div>
                 
-                <!-- User Avatar -->
+                <!-- User Avatar (Desktop Only) -->
                 <?php 
                 // التأكد من أن $currentUser موجود
                 if (!isset($currentUser) || $currentUser === null) {
@@ -3088,7 +3088,7 @@ if (ob_get_level() > 0) {
                 if (isLoggedIn() && $currentUser): 
                     $userFullName = htmlspecialchars($currentUser['full_name'] ?? $currentUser['username'] ?? '');
                 ?>
-                <div class="topbar-dropdown">
+                <div class="topbar-dropdown desktop-user-menu">
                     <div class="topbar-user dropdown-toggle disabled-action" 
                          id="userDropdown" 
                          role="button"
@@ -3125,6 +3125,16 @@ if (ob_get_level() > 0) {
                         <li><a class="dropdown-item" href="<?php echo getRelativeUrl('logout.php'); ?>"><i class="bi bi-box-arrow-right me-2"></i><?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?></a></li>
                     </ul>
                 </div>
+                
+                <!-- Mobile Logout Button -->
+                <a href="<?php echo getRelativeUrl('logout.php'); ?>" 
+                   class="topbar-action mobile-logout-btn" 
+                   data-bs-toggle="tooltip" 
+                   title="<?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?>"
+                   aria-label="<?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?>">
+                    <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                    <span class="visually-hidden"><?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?></span>
+                </a>
                 <?php endif; ?>
             </div>
         </div>

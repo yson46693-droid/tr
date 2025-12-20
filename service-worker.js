@@ -209,9 +209,9 @@ self.addEventListener('fetch', event => {
           const generalCached = await generalCache.match(event.request);
           if (generalCached && !isRedirectResponse(generalCached)) {
             return generalCached;
-        } else if (generalCached && isRedirectResponse(generalCached)) {
-          await generalCache.delete(event.request);
-        }
+          } else if (generalCached && isRedirectResponse(generalCached)) {
+            await generalCache.delete(event.request);
+          }
         
         // التحقق من الشبكة - استخدام redirect: 'manual' للكشف عن redirects
         try {

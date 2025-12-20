@@ -475,6 +475,12 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
                 <div>يرجى التأكد من مطابقة المنتجات عند الاستلام.</div>
                 <div>لأي استفسارات يرجى التواصل على: <?php echo htmlspecialchars($companyPhone); ?></div>
             </div>
+            <?php if (!empty($notes)): ?>
+                <div class="invoice-notes">
+                    <div class="notes-label">ملاحظات الفاتورة:</div>
+                    <div class="notes-text"><?php echo nl2br(htmlspecialchars($notes)); ?></div>
+                </div>
+            <?php endif; ?>
         </footer>
     </div>
 </div>
@@ -816,6 +822,31 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     font-size: 12px;
     color: #64748b;
     line-height: 1.6;
+}
+
+.invoice-footer .invoice-notes {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px dashed rgba(148, 163, 184, 0.3);
+    text-align: right;
+}
+
+.invoice-footer .invoice-notes .notes-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f4c81;
+    margin-bottom: 8px;
+}
+
+.invoice-footer .invoice-notes .notes-text {
+    font-size: 12px;
+    color: #475569;
+    line-height: 1.8;
+    background: rgba(15, 76, 129, 0.05);
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(15, 76, 129, 0.1);
+    text-align: right;
 }
 
 @media print {
