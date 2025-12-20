@@ -485,6 +485,7 @@ function showAlert(type, message) {
 // متغيرات لتخزين موعد العمل و interval للتحديث
 let workTimeData = null;
 let timeSummaryInterval = null;
+let visibilityHandlerAdded = false;
 
 // عرض ملخص الوقت
 async function updateTimeSummary() {
@@ -658,11 +659,33 @@ document.addEventListener('DOMContentLoaded', function() {
         workTimeData = null; // إعادة تعيين
         if (currentAction === 'check_in') {
             updateTimeSummary();
-            // تحديث الوقت كل ثانية
+            // تحديث الوقت كل ثانية - إيقاف عند إخفاء الصفحة لتقليل الضغط
             if (timeSummaryInterval) {
                 clearInterval(timeSummaryInterval);
             }
-            timeSummaryInterval = setInterval(updateTimeSummary, 1000);
+            
+            // إيقاف عند إخفاء الصفحة وإعادة التشغيل عند الظهور
+            if (!visibilityHandlerAdded) {
+                document.addEventListener('visibilitychange', function handleVisibility() {
+                    if (document.hidden) {
+                        // إيقاف interval عند إخفاء الصفحة
+                        if (timeSummaryInterval) {
+                            clearInterval(timeSummaryInterval);
+                            timeSummaryInterval = null;
+                        }
+                    } else if (currentAction === 'check_in' && !timeSummaryInterval) {
+                        // إعادة التشغيل عند الظهور
+                        updateTimeSummary();
+                        timeSummaryInterval = setInterval(updateTimeSummary, 1000);
+                    }
+                });
+                visibilityHandlerAdded = true;
+            }
+            
+            // بدء interval فقط إذا كانت الصفحة مرئية
+            if (!document.hidden && !timeSummaryInterval) {
+                timeSummaryInterval = setInterval(updateTimeSummary, 1000);
+            }
         } else {
             const timeSummaryContainer = document.getElementById('timeSummaryContainer');
             if (timeSummaryContainer) {
@@ -680,10 +703,10 @@ document.addEventListener('DOMContentLoaded', function() {
             initCamera();
         }, 100);
         
-        // مراقبة مستمرة لإزالة backdrop
+        // مراقبة مستمرة لإزالة backdrop (زيادة الفترة من 50ms إلى 1000ms لتقليل الضغط)
         const backdropInterval = setInterval(() => {
             removeBackdrop();
-        }, 50);
+        }, 1000);
         
         // حفظ interval ID لإيقافه لاحقاً
         cameraModal.dataset.backdropInterval = backdropInterval;

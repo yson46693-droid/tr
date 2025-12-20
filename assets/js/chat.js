@@ -1,7 +1,7 @@
 (function () {
   const API_BASE = window.CHAT_API_BASE || '/api/chat';
   const PRESENCE_INTERVAL = 30000;
-  const POLLING_INTERVAL = 12000; // زيادة من 2.5 ثانية إلى 12 ثانية لتقليل الضغط على السيرفر
+  const POLLING_INTERVAL = 30000; // زيادة من 12 ثانية إلى 30 ثانية لتقليل الضغط على السيرفر
 
   const selectors = {
     app: '[data-chat-app]',
@@ -1065,6 +1065,20 @@
       state.pendingFetchTimeout = null;
     }
     stopPolling();
+    stopPresenceUpdates();
+  });
+
+  // إيقاف polling و presence عند إخفاء الصفحة لتقليل الضغط
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+      stopPolling();
+      stopPresenceUpdates();
+    } else {
+      if (state.initialized) {
+        startPolling();
+        startPresenceUpdates();
+      }
+    }
   });
 })();
 

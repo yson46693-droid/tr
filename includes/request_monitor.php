@@ -65,6 +65,9 @@ function ensureRequestUsageTables() {
  * تسجيل الطلب الحالي في جدول الاستخدام
  */
 function logRequestUsage($pathOverride = null) {
+    // تعطيل كامل لتقليل الضغط على السيرفر
+    return;
+    
     if (defined('REQUEST_USAGE_MONITOR_ENABLED') && REQUEST_USAGE_MONITOR_ENABLED === false) {
         return;
     }

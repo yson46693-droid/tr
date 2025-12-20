@@ -26,7 +26,8 @@ try {
     require_once __DIR__ . '/../includes/db.php';
     require_once __DIR__ . '/../includes/auth.php';
 } catch (Exception $e) {
-    error_log("Check Session API initialization error: " . $e->getMessage());
+    // تعطيل error_log لتقليل الضغط على السيرفر
+    // error_log("Check Session API initialization error: " . $e->getMessage());
     echo json_encode(['success' => false, 'error' => 'Initialization error']);
     exit;
 }
@@ -49,7 +50,8 @@ try {
         }
     }
 } catch (Exception $e) {
-    error_log("Check Session API - Error checking login: " . $e->getMessage());
+    // تعطيل error_log لتقليل الضغط على السيرفر
+    // error_log("Check Session API - Error checking login: " . $e->getMessage());
 }
 
 if ($userId) {

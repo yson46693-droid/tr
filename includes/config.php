@@ -194,6 +194,16 @@ define('DATETIME_FORMAT', 'd/m/Y g:i A');
 
 // تم إزالة نظام الجلسات - لا حاجة لإعدادات الجلسة
 
+// تعطيل تسجيل الأخطاء المفرط لتقليل الضغط على السيرفر
+if (!defined('ERROR_LOGGING_ENABLED')) {
+    define('ERROR_LOGGING_ENABLED', false); // تعطيل تسجيل الأخطاء الروتينية
+}
+
+// تعطيل request_monitor لتقليل الضغط على السيرفر
+if (!defined('REQUEST_USAGE_MONITOR_ENABLED')) {
+    define('REQUEST_USAGE_MONITOR_ENABLED', false);
+}
+
 // إعدادات timeout لمنع توقف الخادم
 // زيادة timeout للطلبات الطويلة (مثل keep-alive)
 if (!ini_get('max_execution_time') || ini_get('max_execution_time') < 60) {
@@ -213,7 +223,7 @@ if (!ini_get('default_socket_timeout') || ini_get('default_socket_timeout') > 10
 // إعدادات الأمان
 define('PASSWORD_MIN_LENGTH', 6);
 define('CSRF_TOKEN_NAME', 'csrf_token');
-define('REQUEST_USAGE_MONITOR_ENABLED', true);
+define('REQUEST_USAGE_MONITOR_ENABLED', false); // معطل لتقليل الضغط على السيرفر
 define('REQUEST_USAGE_THRESHOLD_PER_USER', 4000); // الحد اليومي لكل مستخدم قبل إنشاء تنبيه
 define('REQUEST_USAGE_THRESHOLD_PER_IP', 30000);    // الحد اليومي لكل عنوان IP قبل إنشاء تنبيه
 define('REQUEST_USAGE_ALERT_WINDOW_MINUTES', 1440); // فترة المراقبة بالدقائق (افتراضياً يوم كامل)

@@ -202,7 +202,7 @@ if (!defined('ACCESS_ALLOWED')) {
         window.__sessionKeepAliveActive = true;
         
         let lastActivity = Date.now();
-        const SESSION_REFRESH_INTERVAL = 8 * 60 * 1000; // 8 دقائق (زيادة من 5 دقائق لتقليل الضغط)
+        const SESSION_REFRESH_INTERVAL = 15 * 60 * 1000; // 15 دقيقة (زيادة لتقليل الضغط على السيرفر)
         const ACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 دقائق (زيادة من 10 دقائق)
         
         // تتبع النشاط

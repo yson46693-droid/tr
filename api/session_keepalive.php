@@ -52,7 +52,8 @@ try {
     ]);
     
 } catch (Exception $e) {
-    error_log("Session keep-alive error: " . $e->getMessage());
+    // تعطيل error_log لتقليل الضغط على السيرفر
+    // error_log("Session keep-alive error: " . $e->getMessage());
     http_response_code(500);
     echo json_encode([
         'success' => false,
