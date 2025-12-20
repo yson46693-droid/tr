@@ -2855,6 +2855,11 @@ if (ob_get_level() > 0) {
         }
         
         // معالج أخطاء JavaScript العامة
+        let globalErrorCount = 0;
+        let lastGlobalErrorTime = 0;
+        const MAX_GLOBAL_ERRORS = 5; // عدد الأخطاء المسموح قبل إعادة التوجيه
+        const GLOBAL_ERROR_WINDOW = 10000; // نافذة زمنية بالمللي ثانية (10 ثوان)
+        
         window.addEventListener('error', function(event) {
             // تجاهل الأخطاء من مصادر خارجية (CDN، إلخ)
             if (event.filename && (
@@ -2873,14 +2878,47 @@ if (ob_get_level() > 0) {
                 errorMessage.includes('connection') ||
                 errorMessage.includes('network')) {
                 
-                // إذا كان الخطأ متعلقاً بالاتصال، أعد التوجيه إلى تسجيل الدخول
-                redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
-                event.preventDefault();
-                return true;
+                // التحقق من أننا لسنا في صفحة تسجيل الدخول
+                const currentPath = window.location.pathname || '';
+                const isOnLoginPage = currentPath.includes('index.php');
+                
+                // التحقق من وجود remember_token cookie (المستخدم مسجل دخول)
+                const hasRememberToken = document.cookie.includes('remember_token=');
+                
+                if (!isOnLoginPage) {
+                    const now = Date.now();
+                    
+                    // إعادة تعيين العداد إذا مرت فترة زمنية كافية
+                    if (now - lastGlobalErrorTime > GLOBAL_ERROR_WINDOW) {
+                        globalErrorCount = 0;
+                    }
+                    
+                    globalErrorCount++;
+                    lastGlobalErrorTime = now;
+                    
+                    // فقط إذا تجاوز عدد الأخطاء الحد المسموح
+                    if (globalErrorCount >= MAX_GLOBAL_ERRORS) {
+                        // التحقق مرة أخرى من وجود remember_token قبل إعادة التوجيه
+                        if (!hasRememberToken) {
+                            redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
+                            event.preventDefault();
+                            return true;
+                        } else {
+                            // إذا كان المستخدم مسجل دخول، لا نعيد التوجيه - فقط نعيد تعيين العداد
+                            console.warn('Multiple global errors detected but user is logged in, not redirecting');
+                            globalErrorCount = 0;
+                        }
+                    }
+                }
             }
         }, true);
         
         // معالج رفض Promise (unhandledrejection) - للأخطاء غير المعالجة في Promises
+        let promiseErrorCount = 0;
+        let lastPromiseErrorTime = 0;
+        const MAX_PROMISE_ERRORS = 5; // عدد الأخطاء المسموح قبل إعادة التوجيه
+        const PROMISE_ERROR_WINDOW = 10000; // نافذة زمنية بالمللي ثانية (10 ثوان)
+        
         window.addEventListener('unhandledrejection', function(event) {
             const reason = event.reason;
             
@@ -2893,15 +2931,49 @@ if (ob_get_level() > 0) {
                     errorMessage.includes('connection') ||
                     errorMessage.includes('network')) {
                     
-                    redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
-                    event.preventDefault();
-                    return;
+                    // التحقق من أننا لسنا في صفحة تسجيل الدخول
+                    const currentPath = window.location.pathname || '';
+                    const isOnLoginPage = currentPath.includes('index.php');
+                    
+                    // التحقق من وجود remember_token cookie (المستخدم مسجل دخول)
+                    const hasRememberToken = document.cookie.includes('remember_token=');
+                    
+                    if (!isOnLoginPage) {
+                        const now = Date.now();
+                        
+                        // إعادة تعيين العداد إذا مرت فترة زمنية كافية
+                        if (now - lastPromiseErrorTime > PROMISE_ERROR_WINDOW) {
+                            promiseErrorCount = 0;
+                        }
+                        
+                        promiseErrorCount++;
+                        lastPromiseErrorTime = now;
+                        
+                        // فقط إذا تجاوز عدد الأخطاء الحد المسموح
+                        if (promiseErrorCount >= MAX_PROMISE_ERRORS) {
+                            // التحقق مرة أخرى من وجود remember_token قبل إعادة التوجيه
+                            if (!hasRememberToken) {
+                                redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
+                                event.preventDefault();
+                                return;
+                            } else {
+                                // إذا كان المستخدم مسجل دخول، لا نعيد التوجيه - فقط نعيد تعيين العداد
+                                console.warn('Multiple promise errors detected but user is logged in, not redirecting');
+                                promiseErrorCount = 0;
+                            }
+                        }
+                    }
                 }
             }
         });
         
         // اعتراض طلبات fetch للتحقق من الأخطاء
         const originalFetch = window.fetch;
+        let fetchErrorCount = 0;
+        let lastFetchErrorTime = 0;
+        const MAX_FETCH_ERRORS = 3; // عدد الأخطاء المسموح قبل إعادة التوجيه
+        const FETCH_ERROR_WINDOW = 5000; // نافذة زمنية بالمللي ثانية (5 ثوان)
+        
         window.fetch = function(...args) {
             return originalFetch.apply(this, args).catch(function(error) {
                 const errorMessage = (error.message || error.toString() || '').toLowerCase();
@@ -2915,10 +2987,57 @@ if (ob_get_level() > 0) {
                     error.name === 'TypeError' ||
                     error.name === 'NetworkError') {
                     
-                    // التحقق من أن الطلب ليس لصفحة تسجيل الدخول نفسها
                     const url = args[0];
-                    if (url && typeof url === 'string' && !url.includes('index.php')) {
-                        redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
+                    const urlString = url && typeof url === 'string' ? url : (url && url.url ? url.url : '');
+                    
+                    // قائمة بيضاء للـ URLs التي لا يجب إعادة التوجيه عند فشلها
+                    const whitelistedUrls = [
+                        'index.php',
+                        'login',
+                        'notifications',
+                        'check_session',
+                        'session_keepalive',
+                        'api/notifications',
+                        'api/check_session',
+                        'api/session_keepalive'
+                    ];
+                    
+                    // التحقق من أن URL ليس في القائمة البيضاء
+                    const isWhitelisted = whitelistedUrls.some(whitelisted => urlString.includes(whitelisted));
+                    
+                    // التحقق من أن الطلب ليس لصفحة تسجيل الدخول نفسها
+                    const isLoginPage = urlString.includes('index.php');
+                    
+                    // التحقق من أننا لسنا في صفحة تسجيل الدخول
+                    const currentPath = window.location.pathname || '';
+                    const isOnLoginPage = currentPath.includes('index.php');
+                    
+                    // التحقق من وجود remember_token cookie (المستخدم مسجل دخول)
+                    const hasRememberToken = document.cookie.includes('remember_token=');
+                    
+                    // فقط إذا لم يكن في القائمة البيضاء وليس في صفحة تسجيل الدخول
+                    if (!isWhitelisted && !isLoginPage && !isOnLoginPage) {
+                        const now = Date.now();
+                        
+                        // إعادة تعيين العداد إذا مرت فترة زمنية كافية
+                        if (now - lastFetchErrorTime > FETCH_ERROR_WINDOW) {
+                            fetchErrorCount = 0;
+                        }
+                        
+                        fetchErrorCount++;
+                        lastFetchErrorTime = now;
+                        
+                        // فقط إذا تجاوز عدد الأخطاء الحد المسموح
+                        if (fetchErrorCount >= MAX_FETCH_ERRORS) {
+                            // التحقق مرة أخرى من وجود remember_token قبل إعادة التوجيه
+                            if (!hasRememberToken) {
+                                redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
+                            } else {
+                                // إذا كان المستخدم مسجل دخول، لا نعيد التوجيه - فقط نعيد تعيين العداد
+                                console.warn('Multiple fetch errors detected but user is logged in, not redirecting');
+                                fetchErrorCount = 0;
+                            }
+                        }
                     }
                 }
                 
