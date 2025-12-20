@@ -218,6 +218,21 @@ if (!ini_get('default_socket_timeout') || ini_get('default_socket_timeout') > 10
     @ini_set('default_socket_timeout', 5); // 5 ثواني للاتصال بقاعدة البيانات (مخفض)
 }
 
+// إعدادات SOAP WSDL Cache - منع خطأ open_basedir restriction
+// تعطيل WSDL caching أو تعيينه لمجلد مسموح به
+@ini_set('soap.wsdl_cache_enabled', '0'); // تعطيل WSDL caching
+@ini_set('soap.wsdl_cache_ttl', '0'); // تعطيل TTL للكاش
+// إذا كان يجب تفعيل الكاش، استخدم مجلد داخل المسارات المسموحة
+if (defined('PRIVATE_STORAGE_PATH') && is_dir(PRIVATE_STORAGE_PATH)) {
+    $wsdlCacheDir = PRIVATE_STORAGE_PATH . '/wsdlcache';
+    if (!is_dir($wsdlCacheDir)) {
+        @mkdir($wsdlCacheDir, 0755, true);
+    }
+    if (is_dir($wsdlCacheDir) && is_writable($wsdlCacheDir)) {
+        @ini_set('soap.wsdl_cache_dir', $wsdlCacheDir);
+    }
+}
+
 // تم إزالة نظام الجلسات بالكامل - لا حاجة لأي كود متعلق بالجلسات
 
 // إعدادات الأمان

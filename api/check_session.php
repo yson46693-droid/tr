@@ -10,6 +10,10 @@ define('NOTIFICATIONS_API_ACTIVE', true);
 error_reporting(0);
 ini_set('display_errors', 0);
 
+// إعدادات SOAP WSDL Cache - منع خطأ open_basedir restriction
+@ini_set('soap.wsdl_cache_enabled', '0'); // تعطيل WSDL caching
+@ini_set('soap.wsdl_cache_ttl', '0'); // تعطيل TTL للكاش
+
 // إعدادات timeout محسّنة (يجب أن تكون سريعة)
 @set_time_limit(10); // 10 ثواني فقط
 @ini_set('max_execution_time', 10);

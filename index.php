@@ -727,8 +727,8 @@ $lang = $translations;
         }
     </style>
     
-    <!-- منع الضغط بالزر الأيمن وفتح أدوات المطور -->
-    <script>
+    <!-- تم تعطيل منع الضغط بالزر الأيمن وفتح أدوات المطور -->
+    <!-- <script>
     (function() {
         'use strict';
         
@@ -882,7 +882,7 @@ $lang = $translations;
             return originalSetInterval(func, delay);
         };
     })();
-    </script>
+    </script> -->
 </head>
 <body class="login-page">
     <!-- PWA Splash Screen -->

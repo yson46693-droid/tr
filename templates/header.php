@@ -1235,139 +1235,141 @@ if (ob_get_level() > 0) {
     (function() {
         'use strict';
         
-        // منع الضغط بالزر الأيمن
-        document.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-            return false;
-        }, true);
+        // تم تعطيل منع الضغط بالزر الأيمن للسماح بفتح أدوات المطور
+        // document.addEventListener('contextmenu', function(e) {
+        //     e.preventDefault();
+        //     return false;
+        // }, true);
         
-        // منع اختصارات لوحة المفاتيح
-        document.addEventListener('keydown', function(e) {
-            // F12 - فتح أدوات المطور
-            if (e.keyCode === 123) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-            
-            // Ctrl+Shift+I - فتح أدوات المطور
-            if (e.ctrlKey && e.shiftKey && e.keyCode === 73) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-            
-            // Ctrl+Shift+J - فتح Console
-            if (e.ctrlKey && e.shiftKey && e.keyCode === 74) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-            
-            // Ctrl+Shift+C - فتح Element Inspector
-            if (e.ctrlKey && e.shiftKey && e.keyCode === 67) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-            
-            // Ctrl+U - عرض مصدر الصفحة
-            if (e.ctrlKey && e.keyCode === 85) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-            
-            // Ctrl+S - حفظ الصفحة
-            if (e.ctrlKey && e.keyCode === 83) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-            
-            // Ctrl+P - طباعة
-            if (e.ctrlKey && e.keyCode === 80) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-            
-            // Ctrl+Shift+P - Command Palette (في بعض المتصفحات)
-            if (e.ctrlKey && e.shiftKey && e.keyCode === 80) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-            
-            // Ctrl+Shift+K - Network Monitor (في Firefox)
-            if (e.ctrlKey && e.shiftKey && e.keyCode === 75) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-            
-            // Ctrl+Shift+E - Network Panel (في Chrome)
-            if (e.ctrlKey && e.shiftKey && e.keyCode === 69) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-        }, true);
+        // تم تعطيل منع اختصارات لوحة المفاتيح للسماح بفتح أدوات المطور
+        // document.addEventListener('keydown', function(e) {
+        //     // F12 - فتح أدوات المطور
+        //     if (e.keyCode === 123) {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         return false;
+        //     }
+        //     
+        //     // Ctrl+Shift+I - فتح أدوات المطور
+        //     if (e.ctrlKey && e.shiftKey && e.keyCode === 73) {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         return false;
+        //     }
+        //     
+        //     // Ctrl+Shift+J - فتح Console
+        //     if (e.ctrlKey && e.shiftKey && e.keyCode === 74) {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         return false;
+        //     }
+        //     
+        //     // Ctrl+Shift+C - فتح Element Inspector
+        //     if (e.ctrlKey && e.shiftKey && e.keyCode === 67) {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         return false;
+        //     }
+        //     
+        //     // Ctrl+U - عرض مصدر الصفحة
+        //     if (e.ctrlKey && e.keyCode === 85) {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         return false;
+        //     }
+        //     
+        //     // Ctrl+S - حفظ الصفحة
+        //     if (e.ctrlKey && e.keyCode === 83) {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         return false;
+        //     }
+        //     
+        //     // Ctrl+P - طباعة
+        //     if (e.ctrlKey && e.keyCode === 80) {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         return false;
+        //     }
+        //     
+        //     // Ctrl+Shift+P - Command Palette (في بعض المتصفحات)
+        //     if (e.ctrlKey && e.shiftKey && e.keyCode === 80) {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         return false;
+        //     }
+        //     
+        //     // Ctrl+Shift+K - Network Monitor (في Firefox)
+        //     if (e.ctrlKey && e.shiftKey && e.keyCode === 75) {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         return false;
+        //     }
+        //     
+        //     // Ctrl+Shift+E - Network Panel (في Chrome)
+        //     if (e.ctrlKey && e.shiftKey && e.keyCode === 69) {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         return false;
+        //     }
+        // }, true);
         
-        // منع فتح أدوات المطور عبر DevTools API
-        (function() {
-            var devtools = {
-                open: false,
-                orientation: null
-            };
-            var threshold = 160;
-            
-            setInterval(function() {
-                if (window.outerHeight - window.innerHeight > threshold || 
-                    window.outerWidth - window.innerWidth > threshold) {
-                    if (!devtools.open) {
-                        devtools.open = true;
-                        // يمكن إضافة إجراء هنا مثل إعادة تحميل الصفحة
-                        // window.location.reload();
-                    }
-                } else {
-                    if (devtools.open) {
-                        devtools.open = false;
-                    }
-                }
-            }, 500);
-        })();
+        // تم تعطيل منع فتح أدوات المطور عبر DevTools API
+        // (function() {
+        //     var devtools = {
+        //         open: false,
+        //         orientation: null
+        //     };
+        //     var threshold = 160;
+        //     
+        //     setInterval(function() {
+        //         if (window.outerHeight - window.innerHeight > threshold || 
+        //             window.outerWidth - window.innerWidth > threshold) {
+        //             if (!devtools.open) {
+        //                 devtools.open = true;
+        //                 // يمكن إضافة إجراء هنا مثل إعادة تحميل الصفحة
+        //                 // window.location.reload();
+        //             }
+        //         } else {
+        //             if (devtools.open) {
+        //                 devtools.open = false;
+        //             }
+        //         }
+        //     }, 500);
+        // })();
         
-        // منع فحص العناصر (Inspect Element)
-        document.addEventListener('keydown', function(e) {
-            // Ctrl+Shift+C
-            if (e.ctrlKey && e.shiftKey && (e.keyCode === 67 || e.keyCode === 73)) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-        }, true);
+        // تم تعطيل منع فحص العناصر (Inspect Element)
+        // document.addEventListener('keydown', function(e) {
+        //     // Ctrl+Shift+C
+        //     if (e.ctrlKey && e.shiftKey && (e.keyCode === 67 || e.keyCode === 73)) {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         return false;
+        //     }
+        // }, true);
         
-        // منع فتح أدوات المطور عبر Console API
-        (function() {
-            var noop = function() {};
-            var methods = ['log', 'debug', 'info', 'warn', 'error', 'assert', 'dir', 'dirxml', 
-                         'group', 'groupEnd', 'time', 'timeEnd', 'count', 'trace', 'profile', 'profileEnd'];
-            var length = methods.length;
-            var console = (window.console = window.console || {});
-            
-            while (length--) {
-                console[methods[length]] = noop;
-            }
-        })();
+        // تم تعطيل منع فتح أدوات المطور عبر Console API
+        // (function() {
+        //     var noop = function() {};
+        //     var methods = ['log', 'debug', 'info', 'warn', 'error', 'assert', 'dir', 'dirxml', 
+        //                  'group', 'groupEnd', 'time', 'timeEnd', 'count', 'trace', 'profile', 'profileEnd'];
+        //     var length = methods.length;
+        //     var console = (window.console = window.console || {});
+        //     
+        //     while (length--) {
+        //         console[methods[length]] = noop;
+        //     }
+        // })();
         
-        // منع فتح أدوات المطور عبر Debugger
-        setInterval(function() {
-            (function() {
-                return false;
-            })('devtools');
-        }, 4000);
+        // تم تعطيل منع فتح أدوات المطور عبر Debugger
+        // setInterval(function() {
+        //     (function() {
+        //         return false;
+        //     })('devtools');
+        // }, 4000);
         
+        // تم تعطيل كل كود منع أدوات المطور للسماح بفتحها
+        /*
         // منع فتح أدوات المطور عبر Console.clear
         if (window.console && window.console.clear) {
             window.console.clear = function() {};
@@ -1732,7 +1734,10 @@ if (ob_get_level() > 0) {
         } catch (e) {
             // تجاهل الأخطاء
         }
+        */
         
+        // تم تعطيل باقي كود منع أدوات المطور
+        /*
         // منع فتح أدوات المطور عبر Object.defineProperty للـ onmozvisibilitychange
         try {
             Object.defineProperty(document, 'onmozvisibilitychange', {
@@ -1826,7 +1831,10 @@ if (ob_get_level() > 0) {
                 return null;
             };
         }
+        */
         
+        // تم تعطيل باقي كود منع أدوات المطور
+        /*
         // منع فتح أدوات المطور عبر Object.defineProperty للـ createEventNS
         var originalCreateEventNS = document.createEventNS;
         if (originalCreateEventNS) {
@@ -3327,6 +3335,7 @@ if (ob_get_level() > 0) {
                     }, true);
                 });
             });
+        */
         })();
         </script>
         
