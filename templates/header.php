@@ -85,16 +85,33 @@ if (!$isProfilePage) {
 // فحص أمني: إذا كان المستخدم مسجل دخول لكن غير موجود في قاعدة البيانات
 // (getCurrentUser() يقوم بإلغاء تسجيل الدخول تلقائياً، لكن نتأكد من عدم وجود جلسة نشطة)
 // استثناء: لا نعيد التوجيه في profile.php لمنع حذف الجلسة
+// إضافة retry logic لمنع إنهاء الجلسة بعد تسجيل الدخول مباشرة
 if (!$isProfilePage && isLoggedIn() && (!$currentUser || !is_array($currentUser) || empty($currentUser))) {
-    // المستخدم مسجل دخول لكن غير موجود أو محذوف - تم إلغاء تسجيل الدخول تلقائياً
-    // إعادة التوجيه لتسجيل الدخول
-    $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
-    if (!headers_sent()) {
-        header('Location: ' . $loginUrl);
-        exit;
-    } else {
-        echo '<script>window.location.href = "' . htmlspecialchars($loginUrl) . '";</script>';
-        exit;
+    // إعادة المحاولة مرة واحدة - قد يكون هناك تأخير في قاعدة البيانات بعد تسجيل الدخول
+    // انتظار قصير جداً (50ms) ثم إعادة المحاولة
+    usleep(50000);
+    $currentUser = getCurrentUser();
+    
+    // إذا استمر الفشل، حاول الحصول على المستخدم مباشرة من token
+    if (!$currentUser && isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
+        $userFromToken = getUserFromToken();
+        if ($userFromToken && isset($userFromToken['id']) && !empty($userFromToken['id'])) {
+            $currentUser = $userFromToken;
+        }
+    }
+    
+    // فقط إذا استمر الفشل بعد إعادة المحاولة، نعيد التوجيه
+    if (!$currentUser || !is_array($currentUser) || empty($currentUser)) {
+        // المستخدم مسجل دخول لكن غير موجود أو محذوف - تم إلغاء تسجيل الدخول تلقائياً
+        // إعادة التوجيه لتسجيل الدخول
+        $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+        if (!headers_sent()) {
+            header('Location: ' . $loginUrl);
+            exit;
+        } else {
+            echo '<script>window.location.href = "' . htmlspecialchars($loginUrl) . '";</script>';
+            exit;
+        }
     }
 }
 
