@@ -19,9 +19,9 @@ jobs:
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
-          server: 213.239.220.209
-          username: albaraka
-          password: ${{ secrets.FTP_PASSWORD }}
+          server: ftpupload.net
+          username: if0_40278066
+          password: Osama744
 
           protocol: ftp
           port: 21
