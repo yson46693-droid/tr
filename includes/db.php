@@ -63,9 +63,24 @@ class Database {
                 $optReadTimeout = defined('MYSQLI_OPT_READ_TIMEOUT') ? MYSQLI_OPT_READ_TIMEOUT : 11;
                 $optWriteTimeout = defined('MYSQLI_OPT_WRITE_TIMEOUT') ? MYSQLI_OPT_WRITE_TIMEOUT : 12;
                 
-                @$this->connection->options($optConnectTimeout, $connectTimeout);
-                @$this->connection->options($optReadTimeout, $readTimeout);
-                @$this->connection->options($optWriteTimeout, $writeTimeout);
+                // محاولة تعيين خيارات الاتصال مع معالجة الأخطاء
+                try {
+                    $this->connection->options($optConnectTimeout, $connectTimeout);
+                } catch (Exception $e) {
+                    error_log("Database connection timeout option error: " . $e->getMessage());
+                }
+                
+                try {
+                    $this->connection->options($optReadTimeout, $readTimeout);
+                } catch (Exception $e) {
+                    error_log("Database read timeout option error: " . $e->getMessage());
+                }
+                
+                try {
+                    $this->connection->options($optWriteTimeout, $writeTimeout);
+                } catch (Exception $e) {
+                    error_log("Database write timeout option error: " . $e->getMessage());
+                }
             }
             
             // تعيين ترميز UTF-8

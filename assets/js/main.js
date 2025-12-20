@@ -2,6 +2,51 @@
  * JavaScript الرئيسي
  */
 
+// ========== إعدادات التطوير/الإنتاج ==========
+// تعيين DEBUG = false في الإنتاج لإزالة console.log
+const DEBUG = window.location.hostname === 'localhost' || 
+              window.location.hostname === '127.0.0.1' || 
+              window.location.hostname.includes('localhost:');
+
+// دالة console.log آمنة (لا تطبع في الإنتاج)
+window.safeLog = function(...args) {
+    if (DEBUG) {
+        console.log(...args);
+    }
+};
+
+// دالة console.error آمنة (تطبع دائماً للأخطاء)
+window.safeError = function(...args) {
+    console.error(...args);
+};
+
+// دالة console.warn آمنة (تطبع في التطوير فقط)
+window.safeWarn = function(...args) {
+    if (DEBUG) {
+        console.warn(...args);
+    }
+};
+
+// ========== دوال مساعدة للأمان (XSS Protection) ==========
+// دالة لتنظيف النص من HTML tags
+function escapeHTML(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+// دالة لتنظيف attributes
+function escapeAttribute(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+}
+
 // ========== حل جذري لمنع أخطاء classList ==========
 // معالج أخطاء عام لالتقاط أخطاء classList بشكل آمن
 (function() {

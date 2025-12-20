@@ -2,6 +2,20 @@
  * نظام تسجيل الحضور والانصراف مع الكاميرا
  */
 
+// ========== إعدادات التطوير/الإنتاج ==========
+const DEBUG = window.location.hostname === 'localhost' || 
+              window.location.hostname === '127.0.0.1' || 
+              window.location.hostname.includes('localhost:');
+
+// دالة console.log آمنة (لا تطبع في الإنتاج)
+if (typeof window.safeLog === 'undefined') {
+    window.safeLog = function(...args) {
+        if (DEBUG) {
+            console.log(...args);
+        }
+    };
+}
+
 let currentStream = null;
 let capturedPhoto = null;
 let currentAction = null;
@@ -139,7 +153,7 @@ async function initCamera() {
         const captureBtn = document.getElementById('captureBtn');
         if (captureBtn) captureBtn.style.display = 'inline-block';
         
-        console.log('Camera initialized successfully');
+        safeLog('Camera initialized successfully');
         
     } catch (error) {
         console.error('Error accessing camera:', error);
@@ -322,7 +336,7 @@ async function submitAttendance(action) {
         const apiPath = getAttendanceApiPath();
         
         // تسجيل معلومات الصورة في console للتأكد
-        console.log('Submitting attendance:', {
+        safeLog('Submitting attendance:', {
             action: action,
             photoLength: capturedPhoto.length,
             photoPrefix: capturedPhoto.substring(0, 50),
@@ -342,7 +356,7 @@ async function submitAttendance(action) {
             delay_reason: delayReason
         };
         
-        console.log('Payload photo value:', payload.photo ? 'exists (length: ' + payload.photo.length + ')' : 'missing');
+        safeLog('Payload photo value:', payload.photo ? 'exists (length: ' + payload.photo.length + ')' : 'missing');
         
         const response = await fetch(apiPath, {
             method: 'POST',
@@ -365,7 +379,7 @@ async function submitAttendance(action) {
         
         const data = await response.json();
         
-        console.log('API Response:', data);
+        safeLog('API Response:', data);
         
         if (data.success) {
             // إغلاق الـ modal
@@ -467,12 +481,22 @@ function updateButtonsState(action) {
 
 // إظهار تنبيه
 function showAlert(type, message) {
+    // دالة مساعدة لتنظيف HTML (إذا لم تكن موجودة)
+    if (typeof escapeHTML === 'undefined') {
+        window.escapeHTML = function(text) {
+            if (text === null || text === undefined) return '';
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        };
+    }
+    
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
     alertDiv.style.zIndex = '9999';
     alertDiv.innerHTML = `
         <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}-fill me-2"></i>
-        ${message}
+        ${escapeHTML(message)}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
     document.body.appendChild(alertDiv);
@@ -555,12 +579,16 @@ async function updateTimeSummary() {
             
             if (diffMinutes > 0) {
                 // تأخير
-                timeStatusDisplay.innerHTML = '<span class="badge bg-warning">متأخر ' + diffMinutes + ' دقيقة</span>';
+                // تنظيف HTML لمنع XSS
+                const safeMinutes = escapeHTML ? escapeHTML(String(diffMinutes)) : String(diffMinutes);
+                timeStatusDisplay.innerHTML = '<span class="badge bg-warning">متأخر ' + safeMinutes + ' دقيقة</span>';
                 timeStatusDisplay.className = 'fw-bold text-warning';
             } else if (diffMinutes < 0) {
                 // مبكر
                 const earlyMinutes = Math.abs(diffMinutes);
-                timeStatusDisplay.innerHTML = '<span class="badge bg-info">مبكر ' + earlyMinutes + ' دقيقة</span>';
+                // تنظيف HTML لمنع XSS
+                const safeEarlyMinutes = escapeHTML ? escapeHTML(String(earlyMinutes)) : String(earlyMinutes);
+                timeStatusDisplay.innerHTML = '<span class="badge bg-info">مبكر ' + safeEarlyMinutes + ' دقيقة</span>';
                 timeStatusDisplay.className = 'fw-bold text-info';
             } else {
                 // في الوقت

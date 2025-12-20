@@ -433,13 +433,21 @@ define('PRIMARY_COLOR', '#1e3a5f');
 define('SECONDARY_COLOR', '#2c5282');
 define('ACCENT_COLOR', '#3498db');
 
-// تمكين عرض الأخطاء في وضع التطوير (يجب تعطيله في الإنتاج)
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-// TODO: تعطيل عرض الأخطاء عند الانتقال للإنتاج
-// error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
-// ini_set('display_errors', 0);
-// ini_set('log_errors', 1);
+// إعدادات عرض الأخطاء - تعتمد على البيئة
+$isProduction = !$isLocalhost; // الإنتاج = ليس localhost
+
+if ($isProduction) {
+    // في الإنتاج: تعطيل عرض الأخطاء وتسجيلها فقط
+    error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
+    ini_set('display_errors', 0);
+    ini_set('display_startup_errors', 0);
+    ini_set('log_errors', 1);
+} else {
+    // في التطوير: عرض جميع الأخطاء
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+}
 
 // إعدادات UTF-8
 mb_internal_encoding('UTF-8');

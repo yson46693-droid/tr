@@ -191,7 +191,7 @@ if (ob_get_level() > 0) {
     <?php
     // تحديد pageDescription إذا لم يكن محدداً
     if (!isset($pageDescription)) {
-        $pageDescription = 'نظام إدارة متكامل لشركة البركة - إدارة المخازن والمبيعات والموارد البشرية';
+        $pageDescription = 'نظام إدارة متكامل لشركة البركة - إدارة المخازن والمبيعات  ';
     }
     
     // تحديد Canonical URL
@@ -3155,16 +3155,6 @@ if (ob_get_level() > 0) {
             </div>
             
             <div class="topbar-right">
-                <!-- Logout -->
-                <a href="<?php echo getRelativeUrl('logout.php'); ?>" 
-                   class="topbar-action desktop-logout-btn" 
-                   data-bs-toggle="tooltip" 
-                   title="<?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?>"
-                   aria-label="<?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?>">
-                    <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
-                    <span class="visually-hidden"><?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?></span>
-                </a>
-                
                 <!-- Notifications -->
                 <?php if (isLoggedIn()): ?>
                 <div class="topbar-dropdown">

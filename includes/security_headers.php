@@ -30,19 +30,24 @@ class SecurityHeaders {
         // Referrer-Policy: التحكم في معلومات المرجع
         header('Referrer-Policy: strict-origin-when-cross-origin');
         
-        // Content Security Policy - مبسطة لتجنب مشاكل InfinityFree
-        // تم تعديلها لتشمل جميع الموارد المستخدمة في النظام
-        $csp = "default-src 'self' 'unsafe-inline' 'unsafe-eval' " .
+        // Content Security Policy - محسّنة للأمان
+        // ملاحظة: 'unsafe-inline' و 'unsafe-eval' مطلوبان لبعض المكتبات القديمة
+        // يمكن إزالتها تدريجياً بعد تحديث الكود لاستخدام nonces
+        $csp = "default-src 'self' " .
                "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com " .
                "https://api.telegram.org " .
                "https://api.apdf.io; " .
-               "img-src 'self' data: https: blob:; " .
-               "font-src 'self' data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " .
                "script-src 'self' 'unsafe-inline' 'unsafe-eval' " .
                "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " .
                "style-src 'self' 'unsafe-inline' " .
                "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " .
-               "connect-src 'self' https://api.telegram.org https://api.apdf.io;";
+               "img-src 'self' data: https: blob:; " .
+               "font-src 'self' data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " .
+               "connect-src 'self' https://api.telegram.org https://api.apdf.io; " .
+               "frame-src 'self'; " .
+               "object-src 'none'; " .
+               "base-uri 'self'; " .
+               "form-action 'self';";
         
         header("Content-Security-Policy: {$csp}");
         
