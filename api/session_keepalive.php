@@ -38,33 +38,10 @@ try {
         exit;
     }
     
-    // تم إزالة نظام الجلسات - تحديث remember_token في قاعدة البيانات فقط
-    $user = getUserFromToken();
-    if ($user && isset($user['id'])) {
-        try {
-            $db = db();
-            if (isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
-                $cookieValue = $_COOKIE['remember_token'];
-                $decoded = base64_decode($cookieValue, true);
-                if ($decoded) {
-                    $parts = explode(':', $decoded);
-                    if (count($parts) === 2) {
-                        $userId = intval($parts[0]);
-                        $token = trim($parts[1]);
-                        
-                        // تحديث last_used في remember_tokens
-                        if (ensureRememberTokensTable()) {
-                            $db->execute(
-                                "UPDATE remember_tokens SET last_used = NOW() WHERE user_id = ? AND token = ?",
-                                [$userId, $token]
-                            );
-                        }
-                    }
-                }
-            }
-        } catch (Exception $e) {
-            // لا نسجل الخطأ في keep-alive لتقليل الضغط على السيرفر
-        }
+    // تجديد الجلسة (PHP يدير الجلسات تلقائياً)
+    // تحديث وقت آخر نشاط في الجلسة
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['last_activity'] = time();
     }
     
     // إرجاع الاستجابة الناجحة

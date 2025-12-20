@@ -9,8 +9,6 @@ if (!ob_get_level()) {
 
 define('ACCESS_ALLOWED', true);
 
-// تم إزالة نظام الجلسات - لا حاجة لبدء الجلسة
-
 try {
     require_once __DIR__ . '/includes/config.php';
     
@@ -29,70 +27,6 @@ try {
     }
 } catch (Exception $e) {
     error_log("Logout Page Error: " . $e->getMessage());
-}
-
-// تم إزالة نظام الجلسات - حذف remember tokens فقط
-$userId = null;
-if (isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
-    try {
-        require_once __DIR__ . '/includes/db.php';
-        require_once __DIR__ . '/includes/auth.php';
-        $db = db();
-        
-        $cookieValue = $_COOKIE['remember_token'];
-        $decoded = base64_decode($cookieValue, true);
-        if ($decoded) {
-            $parts = explode(':', $decoded);
-            if (count($parts) === 2) {
-                $userId = intval($parts[0]);
-            }
-        }
-        
-        // حذف جميع remember tokens للمستخدم
-        if ($userId && ensureRememberTokensTable()) {
-            try {
-                $db->execute("DELETE FROM remember_tokens WHERE user_id = ?", [$userId]);
-                error_log("Logout: Deleted all remember tokens for user_id: {$userId}");
-            } catch (Exception $e) {
-                error_log("Logout: Error deleting remember tokens from database: " . $e->getMessage());
-            }
-        }
-    } catch (Exception $e) {
-        error_log("Logout: Error in database cleanup: " . $e->getMessage());
-    }
-}
-
-// حذف remember_token cookie بجميع الإعدادات الممكنة
-$isHttps = (
-    (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-    (isset($_SERVER['SERVER_PORT']) && (string)$_SERVER['SERVER_PORT'] === '443')
-);
-
-if (isset($_COOKIE['remember_token'])) {
-    $cookieOptions = [
-        ['expires' => time() - 3600, 'path' => '/', 'domain' => '', 'secure' => $isHttps, 'httponly' => true, 'samesite' => 'Lax'],
-        ['expires' => time() - 3600, 'path' => '/', 'domain' => null, 'secure' => $isHttps, 'httponly' => true, 'samesite' => 'Lax'],
-        ['expires' => time() - 3600, 'path' => '/', 'domain' => '', 'secure' => false, 'httponly' => true, 'samesite' => 'Lax'],
-    ];
-    
-    foreach ($cookieOptions as $options) {
-        @setcookie('remember_token', '', $options);
-    }
-}
-
-// تم إزالة نظام الجلسات - حذف remember_token cookie فقط
-// حذف remember_token cookie بجميع الإعدادات الممكنة
-if (isset($_COOKIE['remember_token'])) {
-    $cookieOptions = [
-        ['expires' => time() - 3600, 'path' => '/', 'domain' => '', 'secure' => $isHttps, 'httponly' => true, 'samesite' => 'Lax'],
-        ['expires' => time() - 3600, 'path' => '/', 'domain' => null, 'secure' => $isHttps, 'httponly' => true, 'samesite' => 'Lax'],
-        ['expires' => time() - 3600, 'path' => '/', 'domain' => '', 'secure' => false, 'httponly' => true, 'samesite' => 'Lax'],
-    ];
-    
-    foreach ($cookieOptions as $options) {
-        @setcookie('remember_token', '', $options);
-    }
-    unset($_COOKIE['remember_token']);
 }
 
 while (ob_get_level()) {

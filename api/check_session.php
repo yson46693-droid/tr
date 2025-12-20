@@ -1,7 +1,7 @@
 <?php
 /**
- * API للتحقق من وجود remember_token (تم إزالة نظام الجلسات بالكامل)
- * النظام يعتمد فقط على remember_token
+ * API للتحقق من وجود الجلسة
+ * النظام يعتمد على PHP Sessions
  */
 
 define('ACCESS_ALLOWED', true);
@@ -36,12 +36,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// التحقق من تسجيل الدخول - يعتمد فقط على remember_token
-// تم إزالة نظام الجلسات بالكامل
+// التحقق من تسجيل الدخول - يعتمد على الجلسات
 $user = null;
 $userId = null;
 
-// محاولة الحصول على المستخدم من remember_token
+// محاولة الحصول على المستخدم من الجلسة
 try {
     if (isLoggedIn()) {
         $user = getCurrentUser();
@@ -53,54 +52,16 @@ try {
     error_log("Check Session API - Error checking login: " . $e->getMessage());
 }
 
-if (!$userId) {
-    echo json_encode(['success' => false, 'session_exists' => false]);
-    exit;
+if ($userId) {
+    echo json_encode([
+        'success' => true,
+        'session_exists' => true,
+        'user_id' => $userId,
+        'method' => 'session'
+    ]);
+} else {
+    echo json_encode([
+        'success' => true,
+        'session_exists' => false
+    ]);
 }
-
-// التحقق من وجود remember_token في قاعدة البيانات
-try {
-    if (isset($_COOKIE['remember_token']) && ensureRememberTokensTable()) {
-        $db = db();
-        $decoded = base64_decode($_COOKIE['remember_token']);
-        if ($decoded) {
-            $parts = explode(':', $decoded);
-            if (count($parts) === 2) {
-                $tokenUserId = intval($parts[0]);
-                $token = $parts[1];
-                
-                if ($tokenUserId === $userId) {
-                    $tokenRecord = $db->queryOne(
-                        "SELECT * FROM remember_tokens WHERE user_id = ? AND token = ? AND expires_at > NOW()",
-                        [$tokenUserId, $token]
-                    );
-                    
-                    if ($tokenRecord) {
-                        // تحديث last_used
-                        $db->execute(
-                            "UPDATE remember_tokens SET last_used = NOW() WHERE id = ?",
-                            [$tokenRecord['id']]
-                        );
-                        
-                        echo json_encode([
-                            'success' => true,
-                            'session_exists' => true,
-                            'user_id' => $userId,
-                            'method' => 'remember_token'
-                        ]);
-                        exit;
-                    }
-                }
-            }
-        }
-    }
-} catch (Exception $e) {
-    error_log("Check Session API - Remember token check error: " . $e->getMessage());
-}
-
-// إذا لم نجد remember_token، نرجع false
-echo json_encode([
-    'success' => true,
-    'session_exists' => false,
-    'user_id' => $userId
-]);

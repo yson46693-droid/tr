@@ -92,13 +92,7 @@ if (!$isProfilePage && isLoggedIn() && (!$currentUser || !is_array($currentUser)
     usleep(50000);
     $currentUser = getCurrentUser();
     
-    // إذا استمر الفشل، حاول الحصول على المستخدم مباشرة من token
-    if (!$currentUser && isset($_COOKIE['remember_token']) && !empty($_COOKIE['remember_token'])) {
-        $userFromToken = getUserFromToken();
-        if ($userFromToken && isset($userFromToken['id']) && !empty($userFromToken['id'])) {
-            $currentUser = $userFromToken;
-        }
-    }
+    // إعادة المحاولة - قد يكون هناك تأخير في قاعدة البيانات
     
     // فقط إذا استمر الفشل بعد إعادة المحاولة، نعيد التوجيه
     if (!$currentUser || !is_array($currentUser) || empty($currentUser)) {
@@ -2840,18 +2834,8 @@ if (ob_get_level() > 0) {
         
         // دالة لإعادة التوجيه إلى صفحة تسجيل الدخول مع رسالة تنبيه
         function redirectToLogin(reason) {
-            const loginUrl = getLoginUrl();
-            
-            // حفظ سبب إعادة التوجيه في sessionStorage
-            try {
-                sessionStorage.setItem('session_expired', 'true');
-                sessionStorage.setItem('redirect_reason', reason || 'انتهت الجلسة أو حدث خطأ في الاتصال');
-            } catch (e) {
-                // تجاهل الأخطاء في sessionStorage
-            }
-            
-            // إعادة التوجيه
-            window.location.replace(loginUrl);
+            // لا نعيد التوجيه تلقائياً - فقط عند تسجيل الخروج يدوياً
+            console.warn('Redirect to login attempted but blocked:', reason || 'انتهت الجلسة أو حدث خطأ في الاتصال');
         }
         
         // معالج أخطاء JavaScript العامة
@@ -2882,8 +2866,8 @@ if (ob_get_level() > 0) {
                 const currentPath = window.location.pathname || '';
                 const isOnLoginPage = currentPath.includes('index.php');
                 
-                // التحقق من وجود remember_token cookie (المستخدم مسجل دخول)
-                const hasRememberToken = document.cookie.includes('remember_token=');
+                // التحقق من أن المستخدم مسجل دخول (من خلال الجلسة)
+                const hasSession = true; // الجلسات تُدار من جانب الخادم
                 
                 if (!isOnLoginPage) {
                     const now = Date.now();
@@ -2898,16 +2882,9 @@ if (ob_get_level() > 0) {
                     
                     // فقط إذا تجاوز عدد الأخطاء الحد المسموح
                     if (globalErrorCount >= MAX_GLOBAL_ERRORS) {
-                        // التحقق مرة أخرى من وجود remember_token قبل إعادة التوجيه
-                        if (!hasRememberToken) {
-                            redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
-                            event.preventDefault();
-                            return true;
-                        } else {
-                            // إذا كان المستخدم مسجل دخول، لا نعيد التوجيه - فقط نعيد تعيين العداد
-                            console.warn('Multiple global errors detected but user is logged in, not redirecting');
-                            globalErrorCount = 0;
-                        }
+                        // لا نعيد التوجيه تلقائياً - فقط نعيد تعيين العداد
+                        console.warn('Multiple global errors detected, resetting counter');
+                        globalErrorCount = 0;
                     }
                 }
             }
@@ -2951,16 +2928,9 @@ if (ob_get_level() > 0) {
                         
                         // فقط إذا تجاوز عدد الأخطاء الحد المسموح
                         if (promiseErrorCount >= MAX_PROMISE_ERRORS) {
-                            // التحقق مرة أخرى من وجود remember_token قبل إعادة التوجيه
-                            if (!hasRememberToken) {
-                                redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
-                                event.preventDefault();
-                                return;
-                            } else {
-                                // إذا كان المستخدم مسجل دخول، لا نعيد التوجيه - فقط نعيد تعيين العداد
-                                console.warn('Multiple promise errors detected but user is logged in, not redirecting');
-                                promiseErrorCount = 0;
-                            }
+                            // لا نعيد التوجيه تلقائياً - فقط نعيد تعيين العداد
+                            console.warn('Multiple promise errors detected, resetting counter');
+                            promiseErrorCount = 0;
                         }
                     }
                 }
@@ -3029,14 +2999,9 @@ if (ob_get_level() > 0) {
                         
                         // فقط إذا تجاوز عدد الأخطاء الحد المسموح
                         if (fetchErrorCount >= MAX_FETCH_ERRORS) {
-                            // التحقق مرة أخرى من وجود remember_token قبل إعادة التوجيه
-                            if (!hasRememberToken) {
-                                redirectToLogin('حدث خطأ في الاتصال. يرجى تسجيل الدخول مرة أخرى.');
-                            } else {
-                                // إذا كان المستخدم مسجل دخول، لا نعيد التوجيه - فقط نعيد تعيين العداد
-                                console.warn('Multiple fetch errors detected but user is logged in, not redirecting');
-                                fetchErrorCount = 0;
-                            }
+                            // لا نعيد التوجيه تلقائياً - فقط نعيد تعيين العداد
+                            console.warn('Multiple fetch errors detected, resetting counter');
+                            fetchErrorCount = 0;
                         }
                     }
                 }

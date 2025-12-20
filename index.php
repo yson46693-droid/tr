@@ -402,7 +402,7 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
             // تعطيل التسجيل الروتيني - الاحتفاظ فقط بالأخطاء الحرجة
         }
     } else {
-        // محاولة تسجيل دخول بحساب مختلف - التحقق من remember_token
+        // محاولة تسجيل دخول بحساب مختلف - التحقق من الجلسة
         $currentUser = getCurrentUser();
         if ($currentUser) {
             $userRole = $currentUser['role'] ?? 'accountant';
@@ -522,7 +522,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             // error_log("Rate limiter reset error: " . $e->getMessage());
                         }
                     }
-                    // تم إزالة نظام الجلسات - النظام يعتمد فقط على remember_token
+                    // النظام يعتمد على الجلسات (PHP Sessions)
                     $userRole = $result['user']['role'] ?? 'accountant';
                     
                     // استخدام دالة getDashboardUrl() للحصول على المسار الصحيح
@@ -1534,7 +1534,7 @@ $lang = $translations;
                     }
                     
                     // إذا كان تسجيل الدخول ناجحاً، توجه مباشرة بدون انتظار
-                    // النظام يعتمد على remember_token الذي يتم إنشاؤه فوراً عند تسجيل الدخول
+                    // النظام يعتمد على الجلسات التي يتم إنشاؤها فوراً عند تسجيل الدخول
                     if (loginResult.success) {
                         loadingMessage.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
                         
