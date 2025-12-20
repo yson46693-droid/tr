@@ -213,8 +213,7 @@ self.addEventListener('fetch', event => {
             await generalCache.delete(event.request);
           }
         
-        // التحقق من الشبكة - استخدام redirect: 'manual' للكشف عن redirects
-        try {
+          // التحقق من الشبكة - استخدام redirect: 'manual' للكشف عن redirects
           const checkResponse = await fetch(event.request.clone(), {
             redirect: 'manual',
             cache: 'no-store'
