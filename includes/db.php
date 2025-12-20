@@ -40,7 +40,7 @@ class Database {
             // إجبار استخدام TCP/IP بدلاً من socket (مهم لخوادم الاستضافة)
             // إذا كان DB_HOST = 'localhost'، استخدم '127.0.0.1' بدلاً منه لإجبار TCP/IP
             $host = DB_HOST;
-            if ($host === 'localhost' || $host === '127.0.0.1') {
+            if ($host === 'localhost') {
                 // للخوادم المحلية، استخدم 127.0.0.1 لإجبار TCP/IP
                 $host = '127.0.0.1';
             }
@@ -48,37 +48,66 @@ class Database {
             // التحقق من أن المنفذ رقم صحيح
             $port = is_numeric(DB_PORT) ? (int)DB_PORT : 3306;
             
-            // للخوادم البعيدة، تأكد من استخدام TCP/IP
-            if ($isRemoteHost) {
-                // إجبار استخدام TCP/IP بإضافة : قبل المنفذ في الـ host
-                // لكن mysqli يتعامل مع المنفذ بشكل منفصل، لذا لا حاجة لذلك
-            }
-            
             try {
-                // إنشاء الاتصال بدون @ لرؤية الأخطاء الحقيقية
-                // ملاحظة: InfinityFree قد يحتاج إلى timeout أطول
-                $this->connection = new mysqli($host, DB_USER, DB_PASS, DB_NAME, $port);
+                // استخدام mysqli_init() و mysqli_real_connect() لإجبار TCP/IP
+                // هذه الطريقة أكثر موثوقية للخوادم البعيدة
+                $this->connection = mysqli_init();
+                
+                // تعيين timeout قبل الاتصال
+                if (defined('MYSQLI_OPT_CONNECT_TIMEOUT')) {
+                    mysqli_options($this->connection, MYSQLI_OPT_CONNECT_TIMEOUT, $connectTimeout);
+                }
+                if (defined('MYSQLI_OPT_READ_TIMEOUT')) {
+                    mysqli_options($this->connection, MYSQLI_OPT_READ_TIMEOUT, $readTimeout);
+                }
+                if (defined('MYSQLI_OPT_WRITE_TIMEOUT')) {
+                    mysqli_options($this->connection, MYSQLI_OPT_WRITE_TIMEOUT, $writeTimeout);
+                }
+                
+                // إجبار استخدام TCP/IP بإضافة : قبل المنفذ في الـ host
+                // هذا يضمن استخدام TCP/IP وليس socket
+                if ($isRemoteHost || $host !== '127.0.0.1') {
+                    // للخوادم البعيدة، تأكد من استخدام TCP/IP
+                    // mysqli_real_connect() يستخدم TCP/IP تلقائياً للخوادم البعيدة
+                }
+                
+                // الاتصال باستخدام mysqli_real_connect() - هذه الطريقة أفضل للخوادم البعيدة
+                if (!mysqli_real_connect($this->connection, $host, DB_USER, DB_PASS, DB_NAME, $port)) {
+                    $errorMsg = mysqli_connect_error();
+                    throw new Exception("MySQL connection failed: " . $errorMsg);
+                }
+                
             } catch (mysqli_sql_exception $e) {
                 // إذا فشل الاتصال، حاول بدون قاعدة البيانات أولاً للتحقق من الاتصال
                 try {
-                    $testConnection = new mysqli($host, DB_USER, DB_PASS, null, $port);
-                    if ($testConnection->connect_error) {
-                        throw new Exception("Cannot connect to MySQL server: " . $testConnection->connect_error);
+                    $testConnection = mysqli_init();
+                    if (defined('MYSQLI_OPT_CONNECT_TIMEOUT')) {
+                        mysqli_options($testConnection, MYSQLI_OPT_CONNECT_TIMEOUT, $connectTimeout);
                     }
-                    $testConnection->close();
+                    
+                    if (!mysqli_real_connect($testConnection, $host, DB_USER, DB_PASS, null, $port)) {
+                        $connectError = mysqli_connect_error();
+                        throw new Exception("Cannot connect to MySQL server: " . $connectError);
+                    }
+                    mysqli_close($testConnection);
                     throw new Exception("Database '" . DB_NAME . "' not found or access denied. Please check database name and user permissions.");
                 } catch (mysqli_sql_exception $testError) {
                     $errorMsg = $testError->getMessage();
                     // تحسين رسالة الخطأ
-                    if (strpos($errorMsg, 'No such file or directory') !== false) {
-                        throw new Exception("MySQL connection error: Cannot connect to MySQL server. Please check:\n" .
-                                          "1. DB_HOST is correct: " . $host . "\n" .
-                                          "2. DB_PORT is correct: " . $port . "\n" .
+                    if (strpos($errorMsg, 'No such file or directory') !== false || 
+                        strpos($errorMsg, 'Connection refused') !== false) {
+                        throw new Exception("MySQL connection error: Cannot connect to MySQL server at {$host}:{$port}. Please check:\n" .
+                                          "1. DB_HOST is correct: {$host}\n" .
+                                          "2. DB_PORT is correct: {$port}\n" .
                                           "3. MySQL server is running and accessible\n" .
-                                          "4. Firewall allows connection on port " . $port);
+                                          "4. Firewall allows connection on port {$port}\n" .
+                                          "5. For remote hosts, ensure the server allows remote connections");
                     }
                     throw new Exception("MySQL connection error: " . $errorMsg);
                 }
+            } catch (Exception $e) {
+                // إعادة رمي الاستثناء مع رسالة محسّنة
+                throw $e;
             }
             
             if ($this->connection->connect_error) {
