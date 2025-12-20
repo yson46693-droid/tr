@@ -72,12 +72,29 @@ function isLoggedIn() {
         $db = db();
         $user = $db->queryOne("SELECT id, status FROM users WHERE id = ? AND status = 'active'", [$_SESSION['user_id']]);
         if (!$user) {
+            // التحقق إذا كان هذا من background-tasks.php - لا نحذف الجلسة عند أخطاء قاعدة البيانات
+            $isBackgroundTask = defined('BACKGROUND_TASKS_ACTIVE') && BACKGROUND_TASKS_ACTIVE === true;
+            if ($isBackgroundTask) {
+                // في background tasks، لا نحذف الجلسة عند فشل الاستعلام
+                // قد يكون السبب timeout في قاعدة البيانات
+                error_log("isLoggedIn() - User not found but BACKGROUND_TASKS_ACTIVE - skipping session destroy");
+                return false; // نرجع false لكن لا نحذف الجلسة
+            }
+            
             // المستخدم غير موجود أو غير مفعّل - حذف الجلسة
             session_destroy();
             return false;
         }
         return true;
     } catch (Exception $e) {
+        // في حالة خطأ في قاعدة البيانات، لا نحذف الجلسة إذا كان هذا من background tasks
+        $isBackgroundTask = defined('BACKGROUND_TASKS_ACTIVE') && BACKGROUND_TASKS_ACTIVE === true;
+        if ($isBackgroundTask) {
+            error_log("isLoggedIn() - Database error in background tasks: " . $e->getMessage());
+            // نعتبر المستخدم مسجل دخول إذا كانت الجلسة موجودة
+            return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
+        }
+        
         error_log("isLoggedIn() error: " . $e->getMessage());
         return false;
     }
@@ -124,6 +141,14 @@ function getCurrentUser() {
         $user = $db->queryOne("SELECT * FROM users WHERE id = ? AND status = 'active'", [$_SESSION['user_id']]);
         
         if (!$user) {
+            // التحقق إذا كان هذا من background-tasks.php - لا نحذف الجلسة عند أخطاء قاعدة البيانات
+            $isBackgroundTask = defined('BACKGROUND_TASKS_ACTIVE') && BACKGROUND_TASKS_ACTIVE === true;
+            if ($isBackgroundTask) {
+                // في background tasks، لا نحذف الجلسة عند فشل الاستعلام
+                error_log("getCurrentUser() - User not found but BACKGROUND_TASKS_ACTIVE - skipping session destroy");
+                return null; // نرجع null لكن لا نحذف الجلسة
+            }
+            
             // المستخدم غير موجود أو غير مفعّل - حذف الجلسة
             session_destroy();
             return null;
@@ -131,6 +156,21 @@ function getCurrentUser() {
         
         return $user;
     } catch (Exception $e) {
+        // في حالة خطأ في قاعدة البيانات، لا نحذف الجلسة إذا كان هذا من background tasks
+        $isBackgroundTask = defined('BACKGROUND_TASKS_ACTIVE') && BACKGROUND_TASKS_ACTIVE === true;
+        if ($isBackgroundTask) {
+            error_log("getCurrentUser() - Database error in background tasks: " . $e->getMessage());
+            // نحاول جلب المستخدم مباشرة بدون شرط status
+            try {
+                $db = db();
+                $user = $db->queryOne("SELECT * FROM users WHERE id = ?", [$_SESSION['user_id']]);
+                return $user; // نرجع المستخدم حتى لو كان غير active مؤقتاً
+            } catch (Exception $retryError) {
+                error_log("getCurrentUser() - Retry failed: " . $retryError->getMessage());
+                return null;
+            }
+        }
+        
         error_log("getCurrentUser() error: " . $e->getMessage());
         return null;
     }
