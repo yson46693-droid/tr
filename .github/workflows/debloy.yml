@@ -28,8 +28,7 @@ jobs:
           security: loose
           timeout: 120000
           log-level: standard
-
-          server-dir: /httpdocs/
+          server-dir: /htdocs/
 
 
           # مهم: لا يحذف ملفات السيرفر
