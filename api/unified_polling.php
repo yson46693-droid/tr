@@ -22,11 +22,9 @@ header('Cache-Control: no-cache, no-store, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// السماح بجميع الطرق
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
+// ملاحظة: تم إزالة معالجة OPTIONS لأن unified_polling يستخدم same-origin requests فقط
+// same-origin requests لا تحتاج preflight (OPTIONS) requests
+// هذا يتوافق بشكل أفضل مع InfinityFree ويتجنب مشاكل preflight غير الضرورية
 
 try {
     require_once __DIR__ . '/../includes/config.php';

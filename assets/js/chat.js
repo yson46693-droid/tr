@@ -313,7 +313,10 @@
 
     const action = actionButton.dataset.chatAction;
 
-    if (action === 'reply') {
+    if (action === 'react') {
+      const reactionType = actionButton.dataset.reactionType;
+      handleReaction(messageId, reactionType);
+    } else if (action === 'reply') {
       setReply(message);
     } else if (action === 'edit') {
       // السماح بالتعديل فقط للرسائل الخاصة بالمستخدم وغير المحذوفة
@@ -562,6 +565,37 @@
     }
   }
 
+  async function handleReaction(messageId, reactionType) {
+    try {
+      const response = await fetch(`${API_BASE}/react_message.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          message_id: messageId,
+          reaction_type: reactionType,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'تعذر إضافة التفاعل');
+      }
+
+      // Update message in state
+      const message = state.messages.find((m) => m.id === messageId);
+      if (message) {
+        message.thumbs_up_count = data.data.thumbs_up_count || 0;
+        message.thumbs_down_count = data.data.thumbs_down_count || 0;
+        renderMessages();
+      }
+    } catch (error) {
+      console.error(error);
+      showToast(error.message || 'حدث خطأ أثناء إضافة التفاعل', true);
+    }
+  }
+
   function toggleComposerDisabled(disabled) {
     elements.sendButton.disabled = disabled;
     elements.input.disabled = disabled;
@@ -708,6 +742,32 @@
     const bubble = document.createElement('div');
     bubble.className = 'chat-message-bubble';
 
+    // Message Header (Name and Time for incoming messages)
+    if (!outgoing) {
+      const header = document.createElement('div');
+      header.className = 'chat-message-header';
+      
+      const name = document.createElement('span');
+      name.className = 'chat-message-name';
+      name.textContent = message.user_name || 'مستخدم';
+      header.appendChild(name);
+      
+      const time = document.createElement('span');
+      time.className = 'chat-message-time';
+      time.textContent = formatTime(message.created_at);
+      header.appendChild(time);
+      
+      bubble.appendChild(header);
+    } else {
+      // For outgoing messages, show time at top
+      const time = document.createElement('div');
+      time.className = 'chat-message-time';
+      time.style.textAlign = 'left';
+      time.style.marginBottom = '4px';
+      time.textContent = formatTime(message.created_at);
+      bubble.appendChild(time);
+    }
+
     if (message.reply_to && message.reply_text) {
       const replyFragment = document.createElement('div');
       replyFragment.className = 'chat-reply-preview';
@@ -722,14 +782,6 @@
     const content = document.createElement('div');
     content.className = 'chat-message-content';
 
-    if (!outgoing) {
-      const sender = document.createElement('strong');
-      sender.textContent = message.user_name || 'مستخدم';
-      sender.style.fontSize = '13px';
-      sender.style.color = 'var(--chat-accent)';
-      content.appendChild(sender);
-    }
-
     const body = document.createElement('div');
     body.className = 'chat-message-body';
     if (message.deleted) {
@@ -740,12 +792,32 @@
     content.appendChild(body);
     bubble.appendChild(content);
 
+    // Reactions
+    const reactions = document.createElement('div');
+    reactions.className = 'chat-message-reactions';
+    
+    const thumbsUp = document.createElement('button');
+    thumbsUp.className = 'chat-reaction-button thumbs-up';
+    thumbsUp.type = 'button';
+    thumbsUp.dataset.chatAction = 'react';
+    thumbsUp.dataset.reactionType = 'thumbs_up';
+    thumbsUp.dataset.messageId = String(message.id);
+    thumbsUp.innerHTML = '👍 <span class="chat-reaction-count" data-reaction-count="thumbs_up">' + (message.thumbs_up_count || 0) + '</span>';
+    reactions.appendChild(thumbsUp);
+    
+    const thumbsDown = document.createElement('button');
+    thumbsDown.className = 'chat-reaction-button thumbs-down';
+    thumbsDown.type = 'button';
+    thumbsDown.dataset.chatAction = 'react';
+    thumbsDown.dataset.reactionType = 'thumbs_down';
+    thumbsDown.dataset.messageId = String(message.id);
+    thumbsDown.innerHTML = '👎 <span class="chat-reaction-count" data-reaction-count="thumbs_down">' + (message.thumbs_down_count || 0) + '</span>';
+    reactions.appendChild(thumbsDown);
+    
+    bubble.appendChild(reactions);
+
     const meta = document.createElement('div');
     meta.className = 'chat-message-meta';
-
-    const timeSpan = document.createElement('span');
-    timeSpan.textContent = formatTime(message.created_at);
-    meta.appendChild(timeSpan);
 
     if (outgoing) {
       const readSpan = document.createElement('div');

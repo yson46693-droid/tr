@@ -91,6 +91,43 @@ function ensureChatSchema(): void {
             }
         }
 
+        // Add reaction columns to messages table
+        $thumbsUpColumn = $db->queryOne("SHOW COLUMNS FROM `messages` LIKE 'thumbs_up_count'");
+        if (!$thumbsUpColumn) {
+            if (!$connection->query("ALTER TABLE `messages` ADD COLUMN `thumbs_up_count` INT NOT NULL DEFAULT 0 AFTER `read_by_count`")) {
+                throw new RuntimeException('Failed adding thumbs_up_count column: ' . $connection->error);
+            }
+        }
+
+        $thumbsDownColumn = $db->queryOne("SHOW COLUMNS FROM `messages` LIKE 'thumbs_down_count'");
+        if (!$thumbsDownColumn) {
+            if (!$connection->query("ALTER TABLE `messages` ADD COLUMN `thumbs_down_count` INT NOT NULL DEFAULT 0 AFTER `thumbs_up_count`")) {
+                throw new RuntimeException('Failed adding thumbs_down_count column: ' . $connection->error);
+            }
+        }
+
+        // Create message_reactions table
+        $messageReactionsTable = $db->queryOne("SHOW TABLES LIKE 'message_reactions'");
+        if (!$messageReactionsTable) {
+            if (!$connection->query("
+                CREATE TABLE IF NOT EXISTS `message_reactions` (
+                  `id` INT NOT NULL AUTO_INCREMENT,
+                  `message_id` INT NOT NULL,
+                  `user_id` INT NOT NULL,
+                  `reaction_type` ENUM('thumbs_up', 'thumbs_down') NOT NULL,
+                  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  PRIMARY KEY (`id`),
+                  UNIQUE KEY `message_reactions_unique` (`message_id`, `user_id`, `reaction_type`),
+                  KEY `message_reactions_message_idx` (`message_id`),
+                  KEY `message_reactions_user_idx` (`user_id`),
+                  CONSTRAINT `message_reactions_message_fk` FOREIGN KEY (`message_id`) REFERENCES `messages` (`id`) ON DELETE CASCADE,
+                  CONSTRAINT `message_reactions_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ")) {
+                throw new RuntimeException('Failed creating message_reactions table: ' . $connection->error);
+            }
+        }
+
         // لا حاجة لإنشاء trigger لأن الجدول يستخدم ON UPDATE CURRENT_TIMESTAMP بالفعل
         // والذي يقوم تلقائياً بتحديث updated_at عند تحديث أي صف
     } catch (Throwable $e) {
@@ -171,6 +208,8 @@ function getChatMessages(?string $since = null, int $limit = 50, ?int $currentUs
             m.created_at,
             m.updated_at,
             m.read_by_count,
+            COALESCE(m.thumbs_up_count, 0) AS thumbs_up_count,
+            COALESCE(m.thumbs_down_count, 0) AS thumbs_down_count,
             s.is_online,
             s.last_seen,
             reply.message_text AS reply_text,
