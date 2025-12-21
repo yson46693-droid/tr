@@ -29,6 +29,10 @@
     imageButton: '[data-chat-image]',
     fileInput: '[data-chat-file-input]',
     imageInput: '[data-chat-image-input]',
+    emojiButton: '[data-chat-emoji]',
+    emojiPicker: '[data-chat-emoji-picker]',
+    emojiList: '[data-chat-emoji-list]',
+    emojiClose: '[data-chat-emoji-close]',
   };
 
   const state = {
@@ -85,6 +89,10 @@
     elements.imageButton = app.querySelector(selectors.imageButton);
     elements.fileInput = document.querySelector(selectors.fileInput);
     elements.imageInput = document.querySelector(selectors.imageInput);
+    elements.emojiButton = app.querySelector(selectors.emojiButton);
+    elements.emojiPicker = app.querySelector(selectors.emojiPicker);
+    elements.emojiList = app.querySelector(selectors.emojiList);
+    elements.emojiClose = app.querySelector(selectors.emojiClose);
 
     currentUser.id = parseInt(app.dataset.currentUserId || '0', 10);
     currentUser.name = app.dataset.currentUserName || '';
@@ -162,6 +170,26 @@
       });
       elements.imageInput.addEventListener('change', handleImageSelect);
     }
+
+    if (elements.emojiButton) {
+      elements.emojiButton.addEventListener('click', toggleEmojiPicker);
+    }
+
+    if (elements.emojiClose) {
+      elements.emojiClose.addEventListener('click', closeEmojiPicker);
+    }
+
+    // Close emoji picker when clicking outside
+    document.addEventListener('click', (e) => {
+      if (elements.emojiPicker && elements.emojiPicker.classList.contains('active')) {
+        if (!elements.emojiPicker.contains(e.target) && !elements.emojiButton.contains(e.target)) {
+          closeEmojiPicker();
+        }
+      }
+    });
+
+    // Initialize emoji picker
+    initEmojiPicker();
 
     // Close sidebar when clicking outside on mobile
     document.addEventListener('click', (e) => {
@@ -1330,6 +1358,110 @@
       state.isSending = false;
       toggleComposerDisabled(false);
     }
+  }
+
+  // Emoji picker functions
+  function initEmojiPicker() {
+    if (!elements.emojiList) {
+      return;
+    }
+
+    // قائمة الإيموجي الشائعة
+    const emojis = [
+      '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃',
+      '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙',
+      '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔',
+      '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '🤥',
+      '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮',
+      '🤧', '🥵', '🥶', '😶‍🌫️', '😵', '😵‍💫', '🤯', '🤠', '🥳', '😎',
+      '🤓', '🧐', '😕', '😟', '🙁', '😮', '😯', '😲', '😳', '🥺',
+      '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣',
+      '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈',
+      '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾',
+      '🤖', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾',
+      '👋', '🤚', '🖐', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞',
+      '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍',
+      '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝',
+      '🙏', '✍️', '💪', '🦾', '🦿', '🦵', '🦶', '👂', '🦻', '👃',
+      '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔',
+      '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️',
+      '✝️', '☪️', '🕉', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐',
+      '⛎', '♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐',
+      '♑', '♒', '♓', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳',
+      '🈶', '🈚', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️',
+      '㊗️', '🈴', '🈵', '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑', '🅾️',
+      '🆘', '❌', '⭕', '🛑', '⛔', '📛', '🚫', '💯', '💢', '♨️',
+      '🚷', '🚯', '🚳', '🚱', '🔞', '📵', '🚭', '❗', '❕', '❓',
+      '❔', '‼️', '⁉️', '🔅', '🔆', '〽️', '⚠️', '🚸', '🔱', '⚜️',
+      '🔰', '♻️', '✅', '🈯', '💹', '❇️', '✳️', '❎', '🌐', '💠',
+      'Ⓜ️', '🌀', '💤', '🏧', '🚾', '♿', '🅿️', '🈳', '🈂️', '🛂',
+      '🛃', '🛄', '🛅', '🚹', '🚺', '🚼', '🚻', '🚮', '🎦', '📶',
+      '🈁', '🔣', 'ℹ️', '🔤', '🔡', '🔠', '🆖', '🆗', '🆙', '🆒',
+      '🆕', '🆓', '0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣',
+      '8️⃣', '9️⃣', '🔟', '🔢', '#️⃣', '*️⃣', '▶️', '⏸', '⏯', '⏹',
+      '⏺', '⏭', '⏮', '⏩', '⏪', '⏫', '⏬', '◀️', '🔼', '🔽',
+      '➡️', '⬅️', '⬆️', '⬇️', '↗️', '↘️', '↙️', '↖️', '↕️', '↔️',
+      '↪️', '↩️', '⤴️', '⤵️', '🔀', '🔁', '🔂', '🔄', '🔃', '🎵',
+      '🎶', '➕', '➖', '➗', '✖️', '💲', '💱', '™️', '©️', '®️',
+      '〰️', '➰', '➿', '🔚', '🔙', '🔛', '🔜', '🔝', '🛐', '⚛️',
+      '🕉️', '☸️', '☮️', '☪️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐',
+    ];
+
+    // إنشاء أزرار الإيموجي
+    emojis.forEach(emoji => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'chat-emoji-item';
+      button.textContent = emoji;
+      button.title = emoji;
+      button.addEventListener('click', () => insertEmoji(emoji));
+      elements.emojiList.appendChild(button);
+    });
+  }
+
+  function toggleEmojiPicker() {
+    if (!elements.emojiPicker) {
+      return;
+    }
+    
+    const isActive = elements.emojiPicker.classList.contains('active');
+    if (isActive) {
+      closeEmojiPicker();
+    } else {
+      openEmojiPicker();
+    }
+  }
+
+  function openEmojiPicker() {
+    if (elements.emojiPicker) {
+      elements.emojiPicker.classList.add('active');
+    }
+  }
+
+  function closeEmojiPicker() {
+    if (elements.emojiPicker) {
+      elements.emojiPicker.classList.remove('active');
+    }
+  }
+
+  function insertEmoji(emoji) {
+    if (!elements.input) {
+      return;
+    }
+
+    const cursorPos = elements.input.selectionStart || elements.input.value.length;
+    const textBefore = elements.input.value.substring(0, cursorPos);
+    const textAfter = elements.input.value.substring(cursorPos);
+    
+    elements.input.value = textBefore + emoji + textAfter;
+    elements.input.focus();
+    
+    // وضع المؤشر بعد الإيموجي
+    const newCursorPos = cursorPos + emoji.length;
+    elements.input.setSelectionRange(newCursorPos, newCursorPos);
+    
+    handleInputResize();
+    closeEmojiPicker();
   }
 
   document.addEventListener('DOMContentLoaded', init);

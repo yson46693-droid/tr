@@ -120,14 +120,25 @@ $membersCount = count($onlineUsers);
                 <button class="chat-reply-dismiss" type="button" data-chat-reply-dismiss>&times;</button>
             </div>
             <div class="chat-input-wrapper">
-                <button class="chat-icon-button chat-emoji-button" type="button" title="إيموجي" data-chat-emoji aria-label="إيموجي">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-                        <line x1="9" y1="9" x2="9.01" y2="9"/>
-                        <line x1="15" y1="9" x2="15.01" y2="9"/>
-                    </svg>
-                </button>
+                <div class="chat-emoji-wrapper">
+                    <button class="chat-icon-button chat-emoji-button" type="button" title="إيموجي" data-chat-emoji aria-label="إيموجي">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                            <line x1="9" y1="9" x2="9.01" y2="9"/>
+                            <line x1="15" y1="9" x2="15.01" y2="9"/>
+                        </svg>
+                    </button>
+                    <div class="chat-emoji-picker" data-chat-emoji-picker>
+                        <div class="chat-emoji-picker-header">
+                            <span>اختر إيموجي</span>
+                            <button class="chat-emoji-picker-close" type="button" data-chat-emoji-close>&times;</button>
+                        </div>
+                        <div class="chat-emoji-picker-body" data-chat-emoji-list>
+                            <!-- سيتم تعبئته عبر JavaScript -->
+                        </div>
+                    </div>
+                </div>
                 <textarea
                     class="chat-input"
                     data-chat-input
