@@ -11,7 +11,74 @@
         initSidebar();
         initMobileMenu();
         loadNotifications();
+        fixMobileSidebarHeight();
     });
+    
+    /**
+     * Fix Sidebar Height on Mobile Devices
+     * إصلاح ارتفاع الشريط الجانبي على الهواتف المحمولة
+     */
+    function fixMobileSidebarHeight() {
+        const sidebar = document.querySelector('.homeline-sidebar');
+        if (!sidebar) return;
+        
+        // التحقق من أننا على هاتف محمول
+        const isMobile = window.innerWidth <= 768;
+        if (!isMobile) return;
+        
+        /**
+         * حساب الارتفاع الفعلي للشاشة
+         */
+        function setSidebarHeight() {
+            // استخدام window.innerHeight للحصول على الارتفاع الفعلي المتاح
+            const actualHeight = window.innerHeight;
+            sidebar.style.height = actualHeight + 'px';
+            
+            // إضافة padding-bottom إضافي لضمان ظهور جميع التبويبات
+            const sidebarNav = sidebar.querySelector('.sidebar-nav');
+            if (sidebarNav) {
+                // حساب المساحة المتبقية بعد المحتوى
+                const headerHeight = sidebar.querySelector('.sidebar-header')?.offsetHeight || 0;
+                const navHeight = sidebarNav.scrollHeight;
+                const totalContentHeight = headerHeight + navHeight;
+                
+                // إذا كان المحتوى أكبر من الشاشة، أضف padding
+                if (totalContentHeight > actualHeight - 20) {
+                    sidebarNav.style.paddingBottom = '30px';
+                }
+            }
+        }
+        
+        // تعيين الارتفاع عند التحميل
+        setSidebarHeight();
+        
+        // تحديث الارتفاع عند تغيير حجم النافذة أو عند فتح/إغلاق الشريط الجانبي
+        window.addEventListener('resize', setSidebarHeight);
+        window.addEventListener('orientationchange', function() {
+            // انتظر قليلاً بعد تغيير الاتجاه
+            setTimeout(setSidebarHeight, 100);
+        });
+        
+        // مراقبة فتح/إغلاق الشريط الجانبي
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+                    if (dashboardWrapper && dashboardWrapper.classList.contains('sidebar-open')) {
+                        setTimeout(setSidebarHeight, 50);
+                    }
+                }
+            });
+        });
+        
+        const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+        if (dashboardWrapper) {
+            observer.observe(dashboardWrapper, {
+                attributes: true,
+                attributeFilter: ['class']
+            });
+        }
+    }
     
     /**
      * Initialize Sidebar

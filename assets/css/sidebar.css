@@ -9,6 +9,7 @@
     top: 0;
     left: 0;
     width: var(--sidebar-width);
+    /* استخدام dynamic viewport height للهواتف المحمولة - fallback إلى 100vh */
     height: 100vh;
     background: var(--bg-sidebar);
     border-right: 1px solid var(--border-color);
@@ -17,6 +18,13 @@
     overflow-y: auto;
     overflow-x: hidden;
     box-shadow: var(--shadow-sm);
+}
+
+/* استخدام dynamic viewport height إذا كان مدعوم */
+@supports (height: 100dvh) {
+    .homeline-sidebar {
+        height: 100dvh;
+    }
 }
 
 .homeline-sidebar::-webkit-scrollbar {
@@ -47,6 +55,11 @@
         transform: translateX(-100%);
         width: var(--sidebar-width);
         z-index: 1050;
+        /* استخدام dynamic viewport height على الهواتف */
+        height: 100dvh;
+        /* إضافة padding-bottom إضافي لضمان ظهور جميع التبويبات */
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
     }
     
     .dashboard-wrapper.sidebar-open .homeline-sidebar {
@@ -56,6 +69,11 @@
     
     .dashboard-wrapper.sidebar-collapsed .homeline-sidebar {
         width: var(--sidebar-width);
+    }
+    
+    /* إضافة padding-bottom للتنقل لضمان ظهور آخر تبويب */
+    .sidebar-nav {
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 30px);
     }
     
     /* Overlay when sidebar is open on mobile */
