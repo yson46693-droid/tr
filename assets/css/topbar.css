@@ -97,7 +97,7 @@
     
     /* إخفاء بعض الأيقونات على الشاشات الصغيرة جداً */
     @media (max-width: 480px) {
-        .topbar-action:not(.mobile-menu-toggle):not(.topbar-user):not(:has(.badge)):not(.mobile-logout-btn) {
+        .topbar-action:not(.mobile-menu-toggle):not(.topbar-user):not(:has(.badge)):not(.mobile-logout-btn):not(#fingerprintRegisterBtn) {
             display: none;
         }
         

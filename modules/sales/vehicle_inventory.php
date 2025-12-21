@@ -835,63 +835,66 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                     /* Modal إنشاء طلب نقل */
                     #createTransferModal .modal-dialog,
                     #addVehicleModal .modal-dialog {
-                        margin: 0.5rem;
-                        max-height: calc(100vh - 1rem);
-                        height: calc(100vh - 1rem);
-                        display: flex;
-                        flex-direction: column;
+                        margin: 0.5rem !important;
+                        max-height: calc(100vh - 1rem) !important;
+                        height: auto !important;
+                        display: flex !important;
+                        flex-direction: column !important;
                     }
                     
                     #createTransferModal .modal-dialog.modal-dialog-scrollable,
                     #addVehicleModal .modal-dialog.modal-dialog-scrollable {
-                        overflow: hidden;
+                        overflow: hidden !important;
                     }
                     
                     #createTransferModal .modal-content,
                     #addVehicleModal .modal-content {
-                        max-height: 100%;
-                        height: 100%;
-                        display: flex;
-                        flex-direction: column;
+                        max-height: calc(100vh - 1rem) !important;
+                        height: 100% !important;
+                        display: flex !important;
+                        flex-direction: column !important;
+                        overflow: hidden !important;
                     }
                     
                     #createTransferModal .modal-header,
                     #addVehicleModal .modal-header {
-                        flex-shrink: 0;
+                        flex-shrink: 0 !important;
+                        flex-grow: 0 !important;
+                        border-bottom: 1px solid rgba(0, 0, 0, 0.125);
                     }
                     
                     #createTransferModal .modal-body,
                     #addVehicleModal .modal-body {
-                        flex: 1;
+                        flex: 1 1 auto !important;
                         overflow-y: auto !important;
                         overflow-x: hidden !important;
                         -webkit-overflow-scrolling: touch;
-                        padding-bottom: 1rem;
-                        min-height: 0; /* مهم لضمان عمل flexbox بشكل صحيح */
-                        max-height: none !important; /* إزالة أي max-height محددة inline */
+                        min-height: 0 !important;
+                        max-height: none !important;
+                        padding-bottom: 0.5rem !important;
+                        position: relative !important;
                     }
                     
                     #createTransferModal .modal-footer,
                     #addVehicleModal .modal-footer {
-                        flex-shrink: 0;
-                        background: rgba(255, 255, 255, 0.98);
-                        backdrop-filter: blur(6px);
-                        border-top: 1px solid rgba(0, 0, 0, 0.1);
-                        display: flex;
-                        flex-direction: column;
-                        gap: 0.6rem;
-                        padding: 1rem;
-                        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
-                        margin-top: 0;
-                        position: sticky;
-                        bottom: 0;
-                        z-index: 10;
+                        flex-shrink: 0 !important;
+                        flex-grow: 0 !important;
+                        background: #fff !important;
+                        border-top: 1px solid rgba(0, 0, 0, 0.125) !important;
+                        display: flex !important;
+                        flex-direction: column !important;
+                        gap: 0.6rem !important;
+                        padding: 1rem !important;
+                        box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.1) !important;
+                        margin-top: 0 !important;
+                        position: relative !important;
+                        z-index: 1050 !important;
                     }
                     
                     #createTransferModal .modal-footer .btn,
                     #addVehicleModal .modal-footer .btn {
-                        width: 100%;
-                        margin: 0;
+                        width: 100% !important;
+                        margin: 0 !important;
                     }
                 }
                 
@@ -1169,7 +1172,7 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
 
 <!-- Modal إنشاء طلب نقل -->
 <div class="modal fade" id="createTransferModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">طلب نقل منتجات بين المخازن</h5>
@@ -1801,24 +1804,43 @@ document.getElementById('transferForm')?.addEventListener('submit', function(e) 
         const modal = document.getElementById(modalId);
         if (!modal) return;
         
+        const modalDialog = modal.querySelector('.modal-dialog');
+        const modalContent = modal.querySelector('.modal-content');
         const modalBody = modal.querySelector('.modal-body');
         const modalFooter = modal.querySelector('.modal-footer');
-        if (!modalBody || !modalFooter) return;
         
-        // عند فتح المودال
+        if (!modalDialog || !modalContent || !modalBody || !modalFooter) return;
+        
+        // دالة لضمان ظهور modal-footer دائماً
+        function ensureFooterVisible() {
+            // التأكد من أن modal-content يستخدم flexbox
+            modalContent.style.display = 'flex';
+            modalContent.style.flexDirection = 'column';
+            modalContent.style.maxHeight = 'calc(100vh - 1rem)';
+            
+            // التأكد من أن modal-body قابل للتمرير
+            modalBody.style.flex = '1 1 auto';
+            modalBody.style.overflowY = 'auto';
+            modalBody.style.minHeight = '0';
+            modalBody.style.maxHeight = 'none';
+            
+            // التأكد من أن modal-footer ثابت
+            modalFooter.style.flexShrink = '0';
+            modalFooter.style.position = 'relative';
+        }
+        
+        // تطبيق الإصلاح عند فتح المودال
         modal.addEventListener('shown.bs.modal', function() {
-            // التأكد من إضافة padding في الأسفل للمحتوى
-            const lastElement = modalBody.lastElementChild;
-            if (lastElement && !lastElement.classList.contains('mb-footer-spacer')) {
+            ensureFooterVisible();
+            
+            // إضافة padding في الأسفل للمحتوى
+            if (!modalBody.querySelector('.mb-footer-spacer')) {
                 const spacer = document.createElement('div');
                 spacer.className = 'mb-footer-spacer';
-                spacer.style.height = '1rem';
+                spacer.style.height = '0.5rem';
+                spacer.style.flexShrink = '0';
                 modalBody.appendChild(spacer);
             }
-            
-            // التأكد من أن modal-body قابل للسكرول
-            modalBody.style.overflowY = 'auto';
-            modalBody.style.maxHeight = 'none';
         });
         
         // عند focus على input/select/textarea
@@ -1826,15 +1848,18 @@ document.getElementById('transferForm')?.addEventListener('submit', function(e) 
             if (e.target && (e.target.tagName === 'INPUT' || 
                             e.target.tagName === 'SELECT' || 
                             e.target.tagName === 'TEXTAREA')) {
-                // Scroll إلى العنصر لضمان ظهوره
                 setTimeout(function() {
                     const targetRect = e.target.getBoundingClientRect();
                     const modalBodyRect = modalBody.getBoundingClientRect();
                     const modalFooterRect = modalFooter.getBoundingClientRect();
                     
-                    // إذا كان العنصر مخفياً بسبب modal-footer
+                    // حساب المساحة المتاحة للسكرول
+                    const availableHeight = modalFooterRect.top - modalBodyRect.top - 20;
+                    
+                    // إذا كان العنصر مخفياً
                     if (targetRect.bottom > modalFooterRect.top - 20) {
-                        e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        const scrollOffset = targetRect.bottom - modalFooterRect.top + 20;
+                        modalBody.scrollTop += scrollOffset;
                     }
                 }, 300);
             }
@@ -1842,24 +1867,38 @@ document.getElementById('transferForm')?.addEventListener('submit', function(e) 
         
         // مراقبة إضافة عناصر جديدة في modal-body
         const observer = new MutationObserver(function(mutations) {
+            let shouldScroll = false;
+            
             mutations.forEach(function(mutation) {
                 if (mutation.addedNodes.length > 0) {
-                    // تمت إضافة عناصر جديدة - التأكد من ظهور modal-footer
-                    setTimeout(function() {
-                        // Scroll إلى آخر عنصر مضافة إذا لزم الأمر
+                    shouldScroll = true;
+                }
+            });
+            
+            if (shouldScroll) {
+                // التأكد من ظهور modal-footer بعد إضافة العناصر
+                setTimeout(function() {
+                    ensureFooterVisible();
+                    
+                    // إذا كان المحتوى طويلاً، scroll إلى الأسفل قليلاً لضمان ظهور الأزرار
+                    const bodyHeight = modalBody.scrollHeight;
+                    const bodyClientHeight = modalBody.clientHeight;
+                    
+                    if (bodyHeight > bodyClientHeight) {
+                        // التأكد من أن آخر عنصر مرئي
                         const lastChild = modalBody.lastElementChild;
-                        if (lastChild && !lastChild.classList.contains('mb-footer-spacer')) {
+                        if (lastChild) {
                             const lastChildRect = lastChild.getBoundingClientRect();
                             const modalFooterRect = modalFooter.getBoundingClientRect();
                             
-                            // إذا كان آخر عنصر مخفياً بسبب modal-footer، scroll
-                            if (lastChildRect.bottom > modalFooterRect.top - 20) {
-                                lastChild.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            if (lastChildRect.bottom > modalFooterRect.top - 30) {
+                                const scrollAmount = lastChildRect.bottom - modalFooterRect.top + 30;
+                                modalBody.scrollTop = Math.min(modalBody.scrollTop + scrollAmount, modalBody.scrollHeight);
                             }
                         }
-                    }, 100);
-                }
-            });
+                    }
+                }, 100);
+            }
         });
         
         observer.observe(modalBody, { childList: true, subtree: true });
@@ -1869,29 +1908,10 @@ document.getElementById('transferForm')?.addEventListener('submit', function(e) 
             function handleViewportResize() {
                 const viewport = window.visualViewport;
                 const viewportHeight = viewport.height;
-                const windowHeight = window.innerHeight;
                 
-                // إذا كانت لوحة المفاتيح مفتوحة
-                if (viewportHeight < windowHeight * 0.75) {
-                    // تعديل max-height للمودال
-                    const modalDialog = modal.querySelector('.modal-dialog');
-                    if (modalDialog) {
-                        modalDialog.style.maxHeight = viewportHeight + 'px';
-                    }
-                    
-                    // التأكد من أن modal-footer مرئي
-                    if (modalFooter) {
-                        modalFooter.style.position = 'sticky';
-                        modalFooter.style.bottom = '0';
-                        modalFooter.style.zIndex = '1000';
-                    }
-                } else {
-                    // إعادة القيم الافتراضية
-                    const modalDialog = modal.querySelector('.modal-dialog');
-                    if (modalDialog) {
-                        modalDialog.style.maxHeight = '';
-                    }
-                }
+                // تحديث max-height للمودال
+                modalContent.style.maxHeight = viewportHeight + 'px';
+                ensureFooterVisible();
             }
             
             window.visualViewport.addEventListener('resize', handleViewportResize);

@@ -3230,6 +3230,20 @@ if (ob_get_level() > 0) {
                 </div>
                 <?php endif; ?>
                 
+                <!-- Fingerprint Registration Button (Mobile Only) -->
+                <?php if (isLoggedIn()): ?>
+                <a href="<?php echo getRelativeUrl('register_fingerprint.php'); ?>" 
+                   class="topbar-action d-md-none" 
+                   id="fingerprintRegisterBtn" 
+                   role="button" 
+                   data-bs-toggle="tooltip" 
+                   title="تسجيل البصمة" 
+                   aria-label="تسجيل البصمة">
+                    <i class="bi bi-fingerprint" aria-hidden="true"></i>
+                    <span class="visually-hidden">تسجيل البصمة</span>
+                </a>
+                <?php endif; ?>
+                
                 <!-- Refresh Page Button -->
                 <a href="#" 
                    class="topbar-action" 
