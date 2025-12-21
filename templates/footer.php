@@ -796,10 +796,8 @@ if (!defined('ACCESS_ALLOWED')) {
                 try {
                     const response = await fetch(apiPath + '?t=' + Date.now(), {
                         method: 'GET',
-                        cache: 'no-cache',
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest'
-                        }
+                        cache: 'no-cache'
+                        // إزالة X-Requested-With لتجنب preflight requests على InfinityFree
                     });
                     
                     if (!response.ok) {

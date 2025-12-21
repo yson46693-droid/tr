@@ -3,15 +3,11 @@
  * API: التحقق من وجود تحديثات في الموقع
  */
 
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
-
 define('ACCESS_ALLOWED', true);
 
 require_once __DIR__ . '/../includes/config.php';
+
+header('Content-Type: application/json; charset=utf-8');
 
 // الحصول على رقم الإصدار الحالي
 $currentVersion = defined('APP_VERSION') ? APP_VERSION : '1.0.0';
