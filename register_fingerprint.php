@@ -120,7 +120,7 @@ $dashboardUrl = getDashboardUrl($userRole);
                                    name="email"
                                    value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>"
                                    required>
-                            <small class="text-muted">يستخدم لتسجيل الدخول</small>
+                            <small class="text-muted">لا يستخدم لتسجيل الدخول</small>
                         </div>
                         
                         <!-- اسم المستخدم (للعرض فقط) -->
