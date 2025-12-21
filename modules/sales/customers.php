@@ -5137,7 +5137,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                             $phoneNumber = trim($phoneData['phone'] ?? '');
                                             if (!empty($phoneNumber)) {
                                                 echo '<a href="tel:' . htmlspecialchars($phoneNumber) . '" class="btn btn-sm btn-outline-primary me-1 mb-1" title="اتصل بـ ' . htmlspecialchars($phoneNumber) . '">';
-                                                echo '<i class="bi bi-telephone-fill"></i> ';
+                                                echo '<i class="bi bi-telephone-fill"></i> ' ;
                                                 echo '</a>';
                                             }
                                         }
@@ -5233,7 +5233,6 @@ document.addEventListener('DOMContentLoaded', function () {
                                         >
                                             <i class="bi bi-cash-coin me-1"></i>تحصيل
                                         </button>
-                                        <?php if (in_array($currentRole, ['manager', 'sales'], true)): ?>
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-info js-customer-history"
@@ -5250,7 +5249,6 @@ document.addEventListener('DOMContentLoaded', function () {
                                         >
                                             <i class="bi bi-arrow-return-left me-1"></i>مرتجع
                                         </button>
-                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>

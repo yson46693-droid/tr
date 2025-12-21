@@ -1552,8 +1552,8 @@ if (!defined('ACCESS_ALLOWED')) {
         
         // التحقق من حالة الاتصال
         window.addEventListener('online', function() {
-            // عند الاتصال بالإنترنت، تحقق من حالة الصفحة بعد تأخير أطول
-            setTimeout(checkPageStatus, 5000);
+            // تم تعطيل فحص حالة الصفحة - checkPageStatus معطلة
+            // setTimeout(checkPageStatus, 5000);
         });
         
         window.addEventListener('offline', function() {
@@ -1561,22 +1561,24 @@ if (!defined('ACCESS_ALLOWED')) {
             // سننتظر حتى يعود الاتصال
         });
         
+        // تم تعطيل فحص حالة الصفحة - checkPageStatus معطلة
         // التحقق من حالة الصفحة بعد التحميل
         // زيادة التأخير لمنح الصفحات وقتاً أطول للتحميل (خاصة tasks.php)
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                // تأخير أطول (8 ثوانٍ) لمنح الصفحات وقتاً كافياً للتحميل بعد التنقل
-                setTimeout(checkPageStatus, 8000);
-            });
-        } else {
-            setTimeout(checkPageStatus, 8000);
-        }
+        // if (document.readyState === 'loading') {
+        //     document.addEventListener('DOMContentLoaded', function() {
+        //         // تأخير أطول (8 ثوانٍ) لمنح الصفحات وقتاً كافياً للتحميل بعد التنقل
+        //         setTimeout(checkPageStatus, 8000);
+        //     });
+        // } else {
+        //     setTimeout(checkPageStatus, 8000);
+        // }
         
+        // تم تعطيل فحص حالة الصفحة - checkPageStatus معطلة
         // التحقق من حالة الصفحة بعد تحميلها بالكامل
-        window.addEventListener('load', function() {
-            // تأخير أطول (5 ثوانٍ) لمنح الصفحات وقتاً كافياً للتحميل بعد التنقل
-            setTimeout(checkPageStatus, 5000);
-        });
+        // window.addEventListener('load', function() {
+        //     // تأخير أطول (5 ثوانٍ) لمنح الصفحات وقتاً كافياً للتحميل بعد التنقل
+        //     setTimeout(checkPageStatus, 5000);
+        // });
         
         // معالجة أخطاء fetch (للطلبات AJAX)
         const originalFetch = window.fetch;
@@ -1615,34 +1617,35 @@ if (!defined('ACCESS_ALLOWED')) {
                 });
         };
         
+        // تم تعطيل فحص حالة الصفحة - checkPageStatus معطلة
         // مراقبة تغييرات الصفحة (للتحقق من أخطاء التوجيه) - تقليل التكرار
-        let lastUrl = window.location.href;
-        setInterval(function() {
-            // إذا كان التنقل قيد التقدم، لا نتحقق
-            if (isNavigating) {
-                return;
-            }
-            
-            const currentUrl = window.location.href;
-            // إذا تغيرت الصفحة إلى صفحة خطأ أو ERR_FAILED
-            if (currentUrl !== lastUrl) {
-                lastUrl = currentUrl;
-                // التحقق من أن الصفحة الحالية ليست صفحة تسجيل الدخول
-                if (!currentUrl.includes('index.php') && !currentUrl.includes('login')) {
-                    // استثناء صفحات tasks من التحقق التلقائي
-                    const isTasksPage = currentUrl.includes('tasks.php') || 
-                                       currentUrl.includes('page=tasks') ||
-                                       currentUrl.includes('production.php?page=tasks') ||
-                                       currentUrl.includes('manager.php?page=tasks');
-                    
-                    if (!isTasksPage) {
-                        // التحقق من أن الصفحة تم تحميلها بشكل صحيح (بعد تأخير أطول)
-                        // زيادة التأخير لمنح الصفحة وقتاً كافياً للتحميل
-                        setTimeout(checkPageStatus, 8000);
-                    }
-                }
-            }
-        }, 15000); // 15 ثانية بدلاً من 10 ثوانٍ لتقليل الاستخدام
+        // let lastUrl = window.location.href;
+        // setInterval(function() {
+        //     // إذا كان التنقل قيد التقدم، لا نتحقق
+        //     if (isNavigating) {
+        //         return;
+        //     }
+        //     
+        //     const currentUrl = window.location.href;
+        //     // إذا تغيرت الصفحة إلى صفحة خطأ أو ERR_FAILED
+        //     if (currentUrl !== lastUrl) {
+        //         lastUrl = currentUrl;
+        //         // التحقق من أن الصفحة الحالية ليست صفحة تسجيل الدخول
+        //         if (!currentUrl.includes('index.php') && !currentUrl.includes('login')) {
+        //             // استثناء صفحات tasks من التحقق التلقائي
+        //             const isTasksPage = currentUrl.includes('tasks.php') || 
+        //                                currentUrl.includes('page=tasks') ||
+        //                                currentUrl.includes('production.php?page=tasks') ||
+        //                                currentUrl.includes('manager.php?page=tasks');
+        //             
+        //             if (!isTasksPage) {
+        //                 // التحقق من أن الصفحة تم تحميلها بشكل صحيح (بعد تأخير أطول)
+        //                 // زيادة التأخير لمنح الصفحة وقتاً كافياً للتحميل
+        //                 setTimeout(checkPageStatus, 8000);
+        //             }
+        //         }
+        //     }
+        // }, 15000); // 15 ثانية بدلاً من 10 ثوانٍ لتقليل الاستخدام
         
         // معالجة أخطاء XMLHttpRequest (للتوافق مع الكود القديم)
         if (window.XMLHttpRequest) {
