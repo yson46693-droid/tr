@@ -1318,114 +1318,14 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
                         
-                        // الحالة الخاصة: حساب نسبة التحصيلات عند البيع بالآجل لعميل له رصيد دائن
-                        // يجب حساب نسبة 2% على المبلغ المستخدم من الرصيد الدائن (creditUsed) بغض النظر عن سجل المشتريات
-                        // هذا ينطبق على البيع بالآجل فقط (paymentType === 'credit')
-                        // عند البيع بالآجل، creditUsed = min(netTotal, abs(originalBalance))
-                        if ($hasCreditBalance && $paymentType === 'credit' && !$commissionApplied) {
-                            // إعادة حساب creditUsed بشكل صحيح للبيع بالآجل
-                            // creditUsed = min(netTotal, abs(originalBalance))
-                            $creditAvailable = abs($originalBalance ?? 0);
-                            $calculatedCreditUsed = min($netTotal, $creditAvailable);
-                            
-                            // استخدام القيمة المحسوبة إذا كانت أكبر من 0
-                            if ($calculatedCreditUsed > 0.0001) {
-                                $creditUsed = $calculatedCreditUsed;
-                                
-                                    error_log(sprintf(
-                                    'Recalculated creditUsed for credit payment commission: originalCreditUsed=%.2f, calculatedCreditUsed=%.2f, netTotal=%.2f, creditAvailable=%.2f, originalBalance=%.2f, invoiceId=%d',
-                                    $creditUsed ?? 0,
-                                    $calculatedCreditUsed,
-                                    $netTotal,
-                                    $creditAvailable,
-                                    $originalBalance ?? 0,
-                                    $invoiceId
-                                ));
-                                
-                                // حساب نسبة 2% على المبلغ المستخدم من الرصيد الدائن
-                                $creditPaymentCommissionAmount = round($calculatedCreditUsed * 0.02, 2);
-                                
-                                if ($creditPaymentCommissionAmount > 0) {
-                                    try {
-                                    $timestamp = strtotime($saleDate) ?: time();
-                                    $targetMonth = (int)date('n', $timestamp);
-                                    $targetYear = (int)date('Y', $timestamp);
-                                    
-                                    $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
-                                    if (!$summary['exists']) {
-                                        $creation = createOrUpdateSalary($currentUser['id'], $targetMonth, $targetYear);
-                                        if (!($creation['success'] ?? false)) {
-                                            throw new RuntimeException('Failed to create salary record: ' . ($creation['message'] ?? 'Unknown error'));
-                                        }
-                                        $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
-                                    }
-                                    
-                                    if ($summary['exists']) {
-                                        $salary = $summary['salary'];
-                                        $salaryId = (int)($salary['id'] ?? 0);
-                                        
-                                        if ($salaryId > 0) {
-                                            $hasCollectionsBonusColumn = ensureCollectionsBonusColumn();
-                                            
-                                            if ($hasCollectionsBonusColumn) {
-                                                // إضافة نسبة التحصيلات إلى collections_bonus والمبلغ الأساسي إلى collections_amount
-                                                $db->execute(
-                                                    "UPDATE salaries 
-                                                     SET collections_bonus = COALESCE(collections_bonus, 0) + ?, 
-                                                         collections_amount = COALESCE(collections_amount, 0) + ?,
-                                                         updated_at = NOW()
-                                                     WHERE id = ?",
-                                                    [$creditPaymentCommissionAmount, $calculatedCreditUsed, $salaryId]
-                                                );
-                                                
-                                                error_log(sprintf(
-                                                    'Added collection percentage for credit payment with credit balance: creditUsed=%.2f, commissionAmount=%.2f, invoiceId=%d, customerId=%d, originalBalance=%.2f, hasPreviousPurchases=%s',
-                                                    $calculatedCreditUsed,
-                                                    $creditPaymentCommissionAmount,
-                                                    $invoiceId,
-                                                    $customerId,
-                                                    $originalBalance ?? 0,
-                                                    ($hasPreviousPurchases ?? false) ? 'true' : 'false'
-                                                ));
-                                                
-                                                $commissionApplied = true; // منع الحساب المزدوج
-                                            }
-                                        }
-                                    }
-                                } catch (Throwable $creditPaymentCommissionError) {
-                                    error_log('Error adding collection percentage for credit payment with credit balance: ' . $creditPaymentCommissionError->getMessage());
-                                    error_log('Credit payment commission error trace: ' . $creditPaymentCommissionError->getTraceAsString());
-                                }
-                                } else {
-                                    error_log(sprintf(
-                                        'WARNING: creditPaymentCommissionAmount is zero or negative: commissionAmount=%.2f, calculatedCreditUsed=%.2f, invoiceId=%d',
-                                        $creditPaymentCommissionAmount,
-                                        $calculatedCreditUsed,
-                                        $invoiceId
-                                    ));
-                                }
-                            } else {
-                                error_log(sprintf(
-                                    'WARNING: calculatedCreditUsed is zero or negative: calculatedCreditUsed=%.2f, netTotal=%.2f, creditAvailable=%.2f, originalBalance=%.2f, invoiceId=%d',
-                                    $calculatedCreditUsed,
-                                    $netTotal,
-                                    $creditAvailable,
-                                    $originalBalance ?? 0,
-                                    $invoiceId
-                                ));
-                            }
-                        } else {
-                            error_log(sprintf(
-                                'DEBUG: Credit payment commission NOT applied: hasCreditBalance=%s, paymentType=%s, commissionApplied=%s, invoiceId=%d',
-                                $hasCreditBalance ? 'true' : 'false',
-                                $paymentType ?? 'NULL',
-                                $commissionApplied ? 'true' : 'false',
-                                $invoiceId
-                            ));
-                        }
+                        // ملاحظة: تم إزالة الكود المكرر الذي كان يعمل للبيع بالآجل لعميل له رصيد دائن
+                        // لأن هذا الكود كان يعمل قبل الكود المخصص ويُعيّن $commissionApplied = true
+                        // مما يمنع الكود المخصص من التنفيذ
+                        // الآن الكود المخصص للعملاء الذين لديهم سجل مشتريات (السطر 1949) 
+                        // والكود المخصص للعملاء الذين ليس لديهم سجل مشتريات (السطر 1429) سيعملان بشكل صحيح
                         
                         // التحقق من أن العميل ليس له سجل مشتريات قبل حساب النسبة
-                        // لعميل له سجل مشتريات: يتم التعامل معه في الكود السابق (السطر 1543)
+                        // لعميل له سجل مشتريات: يتم التعامل معه في الكود اللاحق (السطر 1949)
                         if ($hasCreditBalance && !($hasPreviousPurchases ?? false) && ($paymentType === 'credit' || $paymentType === 'partial') && !$commissionApplied) {
                             // استخدام قيمة creditUsed التي تم حسابها مسبقاً في السطور 589-622
                             // هذه القيمة صحيحة لأنها تم حسابها بناءً على الرصيد الأصلي قبل التحديث

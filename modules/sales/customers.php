@@ -3952,124 +3952,111 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     @media (max-width: 767.98px) {
-        .customers-list-card .card-body {
-            padding: 1.1rem 0.75rem 1rem;
-        }
-
-        /* تحسين الجدول الرئيسي للعملاء */
+        /* تحسين الجدول الرئيسي للعملاء المحليين */
         .dashboard-table-wrapper {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
-            margin: 0;
-            padding: 0;
-            width: 100%;
+            margin: 0 -0.75rem;
+            padding: 0 0.75rem;
         }
-
+        
         .dashboard-table {
-            min-width: 100%;
-            max-width: 100%;
-            font-size: 0.75rem;
+            min-width: 850px;
+            font-size: 0.85rem;
             width: 100%;
             table-layout: fixed;
-            margin: 0;
         }
-
-        /* تحديد عرض الأعمدة بناءً على طول المحتوى - متناسق مع عرض الشاشة */
+        
+        /* تحديد عرض الأعمدة بناءً على طول المحتوى */
         /* الاسم: 15 حرف */
         .dashboard-table thead th:nth-child(1),
         .dashboard-table tbody td:nth-child(1) {
-            width: 18%;
-            min-width: 0;
-            max-width: 18%;
+            width: 20%;
+            min-width: 110px;
         }
-
+        
         /* رقم الهاتف: 11 حرف */
         .dashboard-table thead th:nth-child(2),
         .dashboard-table tbody td:nth-child(2) {
-            width: 12%;
-            min-width: 0;
-            max-width: 12%;
+            width: 15%;
+            min-width: 85px;
         }
-
+        
         /* الرصيد: 7 حرف */
         .dashboard-table thead th:nth-child(3),
         .dashboard-table tbody td:nth-child(3) {
             width: 10%;
-            min-width: 0;
-            max-width: 10%;
+            min-width: 65px;
         }
-
+        
         /* العنوان: 8 حرف */
         .dashboard-table thead th:nth-child(4),
         .dashboard-table tbody td:nth-child(4) {
             width: 12%;
-            min-width: 0;
-            max-width: 12%;
+            min-width: 75px;
             word-wrap: break-word;
             white-space: normal;
         }
-
+        
         /* المنطقة: 7 حرف */
         .dashboard-table thead th:nth-child(5),
         .dashboard-table tbody td:nth-child(5) {
             width: 10%;
-            min-width: 0;
-            max-width: 10%;
+            min-width: 65px;
         }
-
+        
         /* الموقع */
         .dashboard-table thead th:nth-child(6),
         .dashboard-table tbody td:nth-child(6) {
             width: 13%;
-            min-width: 0;
-            max-width: 13%;
+            min-width: 90px;
         }
-
-        /* الإجراءات - عرض أكبر */
+        
+        /* الإجراءات */
         .dashboard-table thead th:nth-child(7),
         .dashboard-table tbody td:nth-child(7) {
-            width: 30%;
-            min-width: 0;
-            max-width: 30%;
+            width: 20%;
+            min-width: 140px;
         }
-
+        
         .dashboard-table thead th {
-            font-size: 0.7rem;
-            padding: 0.4rem 0.25rem;
+            font-size: 0.8rem;
+            padding: 0.5rem 0.35rem;
             white-space: nowrap;
             font-weight: 600;
         }
-
+        
         .dashboard-table tbody td {
-            padding: 0.4rem 0.25rem;
-            font-size: 0.7rem;
+            padding: 0.5rem 0.35rem;
+            font-size: 0.8rem;
             vertical-align: middle;
         }
-
+        
         /* تحسين الأزرار في الجدول */
         .dashboard-table .btn {
             font-size: 0.7rem;
             padding: 0.25rem 0.4rem;
             white-space: nowrap;
         }
-
+        
         .dashboard-table .btn i {
             font-size: 0.75rem;
         }
-
+        
+        
         /* تحسين Badge الرصيد */
         .dashboard-table .badge {
             font-size: 0.65rem;
             padding: 0.2rem 0.4rem;
         }
-
+        
         /* تحسين عمود الموقع */
         .dashboard-table tbody td:nth-child(6) .d-flex {
             flex-direction: column;
             align-items: flex-start;
             gap: 0.3rem;
         }
-
+        
         .dashboard-table tbody td:nth-child(6) .btn {
             width: 100%;
             justify-content: center;
@@ -4077,111 +4064,76 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     @media (max-width: 575.98px) {
-        .customers-search-card .card-body {
-            padding: 1rem 0.5rem 1.25rem;
-            border-radius: 16px;
-        }
-
-        .dashboard-table-wrapper {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-        }
-
         .dashboard-table {
-            min-width: 100%;
-            max-width: 100%;
-            font-size: 0.7rem;
-            width: 100%;
-            margin: 0;
+            min-width: 800px;
+            font-size: 0.8rem;
         }
-
+        
         .dashboard-table thead th {
-            font-size: 0.65rem;
-            padding: 0.35rem 0.2rem;
+            font-size: 0.75rem;
+            padding: 0.45rem 0.3rem;
         }
-
+        
         .dashboard-table tbody td {
-            font-size: 0.65rem;
-            padding: 0.35rem 0.2rem;
+            font-size: 0.75rem;
+            padding: 0.45rem 0.3rem;
         }
-
+        
         .dashboard-table .btn {
             font-size: 0.65rem;
             padding: 0.2rem 0.35rem;
         }
-
+        
         .dashboard-table .btn i {
             font-size: 0.7rem;
         }
-
+        
+        
         /* عمود العنوان يبقى ظاهراً - مهم جداً */
         .dashboard-table thead th:nth-child(4),
         .dashboard-table tbody td:nth-child(4) {
             display: table-cell !important;
         }
-
+        
         .dashboard-table .badge {
             font-size: 0.6rem;
             padding: 0.15rem 0.35rem;
         }
-
-        /* تحسين عرض الأعمدة على الشاشات الصغيرة جداً */
+        
+        /* تقليل min-width للأعمدة على الشاشات الصغيرة */
         .dashboard-table thead th:nth-child(1),
         .dashboard-table tbody td:nth-child(1) {
-            width: 16%;
-            min-width: 0;
-            max-width: 16%;
+            min-width: 100px;
         }
-
+        
         .dashboard-table thead th:nth-child(2),
         .dashboard-table tbody td:nth-child(2) {
-            width: 11%;
-            min-width: 0;
-            max-width: 11%;
+            min-width: 80px;
         }
-
+        
         .dashboard-table thead th:nth-child(3),
         .dashboard-table tbody td:nth-child(3) {
-            width: 9%;
-            min-width: 0;
-            max-width: 9%;
+            min-width: 60px;
         }
-
+        
         .dashboard-table thead th:nth-child(4),
         .dashboard-table tbody td:nth-child(4) {
-            width: 11%;
-            min-width: 0;
-            max-width: 11%;
+            min-width: 70px;
         }
-
+        
         .dashboard-table thead th:nth-child(5),
         .dashboard-table tbody td:nth-child(5) {
-            width: 9%;
-            min-width: 0;
-            max-width: 9%;
+            min-width: 60px;
         }
-
+        
         .dashboard-table thead th:nth-child(6),
         .dashboard-table tbody td:nth-child(6) {
-            width: 24%;
-            min-width: 0;
-            max-width: 24%;
+            min-width: 85px;
         }
-
+        
         .dashboard-table thead th:nth-child(7),
         .dashboard-table tbody td:nth-child(7) {
-            width: 35%;
-            min-width: 0;
-            max-width: 35%;
-        }
-
-        .customers-list-card .card-header {
-            border-radius: 16px 16px 0 0;
-        }
-
-        .customers-list-card .card-body {
-            padding: 1rem 0.5rem 0.9rem;
+            min-width: 130px;
         }
     }
 </style>
