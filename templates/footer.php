@@ -1451,62 +1451,63 @@ if (!defined('ACCESS_ALLOWED')) {
             window.location.replace(loginUrl);
         }
         
+        // تم تعطيل فحص حالة الصفحة - checkPageStatus معطلة
         // التحقق من حالة الصفحة
-        function checkPageStatus() {
-            // إذا كان التنقل قيد التقدم، لا نتحقق من حالة الصفحة
-            if (isNavigating) {
-                return;
-            }
-            
-            // التحقق من أن الصفحة تم تحميلها بشكل صحيح
-            if (document.readyState === 'complete') {
-                // استثناء صفحات معينة من التحقق (مثل tasks.php التي قد تستغرق وقتاً في التحميل)
-                const currentUrl = window.location.href || '';
-                const currentPath = window.location.pathname || '';
-                
-                // قائمة الصفحات المستثناة من التحقق التلقائي
-                const excludedPages = [
-                    'tasks.php',
-                    'page=tasks',
-                    'production.php?page=tasks',
-                    'manager.php?page=tasks',
-                    'index.php',
-                    'login'
-                ];
-                
-                // إذا كانت الصفحة الحالية في قائمة الاستثناءات، لا نتحقق منها
-                const isExcluded = excludedPages.some(page => 
-                    currentUrl.includes(page) || currentPath.includes(page)
-                );
-                
-                if (isExcluded) {
-                    return; // لا نتحقق من هذه الصفحة
-                }
-                
-                // التحقق من وجود محتوى أساسي في الصفحة
-                const mainContent = document.getElementById('main-content') || document.querySelector('main') || document.body;
-                
-                // تحسين المنطق: التحقق من وجود محتوى فعلي وليس فقط عدد العناصر
-                const hasContent = mainContent && (
-                    mainContent.children.length > 0 || 
-                    mainContent.innerHTML.trim().length > 500 || // زيادة الحد الأدنى من 100 إلى 500
-                    document.querySelector('.container-fluid') ||
-                    document.querySelector('.card') ||
-                    document.querySelector('table') ||
-                    document.querySelector('form')
-                );
-                
-                if (!hasContent && document.body.innerHTML.trim().length < 500) {
-                    // الصفحة فارغة أو لم يتم تحميلها - إعادة التوجيه
-                    // لكن فقط إذا لم يكن التنقل قيد التقدم
-                    if (!isNavigating) {
-                        console.warn('Page appears empty or failed to load - redirecting to login');
-                        redirectToLogin();
-                    }
-                    return;
-                }
-            }
-        }
+        // function checkPageStatus() {
+        //     // إذا كان التنقل قيد التقدم، لا نتحقق من حالة الصفحة
+        //     if (isNavigating) {
+        //         return;
+        //     }
+        //     
+        //     // التحقق من أن الصفحة تم تحميلها بشكل صحيح
+        //     if (document.readyState === 'complete') {
+        //         // استثناء صفحات معينة من التحقق (مثل tasks.php التي قد تستغرق وقتاً في التحميل)
+        //         const currentUrl = window.location.href || '';
+        //         const currentPath = window.location.pathname || '';
+        //         
+        //         // قائمة الصفحات المستثناة من التحقق التلقائي
+        //         const excludedPages = [
+        //             'tasks.php',
+        //             'page=tasks',
+        //             'production.php?page=tasks',
+        //             'manager.php?page=tasks',
+        //             'index.php',
+        //             'login'
+        //         ];
+        //         
+        //         // إذا كانت الصفحة الحالية في قائمة الاستثناءات، لا نتحقق منها
+        //         const isExcluded = excludedPages.some(page => 
+        //             currentUrl.includes(page) || currentPath.includes(page)
+        //         );
+        //         
+        //         if (isExcluded) {
+        //             return; // لا نتحقق من هذه الصفحة
+        //         }
+        //         
+        //         // التحقق من وجود محتوى أساسي في الصفحة
+        //         const mainContent = document.getElementById('main-content') || document.querySelector('main') || document.body;
+        //         
+        //         // تحسين المنطق: التحقق من وجود محتوى فعلي وليس فقط عدد العناصر
+        //         const hasContent = mainContent && (
+        //             mainContent.children.length > 0 || 
+        //             mainContent.innerHTML.trim().length > 500 || // زيادة الحد الأدنى من 100 إلى 500
+        //             document.querySelector('.container-fluid') ||
+        //             document.querySelector('.card') ||
+        //             document.querySelector('table') ||
+        //             document.querySelector('form')
+        //         );
+        //         
+        //         if (!hasContent && document.body.innerHTML.trim().length < 500) {
+        //             // الصفحة فارغة أو لم يتم تحميلها - إعادة التوجيه
+        //             // لكن فقط إذا لم يكن التنقل قيد التقدم
+        //             if (!isNavigating) {
+        //                 console.warn('Page appears empty or failed to load - redirecting to login');
+        //                 redirectToLogin();
+        //             }
+        //             return;
+        //         }
+        //     }
+        // }
         
         // معالجة أخطاء التحميل
         window.addEventListener('error', function(event) {
