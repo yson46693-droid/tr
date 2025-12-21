@@ -2243,14 +2243,24 @@ function initEditExternalButtons() {
     });
 }
 
-// تحديث تلقائي للصفحة بعد رسالة النجاح
+// إزالة معاملات success/error من URL بعد عرض الرسالة (بدون إعادة تحميل)
 (function() {
     const successAlert = document.getElementById('successAlert');
-    if (successAlert) {
-        // انتظار 2.5 ثانية قبل التحديث التلقائي
-        setTimeout(function() {
-            window.location.reload();
-        }, 2500);
+    const errorAlert = document.getElementById('errorAlert');
+    
+    // إذا كانت هناك رسالة نجاح أو خطأ، إزالة المعاملات من URL
+    if (successAlert || errorAlert) {
+        if (window.history && window.history.replaceState) {
+            const url = new URL(window.location);
+            if (url.searchParams.has('success') || url.searchParams.has('error')) {
+                url.searchParams.delete('success');
+                url.searchParams.delete('error');
+                // إزالة معاملات _v و _t أيضاً إذا كانت موجودة
+                url.searchParams.delete('_v');
+                url.searchParams.delete('_t');
+                window.history.replaceState({}, '', url);
+            }
+        }
     }
 })();
 </script>

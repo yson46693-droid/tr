@@ -71,6 +71,123 @@ $dashboardUrl = getDashboardUrl($userRole);
                         </small>
                     </div>
                     
+                </div>
+            </div>
+            
+            <!-- قسم الملف الشخصي -->
+            <div class="card shadow-lg border-0 mt-4">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-person-circle me-2"></i>الملف الشخصي
+                    </h4>
+                </div>
+                <div class="card-body p-4">
+                    <form id="profileForm">
+                        <!-- الاسم الكامل -->
+                        <div class="mb-3">
+                            <label for="fullName" class="form-label">
+                                <i class="bi bi-person me-2"></i>الاسم الكامل
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="fullName" 
+                                   name="full_name"
+                                   value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>"
+                                   required>
+                        </div>
+                        
+                        <!-- رقم الهاتف -->
+                        <div class="mb-3">
+                            <label for="phone" class="form-label">
+                                <i class="bi bi-telephone me-2"></i>رقم الهاتف
+                            </label>
+                            <input type="tel" 
+                                   class="form-control" 
+                                   id="phone" 
+                                   name="phone"
+                                   value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>"
+                                   placeholder="مثال: 01234567890">
+                        </div>
+                        
+                        <!-- البريد الإلكتروني (للعرض فقط) -->
+                        <div class="mb-3">
+                            <label for="email" class="form-label">
+                                <i class="bi bi-envelope me-2"></i>البريد الإلكتروني
+                            </label>
+                            <input type="email" 
+                                   class="form-control" 
+                                   id="email" 
+                                   name="email"
+                                   value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>"
+                                   required>
+                            <small class="text-muted">يستخدم لتسجيل الدخول</small>
+                        </div>
+                        
+                        <!-- اسم المستخدم (للعرض فقط) -->
+                        <div class="mb-3">
+                            <label for="username" class="form-label">
+                                <i class="bi bi-person-badge me-2"></i>اسم المستخدم
+                            </label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="username" 
+                                   value="<?php echo htmlspecialchars($user['username'] ?? ''); ?>"
+                                   disabled>
+                            <small class="text-muted">لا يمكن تغيير اسم المستخدم</small>
+                        </div>
+                        
+                        <!-- زر الحفظ -->
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg" id="saveProfileBtn">
+                                <i class="bi bi-save me-2"></i>حفظ التغييرات
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <hr class="my-4">
+                    
+                    <!-- تغيير كلمة المرور -->
+                    <h5 class="mb-3">
+                        <i class="bi bi-key me-2"></i>تغيير كلمة المرور
+                    </h5>
+                    <form id="passwordForm">
+                        <div class="mb-3">
+                            <label for="currentPassword" class="form-label">كلمة المرور الحالية</label>
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="currentPassword" 
+                                   name="current_password"
+                                   required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="newPassword" class="form-label">كلمة المرور الجديدة</label>
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="newPassword" 
+                                   name="new_password"
+                                   minlength="<?php echo getPasswordMinLength(); ?>"
+                                   required>
+                            <small class="text-muted">يجب أن تكون على الأقل <?php echo getPasswordMinLength(); ?> أحرف</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="confirmPassword" class="form-label">تأكيد كلمة المرور</label>
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="confirmPassword" 
+                                   name="confirm_password"
+                                   minlength="<?php echo getPasswordMinLength(); ?>"
+                                   required>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-warning btn-lg" id="changePasswordBtn">
+                                <i class="bi bi-key-fill me-2"></i>تغيير كلمة المرور
+                            </button>
+                        </div>
+                    </form>
+                    
                     <!-- زر العودة -->
                     <div class="mt-4 text-center">
                         <a href="<?php echo htmlspecialchars($dashboardUrl); ?>" class="btn btn-outline-secondary">
@@ -360,6 +477,155 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // تحميل قائمة البصمات
     loadCredentials();
+    
+    // معالجة تحديث الملف الشخصي
+    const profileForm = document.getElementById('profileForm');
+    if (profileForm) {
+        profileForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await updateProfile();
+        });
+    }
+    
+    // معالجة تغيير كلمة المرور
+    const passwordForm = document.getElementById('passwordForm');
+    if (passwordForm) {
+        passwordForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await changePassword();
+        });
+    }
 });
+
+// تحديث الملف الشخصي
+async function updateProfile() {
+    const btn = document.getElementById('saveProfileBtn');
+    if (!btn) return;
+    
+    const originalHTML = btn.innerHTML;
+    
+    try {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري الحفظ...';
+        
+        const formData = new FormData(document.getElementById('profileForm'));
+        formData.append('action', 'update_profile');
+        
+        const pathParts = window.location.pathname.split('/').filter(p => p && !p.endsWith('.php'));
+        let apiPath;
+        
+        if (pathParts.length === 0) {
+            apiPath = 'api/update_profile.php';
+        } else {
+            apiPath = '/' + pathParts[0] + '/api/update_profile.php';
+        }
+        
+        const response = await fetch(apiPath, {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // إظهار رسالة نجاح
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-success alert-dismissible fade show';
+            alertDiv.innerHTML = `
+                <i class="bi bi-check-circle-fill me-2"></i>
+                ${data.message || 'تم تحديث الملف الشخصي بنجاح!'}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            const cardBody = document.querySelector('#profileForm').closest('.card-body');
+            if (cardBody) {
+                cardBody.insertBefore(alertDiv, cardBody.firstChild);
+                setTimeout(() => {
+                    alertDiv.remove();
+                }, 5000);
+            }
+        } else {
+            alert('خطأ: ' + (data.error || 'حدث خطأ أثناء تحديث الملف الشخصي'));
+        }
+        
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        alert('خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+    }
+}
+
+// تغيير كلمة المرور
+async function changePassword() {
+    const btn = document.getElementById('changePasswordBtn');
+    if (!btn) return;
+    
+    const originalHTML = btn.innerHTML;
+    const form = document.getElementById('passwordForm');
+    
+    try {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري التغيير...';
+        
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        
+        if (newPassword !== confirmPassword) {
+            alert('كلمة المرور الجديدة غير متطابقة');
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+            return;
+        }
+        
+        const formData = new FormData(form);
+        formData.append('action', 'change_password');
+        
+        const pathParts = window.location.pathname.split('/').filter(p => p && !p.endsWith('.php'));
+        let apiPath;
+        
+        if (pathParts.length === 0) {
+            apiPath = 'api/update_profile.php';
+        } else {
+            apiPath = '/' + pathParts[0] + '/api/update_profile.php';
+        }
+        
+        const response = await fetch(apiPath, {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // إظهار رسالة نجاح
+            alert(data.message || 'تم تغيير كلمة المرور بنجاح!');
+            
+            // مسح الحقول
+            form.reset();
+        } else {
+            alert('خطأ: ' + (data.error || 'حدث خطأ أثناء تغيير كلمة المرور'));
+        }
+        
+    } catch (error) {
+        console.error('Error changing password:', error);
+        alert('خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+    }
+}
 </script>
 
