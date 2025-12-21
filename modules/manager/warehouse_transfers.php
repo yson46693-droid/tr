@@ -1807,7 +1807,7 @@ if (isset($_GET['id'])) {
                                             <td><?php echo htmlspecialchars($product['name'] ?? ''); ?></td>
                                             <td><?php echo number_format($availableQty, 2); ?> <?php echo htmlspecialchars($product['unit'] ?? 'قطعة'); ?></td>
                                             <td>
-                                                <input type="number" step="0.01" min="0" max="<?php echo $availableQty; ?>" 
+                                                <input type="number" step="1" min="0" max="<?php echo $availableQty; ?>" 
                                                        class="form-control form-control-sm quantity-input" 
                                                        data-type="external"
                                                        data-product-id="<?php echo $product['id']; ?>"
@@ -1870,10 +1870,6 @@ if (isset($_GET['id'])) {
                         <input type="date" class="form-control" name="transfer_date" value="<?php echo date('Y-m-d'); ?>" required>
                     </div>
                     
-                    <div class="mb-3">
-                        <label class="form-label">السبب</label>
-                        <input type="text" class="form-control" name="reason" placeholder="سبب النقل (اختياري)">
-                    </div>
                     
                     <div class="mb-3">
                         <label class="form-label">ملاحظات</label>
@@ -1948,16 +1944,7 @@ if (isset($_GET['id'])) {
                         <label class="form-label">تاريخ النقل <span class="text-danger">*</span></label>
                         <input type="date" class="form-control" name="transfer_date" value="<?php echo date('Y-m-d'); ?>" required>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">السبب</label>
-                        <input type="text" class="form-control" name="reason" placeholder="سبب النقل (اختياري)">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">ملاحظات</label>
-                        <textarea class="form-control" name="notes" rows="2" placeholder="ملاحظات إضافية (اختياري)"></textarea>
-                    </div>
+        
                     
                     <hr>
                     <h6 class="mb-3">المنتجات المراد نقلها:</h6>
@@ -2737,6 +2724,182 @@ document.addEventListener('DOMContentLoaded', function() {
         font-size: 1rem !important;
         padding: 0.5rem !important;
     }
+    
+    /* إصلاح ظهور الأزرار السفلية للمودال على الهاتف */
+    /* Modal نقل من منتجات الشركة */
+    #transferFromCompanyModal .modal-dialog {
+        margin: 0.5rem;
+        max-height: calc(100vh - 1rem);
+        height: calc(100vh - 1rem);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #transferFromCompanyModal .modal-dialog.modal-dialog-scrollable {
+        overflow: hidden;
+    }
+    
+    #transferFromCompanyModal .modal-content {
+        max-height: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #transferFromCompanyModal .modal-header {
+        flex-shrink: 0;
+    }
+    
+    #transferFromCompanyModal .modal-body {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 1rem;
+    }
+    
+    #transferFromCompanyModal .modal-footer {
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(6px);
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        padding: 1rem;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+        margin-top: 0;
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+    }
+    
+    #transferFromCompanyModal .modal-footer .btn {
+        width: 100%;
+        margin: 0;
+    }
+    
+    /* Modal نقل من بضاعة المندوب */
+    #transferFromSalesRepModal .modal-dialog {
+        margin: 0.5rem;
+        max-height: calc(100vh - 1rem);
+        height: calc(100vh - 1rem);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #transferFromSalesRepModal .modal-dialog.modal-dialog-scrollable {
+        overflow: hidden;
+    }
+    
+    #transferFromSalesRepModal .modal-content {
+        max-height: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #transferFromSalesRepModal .modal-header {
+        flex-shrink: 0;
+    }
+    
+    #transferFromSalesRepModal .modal-body {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 1rem;
+    }
+    
+    #transferFromSalesRepModal .modal-footer {
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(6px);
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        padding: 1rem;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+        margin-top: 0;
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+    }
+    
+    #transferFromSalesRepModal .modal-footer .btn {
+        width: 100%;
+        margin: 0;
+    }
+    
+    /* Modal طلب نقل عام */
+    #generalTransferModal .modal-dialog {
+        margin: 0.5rem;
+        max-height: calc(100vh - 1rem);
+        height: calc(100vh - 1rem);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #generalTransferModal .modal-dialog.modal-dialog-scrollable {
+        overflow: hidden;
+    }
+    
+    #generalTransferModal .modal-content {
+        max-height: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #generalTransferModal .modal-header {
+        flex-shrink: 0;
+    }
+    
+    #generalTransferModal .modal-body {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 1rem;
+    }
+    
+    #generalTransferModal .modal-footer {
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(6px);
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        padding: 1rem;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+        margin-top: 0;
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+    }
+    
+    #generalTransferModal .modal-footer .btn {
+        width: 100%;
+        margin: 0;
+    }
+    
+    /* Modal رفض الطلب */
+    #rejectModal .modal-footer {
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(6px);
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+    }
+    
+    #rejectModal .modal-footer .btn {
+        width: 100%;
+        margin: 0.25rem 0;
+    }
 }
 </style>
 
@@ -2847,6 +3010,108 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }, true);
+})();
+
+// إصلاح ظهور الأزرار السفلية للمودال على الهاتف عند فتح لوحة المفاتيح
+(function() {
+    'use strict';
+    
+    // قائمة المودالات التي تحتاج إصلاح
+    const modalsToFix = [
+        'transferFromCompanyModal',
+        'transferFromSalesRepModal',
+        'generalTransferModal',
+        'rejectModal'
+    ];
+    
+    function fixModalForMobile(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        
+        const modalBody = modal.querySelector('.modal-body');
+        const modalFooter = modal.querySelector('.modal-footer');
+        if (!modalBody || !modalFooter) return;
+        
+        // عند فتح المودال
+        modal.addEventListener('shown.bs.modal', function() {
+            // التأكد من إضافة padding في الأسفل للمحتوى
+            const lastElement = modalBody.lastElementChild;
+            if (lastElement && !lastElement.classList.contains('mb-footer-spacer')) {
+                const spacer = document.createElement('div');
+                spacer.className = 'mb-footer-spacer';
+                spacer.style.height = '1rem';
+                modalBody.appendChild(spacer);
+            }
+        });
+        
+        // عند focus على input/select/textarea
+        modal.addEventListener('focusin', function(e) {
+            if (e.target && (e.target.tagName === 'INPUT' || 
+                            e.target.tagName === 'SELECT' || 
+                            e.target.tagName === 'TEXTAREA')) {
+                // Scroll إلى العنصر لضمان ظهوره
+                setTimeout(function() {
+                    e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    
+                    // التأكد من أن modal-footer مرئي
+                    if (modalFooter) {
+                        modalFooter.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                    }
+                }, 300);
+            }
+        }, true);
+        
+        // عند فتح لوحة المفاتيح (visualViewport API)
+        if (window.visualViewport) {
+            function handleViewportResize() {
+                const viewport = window.visualViewport;
+                const viewportHeight = viewport.height;
+                const windowHeight = window.innerHeight;
+                
+                // إذا كانت لوحة المفاتيح مفتوحة
+                if (viewportHeight < windowHeight * 0.75) {
+                    const keyboardHeight = windowHeight - viewportHeight;
+                    
+                    // تعديل max-height للمودال
+                    const modalDialog = modal.querySelector('.modal-dialog');
+                    if (modalDialog) {
+                        modalDialog.style.maxHeight = viewportHeight + 'px';
+                    }
+                    
+                    // التأكد من أن modal-footer مرئي
+                    if (modalFooter) {
+                        modalFooter.style.position = 'sticky';
+                        modalFooter.style.bottom = '0';
+                        modalFooter.style.zIndex = '1000';
+                    }
+                } else {
+                    // إعادة القيم الافتراضية
+                    const modalDialog = modal.querySelector('.modal-dialog');
+                    if (modalDialog) {
+                        modalDialog.style.maxHeight = '';
+                    }
+                }
+            }
+            
+            window.visualViewport.addEventListener('resize', handleViewportResize);
+            
+            // تنظيف عند إغلاق المودال
+            modal.addEventListener('hidden.bs.modal', function() {
+                window.visualViewport.removeEventListener('resize', handleViewportResize);
+            });
+        }
+    }
+    
+    // تطبيق الإصلاح على جميع المودالات
+    modalsToFix.forEach(function(modalId) {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                fixModalForMobile(modalId);
+            });
+        } else {
+            fixModalForMobile(modalId);
+        }
+    });
 })();
 </script>
 
