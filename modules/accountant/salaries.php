@@ -3798,7 +3798,6 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                             <span class="detail-label">سعر الساعة:</span>
                             <span class="detail-value"><?php echo formatCurrency($hourlyRate); ?></span>
                         </div>
-                        <?php if ($userRole !== 'sales'): ?>
                         <div class="detail-row">
                             <span class="detail-label">عدد الساعات:</span>
                             <?php 
@@ -3865,7 +3864,6 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                             ?>
                             <span class="detail-value"><?php echo formatHours($actualHoursForModal); ?></span>
                         </div>
-                        <?php endif; ?>
                         <div class="detail-row">
                             <span class="detail-label">إجمالي التأخير:</span>
                             <span class="detail-value"><?php echo number_format($delaySummary['total_minutes'] ?? 0, 2); ?> دقيقة</span>

@@ -47,13 +47,37 @@ $userId = null;
 
 // محاولة الحصول على المستخدم من الجلسة
 try {
-    if (isLoggedIn()) {
-        $user = getCurrentUser();
-        if ($user && isset($user['id'])) {
-            $userId = $user['id'];
+    // التحقق من وجود الجلسة أولاً
+    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+        // محاولة التحقق من تسجيل الدخول
+        $isLoggedIn = isLoggedIn();
+        
+        // إذا كان isLoggedIn() رجعت true أو كانت الجلسة موجودة، نحاول جلب المستخدم
+        if ($isLoggedIn || isset($_SESSION['user_id'])) {
+            $user = getCurrentUser();
+            
+            // إذا لم نتمكن من جلب المستخدم من قاعدة البيانات لكن الجلسة موجودة،
+            // نستخدم بيانات الجلسة مباشرة (في حالة الأخطاء المؤقتة)
+            if (!$user && isset($_SESSION['user_id']) && isset($_SESSION['username']) && isset($_SESSION['role'])) {
+                $user = [
+                    'id' => $_SESSION['user_id'],
+                    'username' => $_SESSION['username'],
+                    'role' => $_SESSION['role'],
+                    'status' => 'active',
+                    '_cached' => true
+                ];
+            }
+            
+            if ($user && isset($user['id'])) {
+                $userId = $user['id'];
+            }
         }
     }
 } catch (Exception $e) {
+    // في حالة الخطأ، إذا كانت الجلسة موجودة، نعتبرها صالحة
+    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+        $userId = $_SESSION['user_id'];
+    }
     // تعطيل error_log لتقليل الضغط على السيرفر
     // error_log("Check Session API - Error checking login: " . $e->getMessage());
 }

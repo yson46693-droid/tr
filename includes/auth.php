@@ -274,7 +274,17 @@ function getCurrentUser() {
         if ($isTemporaryError && $errorCount[$sessionId] < 5) {
             $errorCount[$sessionId]++;
             error_log("getCurrentUser() - Temporary database error (attempt {$errorCount[$sessionId]}): " . $e->getMessage());
-            // نرجع null لكن لا نحذف الجلسة
+            // في حالة الخطأ المؤقت، نرجع بيانات المستخدم من الجلسة بدلاً من null
+            // لمنع اعتبار الجلسة منتهية عند الأخطاء المؤقتة
+            if (isset($_SESSION['user_id']) && isset($_SESSION['username']) && isset($_SESSION['role'])) {
+                return [
+                    'id' => $_SESSION['user_id'],
+                    'username' => $_SESSION['username'],
+                    'role' => $_SESSION['role'],
+                    'status' => 'active', // افتراض أن المستخدم نشط
+                    '_cached' => true // علامة أن البيانات من الجلسة وليست من قاعدة البيانات
+                ];
+            }
             return null;
         }
         
