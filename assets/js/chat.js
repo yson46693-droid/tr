@@ -780,14 +780,27 @@
 
     const fragment = document.createDocumentFragment();
     let currentDate = '';
+    let lastMessage = null;
+    const GROUP_TIME_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
 
-    state.messages.forEach((message) => {
+    state.messages.forEach((message, index) => {
       const messageDate = formatDate(message.created_at);
       if (messageDate !== currentDate) {
         currentDate = messageDate;
         fragment.appendChild(createDayDivider(messageDate));
       }
-      fragment.appendChild(createMessageElement(message, totalUsers));
+
+      // Determine if this message should be grouped with the previous one
+      let isGrouped = false;
+      if (lastMessage) {
+        const sameUser = message.user_id === lastMessage.user_id;
+        const timeDiff = new Date(message.created_at.replace(' ', 'T')).getTime() - 
+                        new Date(lastMessage.created_at.replace(' ', 'T')).getTime();
+        isGrouped = sameUser && timeDiff < GROUP_TIME_THRESHOLD;
+      }
+
+      fragment.appendChild(createMessageElement(message, totalUsers, isGrouped, index === state.messages.length - 1));
+      lastMessage = message;
     });
 
     elements.messageList.innerHTML = '';
@@ -801,25 +814,41 @@
     return divider;
   }
 
-  function createMessageElement(message, totalUsers) {
+  function createMessageElement(message, totalUsers, isGrouped = false, isLast = false) {
     const outgoing = message.user_id === currentUser.id;
     const messageElement = document.createElement('div');
-    messageElement.className = `chat-message ${outgoing ? 'outgoing' : 'incoming'}${message.deleted ? ' deleted' : ''}${message.edited && !message.deleted ? ' edited' : ''}`;
+    let classes = `chat-message ${outgoing ? 'outgoing' : 'incoming'}`;
+    if (isGrouped) {
+      classes += ' grouped';
+    }
+    if (message.deleted) {
+      classes += ' deleted';
+    }
+    if (message.edited && !message.deleted) {
+      classes += ' edited';
+    }
+    messageElement.className = classes;
     messageElement.dataset.chatMessageId = String(message.id);
 
+    // Avatar - only show if not grouped or for incoming messages
     const avatar = document.createElement('div');
     avatar.className = 'chat-message-avatar';
-    if (message.profile_photo) {
-      avatar.innerHTML = `<img src="${escapeAttribute(message.profile_photo)}" alt="${escapeAttribute(message.user_name)}" />`;
+    if (!isGrouped || !outgoing) {
+      if (message.profile_photo) {
+        avatar.innerHTML = `<img src="${escapeAttribute(message.profile_photo)}" alt="${escapeAttribute(message.user_name)}" />`;
+      } else {
+        avatar.textContent = getInitials(message.user_name);
+      }
     } else {
-      avatar.textContent = getInitials(message.user_name);
+      // Empty avatar spacer for grouped outgoing messages
+      avatar.style.visibility = 'hidden';
     }
 
     const bubble = document.createElement('div');
     bubble.className = 'chat-message-bubble';
 
     // Message Header (Name and Time for incoming messages)
-    if (!outgoing) {
+    if (!outgoing && !isGrouped) {
       const header = document.createElement('div');
       header.className = 'chat-message-header';
       
@@ -834,13 +863,12 @@
       header.appendChild(time);
       
       bubble.appendChild(header);
-    } else {
-      // For outgoing messages, show time at top
-      const time = document.createElement('div');
-      time.className = 'chat-message-time';
-      time.style.textAlign = 'left';
-      time.style.marginBottom = '4px';
+    } else if (!outgoing && isGrouped) {
+      // For grouped incoming messages, show time inline
+      const time = document.createElement('span');
+      time.className = 'chat-message-time inline-time';
       time.textContent = formatTime(message.created_at);
+      time.style.display = 'none'; // Hidden by default, shown on hover
       bubble.appendChild(time);
     }
 
@@ -895,11 +923,21 @@
     const meta = document.createElement('div');
     meta.className = 'chat-message-meta';
 
+    // Time for outgoing messages (shown on hover or at end of group)
     if (outgoing) {
+      const timeContainer = document.createElement('div');
+      timeContainer.className = 'chat-message-time-container';
+      const time = document.createElement('span');
+      time.className = 'chat-message-time';
+      time.textContent = formatTime(message.created_at);
+      timeContainer.appendChild(time);
+      
       const readSpan = document.createElement('div');
       readSpan.className = 'chat-read-status';
       readSpan.innerHTML = renderReadStatus(message, totalUsers);
-      meta.appendChild(readSpan);
+      timeContainer.appendChild(readSpan);
+      
+      meta.appendChild(timeContainer);
     } else {
       meta.appendChild(document.createElement('span'));
     }
