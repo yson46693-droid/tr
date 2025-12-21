@@ -949,39 +949,79 @@ if (!defined('ACCESS_ALLOWED')) {
             'use strict';
             
             // تحسين التنقل: إضافة prefetch للروابط الشائعة عند hover
+            // محدود للروابط المهمة فقط لتجنب الطلبات الكثيرة
             function addPrefetchOnHover() {
-                const links = document.querySelectorAll('a[href]:not([href^="#"]):not([href^="javascript:"]):not([href^="mailto:"]):not([href^="tel:"])');
+                // فقط الروابط المهمة (روابط التنقل الرئيسية)
+                const importantSelectors = [
+                    '.navbar a[href]',
+                    '.nav-link[href]',
+                    '.nav-item a[href]',
+                    '.sidebar a[href]',
+                    '[role="navigation"] a[href]'
+                ];
                 
-                links.forEach(function(link) {
+                let importantLinks = [];
+                importantSelectors.forEach(function(selector) {
+                    const links = document.querySelectorAll(selector);
+                    importantLinks = importantLinks.concat(Array.from(links));
+                });
+                
+                // إزالة التكرارات
+                importantLinks = Array.from(new Set(importantLinks));
+                
+                // تحديد عدد max للروابط التي يمكن عمل prefetch لها عند hover
+                let hoverPrefetchCount = 0;
+                const MAX_HOVER_PREFETCH = 5;
+                
+                importantLinks.forEach(function(link) {
                     // فقط للروابط الداخلية
                     if (link.hostname === window.location.hostname || !link.hostname) {
                         let prefetchLink = null;
                         let hoverTimeout = null;
                         
-                        // عند hover: prefetch بعد 100ms
+                        // عند hover: prefetch بعد 200ms (زيادة من 100ms لتقليل الطلبات)
                         link.addEventListener('mouseenter', function() {
+                            // التحقق من الحد الأقصى
+                            if (hoverPrefetchCount >= MAX_HOVER_PREFETCH) {
+                                return;
+                            }
+                            
                             hoverTimeout = setTimeout(function() {
                                 const href = link.getAttribute('href');
-                                if (href && !href.includes('#') && !document.querySelector('link[rel="prefetch"][href="' + href + '"]')) {
+                                
+                                // التحقق من أن الرابط ليس logout أو API
+                                if (href && 
+                                    !href.includes('#') && 
+                                    !href.includes('logout') &&
+                                    !href.includes('api/') &&
+                                    !document.querySelector('link[rel="prefetch"][href="' + href + '"]')) {
+                                    
                                     prefetchLink = document.createElement('link');
                                     prefetchLink.rel = 'prefetch';
                                     prefetchLink.href = href;
                                     document.head.appendChild(prefetchLink);
+                                    
+                                    hoverPrefetchCount++;
                                 }
-                            }, 100);
+                            }, 200);
                         });
                         
                         // إلغاء prefetch إذا تم إلغاء hover
                         link.addEventListener('mouseleave', function() {
                             if (hoverTimeout) {
                                 clearTimeout(hoverTimeout);
+                                hoverTimeout = null;
                             }
                         });
                         
-                        // عند click: إضافة preload فوري
+                        // عند click: إضافة preload فوري (محدود)
                         link.addEventListener('click', function(e) {
                             const href = link.getAttribute('href');
-                            if (href && !href.includes('#') && !link.hasAttribute('data-no-splash')) {
+                            if (href && 
+                                !href.includes('#') && 
+                                !href.includes('logout') &&
+                                !href.includes('api/') &&
+                                !link.hasAttribute('data-no-splash')) {
                                 // إضافة preload للصفحة التالية
                                 const preloadLink = document.createElement('link');
                                 preloadLink.rel = 'preload';
