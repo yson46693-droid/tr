@@ -29,13 +29,6 @@ if (!isLoggedIn()) {
     exit;
 }
 
-// التحقق من API Token للحماية من الوصول الخارجي
-if (!verifyAPIToken()) {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'message' => 'Invalid API token'], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
 // قراءة البيانات من JSON أو POST
 $inputData = [];
 $contentType = $_SERVER['CONTENT_TYPE'] ?? '';

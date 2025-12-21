@@ -74,13 +74,6 @@ if (!$isAuthenticated) {
     exit;
 }
 
-// التحقق من API Token للحماية من الوصول الخارجي
-if (!verifyAPIToken()) {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'error' => 'Invalid API token']);
-    exit;
-}
-
 try {
     // محاولة تحميل المستخدم بعدة طرق
     $currentUser = getCurrentUser();

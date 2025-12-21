@@ -12,13 +12,6 @@ require_once __DIR__ . '/../includes/audit_log.php';
 header('Content-Type: application/json');
 requireLogin();
 
-// التحقق من API Token للحماية من الوصول الخارجي
-if (!verifyAPIToken()) {
-    http_response_code(403);
-    echo json_encode(['error' => 'Invalid API token']);
-    exit;
-}
-
 $currentUser = getCurrentUser();
 $db = db();
 $passwordMinLength = getPasswordMinLength();

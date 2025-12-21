@@ -117,10 +117,6 @@ try {
                 $_SESSION['role'] = $userData['role'];
                 $_SESSION['logged_in'] = true;
                 
-                // إنشاء API Token عشوائي للحماية من الوصول الخارجي
-                $apiToken = generateAPIToken();
-                $_SESSION['api_token'] = $apiToken;
-                
                 // تسجيل سجل التدقيق
                 require_once __DIR__ . '/../includes/audit_log.php';
                 logAudit($userData['id'], 'login', 'user', $userData['id'], null, ['method' => 'webauthn', 'no_username' => true]);
@@ -133,8 +129,7 @@ try {
                         'username' => $userData['username'],
                         'role' => $userData['role'],
                         'full_name' => $userData['full_name'] ?? null
-                    ],
-                    'api_token' => $apiToken
+                    ]
                 ], JSON_UNESCAPED_UNICODE);
             } else {
                 http_response_code(403);
@@ -177,10 +172,6 @@ try {
                 $_SESSION['role'] = $user['role'];
                 $_SESSION['logged_in'] = true;
                 
-                // إنشاء API Token عشوائي للحماية من الوصول الخارجي
-                $apiToken = generateAPIToken();
-                $_SESSION['api_token'] = $apiToken;
-                
                 // تسجيل سجل التدقيق
                 require_once __DIR__ . '/../includes/audit_log.php';
                 logAudit($userId, 'login', 'user', $userId, null, ['method' => 'webauthn']);
@@ -192,8 +183,7 @@ try {
                         'id' => $user['id'],
                         'username' => $user['username'],
                         'role' => $user['role']
-                    ],
-                    'api_token' => $apiToken
+                    ]
                 ], JSON_UNESCAPED_UNICODE);
             } else {
                 http_response_code(403);
