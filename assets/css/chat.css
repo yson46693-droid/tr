@@ -478,7 +478,7 @@
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 1px;
   scroll-behavior: smooth;
   scrollbar-width: thin;
   touch-action: manipulation;
@@ -502,7 +502,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 16px 0;
+  margin: 20px 0 12px;
   gap: 12px;
 }
 
@@ -529,12 +529,16 @@
   max-width: 75%;
   position: relative;
   animation: fadeIn 0.22s ease;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .chat-message.grouped {
-  margin-top: -4px;
-  margin-bottom: 2px;
+  margin-top: -3px;
+  margin-bottom: 1px;
+}
+
+.chat-message:not(.grouped) {
+  margin-bottom: 4px;
 }
 
 .chat-message.grouped .chat-message-avatar {
@@ -560,22 +564,31 @@
   padding-right: 40px; /* Space for hidden avatar */
 }
 
+.chat-message.grouped.outgoing {
+  padding-left: 0;
+}
+
 .chat-message.outgoing .chat-message-bubble {
-  background: var(--chat-message-out-gradient);
+  background: linear-gradient(135deg, #0084ff 0%, #0066cc 100%);
   color: #fff;
   border: none;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
+.dark-mode .chat-message.outgoing .chat-message-bubble {
+  background: linear-gradient(135deg, #0084ff 0%, #0066cc 100%);
+}
+
 .chat-message.incoming .chat-message-bubble {
-  background: var(--chat-message-in-bg);
+  background: #e4e6eb;
   border: none;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  color: var(--chat-text);
+  color: #050505;
 }
 
 .dark-mode .chat-message.incoming .chat-message-bubble {
-  background: #2a2a2a;
+  background: #2e2e2e;
+  color: #e4e6eb;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
@@ -607,8 +620,8 @@
 .chat-message-bubble {
   border-radius: 18px;
   padding: 8px 12px;
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 14.5px;
+  line-height: 1.38;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   position: relative;
   display: inline-flex;
@@ -628,24 +641,25 @@
 }
 
 .chat-message.grouped .chat-message-bubble {
-  border-radius: 18px;
   margin-top: 1px;
 }
 
-.chat-message.grouped:first-of-type .chat-message-bubble,
+/* First message in a group */
 .chat-message:not(.grouped) + .chat-message.grouped .chat-message-bubble {
-  border-top-right-radius: 18px;
-  border-top-left-radius: 18px;
+  border-top-right-radius: 4px;
+  border-top-left-radius: 4px;
 }
 
-.chat-message.grouped:last-of-type .chat-message-bubble,
-.chat-message.grouped:not(.grouped) + .chat-message .chat-message-bubble {
-  border-bottom-right-radius: 18px;
-  border-bottom-left-radius: 18px;
+/* Middle messages in a group */
+.chat-message.grouped + .chat-message.grouped .chat-message-bubble {
+  border-radius: 4px;
 }
 
-.chat-message.grouped:not(:first-of-type):not(:last-of-type) .chat-message-bubble {
-  border-radius: 18px;
+/* Last message in a group (when next message is not grouped) */
+.chat-message.grouped + .chat-message:not(.grouped) ~ .chat-message.grouped:last-of-type .chat-message-bubble,
+.chat-message.grouped:last-of-type .chat-message-bubble {
+  border-bottom-right-radius: 4px;
+  border-bottom-left-radius: 4px;
 }
 
 .chat-message-header {
@@ -658,7 +672,11 @@
 .chat-message-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--chat-blue);
+  color: #1877f2;
+}
+
+.dark-mode .chat-message-name {
+  color: #0084ff;
 }
 
 .chat-message-time {

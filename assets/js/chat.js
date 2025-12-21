@@ -785,14 +785,16 @@
 
     state.messages.forEach((message, index) => {
       const messageDate = formatDate(message.created_at);
-      if (messageDate !== currentDate) {
+      const isNewDay = messageDate !== currentDate;
+      if (isNewDay) {
         currentDate = messageDate;
         fragment.appendChild(createDayDivider(messageDate));
+        lastMessage = null; // Reset grouping when new day
       }
 
       // Determine if this message should be grouped with the previous one
       let isGrouped = false;
-      if (lastMessage) {
+      if (lastMessage && !isNewDay) {
         const sameUser = message.user_id === lastMessage.user_id;
         const timeDiff = new Date(message.created_at.replace(' ', 'T')).getTime() - 
                         new Date(lastMessage.created_at.replace(' ', 'T')).getTime();
