@@ -1950,25 +1950,49 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $conn->commit();
 
-                $invoiceData = getInvoice($invoiceId);
-                $invoiceMeta = [
-                    'payment_type' => $paymentType,
-                    'summary' => [
-                        'subtotal' => $subtotal,
-                        'prepaid' => $prepaidAmount,
-                        'net_total' => $netTotal,
-                        'paid' => $effectivePaidAmount,
-                        'due_before_credit' => $baseDueAmount,
-                        'credit_used' => $creditUsed,
-                        'due' => $dueAmount,
-                    ],
-                ];
-                $reportInfo = $invoiceData ? storeSalesInvoiceDocument($invoiceData, $invoiceMeta) : null;
-
-                if ($reportInfo) {
-                    $telegramResult = sendReportAndDelete($reportInfo, 'sales_pos_invoice', 'فاتورة نقطة بيع المندوب');
-                    $reportInfo['telegram_sent'] = !empty($telegramResult['success']);
-                    $posInvoiceLinks = $reportInfo;
+                // محاولة إنشاء الفاتورة وإرسالها إلى تليجرام بعد نجاح المعاملة
+                // نستخدم try-catch منفصل لضمان عدم تأثير أي أخطاء على نجاح عملية البيع
+                try {
+                    $invoiceData = getInvoice($invoiceId);
+                    
+                    if (!$invoiceData) {
+                        error_log(sprintf('Failed to get invoice data for invoiceId=%d after POS sale', $invoiceId));
+                    } else {
+                        $invoiceMeta = [
+                            'payment_type' => $paymentType,
+                            'summary' => [
+                                'subtotal' => $subtotal,
+                                'prepaid' => $prepaidAmount,
+                                'net_total' => $netTotal,
+                                'paid' => $effectivePaidAmount,
+                                'due_before_credit' => $baseDueAmount,
+                                'credit_used' => $creditUsed,
+                                'due' => $dueAmount,
+                            ],
+                        ];
+                        
+                        $reportInfo = storeSalesInvoiceDocument($invoiceData, $invoiceMeta);
+                        
+                        if (!$reportInfo) {
+                            error_log(sprintf('Failed to store invoice document for invoiceId=%d after POS sale', $invoiceId));
+                        } else {
+                            // إرسال الفاتورة إلى تليجرام
+                            $telegramResult = sendReportAndDelete($reportInfo, 'sales_pos_invoice', 'فاتورة نقطة بيع المندوب');
+                            $reportInfo['telegram_sent'] = !empty($telegramResult['success']);
+                            
+                            if (empty($telegramResult['success'])) {
+                                error_log(sprintf('Failed to send invoice to Telegram for invoiceId=%d: %s', $invoiceId, $telegramResult['message'] ?? 'Unknown error'));
+                            } else {
+                                error_log(sprintf('Successfully sent invoice to Telegram for invoiceId=%d', $invoiceId));
+                            }
+                            
+                            $posInvoiceLinks = $reportInfo;
+                        }
+                    }
+                } catch (Throwable $invoiceError) {
+                    // تسجيل الخطأ ولكن عدم إيقاف العملية
+                    error_log(sprintf('Error generating/sending invoice after POS sale (invoiceId=%d): %s', $invoiceId, $invoiceError->getMessage()));
+                    error_log('Invoice error trace: ' . $invoiceError->getTraceAsString());
                 }
 
                 $success = 'تم إتمام عملية البيع بنجاح. رقم الفاتورة: ' . htmlspecialchars($invoiceNumber);

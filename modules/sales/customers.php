@@ -3940,6 +3940,13 @@ document.addEventListener('DOMContentLoaded', function () {
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         box-sizing: border-box !important;
+        font-size: 0.75rem !important;
+        padding: 0.45rem 0.6rem !important;
+        min-height: 2.6rem;
+    }
+
+    .dashboard-table tbody td:last-child .btn i {
+        font-size: 0.8rem !important;
     }
 
     @media (max-width: 992px) {
@@ -4060,21 +4067,22 @@ document.addEventListener('DOMContentLoaded', function () {
             font-size: 0.75rem;
         }
 
-        /* تحسين أزرار الإجراءات على الشاشات المتوسطة - نفس حجم أزرار الموقع */
+        /* تحسين أزرار الإجراءات على الشاشات المتوسطة - حجم أكبر */
         .dashboard-table tbody td:last-child .btn {
             width: 100%;
             justify-content: center;
-            font-size: 0.65rem !important;
-            padding: 0.25rem 0.35rem !important;
+            font-size: 0.7rem !important;
+            padding: 0.4rem 0.5rem !important;
             white-space: normal !important;
             word-break: break-word;
-            line-height: 1.2;
+            line-height: 1.3;
             overflow: hidden;
             text-overflow: ellipsis;
+            min-height: 2.5rem;
         }
 
         .dashboard-table tbody td:last-child .btn i {
-            font-size: 0.7rem !important;
+            font-size: 0.75rem !important;
             flex-shrink: 0;
         }
 
@@ -4199,27 +4207,28 @@ document.addEventListener('DOMContentLoaded', function () {
             max-width: 32%;
         }
 
-        /* تحسين أزرار الإجراءات على الشاشات الصغيرة جداً - نفس حجم أزرار الموقع */
+        /* تحسين أزرار الإجراءات على الشاشات الصغيرة جداً - حجم أكبر */
         .dashboard-table tbody td:last-child .d-flex {
             display: grid !important;
             grid-template-columns: 1fr 1fr !important;
-            gap: 0.25rem !important;
+            gap: 0.3rem !important;
         }
 
         .dashboard-table tbody td:last-child .btn {
             width: 100%;
             justify-content: center;
-            font-size: 0.6rem !important;
-            padding: 0.2rem 0.3rem !important;
+            font-size: 0.65rem !important;
+            padding: 0.35rem 0.4rem !important;
             white-space: normal !important;
             word-break: break-word;
-            line-height: 1.2;
+            line-height: 1.3;
             overflow: hidden;
             text-overflow: ellipsis;
+            min-height: 2.3rem;
         }
 
         .dashboard-table tbody td:last-child .btn i {
-            font-size: 0.65rem !important;
+            font-size: 0.7rem !important;
             flex-shrink: 0;
         }
 
