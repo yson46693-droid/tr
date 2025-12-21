@@ -2470,9 +2470,65 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     white-space: normal;
 }
 
+/* إصلاح ظهور الأزرار السفلية للمودال على الهاتف */
+@media (max-width: 767.98px) {
+    /* Modal طلب نقل منتجات من المخزن الرئيسي */
+    #requestTransferModal .modal-dialog {
+        margin: 0.5rem;
+        max-height: calc(100vh - 1rem);
+        height: calc(100vh - 1rem);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #requestTransferModal .modal-dialog.modal-dialog-scrollable {
+        overflow: hidden;
+    }
+    
+    #requestTransferModal .modal-content {
+        max-height: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #requestTransferModal .modal-header {
+        flex-shrink: 0;
+    }
+    
+    #requestTransferModal .modal-body {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 1rem;
+    }
+    
+    #requestTransferModal .modal-footer {
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(6px);
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        padding: 1rem;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+        margin-top: 0;
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+    }
+    
+    #requestTransferModal .modal-footer .btn {
+        width: 100%;
+        margin: 0;
+    }
+}
+
 /* تحسين عرض القائمة المنسدلة على الهواتف */
 @media (max-width: 767.98px) {
-    .modal-body {
+    .modal-body:not(#requestTransferModal .modal-body) {
         max-height: calc(100vh - 200px) !important;
         overflow-y: auto !important;
         overflow-x: visible !important;
@@ -5297,6 +5353,98 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }, true);
+})();
+
+// إصلاح ظهور الأزرار السفلية للمودال على الهاتف عند فتح لوحة المفاتيح
+(function() {
+    'use strict';
+    
+    function fixModalForMobile(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        
+        const modalBody = modal.querySelector('.modal-body');
+        const modalFooter = modal.querySelector('.modal-footer');
+        if (!modalBody || !modalFooter) return;
+        
+        // عند فتح المودال
+        modal.addEventListener('shown.bs.modal', function() {
+            // التأكد من إضافة padding في الأسفل للمحتوى
+            const lastElement = modalBody.lastElementChild;
+            if (lastElement && !lastElement.classList.contains('mb-footer-spacer')) {
+                const spacer = document.createElement('div');
+                spacer.className = 'mb-footer-spacer';
+                spacer.style.height = '1rem';
+                modalBody.appendChild(spacer);
+            }
+        });
+        
+        // عند focus على input/select/textarea
+        modal.addEventListener('focusin', function(e) {
+            if (e.target && (e.target.tagName === 'INPUT' || 
+                            e.target.tagName === 'SELECT' || 
+                            e.target.tagName === 'TEXTAREA')) {
+                // Scroll إلى العنصر لضمان ظهوره
+                setTimeout(function() {
+                    e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    
+                    // التأكد من أن modal-footer مرئي
+                    if (modalFooter) {
+                        modalFooter.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                    }
+                }, 300);
+            }
+        }, true);
+        
+        // عند فتح لوحة المفاتيح (visualViewport API)
+        if (window.visualViewport) {
+            function handleViewportResize() {
+                const viewport = window.visualViewport;
+                const viewportHeight = viewport.height;
+                const windowHeight = window.innerHeight;
+                
+                // إذا كانت لوحة المفاتيح مفتوحة
+                if (viewportHeight < windowHeight * 0.75) {
+                    const keyboardHeight = windowHeight - viewportHeight;
+                    
+                    // تعديل max-height للمودال
+                    const modalDialog = modal.querySelector('.modal-dialog');
+                    if (modalDialog) {
+                        modalDialog.style.maxHeight = viewportHeight + 'px';
+                    }
+                    
+                    // التأكد من أن modal-footer مرئي
+                    if (modalFooter) {
+                        modalFooter.style.position = 'sticky';
+                        modalFooter.style.bottom = '0';
+                        modalFooter.style.zIndex = '1000';
+                    }
+                } else {
+                    // إعادة القيم الافتراضية
+                    const modalDialog = modal.querySelector('.modal-dialog');
+                    if (modalDialog) {
+                        modalDialog.style.maxHeight = '';
+                    }
+                }
+            }
+            
+            window.visualViewport.addEventListener('resize', handleViewportResize);
+            
+            // تنظيف عند إغلاق المودال
+            modal.addEventListener('hidden.bs.modal', function() {
+                window.visualViewport.removeEventListener('resize', handleViewportResize);
+            });
+        }
+    }
+    
+    // تطبيق الإصلاح على مودال نقل المنتجات
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            fixModalForMobile('requestTransferModal');
+        });
+    } else {
+        fixModalForMobile('requestTransferModal');
+    }
 })();
 </script>
 

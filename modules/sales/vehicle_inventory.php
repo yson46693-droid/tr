@@ -830,6 +830,62 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                     }
                 }
 
+                /* إصلاح ظهور الأزرار السفلية للمودال على الهاتف */
+                @media (max-width: 767.98px) {
+                    /* Modal إنشاء طلب نقل */
+                    #createTransferModal .modal-dialog {
+                        margin: 0.5rem;
+                        max-height: calc(100vh - 1rem);
+                        height: calc(100vh - 1rem);
+                        display: flex;
+                        flex-direction: column;
+                    }
+                    
+                    #createTransferModal .modal-dialog.modal-dialog-scrollable {
+                        overflow: hidden;
+                    }
+                    
+                    #createTransferModal .modal-content {
+                        max-height: 100%;
+                        height: 100%;
+                        display: flex;
+                        flex-direction: column;
+                    }
+                    
+                    #createTransferModal .modal-header {
+                        flex-shrink: 0;
+                    }
+                    
+                    #createTransferModal .modal-body {
+                        flex: 1;
+                        overflow-y: auto;
+                        overflow-x: hidden;
+                        -webkit-overflow-scrolling: touch;
+                        padding-bottom: 1rem;
+                    }
+                    
+                    #createTransferModal .modal-footer {
+                        flex-shrink: 0;
+                        background: rgba(255, 255, 255, 0.98);
+                        backdrop-filter: blur(6px);
+                        border-top: 1px solid rgba(0, 0, 0, 0.1);
+                        display: flex;
+                        flex-direction: column;
+                        gap: 0.6rem;
+                        padding: 1rem;
+                        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+                        margin-top: 0;
+                        position: sticky;
+                        bottom: 0;
+                        z-index: 10;
+                    }
+                    
+                    #createTransferModal .modal-footer .btn {
+                        width: 100%;
+                        margin: 0;
+                    }
+                }
+                
                 /* تحسين responsive للجداول */
                 @media (max-width: 576px) {
                     .table-responsive {
