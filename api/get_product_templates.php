@@ -36,7 +36,7 @@ try {
     $db = db();
     $templates = [];
     
-    // محاولة جلب من unified_product_templates أولاً (الأحدث)
+    // جلب القوالب من unified_product_templates إذا كان موجوداً
     try {
         $unifiedTemplatesCheck = $db->queryOne("SHOW TABLES LIKE 'unified_product_templates'");
         if (!empty($unifiedTemplatesCheck)) {
@@ -57,31 +57,31 @@ try {
         error_log('Error fetching unified_product_templates: ' . $e->getMessage());
     }
     
-    // إذا لم توجد قوالب في unified_product_templates، جرب product_templates
-    if (empty($templates)) {
-        try {
-            $templatesCheck = $db->queryOne("SHOW TABLES LIKE 'product_templates'");
-            if (!empty($templatesCheck)) {
-                $productTemplates = $db->query("
-                    SELECT DISTINCT product_name 
-                    FROM product_templates 
-                    WHERE status = 'active' 
-                    ORDER BY product_name ASC
-                ");
-                foreach ($productTemplates as $template) {
-                    $templateName = trim($template['product_name'] ?? '');
-                    if ($templateName !== '') {
-                        $templates[] = $templateName;
-                    }
+    // جلب القوالب من product_templates إذا كان موجوداً أيضاً (قد يكون هناك قوالب في كلا الجدولين)
+    try {
+        $templatesCheck = $db->queryOne("SHOW TABLES LIKE 'product_templates'");
+        if (!empty($templatesCheck)) {
+            $productTemplates = $db->query("
+                SELECT DISTINCT product_name 
+                FROM product_templates 
+                WHERE status = 'active' 
+                ORDER BY product_name ASC
+            ");
+            foreach ($productTemplates as $template) {
+                $templateName = trim($template['product_name'] ?? '');
+                if ($templateName !== '') {
+                    $templates[] = $templateName;
                 }
             }
-        } catch (Exception $e) {
-            error_log('Error fetching product_templates: ' . $e->getMessage());
         }
+    } catch (Exception $e) {
+        error_log('Error fetching product_templates: ' . $e->getMessage());
     }
     
-    // إزالة التكرار والحفاظ على الترتيب
-    $templates = array_values(array_unique($templates));
+    // إزالة التكرار وترتيب القوالب أبجدياً
+    $templates = array_unique($templates);
+    sort($templates);
+    $templates = array_values($templates);
     
     echo json_encode([
         'success' => true,

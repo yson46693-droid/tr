@@ -866,13 +866,28 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                     #createTransferModal .modal-body,
                     #addVehicleModal .modal-body {
                         flex: 1 1 auto !important;
-                        overflow-y: auto !important;
+                        overflow-y: visible !important;
                         overflow-x: hidden !important;
                         -webkit-overflow-scrolling: touch;
                         min-height: 0 !important;
                         max-height: none !important;
                         padding-bottom: 0.5rem !important;
                         position: relative !important;
+                        display: flex !important;
+                        flex-direction: column !important;
+                    }
+                    
+                    /* جعل قسم عناصر النقل قابل للتمرير الداخلي */
+                    #createTransferModal #transferItems {
+                        max-height: 40vh !important;
+                        overflow-y: auto !important;
+                        overflow-x: hidden !important;
+                        -webkit-overflow-scrolling: touch;
+                        padding: 0.5rem;
+                        margin-bottom: 0.5rem;
+                        border: 1px solid rgba(0, 0, 0, 0.1);
+                        border-radius: 0.375rem;
+                        background-color: #f8f9fa;
                     }
                     
                     #createTransferModal .modal-footer,
@@ -1818,11 +1833,28 @@ document.getElementById('transferForm')?.addEventListener('submit', function(e) 
             modalContent.style.flexDirection = 'column';
             modalContent.style.maxHeight = 'calc(100vh - 1rem)';
             
-            // التأكد من أن modal-body قابل للتمرير
+            // التأكد من أن modal-body يستخدم flexbox وليس scroll
             modalBody.style.flex = '1 1 auto';
-            modalBody.style.overflowY = 'auto';
+            modalBody.style.overflowY = 'visible';
+            modalBody.style.overflowX = 'hidden';
             modalBody.style.minHeight = '0';
             modalBody.style.maxHeight = 'none';
+            modalBody.style.display = 'flex';
+            modalBody.style.flexDirection = 'column';
+            
+            // جعل قسم عناصر النقل قابل للتمرير الداخلي (للمودال createTransferModal فقط)
+            const transferItems = modalBody.querySelector('#transferItems');
+            if (transferItems && modalId === 'createTransferModal') {
+                transferItems.style.maxHeight = '40vh';
+                transferItems.style.overflowY = 'auto';
+                transferItems.style.overflowX = 'hidden';
+                transferItems.style.webkitOverflowScrolling = 'touch';
+                transferItems.style.padding = '0.5rem';
+                transferItems.style.marginBottom = '0.5rem';
+                transferItems.style.border = '1px solid rgba(0, 0, 0, 0.1)';
+                transferItems.style.borderRadius = '0.375rem';
+                transferItems.style.backgroundColor = '#f8f9fa';
+            }
             
             // التأكد من أن modal-footer ثابت
             modalFooter.style.flexShrink = '0';
@@ -1865,43 +1897,39 @@ document.getElementById('transferForm')?.addEventListener('submit', function(e) 
             }
         }, true);
         
-        // مراقبة إضافة عناصر جديدة في modal-body
-        const observer = new MutationObserver(function(mutations) {
-            let shouldScroll = false;
-            
-            mutations.forEach(function(mutation) {
-                if (mutation.addedNodes.length > 0) {
-                    shouldScroll = true;
+        // مراقبة إضافة عناصر جديدة في #transferItems
+        const transferItems = modalBody.querySelector('#transferItems');
+        if (transferItems && modalId === 'createTransferModal') {
+            const itemsObserver = new MutationObserver(function(mutations) {
+                let shouldScroll = false;
+                
+                mutations.forEach(function(mutation) {
+                    if (mutation.addedNodes.length > 0) {
+                        shouldScroll = true;
+                    }
+                });
+                
+                if (shouldScroll) {
+                    // التأكد من ظهور modal-footer بعد إضافة العناصر
+                    setTimeout(function() {
+                        ensureFooterVisible();
+                        
+                        // Scroll إلى آخر عنصر في #transferItems
+                        const lastItem = transferItems.lastElementChild;
+                        if (lastItem) {
+                            lastItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }
+                    }, 100);
                 }
             });
             
-            if (shouldScroll) {
-                // التأكد من ظهور modal-footer بعد إضافة العناصر
-                setTimeout(function() {
-                    ensureFooterVisible();
-                    
-                    // إذا كان المحتوى طويلاً، scroll إلى الأسفل قليلاً لضمان ظهور الأزرار
-                    const bodyHeight = modalBody.scrollHeight;
-                    const bodyClientHeight = modalBody.clientHeight;
-                    
-                    if (bodyHeight > bodyClientHeight) {
-                        // التأكد من أن آخر عنصر مرئي
-                        const lastChild = modalBody.lastElementChild;
-                        if (lastChild) {
-                            const lastChildRect = lastChild.getBoundingClientRect();
-                            const modalFooterRect = modalFooter.getBoundingClientRect();
-                            
-                            if (lastChildRect.bottom > modalFooterRect.top - 30) {
-                                const scrollAmount = lastChildRect.bottom - modalFooterRect.top + 30;
-                                modalBody.scrollTop = Math.min(modalBody.scrollTop + scrollAmount, modalBody.scrollHeight);
-                            }
-                        }
-                    }
-                }, 100);
-            }
-        });
-        
-        observer.observe(modalBody, { childList: true, subtree: true });
+            itemsObserver.observe(transferItems, { childList: true, subtree: true });
+            
+            // تنظيف عند إغلاق المودال
+            modal.addEventListener('hidden.bs.modal', function() {
+                itemsObserver.disconnect();
+            });
+        }
         
         // عند فتح لوحة المفاتيح (visualViewport API)
         if (window.visualViewport) {

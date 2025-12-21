@@ -1345,7 +1345,7 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $creditPaymentCommissionAmount = round($calculatedCreditUsed * 0.02, 2);
                                 
                                 if ($creditPaymentCommissionAmount > 0) {
-                                try {
+                                    try {
                                     $timestamp = strtotime($saleDate) ?: time();
                                     $targetMonth = (int)date('n', $timestamp);
                                     $targetYear = (int)date('Y', $timestamp);
@@ -1394,6 +1394,14 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                                 } catch (Throwable $creditPaymentCommissionError) {
                                     error_log('Error adding collection percentage for credit payment with credit balance: ' . $creditPaymentCommissionError->getMessage());
                                     error_log('Credit payment commission error trace: ' . $creditPaymentCommissionError->getTraceAsString());
+                                }
+                                } else {
+                                    error_log(sprintf(
+                                        'WARNING: creditPaymentCommissionAmount is zero or negative: commissionAmount=%.2f, calculatedCreditUsed=%.2f, invoiceId=%d',
+                                        $creditPaymentCommissionAmount,
+                                        $calculatedCreditUsed,
+                                        $invoiceId
+                                    ));
                                 }
                             } else {
                                 error_log(sprintf(

@@ -1203,9 +1203,26 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        // الحصول على base path
-        const basePath = window.location.pathname.replace(/\/[^\/]+$/, '') || '';
-        const apiUrl = basePath + '/api/get_product_templates.php';
+        // الحصول على base path بشكل صحيح
+        function getApiPath(endpoint) {
+            const currentPath = window.location.pathname || '/';
+            const pathParts = currentPath.split('/').filter(Boolean);
+            const stopSegments = ['dashboard', 'modules', 'api', 'assets', 'includes'];
+            const baseParts = [];
+
+            for (const part of pathParts) {
+                if (stopSegments.includes(part) || part.endsWith('.php')) {
+                    break;
+                }
+                baseParts.push(part);
+            }
+
+            const basePath = baseParts.length ? '/' + baseParts.join('/') : '';
+            const apiPath = (basePath + '/api/' + endpoint).replace(/\/+/g, '/');
+            return apiPath.startsWith('/') ? apiPath : '/' + apiPath;
+        }
+
+        const apiUrl = getApiPath('get_product_templates.php');
 
         fetch(apiUrl)
             .then(response => {
