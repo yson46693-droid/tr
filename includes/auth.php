@@ -67,6 +67,10 @@ function isLoggedIn() {
         return false;
     }
     
+    // إعلان المتغيرات الثابتة مرة واحدة في بداية الدالة
+    static $retryCount = [];
+    static $errorCount = [];
+    
     // التحقق من أن المستخدم موجود في قاعدة البيانات
     try {
         $db = db();
@@ -81,13 +85,35 @@ function isLoggedIn() {
                 return false; // نرجع false لكن لا نحذف الجلسة
             }
             
-            // المستخدم غير موجود أو غير مفعّل - حذف الجلسة
+            // المستخدم غير موجود أو غير مفعّل - حذف الجلسة فقط بعد التحقق المتكرر
+            // إضافة آلية retry لمنع حذف الجلسة عند أخطاء مؤقتة
+            $sessionId = session_id();
+            if (!isset($retryCount[$sessionId])) {
+                $retryCount[$sessionId] = 0;
+            }
+            
+            // إذا فشل التحقق أقل من 3 مرات، نعتبره خطأ مؤقت ونحتفظ بالجلسة
+            if ($retryCount[$sessionId] < 3) {
+                $retryCount[$sessionId]++;
+                // نرجع true مؤقتاً على افتراض أن الخطأ مؤقت
+                return true;
+            }
+            
+            // بعد 3 محاولات فاشلة، نحذف الجلسة
+            unset($retryCount[$sessionId]);
             session_destroy();
             return false;
         }
+        
+        // نجح التحقق - إعادة تعيين عداد المحاولات
+        $sessionId = session_id();
+        if (isset($retryCount[$sessionId])) {
+            unset($retryCount[$sessionId]);
+        }
+        
         return true;
     } catch (Exception $e) {
-        // في حالة خطأ في قاعدة البيانات، لا نحذف الجلسة إذا كان هذا من background tasks
+        // في حالة خطأ في قاعدة البيانات، لا نحذف الجلسة فوراً
         $isBackgroundTask = defined('BACKGROUND_TASKS_ACTIVE') && BACKGROUND_TASKS_ACTIVE === true;
         if ($isBackgroundTask) {
             error_log("isLoggedIn() - Database error in background tasks: " . $e->getMessage());
@@ -95,7 +121,39 @@ function isLoggedIn() {
             return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
         }
         
-        error_log("isLoggedIn() error: " . $e->getMessage());
+        // إضافة آلية retry للأخطاء المؤقتة
+        $sessionId = session_id();
+        if (!isset($errorCount[$sessionId])) {
+            $errorCount[$sessionId] = 0;
+        }
+        
+        // التحقق من نوع الخطأ - إذا كان timeout أو connection error، نعتبره مؤقت
+        $errorMessage = strtolower($e->getMessage());
+        $isTemporaryError = (
+            strpos($errorMessage, 'timeout') !== false ||
+            strpos($errorMessage, 'connection') !== false ||
+            strpos($errorMessage, 'lost connection') !== false ||
+            strpos($errorMessage, 'gone away') !== false ||
+            strpos($errorMessage, 'server has gone away') !== false
+        );
+        
+        // إذا كان الخطأ مؤقتاً وأقل من 5 مرات، نعتبره خطأ مؤقت
+        if ($isTemporaryError && $errorCount[$sessionId] < 5) {
+            $errorCount[$sessionId]++;
+            error_log("isLoggedIn() - Temporary database error (attempt {$errorCount[$sessionId]}): " . $e->getMessage());
+            // نرجع true مؤقتاً على افتراض أن الخطأ مؤقت
+            return true;
+        }
+        
+        // إذا كان الخطأ غير مؤقت أو تجاوز 5 محاولات، نعتبر الجلسة منتهية
+        if (!$isTemporaryError || $errorCount[$sessionId] >= 5) {
+            if ($errorCount[$sessionId] >= 5) {
+                unset($errorCount[$sessionId]);
+            }
+            error_log("isLoggedIn() error (persistent): " . $e->getMessage());
+            return false;
+        }
+        
         return false;
     }
 }
@@ -135,6 +193,10 @@ function getCurrentUser() {
         return null;
     }
     
+    // إعلان المتغيرات الثابتة مرة واحدة في بداية الدالة
+    static $retryCount = [];
+    static $errorCount = [];
+    
     // جلب بيانات المستخدم من قاعدة البيانات
     try {
         $db = db();
@@ -149,14 +211,35 @@ function getCurrentUser() {
                 return null; // نرجع null لكن لا نحذف الجلسة
             }
             
-            // المستخدم غير موجود أو غير مفعّل - حذف الجلسة
+            // المستخدم غير موجود أو غير مفعّل - حذف الجلسة فقط بعد التحقق المتكرر
+            // إضافة آلية retry لمنع حذف الجلسة عند أخطاء مؤقتة
+            $sessionId = session_id();
+            if (!isset($retryCount[$sessionId])) {
+                $retryCount[$sessionId] = 0;
+            }
+            
+            // إذا فشل التحقق أقل من 3 مرات، نعتبره خطأ مؤقت
+            if ($retryCount[$sessionId] < 3) {
+                $retryCount[$sessionId]++;
+                // نرجع null لكن لا نحذف الجلسة
+                return null;
+            }
+            
+            // بعد 3 محاولات فاشلة، نحذف الجلسة
+            unset($retryCount[$sessionId]);
             session_destroy();
             return null;
         }
         
+        // نجح التحقق - إعادة تعيين عداد المحاولات
+        $sessionId = session_id();
+        if (isset($retryCount[$sessionId])) {
+            unset($retryCount[$sessionId]);
+        }
+        
         return $user;
     } catch (Exception $e) {
-        // في حالة خطأ في قاعدة البيانات، لا نحذف الجلسة إذا كان هذا من background tasks
+        // في حالة خطأ في قاعدة البيانات، لا نحذف الجلسة فوراً
         $isBackgroundTask = defined('BACKGROUND_TASKS_ACTIVE') && BACKGROUND_TASKS_ACTIVE === true;
         if ($isBackgroundTask) {
             error_log("getCurrentUser() - Database error in background tasks: " . $e->getMessage());
@@ -171,7 +254,39 @@ function getCurrentUser() {
             }
         }
         
-        error_log("getCurrentUser() error: " . $e->getMessage());
+        // إضافة آلية retry للأخطاء المؤقتة
+        $sessionId = session_id();
+        if (!isset($errorCount[$sessionId])) {
+            $errorCount[$sessionId] = 0;
+        }
+        
+        // التحقق من نوع الخطأ - إذا كان timeout أو connection error، نعتبره مؤقت
+        $errorMessage = strtolower($e->getMessage());
+        $isTemporaryError = (
+            strpos($errorMessage, 'timeout') !== false ||
+            strpos($errorMessage, 'connection') !== false ||
+            strpos($errorMessage, 'lost connection') !== false ||
+            strpos($errorMessage, 'gone away') !== false ||
+            strpos($errorMessage, 'server has gone away') !== false
+        );
+        
+        // إذا كان الخطأ مؤقتاً وأقل من 5 مرات، نعتبره خطأ مؤقت
+        if ($isTemporaryError && $errorCount[$sessionId] < 5) {
+            $errorCount[$sessionId]++;
+            error_log("getCurrentUser() - Temporary database error (attempt {$errorCount[$sessionId]}): " . $e->getMessage());
+            // نرجع null لكن لا نحذف الجلسة
+            return null;
+        }
+        
+        // إذا كان الخطأ غير مؤقت أو تجاوز 5 محاولات، نعتبر الجلسة منتهية
+        if (!$isTemporaryError || $errorCount[$sessionId] >= 5) {
+            if ($errorCount[$sessionId] >= 5) {
+                unset($errorCount[$sessionId]);
+            }
+            error_log("getCurrentUser() error (persistent): " . $e->getMessage());
+            return null;
+        }
+        
         return null;
     }
 }

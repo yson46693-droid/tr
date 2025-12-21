@@ -1407,40 +1407,51 @@ document.addEventListener('DOMContentLoaded', function() {
                             urlString.includes('attendance.php?action=') ||
                             urlString.includes('check_session.php');
             
+            let modifiedUrl = url;
+            let modifiedOptions = { ...options };
+            
             if (isApiCall) {
                 const apiToken = getAPIToken();
                 if (apiToken) {
                     // إذا كان options.body هو FormData
                     if (options.body instanceof FormData) {
-                        options.body.append('api_token', apiToken);
+                        // إنشاء FormData جديد لإضافة الـ token
+                        const newFormData = new FormData();
+                        // نسخ جميع البيانات الموجودة
+                        for (const [key, value] of options.body.entries()) {
+                            newFormData.append(key, value);
+                        }
+                        // إضافة API token
+                        newFormData.append('api_token', apiToken);
+                        modifiedOptions.body = newFormData;
                     }
                     // إذا كان options.body هو string (JSON)
                     else if (typeof options.body === 'string') {
                         try {
                             const jsonData = JSON.parse(options.body);
                             jsonData.api_token = apiToken;
-                            options.body = JSON.stringify(jsonData);
+                            modifiedOptions.body = JSON.stringify(jsonData);
                         } catch (e) {
                             // إذا لم يكن JSON، أضف كـ query parameter
                             const separator = urlString.includes('?') ? '&' : '?';
-                            url = urlString + separator + 'api_token=' + encodeURIComponent(apiToken);
+                            modifiedUrl = urlString + separator + 'api_token=' + encodeURIComponent(apiToken);
                         }
                     }
-                    // إذا كان options.body غير موجود أو null
+                    // إذا كان options.body غير موجود أو null (GET request)
                     else if (!options.body) {
                         // أضف كـ query parameter
                         const separator = urlString.includes('?') ? '&' : '?';
-                        url = urlString + separator + 'api_token=' + encodeURIComponent(apiToken);
+                        modifiedUrl = urlString + separator + 'api_token=' + encodeURIComponent(apiToken);
                     }
                     // إذا كان options.body كائن عادي
-                    else if (typeof options.body === 'object' && options.body !== null) {
-                        options.body.api_token = apiToken;
+                    else if (typeof options.body === 'object' && options.body !== null && !(options.body instanceof FormData)) {
+                        modifiedOptions.body = { ...options.body, api_token: apiToken };
                     }
                 }
             }
             
             try {
-                const response = await originalFetch.apply(this, arguments);
+                const response = await originalFetch.call(this, modifiedUrl, modifiedOptions);
                 
                 // التحقق من أن الاستجابة ليست من errors.infinityfree.net
                 if (response && response.url && (response.url.includes('errors.infinityfree.net') || response.url.includes('infinityfree'))) {
