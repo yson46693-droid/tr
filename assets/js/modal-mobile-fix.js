@@ -32,14 +32,26 @@
         
         if (!modalDialog || !modalContent) return;
         
-        // حساب الارتفاع الفعلي المتاح
+        // حساب الارتفاع الفعلي المتاح (استخدام window.innerHeight)
         const availableHeight = getAvailableHeight();
         const margin = 16; // 0.5rem = 8px * 2 = 16px
         const maxHeight = availableHeight - margin;
         
         // تعيين الارتفاع الأقصى للنموذج
         modalDialog.style.maxHeight = maxHeight + 'px';
-        modalContent.style.maxHeight = maxHeight + 'px';
+        modalDialog.style.height = maxHeight + 'px';
+        
+        // التأكد من أن modal-dialog يستخدم flexbox
+        modalDialog.style.display = 'flex';
+        modalDialog.style.flexDirection = 'column';
+        modalDialog.style.overflow = 'hidden';
+        
+        // تعيين الارتفاع الأقصى لمحتوى النموذج
+        modalContent.style.maxHeight = '100%';
+        modalContent.style.height = '100%';
+        modalContent.style.display = 'flex';
+        modalContent.style.flexDirection = 'column';
+        modalContent.style.overflow = 'hidden';
         
         // حساب ارتفاع الرأس والتذييل
         const headerHeight = modalHeader ? modalHeader.offsetHeight : 0;
@@ -48,38 +60,54 @@
         // حساب ارتفاع الجسم المتاح
         const bodyMaxHeight = maxHeight - headerHeight - footerHeight;
         
-        // تعيين max-height للجسم
+        // تعيين خصائص الرأس
+        if (modalHeader) {
+            modalHeader.style.flexShrink = '0';
+        }
+        
+        // التحقق من وجود modal-dialog-scrollable
+        const isScrollable = modalDialog.classList.contains('modal-dialog-scrollable');
+        
+        // تعيين خصائص الجسم
         if (modalBody) {
             // إزالة أي max-height محدد مسبقاً (inline styles)
-            if (modalBody.style.maxHeight) {
-                modalBody.style.maxHeight = '';
+            modalBody.style.maxHeight = '';
+            modalBody.style.height = '';
+            
+            // تعيين خصائص flexbox
+            modalBody.style.flex = '1 1 auto';
+            modalBody.style.minHeight = '0';
+            modalBody.style.overflowY = 'auto';
+            modalBody.style.overflowX = 'hidden';
+            modalBody.style.webkitOverflowScrolling = 'touch';
+            modalBody.style.position = 'relative';
+            
+            // إذا كان modal-dialog-scrollable، نتأكد من أن modal-content لا يحتوي على overflow
+            if (isScrollable) {
+                modalContent.style.overflow = 'hidden';
+                modalContent.style.overflowY = 'hidden';
             }
             
-            // تعيين max-height الجديد
-            modalBody.style.maxHeight = bodyMaxHeight + 'px';
-            
-            // التأكد من أن overflow-y معطى
-            if (!modalBody.style.overflowY) {
-                modalBody.style.overflowY = 'auto';
-            }
-            
-            // إضافة padding-bottom إضافي إذا كان المحتوى أكبر من المساحة المتاحة
-            const contentHeight = modalBody.scrollHeight;
-            if (contentHeight > bodyMaxHeight - 40) {
-                const safeAreaBottom = parseInt(getComputedStyle(document.documentElement)
-                    .getPropertyValue('env(safe-area-inset-bottom)')) || 0;
-                modalBody.style.paddingBottom = (30 + safeAreaBottom) + 'px';
-            }
+            // إضافة padding-bottom إضافي لضمان ظهور جميع الحقول
+            const safeAreaBottom = parseInt(getComputedStyle(document.documentElement)
+                .getPropertyValue('env(safe-area-inset-bottom)')) || 0;
+            const currentPadding = parseInt(getComputedStyle(modalBody).paddingBottom) || 16;
+            modalBody.style.paddingBottom = Math.max(currentPadding, 40 + safeAreaBottom) + 'px';
         }
         
         // التأكد من أن التذييل مرئي دائماً
         if (modalFooter) {
-            const safeAreaBottom = parseInt(getComputedStyle(document.documentElement)
-                .getPropertyValue('env(safe-area-inset-bottom)')) || 0;
-            modalFooter.style.paddingBottom = (16 + safeAreaBottom) + 'px';
+            modalFooter.style.flexShrink = '0';
             modalFooter.style.position = 'relative';
             modalFooter.style.zIndex = '10';
-            modalFooter.style.backgroundColor = getComputedStyle(modalContent).backgroundColor || '#fff';
+            modalFooter.style.backgroundColor = '#fff';
+            modalFooter.style.borderTop = '1px solid #dee2e6';
+            modalFooter.style.marginTop = '0';
+            
+            const safeAreaBottom = parseInt(getComputedStyle(document.documentElement)
+                .getPropertyValue('env(safe-area-inset-bottom)')) || 0;
+            const currentPadding = parseInt(getComputedStyle(modalFooter).paddingBottom) || 16;
+            modalFooter.style.paddingBottom = Math.max(currentPadding, 16 + safeAreaBottom) + 'px';
         }
     }
     
@@ -104,27 +132,49 @@
         // استخدام Bootstrap Modal Events
         document.addEventListener('show.bs.modal', function(event) {
             const modal = event.target;
-            if (modal && modal.classList.contains('modal')) {
+            if (modal && modal.classList.contains('modal') && isMobile()) {
+                // إزالة الأنماط المضمنة قبل فتح النموذج
                 const modalBody = modal.querySelector('.modal-body');
+                const modalDialog = modal.querySelector('.modal-dialog');
+                const modalContent = modal.querySelector('.modal-content');
+                
                 if (modalBody && modalBody.style.maxHeight) {
-                    // إزالة max-height من inline style قبل فتح النموذج
                     modalBody.style.maxHeight = '';
+                }
+                
+                // ضبط أولي للنموذج
+                if (modalDialog) {
+                    modalDialog.style.display = 'flex';
+                    modalDialog.style.flexDirection = 'column';
+                }
+                
+                if (modalContent) {
+                    modalContent.style.display = 'flex';
+                    modalContent.style.flexDirection = 'column';
                 }
             }
         });
         
         document.addEventListener('shown.bs.modal', function(event) {
             const modal = event.target;
-            if (modal && modal.classList.contains('modal')) {
-                // انتظر قليلاً للسماح بعرض النموذج بشكل كامل
+            if (modal && modal.classList.contains('modal') && isMobile()) {
+                // ضبط الارتفاع فوراً
+                adjustModalHeight(modal);
+                
+                // إعادة ضبط بعد 50ms للسماح بعرض النموذج بشكل كامل
                 setTimeout(function() {
                     adjustModalHeight(modal);
                 }, 50);
                 
-                // إعادة ضبط الارتفاع بعد تحميل المحتوى الديناميكي
+                // إعادة ضبط بعد 200ms لضمان تطبيق جميع الأنماط
                 setTimeout(function() {
                     adjustModalHeight(modal);
-                }, 300);
+                }, 200);
+                
+                // إعادة ضبط بعد 500ms بعد تحميل المحتوى الديناميكي
+                setTimeout(function() {
+                    adjustModalHeight(modal);
+                }, 500);
             }
         });
         

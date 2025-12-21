@@ -7,67 +7,62 @@
 @media (max-width: 768px) {
     /* استخدام dynamic viewport height للنماذج على الهواتف */
     .modal-dialog {
-        margin: 0.5rem;
-        max-width: calc(100% - 1rem);
+        margin: 0.5rem !important;
+        max-width: calc(100% - 1rem) !important;
+        /* سيتم تعيين max-height ديناميكياً عبر JavaScript */
     }
     
-    /* تطبيق الارتفاع الديناميكي على النماذج */
+    /* تطبيق الارتفاع الديناميكي على النماذج المفتوحة */
     .modal.show .modal-dialog,
     .modal.showing .modal-dialog {
-        /* استخدام dynamic viewport height */
-        max-height: 100dvh;
-        max-height: calc(100dvh - 1rem);
-        display: flex;
-        flex-direction: column;
+        display: flex !important;
+        flex-direction: column !important;
+        max-height: calc(100vh - 1rem) !important;
+        /* سيتم تحديثه ديناميكياً عبر JavaScript */
     }
     
     /* تطبيق الارتفاع الديناميكي على محتوى النموذج */
-    .modal-content {
-        max-height: 100dvh;
-        max-height: calc(100dvh - 1rem);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
+    .modal.show .modal-content,
+    .modal.showing .modal-content {
+        display: flex !important;
+        flex-direction: column !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
     }
     
     /* رأس النموذج - ثابت في الأعلى */
-    .modal-header {
-        flex-shrink: 0;
-        padding: 1rem;
-        border-bottom: 1px solid var(--border-color, #dee2e6);
+    .modal.show .modal-header,
+    .modal.showing .modal-header {
+        flex-shrink: 0 !important;
+        padding: 1rem !important;
     }
     
     /* جسم النموذج - قابل للتمرير */
-    .modal-body {
-        flex: 1 1 auto;
-        overflow-y: auto;
-        overflow-x: hidden;
-        padding: 1rem;
+    .modal.show .modal-body,
+    .modal.showing .modal-body {
+        flex: 1 1 auto !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
         /* إضافة padding-bottom إضافي لضمان ظهور جميع الحقول */
-        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px) + 20px);
-        -webkit-overflow-scrolling: touch;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px) + 40px) !important;
         /* إزالة أي max-height محدد مسبقاً */
         max-height: none !important;
+        position: relative !important;
     }
     
     /* تذييل النموذج - ثابت في الأسفل */
-    .modal-footer {
-        flex-shrink: 0;
-        padding: 1rem;
-        border-top: 1px solid var(--border-color, #dee2e6);
-        /* إضافة padding-bottom للشاشات ذات الشقوق */
-        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
-        background-color: var(--bg-color, #fff);
+    .modal.show .modal-footer,
+    .modal.showing .modal-footer {
+        flex-shrink: 0 !important;
+        padding: 1rem !important;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+        background-color: #fff !important;
         /* التأكد من أن التذييل مرئي دائماً */
-        position: relative;
-        z-index: 10;
-    }
-    
-    /* إزالة max-height من modal-body - سيتم التعامل معها عبر JavaScript */
-    /* تعيين overflow-y للتمرير الصحيح */
-    .modal-body {
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch !important;
+        position: relative !important;
+        z-index: 10 !important;
+        border-top: 1px solid #dee2e6 !important;
+        margin-top: 0 !important;
     }
 }
 
@@ -111,15 +106,56 @@
     }
 }
 
-/* ===== Scrollable Modal Body Fix ===== */
+/* ===== Scrollable Modal Body Fix - Bootstrap modal-dialog-scrollable ===== */
 @media (max-width: 768px) {
-    .modal-dialog-scrollable .modal-content {
-        max-height: calc(100dvh - 1rem);
+    /* إعادة تعريف modal-dialog-scrollable للعمل بشكل صحيح على الهواتف */
+    .modal.show .modal-dialog-scrollable,
+    .modal.showing .modal-dialog-scrollable {
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        max-height: calc(100vh - 1rem) !important;
+        height: calc(100vh - 1rem) !important;
+        /* سيتم تحديثه ديناميكياً عبر JavaScript */
     }
     
-    .modal-dialog-scrollable .modal-body {
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
+    /* منع overflow على modal-content في modal-dialog-scrollable */
+    .modal.show .modal-dialog-scrollable .modal-content,
+    .modal.showing .modal-dialog-scrollable .modal-content {
+        display: flex !important;
+        flex-direction: column !important;
+        max-height: 100% !important;
+        height: 100% !important;
+        overflow: hidden !important;
+        /* إزالة overflow-y من modal-content */
+    }
+    
+    /* جعل modal-body scrollable بدلاً من modal-content */
+    .modal.show .modal-dialog-scrollable .modal-body,
+    .modal.showing .modal-dialog-scrollable .modal-body {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        max-height: none !important;
+        height: auto !important;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px) + 40px) !important;
+        /* إضافة مساحة إضافية في الأسفل */
+    }
+    
+    .modal.show .modal-dialog-scrollable .modal-header,
+    .modal.showing .modal-dialog-scrollable .modal-header {
+        flex-shrink: 0 !important;
+    }
+    
+    .modal.show .modal-dialog-scrollable .modal-footer,
+    .modal.showing .modal-dialog-scrollable .modal-footer {
+        flex-shrink: 0 !important;
+        background-color: #fff !important;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+        border-top: 1px solid #dee2e6 !important;
+        margin-top: 0 !important;
     }
 }
 

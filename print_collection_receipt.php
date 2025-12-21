@@ -315,10 +315,6 @@ $notes = $transaction['notes'] ?? '';
         
         <div class="details-section">
             <div class="details-title"><i class="bi bi-info-circle me-2"></i>تفاصيل العملية</div>
-            <div class="detail-row">
-                <span class="detail-label">الوصف:</span>
-                <span class="detail-value"><?php echo htmlspecialchars($description); ?></span>
-            </div>
             <?php if (!empty($notes)): ?>
             <div class="detail-row">
                 <span class="detail-label">ملاحظات:</span>
