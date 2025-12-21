@@ -27,6 +27,65 @@ window.safeWarn = function(...args) {
     }
 };
 
+// ========== إدارة API Token للحماية من الوصول الخارجي ==========
+/**
+ * حفظ API Token في sessionStorage
+ * @param {string} token - API Token المراد حفظه
+ */
+function saveAPIToken(token) {
+    try {
+        if (token && typeof token === 'string') {
+            sessionStorage.setItem('api_token', token);
+            if (DEBUG) {
+                console.log('API Token saved to sessionStorage');
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to save API token:', e);
+    }
+}
+
+/**
+ * الحصول على API Token من sessionStorage
+ * @returns {string|null} API Token أو null إذا لم يكن موجوداً
+ */
+function getAPIToken() {
+    try {
+        return sessionStorage.getItem('api_token');
+    } catch (e) {
+        console.warn('Failed to get API token:', e);
+        return null;
+    }
+}
+
+/**
+ * حذف API Token من sessionStorage
+ */
+function clearAPIToken() {
+    try {
+        sessionStorage.removeItem('api_token');
+    } catch (e) {
+        console.warn('Failed to clear API token:', e);
+    }
+}
+
+/**
+ * إضافة API Token إلى FormData أو URL parameters
+ * @param {FormData|Object} data - البيانات المراد إضافة الـ token إليها
+ * @returns {FormData|Object} البيانات مع الـ token المضاف
+ */
+function addAPITokenToRequest(data) {
+    const token = getAPIToken();
+    if (token) {
+        if (data instanceof FormData) {
+            data.append('api_token', token);
+        } else if (typeof data === 'object' && data !== null) {
+            data.api_token = token;
+        }
+    }
+    return data;
+}
+
 // ========== دوال مساعدة للأمان (XSS Protection) ==========
 // دالة لتنظيف النص من HTML tags
 function escapeHTML(text) {
@@ -1340,7 +1399,46 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const originalFetch = window.fetch;
     if (typeof originalFetch === 'function') {
-        window.fetch = async function() {
+        window.fetch = async function(url, options = {}) {
+            // إضافة API Token تلقائياً للطلبات الموجهة إلى API endpoints
+            const urlString = typeof url === 'string' ? url : (url?.href || url?.toString() || '');
+            const isApiCall = urlString.includes('/api/') || 
+                            urlString.includes('notifications.php') ||
+                            urlString.includes('attendance.php?action=') ||
+                            urlString.includes('check_session.php');
+            
+            if (isApiCall) {
+                const apiToken = getAPIToken();
+                if (apiToken) {
+                    // إذا كان options.body هو FormData
+                    if (options.body instanceof FormData) {
+                        options.body.append('api_token', apiToken);
+                    }
+                    // إذا كان options.body هو string (JSON)
+                    else if (typeof options.body === 'string') {
+                        try {
+                            const jsonData = JSON.parse(options.body);
+                            jsonData.api_token = apiToken;
+                            options.body = JSON.stringify(jsonData);
+                        } catch (e) {
+                            // إذا لم يكن JSON، أضف كـ query parameter
+                            const separator = urlString.includes('?') ? '&' : '?';
+                            url = urlString + separator + 'api_token=' + encodeURIComponent(apiToken);
+                        }
+                    }
+                    // إذا كان options.body غير موجود أو null
+                    else if (!options.body) {
+                        // أضف كـ query parameter
+                        const separator = urlString.includes('?') ? '&' : '?';
+                        url = urlString + separator + 'api_token=' + encodeURIComponent(apiToken);
+                    }
+                    // إذا كان options.body كائن عادي
+                    else if (typeof options.body === 'object' && options.body !== null) {
+                        options.body.api_token = apiToken;
+                    }
+                }
+            }
+            
             try {
                 const response = await originalFetch.apply(this, arguments);
                 

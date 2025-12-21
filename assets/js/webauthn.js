@@ -640,6 +640,19 @@ class SimpleWebAuthn {
             const verifyData = await verifyResponse.json();
 
             if (verifyData.success) {
+                // حفظ API Token من استجابة تسجيل الدخول
+                if (verifyData.api_token) {
+                    if (typeof saveAPIToken === 'function') {
+                        saveAPIToken(verifyData.api_token);
+                    } else {
+                        try {
+                            sessionStorage.setItem('api_token', verifyData.api_token);
+                        } catch (e) {
+                            console.warn('Failed to save API token:', e);
+                        }
+                    }
+                }
+                
                 // إعادة توجيه إلى لوحة التحكم
                 const userRole = verifyData.user?.role || 'accountant';
                 
@@ -822,6 +835,19 @@ class SimpleWebAuthn {
             console.log('Verify data:', verifyData);
 
             if (verifyData.success) {
+                // حفظ API Token من استجابة تسجيل الدخول
+                if (verifyData.api_token) {
+                    if (typeof saveAPIToken === 'function') {
+                        saveAPIToken(verifyData.api_token);
+                    } else {
+                        try {
+                            sessionStorage.setItem('api_token', verifyData.api_token);
+                        } catch (e) {
+                            console.warn('Failed to save API token:', e);
+                        }
+                    }
+                }
+                
                 // إعادة توجيه إلى لوحة التحكم - استخدام مسار مطلق
                 const userRole = verifyData.user?.role || 'accountant';
                 

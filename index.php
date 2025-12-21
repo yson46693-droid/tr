@@ -311,6 +311,12 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
     
     // === معالجة طلبات AJAX Login عند وجود جلسة نشطة ===
     if (isset($_POST['ajax_login']) && $_POST['ajax_login'] == '1') {
+        // التحقق من وجود API Token في الجلسة، وإذا لم يكن موجوداً، أنشئ واحداً جديداً
+        if (!isset($_SESSION['api_token']) || empty($_SESSION['api_token'])) {
+            require_once __DIR__ . '/includes/auth.php';
+            $_SESSION['api_token'] = generateAPIToken();
+        }
+        
         // تنظيف output buffer
         while (ob_get_level() > 0) {
             ob_end_clean();
@@ -334,6 +340,7 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
             'already_logged_in' => true,
             'message' => 'يوجد جلسة نشطة بالفعل جاري التحويل إلى النظام',
             'redirect_url' => $dashboardUrl,
+            'api_token' => $_SESSION['api_token'], // إرجاع API token
             'user' => [
                 'id' => $_SESSION['user_id'] ?? 0,
                 'username' => $_SESSION['username'] ?? '',
@@ -1491,8 +1498,21 @@ $lang = $translations;
                         throw fetchError; // إعادة رمي الخطأ إذا لم يكن خطأ اتصال
                     }
                     
-                    // معالجة حالة الجلسة النشطة
+                        // معالجة حالة الجلسة النشطة
                     if (loginResult.already_logged_in) {
+                        // حفظ API Token إذا كان موجوداً
+                        if (loginResult.api_token) {
+                            if (typeof saveAPIToken === 'function') {
+                                saveAPIToken(loginResult.api_token);
+                            } else {
+                                try {
+                                    sessionStorage.setItem('api_token', loginResult.api_token);
+                                } catch (e) {
+                                    console.warn('Failed to save API token:', e);
+                                }
+                            }
+                        }
+                        
                         loadingMessage.textContent = loginResult.message || 'يوجد جلسة نشطة بالفعل جاري التحويل إلى النظام';
                         
                         // الحصول على URL الداشبورد
@@ -1531,6 +1551,20 @@ $lang = $translations;
                     
                     if (!loginResult.success) {
                         throw new Error(loginResult.message || 'فشل تسجيل الدخول');
+                    }
+                    
+                    // حفظ API Token من استجابة تسجيل الدخول
+                    if (loginResult.api_token) {
+                        if (typeof saveAPIToken === 'function') {
+                            saveAPIToken(loginResult.api_token);
+                        } else {
+                            // Fallback: حفظ مباشرة في sessionStorage
+                            try {
+                                sessionStorage.setItem('api_token', loginResult.api_token);
+                            } catch (e) {
+                                console.warn('Failed to save API token:', e);
+                            }
+                        }
                     }
                     
                     // إذا كان تسجيل الدخول ناجحاً، توجه مباشرة بدون انتظار

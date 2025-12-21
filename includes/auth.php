@@ -456,6 +456,10 @@ function login($username, $password, $rememberMe = true) {
     $_SESSION['role'] = $user['role'];
     $_SESSION['login_time'] = time();
     
+    // إنشاء API Token عشوائي للحماية من الوصول الخارجي
+    $apiToken = generateAPIToken();
+    $_SESSION['api_token'] = $apiToken;
+    
     // إذا كان rememberMe مفعّل، نمدد مدة الجلسة
     if ($rememberMe) {
         ini_set('session.gc_maxlifetime', 2592000); // 30 يوم
@@ -473,7 +477,11 @@ function login($username, $password, $rememberMe = true) {
         'remember_me' => $rememberMe ? 'yes' : 'no'
     ]);
     
-    return ['success' => true, 'user' => $user];
+    return [
+        'success' => true, 
+        'user' => $user,
+        'api_token' => $apiToken // إرجاع API token للاستخدام في JavaScript
+    ];
 }
 
 /**
@@ -1202,6 +1210,61 @@ function requireAnyRole($roles) {
  */
 function hashPassword($password) {
     return password_hash($password, PASSWORD_BCRYPT);
+}
+
+/**
+ * إنشاء API Token عشوائي (حروف وأرقام) للحماية من الوصول الخارجي
+ * @return string token عشوائي مكون من 32 حرف ورقم
+ */
+function generateAPIToken() {
+    // إنشاء token عشوائي مكون من حروف وأرقام فقط
+    $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $token = '';
+    $length = 32;
+    
+    for ($i = 0; $i < $length; $i++) {
+        $token .= $characters[random_int(0, strlen($characters) - 1)];
+    }
+    
+    return $token;
+}
+
+/**
+ * التحقق من API Token
+ * @param string|null $token الـ token المراد التحقق منه (إذا كان null، يتم أخذه من POST/GET)
+ * @return bool true إذا كان الـ token صحيح، false إذا كان غير صحيح
+ */
+function verifyAPIToken($token = null) {
+    // إذا لم يتم تمرير token، احصل عليه من POST أو GET
+    if ($token === null) {
+        $token = $_POST['api_token'] ?? $_GET['api_token'] ?? null;
+    }
+    
+    // تنظيف token من أي مسافات
+    if ($token !== null) {
+        $token = trim($token);
+    }
+    
+    // إذا لم يكن هناك token في الطلب، فشل التحقق
+    if ($token === null || $token === '') {
+        return false;
+    }
+    
+    // التحقق من وجود token في الجلسة
+    if (!isset($_SESSION['api_token']) || empty($_SESSION['api_token'])) {
+        return false;
+    }
+    
+    // التحقق من تطابق الـ token
+    return hash_equals($_SESSION['api_token'], $token);
+}
+
+/**
+ * الحصول على API Token الحالي من الجلسة
+ * @return string|null الـ token الحالي أو null إذا لم يكن موجوداً
+ */
+function getAPIToken() {
+    return $_SESSION['api_token'] ?? null;
 }
 
 /**

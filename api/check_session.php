@@ -48,6 +48,17 @@ $userId = null;
 // محاولة الحصول على المستخدم من الجلسة
 try {
     if (isLoggedIn()) {
+        // التحقق من API Token للحماية من الوصول الخارجي
+        // ملاحظة: نتحقق فقط إذا كان هناك token في الطلب (لأن check_session قد يُستدعى بدون token من بعض الأماكن)
+        $requestToken = $_POST['api_token'] ?? $_GET['api_token'] ?? null;
+        if ($requestToken !== null) {
+            if (!verifyAPIToken()) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'error' => 'Invalid API token']);
+                exit;
+            }
+        }
+        
         $user = getCurrentUser();
         if ($user && isset($user['id'])) {
             $userId = $user['id'];
