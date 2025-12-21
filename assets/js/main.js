@@ -989,6 +989,43 @@ document.addEventListener('DOMContentLoaded', function() {
     // 403 (Forbidden) ليس خطأ في الجلسة - هو خطأ في الصلاحيات
     const FORBIDDEN_STATUS = 403;
 
+    /**
+     * Stop all intervals, timeouts, and background jobs
+     * Called when session expires to prevent continued polling
+     */
+    function stopAllPolling() {
+        // Stop auto-refresh interval if exists
+        if (typeof stopAutoRefresh === 'function') {
+            stopAutoRefresh();
+        }
+        
+        // Stop background tasks interval (from footer.php)
+        if (window.backgroundTasksInterval) {
+            clearInterval(window.backgroundTasksInterval);
+            window.backgroundTasksInterval = null;
+        }
+        
+        // Clear any other intervals registered in window
+        for (let i = 1; i < 9999; i++) {
+            clearInterval(i);
+            clearTimeout(i);
+        }
+        
+        // Stop any intervals stored in window
+        if (window.__intervals) {
+            window.__intervals.forEach(function(id) {
+                clearInterval(id);
+                clearTimeout(id);
+            });
+            window.__intervals = [];
+        }
+        
+        safeLog('All polling stopped due to session expiration');
+    }
+    
+    // Export function globally
+    window.stopAllPolling = stopAllPolling;
+    
     function getOverlayElement() {
         return null; // الـ overlay تم إزالته
     }
@@ -1112,19 +1149,6 @@ document.addEventListener('DOMContentLoaded', function() {
         ) || document.querySelector('body[data-page="profile"]') ||
            document.querySelector('body[data-page="attendance"]');
         
-        if (isProtectedPage) {
-            // في الصفحات المحمية، لا نعيد التوجيه حتى لو كان status 401/419/440
-            // لأن الجلسة قد تكون صالحة لكن هناك مشكلة في الاتصال
-            return;
-        }
-        
-        // التحقق من وجود رابط تنقل نشط - منع إعادة التوجيه أثناء التنقل
-        const activeNavigationLink = document.querySelector('a[data-navigation-link="true"]');
-        if (activeNavigationLink) {
-            // هناك عملية تنقل نشطة - لا نعيد التوجيه
-            return;
-        }
-        
         const numericStatus = Number(status);
         if (!Number.isFinite(numericStatus)) {
             return;
@@ -1137,6 +1161,21 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // فقط نعيد التوجيه إذا كان status هو 401/419/440 وكان من API call
         if (SESSION_END_STATUS.has(numericStatus)) {
+            // STOP ALL POLLING IMMEDIATELY when session expires
+            stopAllPolling();
+            
+            if (isProtectedPage) {
+                // في الصفحات المحمية، نوقف الـ polling لكن لا نعيد التوجيه
+                // لأن الجلسة قد تكون صالحة لكن هناك مشكلة في الاتصال
+                return;
+            }
+        
+            // التحقق من وجود رابط تنقل نشط - منع إعادة التوجيه أثناء التنقل
+            const activeNavigationLink = document.querySelector('a[data-navigation-link="true"]');
+            if (activeNavigationLink) {
+                // هناك عملية تنقل نشطة - لا نعيد التوجيه
+                return;
+            }
             // استخدام requestUrl إذا كان متوفراً، وإلا استخدم responseUrl
             const urlToCheck = requestUrl || responseUrl || '';
             
@@ -1221,6 +1260,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.error('Current Path:', currentPath);
                         console.error('Is API Call:', isApiCall);
                         console.error('Full Log Data:', logData);
+                        
+                        // Ensure all polling is stopped
+                        stopAllPolling();
                         
                         // محاولة إرسال log إلى الخادم (اختياري)
                         try {

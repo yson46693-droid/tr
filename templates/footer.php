@@ -554,17 +554,22 @@ if (!defined('ACCESS_ALLOWED')) {
         document.addEventListener('DOMContentLoaded', function() {
             // تحميل العمليات الخلفية بشكل غير متزامن (بعد تحميل الصفحة)
             // هذا يحسن الأداء عن طريق تأخير العمليات الثقيلة
-            setTimeout(function() {
-                // تخطي الاستدعاء إذا كانت الصفحة مخفية لتقليل الضغط
+            // Background tasks polling interval (stored globally for access by stopAllPolling)
+            window.backgroundTasksInterval = null;
+            
+            function executeBackgroundTasks() {
+                // Skip if page is hidden
                 if (document.hidden) {
                     return;
                 }
                 
                 try {
-                    // استخدام دالة getApiPath لحساب مسار API بشكل صحيح
-                    const apiPath = getApiPath('api/background-tasks.php');
+                    // Use getApiPath helper if available, otherwise construct path
+                    const apiPath = typeof getApiPath === 'function' 
+                        ? getApiPath('api/background-tasks.php')
+                        : '/api/background-tasks.php';
                     
-                    // استدعاء API للعمليات الخلفية (بدون انتظار النتيجة)
+                    // Call background tasks API
                     fetch(apiPath, {
                         method: 'GET',
                         credentials: 'same-origin',
@@ -572,15 +577,93 @@ if (!defined('ACCESS_ALLOWED')) {
                         headers: {
                             'X-Requested-With': 'XMLHttpRequest'
                         }
-                    }).catch(function(error) {
-                        // تجاهل الأخطاء بصمت - العمليات الخلفية اختيارية
-                        console.log('Background tasks skipped:', error.message);
+                    })
+                    .then(function(response) {
+                        // Check for session expiration (401)
+                        if (response.status === 401) {
+                            // Session expired - stop all polling
+                            if (window.backgroundTasksInterval) {
+                                clearInterval(window.backgroundTasksInterval);
+                                window.backgroundTasksInterval = null;
+                            }
+                            
+                            // Stop all polling globally
+                            if (typeof stopAllPolling === 'function') {
+                                stopAllPolling();
+                            }
+                            
+                            // Trigger session expiration handler
+                            if (typeof handleSessionStatus === 'function') {
+                                handleSessionStatus(401, response.url, apiPath);
+                            }
+                            return;
+                        }
+                        
+                        // Parse response if successful
+                        if (response.ok) {
+                            return response.json().catch(function() {
+                                return { success: false };
+                            });
+                        }
+                        
+                        return { success: false };
+                    })
+                    .then(function(data) {
+                        // Check if response indicates session expired
+                        if (data && data.status === 'expired') {
+                            // Stop polling
+                            if (window.backgroundTasksInterval) {
+                                clearInterval(window.backgroundTasksInterval);
+                                window.backgroundTasksInterval = null;
+                            }
+                            
+                            // Stop all polling globally
+                            if (typeof stopAllPolling === 'function') {
+                                stopAllPolling();
+                            }
+                            
+                            // Trigger session expiration handler
+                            if (typeof handleSessionStatus === 'function') {
+                                handleSessionStatus(401);
+                            }
+                        }
+                    })
+                    .catch(function(error) {
+                        // Only log non-network errors (network errors are normal for background tasks)
+                        if (error.name !== 'TypeError' && !error.message.includes('fetch')) {
+                            safeLog('Background tasks error:', error.message);
+                        }
                     });
                 } catch (error) {
-                    // تجاهل الأخطاء
-                    console.log('Background tasks error:', error.message);
+                    safeLog('Background tasks exception:', error.message);
                 }
-            }, 5000); // زيادة من 2 ثانية إلى 5 ثوان لتقليل الضغط
+            }
+            
+                // Execute first time after 5 seconds
+            setTimeout(function() {
+                executeBackgroundTasks();
+                
+                // Set up polling every 5 minutes (300000ms) if session is still valid
+                // This will be cleared if session expires
+                window.backgroundTasksInterval = setInterval(function() {
+                    executeBackgroundTasks();
+                }, 300000); // 5 minutes
+            }, 5000);
+            
+            // Stop polling when page is hidden or unloaded
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden && window.backgroundTasksInterval) {
+                    clearInterval(window.backgroundTasksInterval);
+                    window.backgroundTasksInterval = null;
+                }
+            });
+            
+            window.addEventListener('beforeunload', function() {
+                if (window.backgroundTasksInterval) {
+                    clearInterval(window.backgroundTasksInterval);
+                    window.backgroundTasksInterval = null;
+                }
+            });
             
             // إغلاق القائمة المنسدلة عند النقر على أي رابط
             const mainMenuDropdown = document.getElementById('mainMenuDropdown');

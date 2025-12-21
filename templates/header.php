@@ -572,9 +572,21 @@ if (ob_get_level() > 0) {
     </script>
     
     <!-- Favicon -->
+    <?php 
+    // Use existing favicon.svg if available, otherwise use PNG icons
+    $faviconSvg = __DIR__ . '/../assets/icons/favicon.svg';
+    $icon32x32 = __DIR__ . '/../assets/icons/icon-32x32.png';
+    $icon16x16 = __DIR__ . '/../assets/icons/icon-16x16.png';
+    ?>
+    <?php if (file_exists($faviconSvg)): ?>
     <link rel="icon" type="image/svg+xml" href="<?php echo ASSETS_URL; ?>icons/favicon.svg">
-    <link rel="icon" type="image/svg+xml" sizes="32x32" href="<?php echo ASSETS_URL; ?>icons/icon-32x32.svg">
-    <link rel="icon" type="image/svg+xml" sizes="16x16" href="<?php echo ASSETS_URL; ?>icons/icon-16x16.svg">
+    <?php endif; ?>
+    <?php if (file_exists($icon32x32)): ?>
+    <link rel="icon" type="image/png" sizes="32x32" href="<?php echo ASSETS_URL; ?>icons/icon-32x32.png">
+    <?php endif; ?>
+    <?php if (file_exists($icon16x16)): ?>
+    <link rel="icon" type="image/png" sizes="16x16" href="<?php echo ASSETS_URL; ?>icons/icon-16x16.png">
+    <?php endif; ?>
     <?php if (file_exists(__DIR__ . '/../favicon.ico')): ?>
     <link rel="icon" type="image/x-icon" href="<?php echo getRelativeUrl('favicon.ico'); ?>">
     <link rel="shortcut icon" href="<?php echo getRelativeUrl('favicon.ico'); ?>">
