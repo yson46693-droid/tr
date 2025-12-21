@@ -18,7 +18,7 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/audit_log.php';
 
-// === التحقق من تسجيل الدخول - تحقق بسيط من $_SESSION فقط ===
+// === التحقق من تسجيل الدخول - استخدام isLoggedIn() ===
 $isAuthenticated = false;
 $userId = null;
 
@@ -27,8 +27,8 @@ if (!defined('WEBAUTHN_API_ACTIVE')) {
     define('WEBAUTHN_API_ACTIVE', true);
 }
 
-// التحقق البسيط من $_SESSION مباشرة
-if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+// استخدام isLoggedIn() للتحقق من تسجيل الدخول
+if (isLoggedIn() && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
     $userId = $_SESSION['user_id'];
     $isAuthenticated = true;
 }
@@ -43,7 +43,8 @@ if (!$isAuthenticated || !$userId) {
         'debug' => [
             'session_id' => session_id(),
             'session_user_id' => $_SESSION['user_id'] ?? 'not set',
-            'session_logged_in' => $_SESSION['logged_in'] ?? 'not set'
+            'session_logged_in' => $_SESSION['logged_in'] ?? 'not set',
+            'isLoggedIn_result' => isLoggedIn() ? 'true' : 'false'
         ]
     ], JSON_UNESCAPED_UNICODE);
     exit;

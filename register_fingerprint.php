@@ -4,6 +4,9 @@
  */
 
 define('ACCESS_ALLOWED', true);
+// تعريف ثابت لمنع حذف الجلسة في register_fingerprint.php
+define('WEBAUTHN_API_ACTIVE', true);
+
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/path_helper.php';
 require_once __DIR__ . '/includes/db.php';
@@ -134,6 +137,11 @@ async function loadCredentials() {
         clearTimeout(timeoutId);
         
         if (!response.ok) {
+            // معالجة خاصة لخطأ 401
+            if (response.status === 401) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error('انتهت جلسة العمل. يرجى إعادة تسجيل الدخول ثم المحاولة مرة أخرى.');
+            }
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
@@ -207,6 +215,8 @@ async function loadCredentials() {
             
             if (error.name === 'AbortError' || error.message.includes('aborted')) {
                 errorMessage = 'انتهت مهلة التحميل. يمكنك المحاولة مرة أخرى.';
+            } else if (error.message.includes('انتهت جلسة العمل')) {
+                errorMessage = error.message + '<br><a href="' + window.location.origin + '/index.php" class="alert-link">اضغط هنا لتسجيل الدخول</a>';
             } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
                 errorMessage += ': ' + error.message;
             } else {
@@ -214,7 +224,7 @@ async function loadCredentials() {
             }
             
             listContainer.innerHTML = 
-                '<div class="alert alert-warning"><i class="bi bi-info-circle me-2"></i>' + errorMessage + '</div>';
+                '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>' + errorMessage + '</div>';
         }
     }
 }

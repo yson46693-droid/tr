@@ -225,7 +225,7 @@ $inventoryStats = [
     'total_value' => 0,
 ];
 
-if (!$error && $vehicle) {
+if ($vehicle) {
     $vehicleInventory = getVehicleInventory($vehicle['id']);
 
     foreach ($vehicleInventory as &$item) {
@@ -2246,13 +2246,13 @@ if (!$error) {
 </div>
 <?php endif; ?>
 
-<?php if (!$error && !$vehicle): ?>
+<?php if (!$vehicle): ?>
     <div class="empty-state-card">
         <div class="empty-state-icon"><i class="bi bi-truck"></i></div>
         <div class="empty-state-title">لا توجد سيارة مرتبطة</div>
         <div class="empty-state-description">يرجى التواصل مع الإدارة لربط سيارة بحسابك قبل استخدام نقطة البيع.</div>
     </div>
-<?php elseif (!$error): ?>
+<?php elseif ($vehicle): ?>
     <style>
         .pos-wrapper {
             display: flex;
@@ -3381,7 +3381,7 @@ if (!$error) {
     </div>
 <?php endif; ?>
 
-<?php if (!$error && $vehicle): ?>
+<?php if ($vehicle): ?>
 <script>
 (function () {
     const locale = <?php echo json_encode($pageDirection === 'rtl' ? 'ar-EG' : 'en-US'); ?>;
