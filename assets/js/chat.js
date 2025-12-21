@@ -50,6 +50,7 @@
     mediaRecorder: null,
     isRecording: false,
     audioChunks: [],
+    audioStream: null, // حفظ stream لإيقافه لاحقاً
   };
 
   const elements = {};
@@ -149,12 +150,8 @@
     }
 
     if (elements.micButton) {
+      // استخدام click فقط للتبديل بين البدء والإيقاف
       elements.micButton.addEventListener('click', handleMicClick);
-      elements.micButton.addEventListener('mousedown', handleMicStart);
-      elements.micButton.addEventListener('mouseup', handleMicStop);
-      elements.micButton.addEventListener('mouseleave', handleMicStop);
-      elements.micButton.addEventListener('touchstart', handleMicStart, { passive: true });
-      elements.micButton.addEventListener('touchend', handleMicStop, { passive: true });
     }
 
     if (elements.attachButton && elements.fileInput) {
@@ -221,6 +218,21 @@
         window.clearTimeout(state.pendingFetchTimeout);
         state.pendingFetchTimeout = null;
       }
+      
+      // إيقاف التسجيل الصوتي إذا كان جارياً
+      if (state.isRecording) {
+        stopRecording();
+      }
+      
+      // إيقاف stream الميكروفون
+      if (state.audioStream) {
+        state.audioStream.getTracks().forEach(track => {
+          track.stop();
+          track.enabled = false;
+        });
+        state.audioStream = null;
+      }
+      
       stopPresenceUpdates();
       stopPolling();
       updatePresence(false).catch(() => null);
@@ -1314,7 +1326,10 @@
   }
 
   // Microphone recording functions
-  async function handleMicClick() {
+  async function handleMicClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
     if (!state.isRecording) {
       await startRecording();
     } else {
@@ -1322,59 +1337,164 @@
     }
   }
 
-  async function handleMicStart(e) {
-    e.preventDefault();
-    if (!state.isRecording) {
-      await startRecording();
-    }
-  }
-
-  function handleMicStop(e) {
-    e.preventDefault();
-    if (state.isRecording) {
-      stopRecording();
-    }
-  }
-
   async function startRecording() {
+    // إذا كان هناك تسجيل جاري بالفعل، لا تفعل شيئاً
+    if (state.isRecording) {
+      return;
+    }
+
     try {
+      // إيقاف أي stream سابق إذا كان موجوداً
+      if (state.audioStream) {
+        state.audioStream.getTracks().forEach(track => track.stop());
+        state.audioStream = null;
+      }
+
+      // الحصول على stream جديد
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      state.mediaRecorder = new MediaRecorder(stream);
+      state.audioStream = stream; // حفظ stream في state
+      
+      // إعداد MediaRecorder
+      const options = { mimeType: 'audio/webm' };
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        // Fallback للمتصفحات التي لا تدعم webm
+        options.mimeType = 'audio/webm;codecs=opus';
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+          delete options.mimeType; // استخدام الافتراضي
+        }
+      }
+      
+      state.mediaRecorder = new MediaRecorder(stream, options);
       state.audioChunks = [];
 
       state.mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           state.audioChunks.push(event.data);
         }
       };
 
       state.mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(state.audioChunks, { type: 'audio/webm' });
+        // إيقاف stream
+        if (state.audioStream) {
+          state.audioStream.getTracks().forEach(track => {
+            track.stop();
+            track.enabled = false;
+          });
+          state.audioStream = null;
+        }
+
+        // التحقق من وجود بيانات مسجلة
+        if (state.audioChunks.length === 0) {
+          showToast('لم يتم تسجيل أي صوت. حاول مرة أخرى.', true);
+          state.audioChunks = [];
+          state.isRecording = false;
+          updateMicButtonState(false);
+          return;
+        }
+
+        // إنشاء Blob وإرساله
+        const audioBlob = new Blob(state.audioChunks, { type: state.mediaRecorder.mimeType || 'audio/webm' });
+        
+        // التحقق من حجم الملف (يجب أن يكون أكبر من 0)
+        if (audioBlob.size === 0) {
+          showToast('التسجيل فارغ. حاول مرة أخرى.', true);
+          state.audioChunks = [];
+          state.isRecording = false;
+          updateMicButtonState(false);
+          return;
+        }
+
         await sendAudioMessage(audioBlob);
-        stream.getTracks().forEach(track => track.stop());
+        
+        // تنظيف
+        state.audioChunks = [];
+        state.isRecording = false;
+        updateMicButtonState(false);
       };
 
-      state.mediaRecorder.start();
+      state.mediaRecorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event.error);
+        showToast('حدث خطأ أثناء التسجيل', true);
+        stopRecording();
+      };
+
+      // بدء التسجيل مع timeslice لضمان الحصول على البيانات
+      state.mediaRecorder.start(1000); // جمع البيانات كل ثانية
       state.isRecording = true;
       
-      if (elements.micButton) {
-        elements.micButton.classList.add('recording');
-        elements.micButton.style.color = 'var(--chat-red)';
-      }
-      
+      updateMicButtonState(true);
       showToast('جاري التسجيل... اضغط مرة أخرى لإيقاف التسجيل');
     } catch (error) {
       console.error('Error starting recording:', error);
-      showToast('تعذر الوصول إلى الميكروفون. تأكد من السماح بالوصول.', true);
+      state.isRecording = false;
+      updateMicButtonState(false);
+      
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        showToast('تم رفض الوصول إلى الميكروفون. يرجى السماح بالوصول في إعدادات المتصفح.', true);
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        showToast('لم يتم العثور على ميكروفون. تأكد من توصيل ميكروفون.', true);
+      } else {
+        showToast('تعذر الوصول إلى الميكروفون. تأكد من السماح بالوصول.', true);
+      }
+      
+      // تنظيف في حالة الخطأ
+      if (state.audioStream) {
+        state.audioStream.getTracks().forEach(track => track.stop());
+        state.audioStream = null;
+      }
     }
   }
 
   function stopRecording() {
-    if (state.mediaRecorder && state.isRecording) {
-      state.mediaRecorder.stop();
+    if (!state.isRecording) {
+      return;
+    }
+
+    if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+      try {
+        // إيقاف التسجيل
+        if (state.mediaRecorder.state === 'recording') {
+          state.mediaRecorder.stop();
+        }
+        
+        updateMicButtonState(false);
+        showToast('تم إيقاف التسجيل... جاري الإرسال');
+      } catch (error) {
+        console.error('Error stopping recording:', error);
+        // فرض الإيقاف حتى لو حدث خطأ
+        state.isRecording = false;
+        updateMicButtonState(false);
+        
+        // إيقاف stream
+        if (state.audioStream) {
+          state.audioStream.getTracks().forEach(track => {
+            track.stop();
+            track.enabled = false;
+          });
+          state.audioStream = null;
+        }
+      }
+    } else {
+      // إذا لم يكن هناك recorder نشط، تأكد من إيقاف stream
       state.isRecording = false;
+      updateMicButtonState(false);
       
-      if (elements.micButton) {
+      if (state.audioStream) {
+        state.audioStream.getTracks().forEach(track => {
+          track.stop();
+          track.enabled = false;
+        });
+        state.audioStream = null;
+      }
+    }
+  }
+
+  function updateMicButtonState(recording) {
+    if (elements.micButton) {
+      if (recording) {
+        elements.micButton.classList.add('recording');
+        elements.micButton.style.color = 'var(--chat-red)';
+      } else {
         elements.micButton.classList.remove('recording');
         elements.micButton.style.color = '';
       }
@@ -1383,6 +1503,12 @@
 
   async function sendAudioMessage(audioBlob) {
     try {
+      // التحقق من حجم الملف
+      if (!audioBlob || audioBlob.size === 0) {
+        showToast('التسجيل فارغ. حاول مرة أخرى.', true);
+        return;
+      }
+
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
       formData.append('reply_to', state.replyTo ? state.replyTo.id : '');
@@ -1407,7 +1533,7 @@
         fetchMessages();
       }, 500);
     } catch (error) {
-      console.error(error);
+      console.error('Error sending audio:', error);
       showToast(error.message || 'حدث خطأ أثناء إرسال التسجيل', true);
     }
   }
@@ -1591,6 +1717,21 @@
       window.clearTimeout(state.pendingFetchTimeout);
       state.pendingFetchTimeout = null;
     }
+    
+    // إيقاف التسجيل الصوتي إذا كان جارياً
+    if (state.isRecording) {
+      stopRecording();
+    }
+    
+    // إيقاف stream الميكروفون
+    if (state.audioStream) {
+      state.audioStream.getTracks().forEach(track => {
+        track.stop();
+        track.enabled = false;
+      });
+      state.audioStream = null;
+    }
+    
     stopPolling();
     stopPresenceUpdates();
   });
