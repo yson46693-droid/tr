@@ -68,6 +68,14 @@
         // التحقق من وجود modal-dialog-scrollable
         const isScrollable = modalDialog.classList.contains('modal-dialog-scrollable');
         
+        // إذا كان modal-dialog-scrollable، نحتاج تغيير سلوك Bootstrap
+        if (isScrollable) {
+            // منع overflow على modal-content - هذا مهم جداً
+            modalContent.style.overflow = 'hidden';
+            modalContent.style.overflowY = 'hidden';
+            modalContent.style.overflowX = 'hidden';
+        }
+        
         // تعيين خصائص الجسم
         if (modalBody) {
             // إزالة أي max-height محدد مسبقاً (inline styles)
@@ -82,17 +90,29 @@
             modalBody.style.webkitOverflowScrolling = 'touch';
             modalBody.style.position = 'relative';
             
-            // إذا كان modal-dialog-scrollable، نتأكد من أن modal-content لا يحتوي على overflow
-            if (isScrollable) {
-                modalContent.style.overflow = 'hidden';
-                modalContent.style.overflowY = 'hidden';
-            }
-            
             // إضافة padding-bottom إضافي لضمان ظهور جميع الحقول
             const safeAreaBottom = parseInt(getComputedStyle(document.documentElement)
                 .getPropertyValue('env(safe-area-inset-bottom)')) || 0;
             const currentPadding = parseInt(getComputedStyle(modalBody).paddingBottom) || 16;
-            modalBody.style.paddingBottom = Math.max(currentPadding, 40 + safeAreaBottom) + 'px';
+            // زيادة padding-bottom بشكل كبير لضمان ظهور جميع الحقول والأزرار
+            modalBody.style.paddingBottom = Math.max(currentPadding, 60 + safeAreaBottom) + 'px';
+            
+            // التأكد من أن modal-body يمكن أن يكون scrollable
+            // إزالة أي قيود على الارتفاع
+            modalBody.style.maxHeight = 'none';
+            
+            // التأكد من أن التمرير يعمل - إزالة أي CSS متعارض
+            modalBody.style.overflow = 'auto';
+            modalBody.style.overflowY = 'auto';
+            modalBody.style.overflowX = 'hidden';
+            
+            // إضافة event listener للتأكد من أن التمرير يعمل
+            setTimeout(function() {
+                if (modalBody.scrollHeight > modalBody.clientHeight) {
+                    // المحتوى أكبر من المساحة المتاحة - التمرير يجب أن يعمل
+                    modalBody.style.overflowY = 'auto';
+                }
+            }, 100);
         }
         
         // التأكد من أن التذييل مرئي دائماً
@@ -161,10 +181,20 @@
                 // ضبط الارتفاع فوراً
                 adjustModalHeight(modal);
                 
+                // إعادة ضبط بعد 10ms - مهم جداً للتأكد من التطبيق
+                setTimeout(function() {
+                    adjustModalHeight(modal);
+                }, 10);
+                
                 // إعادة ضبط بعد 50ms للسماح بعرض النموذج بشكل كامل
                 setTimeout(function() {
                     adjustModalHeight(modal);
                 }, 50);
+                
+                // إعادة ضبط بعد 100ms
+                setTimeout(function() {
+                    adjustModalHeight(modal);
+                }, 100);
                 
                 // إعادة ضبط بعد 200ms لضمان تطبيق جميع الأنماط
                 setTimeout(function() {
@@ -175,6 +205,11 @@
                 setTimeout(function() {
                     adjustModalHeight(modal);
                 }, 500);
+                
+                // إعادة ضبط بعد 1000ms للتأكد النهائي
+                setTimeout(function() {
+                    adjustModalHeight(modal);
+                }, 1000);
             }
         });
         
@@ -186,8 +221,23 @@
                 if (isMobile()) {
                     adjustAllOpenModals();
                 }
-            }, 100);
+            }, 50);
         });
+        
+        // إعادة ضبط عند scroll - للتأكد من أن التمرير يعمل
+        document.addEventListener('scroll', function(e) {
+            if (isMobile() && e.target.closest('.modal-body')) {
+                const modal = e.target.closest('.modal');
+                if (modal && (modal.classList.contains('show') || modal.classList.contains('showing'))) {
+                    // التأكد من أن التذييل مرئي
+                    const modalFooter = modal.querySelector('.modal-footer');
+                    if (modalFooter) {
+                        modalFooter.style.position = 'relative';
+                        modalFooter.style.zIndex = '10';
+                    }
+                }
+            }
+        }, true);
         
         // إعادة ضبط عند تغيير اتجاه الشاشة
         window.addEventListener('orientationchange', function() {
