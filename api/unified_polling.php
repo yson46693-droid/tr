@@ -40,7 +40,8 @@ try {
         'maintenance' => null,
         'background_tasks' => null,
         'notifications' => null,
-        'chat' => null
+        'chat' => null,
+        'update_check' => null
     ];
     
     // الحصول على معاملات الطلب
@@ -253,6 +254,45 @@ try {
             'mode' => 'off',
             'is_developer' => false,
             'allowed' => true
+        ];
+    }
+    
+    // 6. Update Check (يعمل دائماً - لا يحتاج لتسجيل دخول)
+    try {
+        $currentVersion = defined('APP_VERSION') ? APP_VERSION : '1.0.0';
+        
+        // حساب hash للملفات الرئيسية للتحقق من التغييرات
+        $mainFiles = [
+            __DIR__ . '/../index.php',
+            __DIR__ . '/../templates/header.php',
+            __DIR__ . '/../templates/footer.php',
+            __DIR__ . '/../includes/config.php'
+        ];
+        
+        $fileHashes = [];
+        $lastModified = 0;
+        
+        foreach ($mainFiles as $file) {
+            if (file_exists($file)) {
+                $fileHashes[] = md5_file($file);
+                $mtime = filemtime($file);
+                if ($mtime > $lastModified) {
+                    $lastModified = $mtime;
+                }
+            }
+        }
+        
+        // إنشاء hash فريد بناءً على جميع الملفات
+        $contentHash = md5(implode('', $fileHashes) . $currentVersion);
+        
+        $response['update_check'] = [
+            'version' => $currentVersion,
+            'last_modified' => $lastModified,
+            'content_hash' => $contentHash
+        ];
+    } catch (Throwable $e) {
+        $response['update_check'] = [
+            'error' => 'Failed to check updates'
         ];
     }
     

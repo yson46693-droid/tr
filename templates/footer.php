@@ -253,7 +253,7 @@ if (!defined('ACCESS_ALLOWED')) {
         let consecutiveFailures = 0;
         const MAX_CONSECUTIVE_FAILURES = 3;
         
-        // حساب مسار API
+        // حساب مسار API - تصديره عالمياً للاستخدام من قبل initUpdateChecker
         function getApiPath(endpoint) {
             const cleanEndpoint = String(endpoint || '').replace(/^\/+/, '');
             const currentPath = window.location.pathname || '/';
@@ -272,6 +272,9 @@ if (!defined('ACCESS_ALLOWED')) {
             const apiPath = (basePath + '/' + cleanEndpoint).replace(/\/+/g, '/');
             return apiPath.startsWith('/') ? apiPath : '/' + apiPath;
         }
+        
+        // تصدير getApiPath عالمياً للاستخدام من قبل initUpdateChecker
+        window.getApiPath = getApiPath;
         
         function updateActivity() {
             lastActivity = Date.now();
@@ -394,6 +397,11 @@ if (!defined('ACCESS_ALLOWED')) {
                                 window.lastChatMessageId = lastMsg.id;
                             }
                         }
+                    }
+                    
+                    // معالجة update check (اختياري - للاستخدام من initUpdateChecker)
+                    if (data.update_check && typeof window.handleUpdateCheck === 'function') {
+                        window.handleUpdateCheck(data.update_check);
                     }
                     
                 } else {
@@ -719,14 +727,6 @@ if (!defined('ACCESS_ALLOWED')) {
             let updateCheckTimeout = null;
             let isChecking = false;
             
-            // حساب مسار API
-            const currentPath = window.location.pathname;
-            const pathParts = currentPath.split('/').filter(p => p && !p.endsWith('.php'));
-            let apiPath = '/api/check_update.php';
-            if (pathParts.length > 0) {
-                apiPath = '/' + pathParts[0] + '/api/check_update.php';
-            }
-            
             /**
              * التحقق من وجود تحديثات
              */
@@ -735,10 +735,14 @@ if (!defined('ACCESS_ALLOWED')) {
                 isChecking = true;
                 
                 try {
+                    // استخدام unified_polling بدلاً من check_update.php
+                    const apiPath = (typeof window.getApiPath === 'function' 
+                        ? window.getApiPath('api/unified_polling.php')
+                        : '/api/unified_polling.php');
                     const response = await fetch(apiPath + '?t=' + Date.now(), {
                         method: 'GET',
-                        cache: 'no-cache'
-                        // إزالة X-Requested-With لتجنب preflight requests على InfinityFree
+                        cache: 'no-cache',
+                        credentials: 'same-origin'
                     });
                     
                     if (!response.ok) {
@@ -747,11 +751,12 @@ if (!defined('ACCESS_ALLOWED')) {
                     
                     const data = await response.json();
                     
-                    if (data.success) {
-                        const currentHash = data.content_hash || data.version || data.last_modified;
+                    if (data.success && data.update_check) {
+                        const updateData = data.update_check;
+                        const currentHash = updateData.content_hash || updateData.version || updateData.last_modified;
                         const storedHash = localStorage.getItem(STORAGE_KEY);
                         const storedDisplay = localStorage.getItem(VERSION_STORAGE_KEY) || '';
-                        const serverVersion = (data.version || '').toString().trim();
+                        const serverVersion = (updateData.version || '').toString().trim();
                         let displayVersion = storedDisplay || serverVersion || 'جديد';
 
                         if (storedHash && storedHash !== currentHash) {
