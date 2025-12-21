@@ -1034,7 +1034,8 @@ try {
                         </div>
                         <div class="col-md-6" id="productFieldWrapper">
                             <label class="form-label">المنتج (اختياري)</label>
-                            <input type="text" class="form-control" name="product_name" id="productNameInput" placeholder="أدخل اسم المنتج أو القالب">
+                            <input type="text" class="form-control" name="product_name" id="productNameInput" placeholder="أدخل اسم المنتج أو القالب" list="templateSuggestions" autocomplete="off">
+                            <datalist id="templateSuggestions"></datalist>
                             <div class="form-text mt-2">
                                 <small class="text-muted">أدخل اسم المنتج أو القالب المراد إنتاجه.</small>
                             </div>
@@ -1177,6 +1178,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const quantityWrapper = document.getElementById('quantityFieldWrapper');
     const productNameInput = document.getElementById('productNameInput');
     const quantityInput = document.getElementById('productQuantityInput');
+    const templateSuggestions = document.getElementById('templateSuggestions');
 
     function updateTaskTypeUI() {
         if (!titleInput) {
@@ -1192,10 +1194,46 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (taskTypeSelect) {
         taskTypeSelect.addEventListener('change', updateTaskTypeUI);
-        
-        // لا حاجة لمعالجة خاصة بحقل المنتج - الآن حقل نصي بسيط
     }
     updateTaskTypeUI();
+
+    // تحميل أسماء القوالب وتعبئة datalist
+    function loadTemplateSuggestions() {
+        if (!templateSuggestions) {
+            return;
+        }
+
+        // الحصول على base path
+        const basePath = window.location.pathname.replace(/\/[^\/]+$/, '') || '';
+        const apiUrl = basePath + '/api/get_product_templates.php';
+
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success && Array.isArray(data.templates)) {
+                    // مسح القائمة الحالية
+                    templateSuggestions.innerHTML = '';
+                    
+                    // إضافة الخيارات
+                    data.templates.forEach(templateName => {
+                        const option = document.createElement('option');
+                        option.value = templateName;
+                        templateSuggestions.appendChild(option);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading template suggestions:', error);
+            });
+    }
+
+    // تحميل الاقتراحات عند تحميل الصفحة
+    loadTemplateSuggestions();
 });
 
 // لا حاجة لإعادة التحميل التلقائي - preventDuplicateSubmission يتولى ذلك

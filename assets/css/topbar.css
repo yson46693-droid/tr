@@ -113,11 +113,6 @@
             display: none; /* إخفاء البحث على الشاشات الصغيرة جداً */
         }
         
-        /* إخفاء قائمة المستخدم على الهاتف */
-        .desktop-user-menu {
-            display: none !important;
-        }
-        
         /* إظهار زر تسجيل الخروج على الهاتف */
         .mobile-logout-btn {
             display: flex !important;

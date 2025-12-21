@@ -3230,17 +3230,17 @@ if (ob_get_level() > 0) {
                 </div>
                 <?php endif; ?>
                 
-                <!-- Fingerprint Registration Button (Mobile Only) -->
+                <!-- Fingerprint Registration Button -->
                 <?php if (isLoggedIn()): ?>
                 <a href="<?php echo getRelativeUrl('register_fingerprint.php'); ?>" 
-                   class="topbar-action d-md-none" 
+                   class="topbar-action" 
                    id="fingerprintRegisterBtn" 
                    role="button" 
                    data-bs-toggle="tooltip" 
-                   title="تسجيل البصمة" 
-                   aria-label="تسجيل البصمة">
+                   title="تسجيل البصمة والملف الشخصي" 
+                   aria-label="تسجيل البصمة والملف الشخصي">
                     <i class="bi bi-fingerprint" aria-hidden="true"></i>
-                    <span class="visually-hidden">تسجيل البصمة</span>
+                    <span class="visually-hidden">تسجيل البصمة والملف الشخصي</span>
                 </a>
                 <?php endif; ?>
                 
@@ -3271,54 +3271,8 @@ if (ob_get_level() > 0) {
                     </div>
                 </div>
                 
-                <!-- User Avatar (Desktop Only) -->
-                <?php 
-                // التأكد من أن $currentUser موجود
-                if (!isset($currentUser) || $currentUser === null) {
-                    $currentUser = getCurrentUser();
-                }
-                if (isLoggedIn() && $currentUser): 
-                    $userFullName = htmlspecialchars($currentUser['full_name'] ?? $currentUser['username'] ?? '');
-                ?>
-                <div class="topbar-dropdown desktop-user-menu">
-                    <div class="topbar-user dropdown-toggle disabled-action" 
-                         id="userDropdown" 
-                         role="button"
-                         aria-label="<?php echo isset($lang['user_menu']) ? $lang['user_menu'] : 'قائمة المستخدم'; ?>"
-                         aria-expanded="false"
-                         aria-haspopup="true"
-                         style="cursor: not-allowed; opacity: 0.5; pointer-events: none !important;">
-                        <?php if (isset($currentUser['profile_photo']) && !empty($currentUser['profile_photo'])): ?>
-                            <img src="<?php echo htmlspecialchars($currentUser['profile_photo'], ENT_QUOTES, 'UTF-8'); ?>" 
-                                 alt="<?php echo $userFullName; ?>"
-                                 width="40"
-                                 height="40"
-                                 loading="lazy"
-                                 decoding="async">
-                        <?php else: ?>
-                            <span aria-hidden="true"><?php echo htmlspecialchars(mb_substr(isset($currentUser['username']) ? $currentUser['username'] : '', 0, 1)); ?></span>
-                            <span class="visually-hidden"><?php echo $userFullName; ?></span>
-                        <?php endif; ?>
-                    </div>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                        <li class="px-3 py-2">
-                            <div class="fw-bold"><?php echo htmlspecialchars(isset($currentUser['username']) ? $currentUser['username'] : ''); ?></div>
-                            <small class="text-muted"><?php 
-                                $userRole = isset($currentUser['role']) ? $currentUser['role'] : '';
-                                echo isset($lang['role_' . $userRole]) ? $lang['role_' . $userRole] : ($userRole ? ucfirst($userRole) : ''); 
-                            ?></small>
-                        </li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><span class="dropdown-item disabled-action" style="cursor: not-allowed; opacity: 0.5; pointer-events: none !important;"><i class="bi bi-person me-2"></i><?php echo isset($lang['profile']) ? $lang['profile'] : 'الملف الشخصي'; ?></span></li>
-                        <?php if ((isset($currentUser['role']) ? $currentUser['role'] : '') !== 'manager'): ?>
-                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('attendance.php'); ?>"><i class="bi bi-calendar-check me-2"></i><?php echo isset($lang['attendance']) ? $lang['attendance'] : 'الحضور والانصراف'; ?></a></li>
-                        <?php endif; ?>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="<?php echo getRelativeUrl('logout.php'); ?>"><i class="bi bi-box-arrow-right me-2"></i><?php echo isset($lang['logout']) ? $lang['logout'] : 'تسجيل الخروج'; ?></a></li>
-                    </ul>
-                </div>
-                
                 <!-- Mobile Logout Button -->
+                <?php if (isLoggedIn()): ?>
                 <a href="<?php echo getRelativeUrl('logout.php'); ?>" 
                    class="topbar-action mobile-logout-btn" 
                    data-bs-toggle="tooltip" 
@@ -3331,54 +3285,6 @@ if (ob_get_level() > 0) {
             </div>
         </div>
         
-        <!-- منع التفاعل مع العناصر المعطلة -->
-        <script>
-        (function() {
-            'use strict';
-            // منع جميع الأحداث على العناصر المعطلة
-            document.addEventListener('DOMContentLoaded', function() {
-                // منع Bootstrap dropdown من العمل على العناصر المعطلة
-                const userDropdown = document.getElementById('userDropdown');
-                if (userDropdown && userDropdown.classList.contains('disabled-action')) {
-                    // إزالة data-bs-toggle لمنع Bootstrap من التعامل معه
-                    userDropdown.removeAttribute('data-bs-toggle');
-                    userDropdown.setAttribute('aria-expanded', 'false');
-                    // إغلاق القائمة إذا كانت مفتوحة
-                    const dropdownMenu = userDropdown.nextElementSibling;
-                    if (dropdownMenu && dropdownMenu.classList.contains('dropdown-menu')) {
-                        dropdownMenu.classList.remove('show');
-                    }
-                }
-                
-                // منع click على العناصر المعطلة
-                document.addEventListener('click', function(e) {
-                    const target = e.target;
-                    const disabledElement = target.closest('.disabled-action');
-                    if (disabledElement) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        e.stopImmediatePropagation();
-                        return false;
-                    }
-                }, true); // استخدام capture phase لمنع الأحداث مبكراً
-                
-                // منع جميع الأحداث الأخرى
-                ['mousedown', 'mouseup', 'touchstart', 'touchend', 'keydown', 'keyup'].forEach(function(eventType) {
-                    document.addEventListener(eventType, function(e) {
-                        const target = e.target;
-                        const disabledElement = target.closest('.disabled-action');
-                        if (disabledElement) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            e.stopImmediatePropagation();
-                            return false;
-                        }
-                    }, true);
-                });
-            });
-        */
-        })();
-        </script>
         
         <!-- Main Content Area -->
         <main class="dashboard-main" id="main-content" role="main" aria-label="<?php echo isset($pageTitle) ? htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') : 'المحتوى الرئيسي'; ?>">
