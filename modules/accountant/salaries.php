@@ -1756,55 +1756,12 @@ foreach ($salariesFromDb as &$salary) {
 unset($salary); // إلغاء المرجع
 
 // إضافة bonus_standardized لجميع السجلات في salariesFromDb
-// وحساب نسبة التحصيلات الخاصة بالشهر المحدد لكل راتب
-require_once __DIR__ . '/../../includes/salary_calculator.php';
+// لا نعيد حساب نسبة التحصيلات هنا - نستخدم القيمة المحفوظة في قاعدة البيانات مباشرة (مطابق لصفحة "مرتبي")
+// لأن القيمة المحفوظة تتضمن 2% من collections + 2% من creditUsed من pos.php
+// بينما calculateSalesCollections() تحسب فقط من collections ولا تتضمن creditUsed
 foreach ($salariesFromDb as &$salary) {
     if (!isset($salary['bonus_standardized'])) {
         $salary['bonus_standardized'] = $salary[$bonusColumnName] ?? 0;
-    }
-    
-    // حساب نسبة التحصيلات الخاصة بالشهر المحدد فقط (للمندوبين)
-    $userRole = $salary['role'] ?? 'production';
-    if ($userRole === 'sales') {
-        // استخراج شهر وسنة الراتب
-        $salaryMonth = null;
-        $salaryYear = null;
-        
-        // التحقق من نوع عمود month
-        $monthColumnCheck = $db->queryOne("SHOW COLUMNS FROM salaries WHERE Field = 'month'");
-        $monthType = $monthColumnCheck['Type'] ?? '';
-        $isMonthDate = stripos($monthType, 'date') !== false;
-        
-        if ($isMonthDate && !empty($salary['month'])) {
-            $monthDate = DateTime::createFromFormat('Y-m-d', $salary['month']);
-            if ($monthDate) {
-                $salaryMonth = (int)$monthDate->format('n');
-                $salaryYear = (int)$monthDate->format('Y');
-            }
-        } else {
-            $salaryMonth = isset($salary['month']) ? (int)$salary['month'] : null;
-        }
-        
-        if (isset($salary['year']) && !empty($salary['year'])) {
-            $salaryYear = (int)$salary['year'];
-        }
-        
-        // إذا لم نتمكن من استخراج الشهر والسنة، استخدم القيم من الفلترة
-        if (!$salaryMonth || !$salaryYear) {
-            $salaryMonth = $selectedMonth;
-            $salaryYear = $selectedYear;
-        }
-        
-        // حساب نسبة التحصيلات من الشهر المحدد فقط
-        $userId = intval($salary['user_id'] ?? 0);
-        if ($userId > 0) {
-            $collectionsAmount = calculateSalesCollections($userId, $salaryMonth, $salaryYear);
-            $collectionsBonus = round($collectionsAmount * 0.02, 2);
-            
-            // تحديث القيم في المصفوفة (للعرض فقط، لا نحدث قاعدة البيانات)
-            $salary['collections_bonus'] = $collectionsBonus;
-            $salary['collections_amount'] = $collectionsAmount;
-        }
     }
 }
 unset($salary);
