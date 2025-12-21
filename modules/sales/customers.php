@@ -3906,6 +3906,9 @@ document.addEventListener('DOMContentLoaded', function () {
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        box-sizing: border-box !important;
     }
 
     @media (max-width: 992px) {
@@ -4024,6 +4027,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
         .dashboard-table .btn i {
             font-size: 0.75rem;
+        }
+
+        /* تحسين أزرار الإجراءات على الشاشات المتوسطة */
+        .dashboard-table tbody td:last-child .btn {
+            font-size: 0.65rem !important;
+            padding: 0.3rem 0.4rem !important;
+            white-space: normal !important;
+            word-break: break-word;
+            line-height: 1.2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dashboard-table tbody td:last-child .btn i {
+            font-size: 0.7rem !important;
+            flex-shrink: 0;
         }
 
         /* تحسين Badge الرصيد */
@@ -4145,6 +4164,45 @@ document.addEventListener('DOMContentLoaded', function () {
             width: 32%;
             min-width: 0;
             max-width: 32%;
+        }
+
+        /* تحسين أزرار الإجراءات على الشاشات الصغيرة جداً */
+        .dashboard-table tbody td:last-child .d-flex {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 0.2rem !important;
+        }
+
+        .dashboard-table tbody td:last-child .btn {
+            font-size: 0.5rem !important;
+            padding: 0.2rem 0.25rem !important;
+            white-space: normal !important;
+            word-break: break-word;
+            line-height: 1.1;
+            min-height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dashboard-table tbody td:last-child .btn i {
+            font-size: 0.6rem !important;
+            margin: 0 !important;
+            flex-shrink: 0;
+        }
+
+        /* جعل الأيقونة والنص في صف واحد مضغوط */
+        .dashboard-table tbody td:last-child .btn {
+            flex-direction: row;
+            gap: 0.15rem;
+        }
+
+        /* تقليل المسافة بين الأيقونة والنص */
+        .dashboard-table tbody td:last-child .btn .me-1 {
+            margin-right: 0.15rem !important;
         }
 
         /* تحسين عمود الموقع على الشاشات الصغيرة */
