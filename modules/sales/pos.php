@@ -139,7 +139,8 @@ if (!function_exists('storeSalesInvoiceDocument')) {
     }
 }
 
-requireRole(['sales', 'manager', 'developer']);
+// التحقق من الصلاحيات يتم مسبقاً في dashboard/sales.php
+// requireRole(['sales', 'manager', 'developer']); // تم إزالة هذا السطر لأن التحقق يتم في dashboard/sales.php
 
 $currentUser = getCurrentUser();
 $pageDirection = getDirection();
