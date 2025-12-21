@@ -987,7 +987,36 @@
     // إضافة عرض الملفات المرفقة
     if (fileMatches.length > 0) {
       const fileHtml = fileMatches.map(file => {
-        const fileUrl = escapeAttribute(file.fileUrl);
+        // تحويل URL إلى API endpoint لتجنب مشكلة CORB
+        let fileUrl = file.fileUrl;
+        let apiUrl = fileUrl;
+        
+        // استخراج المسار النسبي من URL الكامل
+        // أمثلة:
+        // /v1/uploads/chat/images/file_xxx.png -> images/file_xxx.png
+        // uploads/chat/images/file_xxx.png -> images/file_xxx.png
+        // /uploads/chat/videos/file_xxx.mp4 -> videos/file_xxx.mp4
+        
+        // إزالة query parameters إذا كانت موجودة
+        const urlWithoutQuery = fileUrl.split('?')[0];
+        
+        // البحث عن المسار بعد uploads/chat/
+        const uploadsMatch = urlWithoutQuery.match(/uploads\/chat\/(.+)$/i);
+        if (uploadsMatch) {
+          const relativePath = uploadsMatch[1];
+          apiUrl = `${API_BASE}/get_file.php?path=${encodeURIComponent(relativePath)}`;
+        } else {
+          // محاولة أخرى: البحث عن chat/ مباشرة
+          const chatMatch = urlWithoutQuery.match(/chat\/(images|videos|audio|files)\/(.+)$/i);
+          if (chatMatch) {
+            const folder = chatMatch[1];
+            const filename = chatMatch[2];
+            apiUrl = `${API_BASE}/get_file.php?path=${encodeURIComponent(folder + '/' + filename)}`;
+          }
+        }
+        
+        const safeFileUrl = escapeAttribute(apiUrl);
+        const originalUrl = escapeAttribute(fileUrl);
         const fileName = escapeHTML(file.fileName);
         const fileExtension = fileName.split('.').pop().toLowerCase();
         const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(fileExtension);
@@ -997,10 +1026,10 @@
         if (isImage) {
           return `
             <div class="chat-message-attachment chat-attachment-image">
-              <img src="${fileUrl}" alt="${fileName}" onclick="window.open('${fileUrl}', '_blank')" />
+              <img src="${safeFileUrl}" alt="${fileName}" onclick="window.open('${safeFileUrl}', '_blank')" />
               <div class="chat-attachment-info">
                 <span class="chat-attachment-name">${fileName}</span>
-                <a href="${fileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
+                <a href="${safeFileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
               </div>
             </div>
           `;
@@ -1008,12 +1037,12 @@
           return `
             <div class="chat-message-attachment chat-attachment-video">
               <video controls preload="metadata">
-                <source src="${fileUrl}" type="video/${fileExtension === 'mp4' ? 'mp4' : fileExtension === 'webm' ? 'webm' : 'ogg'}">
+                <source src="${safeFileUrl}" type="video/${fileExtension === 'mp4' ? 'mp4' : fileExtension === 'webm' ? 'webm' : 'ogg'}">
                 متصفحك لا يدعم تشغيل الفيديو.
               </video>
               <div class="chat-attachment-info">
                 <span class="chat-attachment-name">${fileName}</span>
-                <a href="${fileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
+                <a href="${safeFileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
               </div>
             </div>
           `;
@@ -1021,12 +1050,12 @@
           return `
             <div class="chat-message-attachment chat-attachment-audio">
               <audio controls preload="metadata">
-                <source src="${fileUrl}" type="audio/${fileExtension === 'mp3' ? 'mpeg' : fileExtension === 'webm' ? 'webm' : fileExtension}">
+                <source src="${safeFileUrl}" type="audio/${fileExtension === 'mp3' ? 'mpeg' : fileExtension === 'webm' ? 'webm' : fileExtension}">
                 متصفحك لا يدعم تشغيل الصوت.
               </audio>
               <div class="chat-attachment-info">
                 <span class="chat-attachment-name">${fileName}</span>
-                <a href="${fileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
+                <a href="${safeFileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
               </div>
             </div>
           `;
@@ -1036,7 +1065,7 @@
               <div class="chat-attachment-icon">📄</div>
               <div class="chat-attachment-info">
                 <span class="chat-attachment-name">${fileName}</span>
-                <a href="${fileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
+                <a href="${safeFileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
               </div>
             </div>
           `;
