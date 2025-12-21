@@ -24,7 +24,38 @@ if (!defined('CUSTOMERS_MODULE_BOOTSTRAPPED')) {
         require_once __DIR__ . '/../../includes/cache.php';
     }
 
-    requireRole(['sales', 'accountant', 'manager', 'developer']);
+    // التحقق من الصلاحيات فقط إذا لم يتم التحقق بالفعل من dashboard
+    // إذا كان المستخدم مسجل دخول بالفعل ولديه دور صحيح، لا حاجة لإعادة التحقق
+    // هذا يمنع timeout أو مشاكل قاعدة البيانات عند إعادة استدعاء requireRole
+    $skipRoleCheck = false;
+    
+    // إذا تم التضمين من sales.php أو manager.php أو accountant.php، يكون requireRole قد تم استدعاؤه بالفعل
+    if ((defined('SALES_PAGE_ACTIVE') && SALES_PAGE_ACTIVE === true) ||
+        (defined('MANAGER_PAGE_ACTIVE') && MANAGER_PAGE_ACTIVE === true) ||
+        (defined('ACCOUNTANT_PAGE_ACTIVE') && ACCOUNTANT_PAGE_ACTIVE === true)) {
+        // التحقق بشكل بسيط من أن المستخدم لديه دور صحيح دون إعادة استدعاء requireRole
+        // لأن requireRole قد يسبب timeout أو مشاكل أخرى عند إعادة الاستدعاء
+        try {
+            if (function_exists('isLoggedIn') && isLoggedIn() && function_exists('getCurrentUser')) {
+                $user = getCurrentUser();
+                if ($user && isset($user['role']) && isset($user['status']) && $user['status'] === 'active') {
+                    $userRole = strtolower((string)$user['role']);
+                    $allowedRoles = ['sales', 'accountant', 'manager', 'developer'];
+                    if (in_array($userRole, $allowedRoles, true)) {
+                        $skipRoleCheck = true;
+                    }
+                }
+            }
+        } catch (Throwable $e) {
+            // في حالة حدوث خطأ، نترك requireRole يعمل بشكل عادي للتحقق من الصلاحيات
+            error_log("Error checking user role in customers.php: " . $e->getMessage());
+        }
+    }
+    
+    // استدعاء requireRole فقط إذا لم يتم التخطي (عند الوصول المباشر للصفحة)
+    if (!$skipRoleCheck) {
+        requireRole(['sales', 'accountant', 'manager', 'developer']);
+    }
 }
 
 if (!defined('CUSTOMERS_PURCHASE_HISTORY_AJAX')) {
@@ -4029,10 +4060,12 @@ document.addEventListener('DOMContentLoaded', function () {
             font-size: 0.75rem;
         }
 
-        /* تحسين أزرار الإجراءات على الشاشات المتوسطة */
+        /* تحسين أزرار الإجراءات على الشاشات المتوسطة - نفس حجم أزرار الموقع */
         .dashboard-table tbody td:last-child .btn {
+            width: 100%;
+            justify-content: center;
             font-size: 0.65rem !important;
-            padding: 0.3rem 0.4rem !important;
+            padding: 0.25rem 0.35rem !important;
             white-space: normal !important;
             word-break: break-word;
             line-height: 1.2;
@@ -4166,43 +4199,28 @@ document.addEventListener('DOMContentLoaded', function () {
             max-width: 32%;
         }
 
-        /* تحسين أزرار الإجراءات على الشاشات الصغيرة جداً */
+        /* تحسين أزرار الإجراءات على الشاشات الصغيرة جداً - نفس حجم أزرار الموقع */
         .dashboard-table tbody td:last-child .d-flex {
             display: grid !important;
             grid-template-columns: 1fr 1fr !important;
-            gap: 0.2rem !important;
+            gap: 0.25rem !important;
         }
 
         .dashboard-table tbody td:last-child .btn {
-            font-size: 0.5rem !important;
-            padding: 0.2rem 0.25rem !important;
+            width: 100%;
+            justify-content: center;
+            font-size: 0.6rem !important;
+            padding: 0.2rem 0.3rem !important;
             white-space: normal !important;
             word-break: break-word;
-            line-height: 1.1;
-            min-height: 2rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
+            line-height: 1.2;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
         .dashboard-table tbody td:last-child .btn i {
-            font-size: 0.6rem !important;
-            margin: 0 !important;
+            font-size: 0.65rem !important;
             flex-shrink: 0;
-        }
-
-        /* جعل الأيقونة والنص في صف واحد مضغوط */
-        .dashboard-table tbody td:last-child .btn {
-            flex-direction: row;
-            gap: 0.15rem;
-        }
-
-        /* تقليل المسافة بين الأيقونة والنص */
-        .dashboard-table tbody td:last-child .btn .me-1 {
-            margin-right: 0.15rem !important;
         }
 
         /* تحسين عمود الموقع على الشاشات الصغيرة */
