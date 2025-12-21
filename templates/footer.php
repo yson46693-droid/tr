@@ -989,11 +989,15 @@ if (!defined('ACCESS_ALLOWED')) {
                             hoverTimeout = setTimeout(function() {
                                 const href = link.getAttribute('href');
                                 
-                                // التحقق من أن الرابط ليس logout أو API
+                                // التحقق من أن الرابط ليس logout أو API أو صفحة ديناميكية
+                                // تجنب prefetch للصفحات مع معامل page= لأنها كبيرة وتستغرق وقتاً طويلاً
+                                const hasPageParam = href && (href.includes('?page=') || href.includes('&page='));
+                                
                                 if (href && 
                                     !href.includes('#') && 
                                     !href.includes('logout') &&
                                     !href.includes('api/') &&
+                                    !hasPageParam && // تجنب prefetch للصفحات مع معامل page=
                                     !document.querySelector('link[rel="prefetch"][href="' + href + '"]')) {
                                     
                                     prefetchLink = document.createElement('link');
@@ -1075,11 +1079,16 @@ if (!defined('ACCESS_ALLOWED')) {
                             const href = link.getAttribute('href');
                             
                             // فقط للروابط الداخلية والمهمة
+                            // تجنب prefetch للصفحات الديناميكية الكبيرة (مع معاملات page=)
+                            const urlObj = new URL(href, window.location.origin);
+                            const hasPageParam = urlObj.searchParams.has('page');
+                            
                             if (href && 
                                 (link.hostname === window.location.hostname || !link.hostname) && 
                                 !href.includes('#') &&
                                 !href.includes('logout') &&
                                 !href.includes('api/') &&
+                                !hasPageParam && // تجنب prefetch للصفحات مع معامل page=
                                 !document.querySelector('link[rel="prefetch"][href="' + href + '"]')) {
                                 
                                 // تحقق من أن الرابط ليس صفحة حالية
@@ -1113,6 +1122,7 @@ if (!defined('ACCESS_ALLOWED')) {
             }
             
             // تحسين: استخدام requestIdleCallback لتحميل الصفحات المهمة
+            // تم تقييد prefetch للصفحات الديناميكية (مع معاملات) لتجنب الطلبات الكثيرة
             function prefetchImportantPages() {
                 if (!('requestIdleCallback' in window)) {
                     return;
@@ -1141,13 +1151,23 @@ if (!defined('ACCESS_ALLOWED')) {
                         dashboardUrl = baseUrl + 'dashboard/production.php';
                     }
                     
+                    // فقط prefetch للصفحة الرئيسية (بدون معاملات) لتجنب الطلبات الكثيرة
+                    // الصفحات الديناميكية (مع معاملات page=) كبيرة وتستغرق وقتاً طويلاً
+                    // يتم تحميلها عند hover بدلاً من prefetch تلقائي
                     const importantPages = [
-                        dashboardUrl,
-                        dashboardUrl + '?page=chat',
-                        dashboardUrl + '?page=customers'
+                        dashboardUrl
                     ];
                     
                     importantPages.forEach(function(url) {
+                        // تحقق من أن الرابط ليس الصفحة الحالية
+                        const currentUrl = window.location.pathname + (window.location.search || '');
+                        const prefetchUrl = new URL(url, window.location.origin);
+                        const prefetchPath = prefetchUrl.pathname + (prefetchUrl.search || '');
+                        
+                        if (currentUrl === prefetchPath) {
+                            return; // تجاهل الصفحة الحالية
+                        }
+                        
                         if (!document.querySelector('link[rel="prefetch"][href="' + url + '"]')) {
                             const prefetchLink = document.createElement('link');
                             prefetchLink.rel = 'prefetch';
@@ -1155,7 +1175,7 @@ if (!defined('ACCESS_ALLOWED')) {
                             document.head.appendChild(prefetchLink);
                         }
                     });
-                }, { timeout: 2000 });
+                }, { timeout: 3000 }); // زيادة timeout لتقليل الطلبات الفورية
             }
             
             // تشغيل التحسينات بعد تحميل الصفحة
