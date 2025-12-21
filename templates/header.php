@@ -85,26 +85,51 @@ if (!$isProfilePage) {
 // فحص أمني: إذا كان المستخدم مسجل دخول لكن غير موجود في قاعدة البيانات
 // (getCurrentUser() يقوم بإلغاء تسجيل الدخول تلقائياً، لكن نتأكد من عدم وجود جلسة نشطة)
 // استثناء: لا نعيد التوجيه في profile.php لمنع حذف الجلسة
-// إضافة retry logic لمنع إنهاء الجلسة بعد تسجيل الدخول مباشرة
+// إضافة retry logic محسّن لمنع إنهاء الجلسة بعد تسجيل الدخول مباشرة
 if (!$isProfilePage && isLoggedIn() && (!$currentUser || !is_array($currentUser) || empty($currentUser))) {
-    // إعادة المحاولة مرة واحدة - قد يكون هناك تأخير في قاعدة البيانات بعد تسجيل الدخول
-    // انتظار قصير جداً (50ms) ثم إعادة المحاولة
-    usleep(50000);
-    $currentUser = getCurrentUser();
+    // إعادة المحاولة عدة مرات - قد يكون هناك تأخير في قاعدة البيانات بعد تسجيل الدخول
+    $maxRetries = 3;
+    $retryDelay = 100000; // 100ms
     
-    // إعادة المحاولة - قد يكون هناك تأخير في قاعدة البيانات
+    for ($retry = 0; $retry < $maxRetries; $retry++) {
+        usleep($retryDelay);
+        $currentUser = getCurrentUser();
+        
+        // إذا نجحت إعادة المحاولة، توقف
+        if ($currentUser && is_array($currentUser) && !empty($currentUser)) {
+            break;
+        }
+        
+        // زيادة وقت الانتظار في كل محاولة
+        $retryDelay *= 1.5;
+    }
     
-    // فقط إذا استمر الفشل بعد إعادة المحاولة، نعيد التوجيه
+    // فقط إذا استمر الفشل بعد جميع محاولات إعادة المحاولة، نعيد التوجيه
     if (!$currentUser || !is_array($currentUser) || empty($currentUser)) {
-        // المستخدم مسجل دخول لكن غير موجود أو محذوف - تم إلغاء تسجيل الدخول تلقائياً
-        // إعادة التوجيه لتسجيل الدخول
-        $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
-        if (!headers_sent()) {
-            header('Location: ' . $loginUrl);
-            exit;
-        } else {
-            echo '<script>window.location.href = "' . htmlspecialchars($loginUrl) . '";</script>';
-            exit;
+        // التحقق من أن الجلسة لا تزال موجودة (لم يتم حذفها)
+        // قد يكون المستخدم محذوفاً أو غير مفعّل
+        if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+            // الجلسة موجودة لكن المستخدم غير موجود - قد يكون هناك مشكلة في قاعدة البيانات
+            // سجل الخطأ لكن لا تقم بإعادة التوجيه فوراً (قد يكون خطأ مؤقت)
+            error_log("Warning: User ID {$_SESSION['user_id']} logged in but getCurrentUser() returned empty. Retrying...");
+            
+            // إعادة المحاولة مرة أخيرة بعد انتظار أطول
+            usleep(200000); // 200ms
+            $currentUser = getCurrentUser();
+            
+            // فقط إذا استمر الفشل، قم بإعادة التوجيه
+            if (!$currentUser || !is_array($currentUser) || empty($currentUser)) {
+                // المستخدم مسجل دخول لكن غير موجود أو محذوف - تم إلغاء تسجيل الدخول تلقائياً
+                // إعادة التوجيه لتسجيل الدخول
+                $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+                if (!headers_sent()) {
+                    header('Location: ' . $loginUrl);
+                    exit;
+                } else {
+                    echo '<script>window.location.href = "' . htmlspecialchars($loginUrl) . '";</script>';
+                    exit;
+                }
+            }
         }
     }
 }

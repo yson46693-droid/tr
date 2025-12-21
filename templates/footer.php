@@ -995,37 +995,77 @@ if (!defined('ACCESS_ALLOWED')) {
             }
             
             // تحسين: استخدام Intersection Observer لتحميل الصفحات مسبقاً عند اقترابها من viewport
+            // محدود للروابط المهمة فقط لتجنب طلبات كثيرة
             function addIntersectionPrefetch() {
                 if (!('IntersectionObserver' in window)) {
                     return;
                 }
                 
-                const links = document.querySelectorAll('a[href]:not([href^="#"]):not([href^="javascript:"])');
+                // فقط الروابط المهمة (روابط التنقل الرئيسية، وليس كل الروابط)
+                const importantSelectors = [
+                    '.navbar a[href]',
+                    '.nav-link[href]',
+                    '.nav-item a[href]',
+                    '.sidebar a[href]',
+                    '[role="navigation"] a[href]'
+                ];
+                
+                let importantLinks = [];
+                importantSelectors.forEach(function(selector) {
+                    const links = document.querySelectorAll(selector);
+                    importantLinks = importantLinks.concat(Array.from(links));
+                });
+                
+                // إزالة التكرارات
+                importantLinks = Array.from(new Set(importantLinks));
+                
+                // تحديد عدد max للروابط التي يمكن عمل prefetch لها (لتجنب الطلبات الكثيرة)
+                const MAX_PREFETCH_LINKS = 10;
+                
                 const observer = new IntersectionObserver(function(entries) {
+                    let prefetchedCount = 0;
+                    
                     entries.forEach(function(entry) {
+                        if (prefetchedCount >= MAX_PREFETCH_LINKS) {
+                            return; // توقف عند الوصول للحد الأقصى
+                        }
+                        
                         if (entry.isIntersecting) {
                             const link = entry.target;
                             const href = link.getAttribute('href');
                             
+                            // فقط للروابط الداخلية والمهمة
                             if (href && 
-                                link.hostname === window.location.hostname && 
+                                (link.hostname === window.location.hostname || !link.hostname) && 
                                 !href.includes('#') &&
+                                !href.includes('logout') &&
+                                !href.includes('api/') &&
                                 !document.querySelector('link[rel="prefetch"][href="' + href + '"]')) {
+                                
+                                // تحقق من أن الرابط ليس صفحة حالية
+                                const currentPath = window.location.pathname;
+                                const linkPath = new URL(href, window.location.origin).pathname;
+                                if (linkPath === currentPath) {
+                                    observer.unobserve(link);
+                                    return;
+                                }
                                 
                                 const prefetchLink = document.createElement('link');
                                 prefetchLink.rel = 'prefetch';
                                 prefetchLink.href = href;
                                 document.head.appendChild(prefetchLink);
                                 
+                                prefetchedCount++;
                                 observer.unobserve(link);
                             }
                         }
                     });
                 }, {
-                    rootMargin: '200px' // بدء prefetch قبل 200px من viewport
+                    rootMargin: '150px' // تقليل من 200px إلى 150px
                 });
                 
-                links.forEach(function(link) {
+                // مراقبة فقط الروابط المهمة
+                importantLinks.forEach(function(link) {
                     if (link.hostname === window.location.hostname || !link.hostname) {
                         observer.observe(link);
                     }

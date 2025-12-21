@@ -1341,10 +1341,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 return response;
             } catch (fetchError) {
                 // التعامل مع أخطاء الشبكة والأخطاء الأخرى (ERR_FAILED / Error Code: -2)
-                console.error('Fetch error:', fetchError);
+                
+                // التحقق من نوع الخطأ
+                const errorMessage = (fetchError.message || '').toLowerCase();
+                const errorName = fetchError.name || '';
+                
+                // تجاهل أخطاء prefetch المباشرة (AbortError من prefetch requests)
+                const isAbortError = errorName === 'AbortError' || 
+                                   errorMessage.includes('aborted') ||
+                                   errorMessage.includes('user aborted');
+                
+                // إذا كان خطأ إلغاء (مثل prefetch aborted)، تجاهله بصمت
+                if (isAbortError) {
+                    // هذا خطأ عادي من prefetch requests - لا نريد التعامل معه
+                    return new Response(JSON.stringify({
+                        success: false,
+                        message: 'Request aborted',
+                        aborted: true
+                    }), {
+                        status: 0,
+                        statusText: 'Aborted'
+                    });
+                }
                 
                 // التحقق من error code -2
-                const errorMessage = (fetchError.message || '').toLowerCase();
                 const isErrorCodeMinus2 = errorMessage.includes('error code: -2') || 
                                          errorMessage.includes('error code:-2') ||
                                          errorMessage.includes('err_failed') ||
@@ -1354,10 +1374,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('Error Code -2 (ERR_FAILED) detected in fetch:', fetchError);
                 }
                 
+                // فقط تسجيل الأخطاء الحقيقية
+                if (!isAbortError) {
+                    console.error('Fetch error:', fetchError);
+                }
+                
                 // إذا كان الخطأ بسبب انتهاء الجلسة أو خطأ في الاتصال
                 // محاولة التوجيه إلى صفحة تسجيل الدخول بدلاً من عرض ERR_FAILED
-                // فقط إذا كان من API call وليس navigation عادي
+                // فقط إذا كان من API call وليس navigation عادي أو prefetch
                 const fetchUrl = arguments[0] || ''; // URL الأول من fetch arguments
+                const fetchOptions = arguments[1] || {};
+                
+                // التحقق من أن الطلب ليس prefetch
+                const isPrefetch = fetchOptions.mode === 'no-cors' || 
+                                 (typeof fetchUrl === 'string' && fetchUrl.includes('prefetch')) ||
+                                 document.querySelector('link[rel="prefetch"][href*="' + (typeof fetchUrl === 'string' ? fetchUrl.split('?')[0] : '') + '"]');
+                
                 const isApiCall = typeof fetchUrl === 'string' && (
                     fetchUrl.includes('/api/') || 
                     fetchUrl.includes('notifications.php') ||
@@ -1369,6 +1401,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 const isProtectedPage = protectedPages.some(page => currentPath.includes(page)) ||
                                        document.querySelector('body[data-page="profile"]') ||
                                        document.querySelector('body[data-page="attendance"]');
+                
+                // تجاهل أخطاء prefetch
+                if (isPrefetch || isAbortError) {
+                    return new Response(JSON.stringify({
+                        success: false,
+                        message: 'Request aborted or prefetch error',
+                        aborted: true
+                    }), {
+                        status: 0,
+                        statusText: 'Aborted'
+                    });
+                }
                 
                 // إذا كان error code -2 في صفحة تسجيل الدخول، أظهر رسالة واضحة
                 if (isErrorCodeMinus2 && currentPath.includes('index.php')) {
@@ -1394,11 +1438,24 @@ document.addEventListener('DOMContentLoaded', function() {
                             errorDiv.remove();
                         }
                     }, 10000);
+                    
+                    // لا نعيد التوجيه في صفحة تسجيل الدخول
+                    return new Response(JSON.stringify({
+                        success: false,
+                        message: 'Network error',
+                        error_code: -2
+                    }), {
+                        status: 500,
+                        statusText: 'Network Error',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
                 }
                 
                 // منع إعادة التوجيه في الصفحات المحمية أو إذا لم يكن API call
                 // لكن إذا كان ERR_FAILED في صفحة الداشبورد بعد انتهاء الجلسة، نعيد التوجيه
-                if (!isProtectedPage && isApiCall) {
+                if (!isProtectedPage && isApiCall && !isPrefetch) {
                     // إذا كان ERR_FAILED في صفحة الداشبورد، قد تكون الجلسة منتهية
                     // محاولة التحقق من الجلسة أولاً
                     if (isErrorCodeMinus2 && currentPath.includes('/dashboard/')) {
@@ -1422,10 +1479,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             }
                         })
                         .catch(function() {
-                            // في حالة الخطأ، افترض أن الجلسة منتهية وأعد التوجيه
-                            const overlay = getOverlayElement();
-                            const loginUrl = getLoginUrl(overlay);
-                            redirectToLogin(loginUrl);
+                            // في حالة الخطأ، لا نعيد التوجيه فوراً - قد يكون خطأ مؤقت
+                            console.warn('Session check failed, but not redirecting - may be temporary error');
                         });
                     } else if (!isErrorCodeMinus2) {
                         // محاولة تحديد URL تسجيل الدخول
