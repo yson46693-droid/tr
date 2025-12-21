@@ -1257,6 +1257,65 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         // متغير لتتبع ما إذا تم تطبيق نسبة التحصيلات بالفعل (لمنع الحساب المزدوج)
                         $commissionApplied = false;
                         
+                        // الحالة الخاصة: حساب نسبة التحصيلات عندما يكون للعميل رصيد مدين ويدفع نقداً أو جزئياً
+                        // إذا كان للعميل رصيد مدين (balance > 0) ودفع نقداً أو جزئياً، يجب حساب نسبة 2% على المبلغ المدفوع
+                        $hasDebitBalance = (isset($originalBalance) && $originalBalance > 0.0001);
+                        if ($hasDebitBalance && ($paymentType === 'full' || $paymentType === 'partial') && $effectivePaidAmount > 0.0001 && !$commissionApplied) {
+                            // حساب نسبة 2% على المبلغ المدفوع نقداً
+                            $debitCommissionAmount = round($effectivePaidAmount * 0.02, 2);
+                            
+                            if ($debitCommissionAmount > 0) {
+                                try {
+                                    $timestamp = strtotime($saleDate) ?: time();
+                                    $targetMonth = (int)date('n', $timestamp);
+                                    $targetYear = (int)date('Y', $timestamp);
+                                    
+                                    $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    if (!$summary['exists']) {
+                                        $creation = createOrUpdateSalary($currentUser['id'], $targetMonth, $targetYear);
+                                        if (!($creation['success'] ?? false)) {
+                                            throw new RuntimeException('Failed to create salary record: ' . ($creation['message'] ?? 'Unknown error'));
+                                        }
+                                        $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    }
+                                    
+                                    if ($summary['exists']) {
+                                        $salary = $summary['salary'];
+                                        $salaryId = (int)($salary['id'] ?? 0);
+                                        
+                                        if ($salaryId > 0) {
+                                            $hasCollectionsBonusColumn = ensureCollectionsBonusColumn();
+                                            
+                                            if ($hasCollectionsBonusColumn) {
+                                                // إضافة نسبة التحصيلات إلى collections_bonus والمبلغ الأساسي إلى collections_amount
+                                                $db->execute(
+                                                    "UPDATE salaries 
+                                                     SET collections_bonus = COALESCE(collections_bonus, 0) + ?, 
+                                                         collections_amount = COALESCE(collections_amount, 0) + ?,
+                                                         updated_at = NOW()
+                                                     WHERE id = ?",
+                                                    [$debitCommissionAmount, $effectivePaidAmount, $salaryId]
+                                                );
+                                                
+                                                error_log(sprintf(
+                                                    'Added collection percentage for debit balance customer: effectivePaidAmount=%.2f, commissionAmount=%.2f, invoiceId=%d, customerId=%d, originalBalance=%.2f',
+                                                    $effectivePaidAmount,
+                                                    $debitCommissionAmount,
+                                                    $invoiceId,
+                                                    $customerId,
+                                                    $originalBalance ?? 0
+                                                ));
+                                                
+                                                $commissionApplied = true; // منع الحساب المزدوج
+                                            }
+                                        }
+                                    }
+                                } catch (Throwable $debitCommissionError) {
+                                    error_log('Error adding collection percentage for debit balance customer: ' . $debitCommissionError->getMessage());
+                                }
+                            }
+                        }
+                        
                         // التحقق من أن العميل ليس له سجل مشتريات قبل حساب النسبة
                         // لعميل له سجل مشتريات: يتم التعامل معه في الكود السابق (السطر 1543)
                         if ($hasCreditBalance && !($hasPreviousPurchases ?? false) && ($paymentType === 'credit' || $paymentType === 'partial') && !$commissionApplied) {
