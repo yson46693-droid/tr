@@ -1319,7 +1319,26 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         // الحالة الخاصة: حساب نسبة التحصيلات عند البيع بالآجل لعميل له رصيد دائن
                         // يجب حساب نسبة 2% على المبلغ المستخدم من الرصيد الدائن (creditUsed) بغض النظر عن سجل المشتريات
                         // هذا ينطبق على البيع بالآجل فقط (paymentType === 'credit')
-                        if ($hasCreditBalance && $paymentType === 'credit' && $creditUsed > 0.0001 && !$commissionApplied) {
+                        // عند البيع بالآجل، creditUsed = min(netTotal, abs(originalBalance))
+                        if ($hasCreditBalance && $paymentType === 'credit' && !$commissionApplied) {
+                            // إعادة حساب creditUsed بشكل صحيح للبيع بالآجل
+                            // creditUsed = min(netTotal, abs(originalBalance))
+                            $creditAvailable = abs($originalBalance ?? 0);
+                            $calculatedCreditUsed = min($netTotal, $creditAvailable);
+                            
+                            // استخدام القيمة المحسوبة إذا كانت أكبر من 0
+                            if ($calculatedCreditUsed > 0.0001) {
+                                $creditUsed = $calculatedCreditUsed;
+                                
+                                error_log(sprintf(
+                                    'Recalculated creditUsed for credit payment commission: originalCreditUsed=%.2f, calculatedCreditUsed=%.2f, netTotal=%.2f, creditAvailable=%.2f, originalBalance=%.2f, invoiceId=%d',
+                                    $creditUsed ?? 0,
+                                    $calculatedCreditUsed,
+                                    $netTotal,
+                                    $creditAvailable,
+                                    $originalBalance ?? 0,
+                                    $invoiceId
+                                ));
                             // حساب نسبة 2% على المبلغ المستخدم من الرصيد الدائن
                             $creditPaymentCommissionAmount = round($creditUsed * 0.02, 2);
                             
