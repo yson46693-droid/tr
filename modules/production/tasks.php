@@ -2329,5 +2329,13 @@ function tasksHtml(string $value): string
     
     // تنظيف عند إغلاق الصفحة
     window.addEventListener('unload', stopAutoRefresh);
+    
+    // دالة للتعامل مع تحديثات المهام من unified polling system (إذا تم إضافتها لاحقاً)
+    window.handleTasksUpdate = function() {
+        // يمكن استدعاء fetchTasks إذا لزم الأمر
+        if (typeof fetchTasks === 'function' && !document.hidden) {
+            fetchTasks();
+        }
+    };
 })();
 </script>

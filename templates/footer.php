@@ -233,23 +233,25 @@ if (!defined('ACCESS_ALLOWED')) {
     })();
     </script>
     
-    <!-- Session Keep-Alive Script - محسّن لمنع انتهاء الجلسة -->
+    <!-- Unified Polling System - نظام موحد لجميع طلبات الـ Polling -->
     <script>
     (function() {
-        if (window.__sessionKeepAliveActive) {
-            return; // منع التكرار
+        'use strict';
+        
+        if (window.__unifiedPollingActive) {
+            return;
         }
-        window.__sessionKeepAliveActive = true;
+        window.__unifiedPollingActive = true;
         
         let lastActivity = Date.now();
-        const SESSION_REFRESH_INTERVAL = 15 * 60 * 1000; // 15 دقيقة (زيادة لتقليل الضغط على السيرفر)
-        const ACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 دقائق (زيادة من 10 دقائق)
+        const POLLING_INTERVAL = 60 * 1000; // 60 ثانية - فترة موحدة لجميع المهام
+        const ACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 دقيقة
         
-        // تتبع النشاط
         const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click', 'keydown'];
-        let activityTimer;
-        let keepAliveInterval;
-        let isRefreshing = false;
+        let unifiedPollInterval;
+        let isPolling = false;
+        let consecutiveFailures = 0;
+        const MAX_CONSECUTIVE_FAILURES = 3;
         
         // حساب مسار API
         function getApiPath(endpoint) {
@@ -273,32 +275,49 @@ if (!defined('ACCESS_ALLOWED')) {
         
         function updateActivity() {
             lastActivity = Date.now();
-            clearTimeout(activityTimer);
         }
         
-        // تحديث الجلسة عبر API المخصص
-        let consecutiveFailures = 0;
-        const MAX_CONSECUTIVE_FAILURES = 3;
+        // تحديد ما يجب إضافته للطلب بناءً على الصفحة
+        function getPollingParams() {
+            const params = new URLSearchParams();
+            const path = window.location.pathname || '';
+            
+            // إضافة notifications دائماً
+            params.set('notifications', '1');
+            if (typeof window.lastNotificationId !== 'undefined' && window.lastNotificationId) {
+                params.set('last_notification_id', window.lastNotificationId);
+            }
+            
+            // إضافة chat إذا كانت الصفحة تحتوي على chat
+            if (document.querySelector('[data-chat-app]')) {
+                params.set('chat', '1');
+                if (typeof window.lastChatMessageId !== 'undefined' && window.lastChatMessageId) {
+                    params.set('last_message_id', window.lastChatMessageId);
+                }
+                if (typeof window.currentChatId !== 'undefined' && window.currentChatId) {
+                    params.set('chat_id', window.currentChatId);
+                }
+            }
+            
+            return params.toString();
+        }
         
-        function refreshSession() {
-            if (isRefreshing) {
-                return; // منع الطلبات المتزامنة
+        function executeUnifiedPolling() {
+            if (isPolling || document.hidden) {
+                return;
             }
             
             const timeSinceActivity = Date.now() - lastActivity;
-            // تحديث فقط إذا كان هناك نشاط
             if (timeSinceActivity > ACTIVITY_TIMEOUT) {
                 return;
             }
             
-            isRefreshing = true;
-            const apiPath = getApiPath('api/session_keepalive.php');
+            isPolling = true;
+            const params = getPollingParams();
+            const apiPath = getApiPath('api/unified_polling.php') + (params ? '?' + params : '');
             
-            // إضافة timeout للطلب (5 ثواني فقط - يجب أن يكون سريعاً)
             const controller = new AbortController();
-            const timeoutId = setTimeout(function() {
-                controller.abort();
-            }, 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 12000);
             
             fetch(apiPath, {
                 method: 'GET',
@@ -310,129 +329,161 @@ if (!defined('ACCESS_ALLOWED')) {
                     'Cache-Control': 'no-cache'
                 }
             })
-            .then(function(response) {
+            .then(response => {
                 clearTimeout(timeoutId);
                 if (!response.ok) {
-                    return response.json().then(function(data) {
-                        if (data && data.expired) {
-                            // الجلسة انتهت - إعادة توجيه مع تنظيف URL
-                            consecutiveFailures = 0;
+                    return response.json().then(data => {
+                        if (data && (data.expired || (data.session && !data.session.active))) {
                             const loginUrl = getApiPath('index.php').split('?')[0];
-                            // إزالة جميع معاملات _nocache و _refresh من URL
                             const cleanUrl = loginUrl.replace(/[?&](_nocache|_refresh|_cache_bust|_t|_r|_auto_refresh)=\d+/g, '');
-                            // استخدام replace بدلاً من href لتجنب ERR_FAILED
                             if (window.location.pathname !== cleanUrl.split('?')[0]) {
                                 window.location.replace(cleanUrl);
                             }
-                            return;
+                            return null;
                         }
-                        throw new Error('Session refresh failed: ' + (data.message || 'Unknown error'));
-                    }).catch(function() {
-                        throw new Error('Session refresh failed: HTTP ' + response.status);
+                        throw new Error('Polling failed');
                     });
                 }
                 return response.json();
             })
-            .then(function(data) {
-                if (data && data.success) {
-                    // تحديث ناجح - إعادة تعيين عداد الفشل
+            .then(data => {
+                if (!data) return;
+                
+                if (data.success) {
                     consecutiveFailures = 0;
                     lastActivity = Date.now();
+                    
+                    // معالجة الجلسة
+                    if (data.session && !data.session.active) {
+                        if (typeof handleSessionStatus === 'function') {
+                            handleSessionStatus(401);
+                        }
+                        return;
+                    }
+                    
+                    // معالجة وضع الصيانة
+                    if (data.maintenance) {
+                        if (data.maintenance.mode === 'on' && !data.maintenance.is_developer) {
+                            if (typeof showMaintenanceModal === 'function') {
+                                showMaintenanceModal();
+                            }
+                        } else {
+                            if (typeof hideMaintenanceModal === 'function') {
+                                hideMaintenanceModal();
+                            }
+                        }
+                    }
+                    
+                    // معالجة الإشعارات
+                    if (data.notifications && typeof window.handleUnifiedNotifications === 'function') {
+                        window.handleUnifiedNotifications(data.notifications);
+                        if (data.notifications.notifications && data.notifications.notifications.length > 0) {
+                            const lastId = data.notifications.notifications[0].id;
+                            if (lastId) {
+                                window.lastNotificationId = lastId;
+                            }
+                        }
+                    }
+                    
+                    // معالجة رسائل الدردشة
+                    if (data.chat && data.chat.messages && typeof window.handleChatMessages === 'function') {
+                        window.handleChatMessages(data.chat.messages);
+                        if (data.chat.messages.length > 0) {
+                            const lastMsg = data.chat.messages[data.chat.messages.length - 1];
+                            if (lastMsg && lastMsg.id) {
+                                window.lastChatMessageId = lastMsg.id;
+                            }
+                        }
+                    }
+                    
                 } else {
                     consecutiveFailures++;
                 }
             })
-            .catch(function(error) {
+            .catch(error => {
                 clearTimeout(timeoutId);
-                consecutiveFailures++;
-                
-                // إذا فشل الطلب بسبب network error أو timeout
-                if (error.name === 'AbortError' || error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.message.includes('ERR_FAILED')) {
-                    // لا نسجل الخطأ في console لتقليل الضغط
-                    // console.log('Session keep-alive: Network error or timeout - ' + (error.message || 'Unknown'));
+                if (error.name !== 'AbortError') {
+                    consecutiveFailures++;
                     
-                    // إذا فشل 3 مرات متتالية، تحقق من حالة الجلسة
                     if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                        console.warn('Session keep-alive: Multiple consecutive failures detected. Checking session status...');
-                        // محاولة تحميل صفحة بسيطة للتحقق من الاتصال
-                        checkConnection();
+                        console.warn('Unified polling: Multiple failures detected');
+                        const checkUrl = getApiPath('index.php').split('?')[0];
+                        const checkController = new AbortController();
+                        const checkTimeout = setTimeout(() => checkController.abort(), 5000);
                         
-                        // إعادة تعيين العداد بعد فحص الاتصال لمنع التكرار المفرط
-                        setTimeout(function() {
-                            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                                consecutiveFailures = Math.floor(MAX_CONSECUTIVE_FAILURES / 2); // تقليل العداد تدريجياً
-                            }
-                        }, 30000); // بعد 30 ثانية
+                        fetch(checkUrl, {
+                            method: 'HEAD',
+                            cache: 'no-cache',
+                            credentials: 'same-origin',
+                            signal: checkController.signal
+                        })
+                        .then(() => {
+                            clearTimeout(checkTimeout);
+                            consecutiveFailures = Math.floor(MAX_CONSECUTIVE_FAILURES / 2);
+                        })
+                        .catch(() => {
+                            clearTimeout(checkTimeout);
+                        });
                     }
-                } else {
-                    // لا نسجل الأخطاء الروتينية
-                    // console.log('Session keep-alive error:', error.message || 'refresh skipped');
                 }
             })
-            .finally(function() {
-                isRefreshing = false;
-            });
-        }
-        
-        // التحقق من الاتصال والجلسة
-        function checkConnection() {
-            const checkUrl = getApiPath('index.php').split('?')[0];
-            const controller = new AbortController();
-            const timeoutId = setTimeout(function() {
-                controller.abort();
-            }, 5000); // 5 ثواني timeout
-            
-            fetch(checkUrl, {
-                method: 'HEAD',
-                cache: 'no-cache',
-                credentials: 'same-origin',
-                signal: controller.signal
-            })
-            .then(function(response) {
-                clearTimeout(timeoutId);
-                // إذا نجح الطلب، إعادة تعيين العداد
-                consecutiveFailures = 0;
-            })
-            .catch(function(error) {
-                clearTimeout(timeoutId);
-                // إذا فشل الطلب، قد تكون هناك مشكلة في الاتصال
-                // لا نعيد التوجيه تلقائياً - فقط نسجل التحذير
-                // الجلسة ستبقى نشطة حتى لو فشلت طلبات keep-alive
-                console.warn('Connection check failed:', error.message);
-                // لا نعيد التوجيه - نترك الجلسة نشطة حتى لو فشلت طلبات keep-alive
-                // إعادة التوجيه ستحدث فقط عند تسجيل الخروج الفعلي أو انتهاء الجلسة في قاعدة البيانات
+            .finally(() => {
+                isPolling = false;
             });
         }
         
         // إضافة مستمعي الأحداث للنشاط
-        activityEvents.forEach(function(event) {
+        activityEvents.forEach(event => {
             document.addEventListener(event, updateActivity, { passive: true });
         });
         
-        // تحديث الجلسة كل 5 دقائق
-        keepAliveInterval = setInterval(function() {
-            refreshSession();
-        }, SESSION_REFRESH_INTERVAL);
+        // بدء الـ polling الموحد
+        unifiedPollInterval = setInterval(executeUnifiedPolling, POLLING_INTERVAL);
         
-        // تحديث أولي بعد تحميل الصفحة (بعد 60 ثانية - تقليل الضغط على السيرفر)
-        setTimeout(refreshSession, 60000);
+        // تنفيذ أول مرة بعد 5 ثواني
+        setTimeout(executeUnifiedPolling, 5000);
         
-        // تحديث قبل مغادرة الصفحة
-        window.addEventListener('beforeunload', function() {
-            if (keepAliveInterval) {
-                clearInterval(keepAliveInterval);
+        // تنظيف عند مغادرة الصفحة
+        window.addEventListener('beforeunload', () => {
+            if (unifiedPollInterval) {
+                clearInterval(unifiedPollInterval);
             }
-            // محاولة تحديث نهائي قبل المغادرة (غير متزامن)
-            navigator.sendBeacon && navigator.sendBeacon(getApiPath('api/session_keepalive.php'));
+            if (navigator.sendBeacon) {
+                const params = getPollingParams();
+                navigator.sendBeacon(getApiPath('api/unified_polling.php') + (params ? '?' + params : ''));
+            }
         });
         
         // تحديث عند العودة للصفحة
-        document.addEventListener('visibilitychange', function() {
+        document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
-                // تحديث فوري عند العودة
-                setTimeout(refreshSession, 1000);
+                setTimeout(executeUnifiedPolling, 1000);
             }
         });
+        
+        // ربط مع stopAllPolling
+        if (typeof stopAllPolling === 'function') {
+            const originalStopAllPolling = stopAllPolling;
+            window.stopAllPolling = function() {
+                originalStopAllPolling();
+                if (unifiedPollInterval) {
+                    clearInterval(unifiedPollInterval);
+                    unifiedPollInterval = null;
+                }
+            };
+        }
+        
+        // Export للوصول من ملفات أخرى
+        window.unifiedPolling = {
+            execute: executeUnifiedPolling,
+            stop: function() {
+                if (unifiedPollInterval) {
+                    clearInterval(unifiedPollInterval);
+                    unifiedPollInterval = null;
+                }
+            }
+        };
+        
     })();
     </script>
     
@@ -595,118 +646,8 @@ if (!defined('ACCESS_ALLOWED')) {
         
         // تهيئة النظام
         document.addEventListener('DOMContentLoaded', function() {
-            // تحميل العمليات الخلفية بشكل غير متزامن (بعد تحميل الصفحة)
-            // هذا يحسن الأداء عن طريق تأخير العمليات الثقيلة
-            // Background tasks polling interval (stored globally for access by stopAllPolling)
-            window.backgroundTasksInterval = null;
-            
-            function executeBackgroundTasks() {
-                // Skip if page is hidden
-                if (document.hidden) {
-                    return;
-                }
-                
-                try {
-                    // Use getApiPath helper if available, otherwise construct path
-                    const apiPath = typeof getApiPath === 'function' 
-                        ? getApiPath('api/background-tasks.php')
-                        : '/api/background-tasks.php';
-                    
-                    // Call background tasks API
-                    fetch(apiPath, {
-                        method: 'GET',
-                        credentials: 'same-origin',
-                        cache: 'no-cache',
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest'
-                        }
-                    })
-                    .then(function(response) {
-                        // Check for session expiration (401)
-                        if (response.status === 401) {
-                            // Session expired - stop all polling
-                            if (window.backgroundTasksInterval) {
-                                clearInterval(window.backgroundTasksInterval);
-                                window.backgroundTasksInterval = null;
-                            }
-                            
-                            // Stop all polling globally
-                            if (typeof stopAllPolling === 'function') {
-                                stopAllPolling();
-                            }
-                            
-                            // Trigger session expiration handler
-                            if (typeof handleSessionStatus === 'function') {
-                                handleSessionStatus(401, response.url, apiPath);
-                            }
-                            return;
-                        }
-                        
-                        // Parse response if successful
-                        if (response.ok) {
-                            return response.json().catch(function() {
-                                return { success: false };
-                            });
-                        }
-                        
-                        return { success: false };
-                    })
-                    .then(function(data) {
-                        // Check if response indicates session expired
-                        if (data && data.status === 'expired') {
-                            // Stop polling
-                            if (window.backgroundTasksInterval) {
-                                clearInterval(window.backgroundTasksInterval);
-                                window.backgroundTasksInterval = null;
-                            }
-                            
-                            // Stop all polling globally
-                            if (typeof stopAllPolling === 'function') {
-                                stopAllPolling();
-                            }
-                            
-                            // Trigger session expiration handler
-                            if (typeof handleSessionStatus === 'function') {
-                                handleSessionStatus(401);
-                            }
-                        }
-                    })
-                    .catch(function(error) {
-                        // Only log non-network errors (network errors are normal for background tasks)
-                        if (error.name !== 'TypeError' && !error.message.includes('fetch')) {
-                            safeLog('Background tasks error:', error.message);
-                        }
-                    });
-                } catch (error) {
-                    safeLog('Background tasks exception:', error.message);
-                }
-            }
-            
-                // Execute first time after 5 seconds
-            setTimeout(function() {
-                executeBackgroundTasks();
-                
-                // Set up polling every 5 minutes (300000ms) if session is still valid
-                // This will be cleared if session expires
-                window.backgroundTasksInterval = setInterval(function() {
-                    executeBackgroundTasks();
-                }, 300000); // 5 minutes
-            }, 5000);
-            
-            // Stop polling when page is hidden or unloaded
-            document.addEventListener('visibilitychange', function() {
-                if (document.hidden && window.backgroundTasksInterval) {
-                    clearInterval(window.backgroundTasksInterval);
-                    window.backgroundTasksInterval = null;
-                }
-            });
-            
-            window.addEventListener('beforeunload', function() {
-                if (window.backgroundTasksInterval) {
-                    clearInterval(window.backgroundTasksInterval);
-                    window.backgroundTasksInterval = null;
-                }
-            });
+            // تم دمج background tasks في unified polling system
+            // لا حاجة لـ background tasks polling منفصل بعد الآن
             
             // إغلاق القائمة المنسدلة عند النقر على أي رابط
             const mainMenuDropdown = document.getElementById('mainMenuDropdown');
@@ -1842,8 +1783,8 @@ if (!defined('ACCESS_ALLOWED')) {
             setTimeout(checkMaintenanceMode, 500);
         }
         
-        // التحقق بشكل دوري من وضع الصيانة (كل 30 ثانية)
-        setInterval(checkMaintenanceMode, 30000);
+        // تم دمج التحقق من وضع الصيانة في unified polling system
+        // لا حاجة لـ setInterval منفصل بعد الآن
     })();
     </script>
     

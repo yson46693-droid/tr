@@ -873,9 +873,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        // تم دمج notifications polling في unified polling system
+        // نستخدم unified polling إذا كان متاحاً، وإلا نستخدم النظام القديم
         if (!window.__notificationAutoRefreshActive) {
             window.__notificationAutoRefreshActive = true;
-            // التحقق من أن الصفحة مرئية قبل الطلب
+            
+            // إذا كان unified polling نشطاً، لا نستخدم polling منفصل
+            if (window.__unifiedPollingActive) {
+                // سنعتمد على unified polling فقط
+                return;
+            }
+            
+            // Fallback: استخدام النظام القديم إذا لم يكن unified polling متاحاً
             notificationCheckInterval = setInterval(function() {
                 if (!document.hidden) {
                     loadNotifications();
@@ -883,6 +892,30 @@ document.addEventListener('DOMContentLoaded', function() {
             }, pollInterval);
         }
     }
+    
+    // دالة للتعامل مع الإشعارات من unified polling system
+    window.handleUnifiedNotifications = async function(notificationsData) {
+        if (!notificationsData || !notificationsData.notifications) {
+            return;
+        }
+        
+        try {
+            const notifications = Array.isArray(notificationsData.notifications) ? notificationsData.notifications : [];
+            const displayNotifications = filterDisplayableNotifications(notifications);
+            const unreadCount = notificationsData.unread_count || displayNotifications.filter(isNotificationUnread).length;
+            
+            // تحديث العداد
+            updateNotificationBadge(unreadCount);
+            
+            // معالجة إشعارات المتصفح
+            await handleBrowserNotifications(displayNotifications);
+            
+            // تحديث قائمة الإشعارات
+            await updateNotificationList(displayNotifications);
+        } catch (error) {
+            console.error('Error handling unified notifications:', error);
+        }
+    };
     
     // طلب الإذن عند النقر على أيقونة الإشعارات (user-generated event)
     // البحث عن أيقونة الإشعارات في header

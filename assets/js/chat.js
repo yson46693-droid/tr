@@ -1080,5 +1080,66 @@
       }
     }
   });
+  
+  // دالة للتعامل مع الرسائل من unified polling system
+  window.handleChatMessages = function(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return;
+    }
+    
+    try {
+      let hasNew = false;
+      const existingIds = new Set(state.messages.map((msg) => msg.id));
+      
+      messages.forEach((message) => {
+        if (!existingIds.has(message.id)) {
+          // تحويل format الرسالة إذا لزم الأمر
+          const formattedMessage = {
+            id: message.id,
+            user_id: message.user_id || message.userId,
+            chat_id: message.chat_id || message.chatId,
+            message: message.message || message.content,
+            created_at: message.created_at || message.createdAt,
+            user_name: message.user_name || message.userName,
+            user_role: message.user_role || message.userRole
+          };
+          
+          state.messages.push(formattedMessage);
+          state.lastMessageId = Math.max(state.lastMessageId, formattedMessage.id);
+          hasNew = formattedMessage.user_id !== currentUser.id;
+        } else {
+          // تحديث الرسالة الموجودة إذا تغيرت
+          const existingIndex = state.messages.findIndex(m => m.id === message.id);
+          if (existingIndex !== -1) {
+            if (applyMessageUpdate(message)) {
+              hasNew = true;
+            }
+          }
+        }
+      });
+      
+      // ترتيب الرسائل
+      if (hasNew) {
+        state.messages.sort((a, b) => a.id - b.id);
+        renderMessages();
+        scrollToBottom();
+      }
+      
+      // تحديث lastChatMessageId للـ unified polling
+      if (messages.length > 0) {
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg && lastMsg.id) {
+          window.lastChatMessageId = lastMsg.id;
+        }
+      }
+    } catch (error) {
+      console.error('Error handling unified chat messages:', error);
+    }
+  };
+  
+  // تحديث currentChatId إذا كان متاحاً
+  if (elements.app && elements.app.dataset.chatId) {
+    window.currentChatId = parseInt(elements.app.dataset.chatId, 10);
+  }
 })();
 
