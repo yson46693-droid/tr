@@ -358,18 +358,15 @@ function requestApproval($type, $entityId, $requestedBy, $notes = null) {
         // للمرتجعات (return_request و invoice_return_company)، استخدم رابط صفحة المرتجعات
         if ($type === 'return_request' || $type === 'invoice_return_company') {
             require_once __DIR__ . '/path_helper.php';
-            $basePath = getBasePath();
-            $notificationLink = $basePath . '/dashboard/manager.php?page=returns&id=' . $entityId;
+            $notificationLink = getRelativeUrl('dashboard/manager.php?page=returns&id=' . $entityId);
         } elseif ($type === 'warehouse_transfer') {
             // لطلبات نقل المخازن، استخدم رابط صفحة الموافقات مع قسم warehouse_transfers
             require_once __DIR__ . '/path_helper.php';
-            $basePath = getBasePath();
-            $notificationLink = $basePath . '/dashboard/manager.php?page=approvals&section=warehouse_transfers&id=' . $result['insert_id'];
+            $notificationLink = getRelativeUrl('dashboard/manager.php?page=approvals&section=warehouse_transfers&id=' . $result['insert_id']);
         } else {
             // للموافقات الأخرى، استخدم رابط صفحة الموافقات مع معرف الموافقة
             require_once __DIR__ . '/path_helper.php';
-            $basePath = getBasePath();
-            $notificationLink = $basePath . '/dashboard/manager.php?page=approvals&id=' . $result['insert_id'];
+            $notificationLink = getRelativeUrl('dashboard/manager.php?page=approvals&id=' . $result['insert_id']);
         }
         
         notifyManagers(
@@ -1055,8 +1052,8 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                         number_format($refundAmount, 2)
                     );
                     
-                    $basePath = getBasePath();
-                    $notificationLink = $basePath . '/dashboard/sales.php?page=returns&id=' . $entityId;
+                    require_once __DIR__ . '/path_helper.php';
+                    $notificationLink = getRelativeUrl('dashboard/sales.php?page=returns&id=' . $entityId);
                     
                     createNotification(
                         $salesRepId,
@@ -1293,8 +1290,8 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                             number_format($refundAmount, 2)
                         );
                         
-                        $basePath = getBasePath();
-                        $notificationLink = $basePath . '/dashboard/sales.php?page=returns&id=' . $entityId;
+                        require_once __DIR__ . '/path_helper.php';
+                        $notificationLink = getRelativeUrl('dashboard/sales.php?page=returns&id=' . $entityId);
                         
                         createNotification(
                             $salesRepId,
@@ -1430,34 +1427,32 @@ function getEntityName($type, $entityId) {
  */
 function getEntityLink($type, $entityId) {
     require_once __DIR__ . '/path_helper.php';
-    $basePath = getBasePath();
-    $baseUrl = $basePath . '/dashboard/';
     
     switch ($type) {
         case 'financial':
-            return $baseUrl . 'accountant.php?page=financial&id=' . $entityId;
+            return getRelativeUrl('dashboard/accountant.php?page=financial&id=' . $entityId);
             
         case 'sales':
-            return $baseUrl . 'sales.php?page=sales_collections&id=' . $entityId;
+            return getRelativeUrl('dashboard/sales.php?page=sales_collections&id=' . $entityId);
             
         case 'production':
-            return $baseUrl . 'production.php?page=production&id=' . $entityId;
+            return getRelativeUrl('dashboard/production.php?page=production&id=' . $entityId);
             
         case 'collection':
-            return $baseUrl . 'accountant.php?page=collections&id=' . $entityId;
+            return getRelativeUrl('dashboard/accountant.php?page=collections&id=' . $entityId);
             
         case 'salary':
-            return $baseUrl . 'accountant.php?page=salaries&id=' . $entityId;
+            return getRelativeUrl('dashboard/accountant.php?page=salaries&id=' . $entityId);
 
         case 'warehouse_transfer':
-            return $baseUrl . 'manager.php?page=warehouse_transfers&id=' . $entityId;
+            return getRelativeUrl('dashboard/manager.php?page=warehouse_transfers&id=' . $entityId);
 
         case 'invoice_return_company':
         case 'return_request':
-            return $baseUrl . 'manager.php?page=returns&id=' . $entityId;
+            return getRelativeUrl('dashboard/manager.php?page=returns&id=' . $entityId);
             
         default:
-            return $baseUrl . 'manager.php?page=approvals&id=' . $entityId;
+            return getRelativeUrl('dashboard/manager.php?page=approvals&id=' . $entityId);
     }
 }
 

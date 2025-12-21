@@ -4203,9 +4203,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         .dashboard-table thead th:nth-child(6),
         .dashboard-table tbody td:nth-child(6) {
-            width: 12%;
+            width: 24%;
             min-width: 0;
-            max-width: 12%;
+            max-width: 24%;
         }
 
         .dashboard-table thead th:nth-child(7),
