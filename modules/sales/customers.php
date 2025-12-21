@@ -3925,11 +3925,11 @@ document.addEventListener('DOMContentLoaded', function () {
         padding: 1.35rem 1.25rem;
     }
 
-    /* الأزرار في عمود الإجراءات: 2×2 على جميع الشاشات */
+    /* الأزرار في عمود الإجراءات: 2×2 على جميع الشاشات - أعرض */
     .dashboard-table tbody td:last-child .d-flex {
         display: grid !important;
         grid-template-columns: 1fr 1fr !important;
-        gap: 0.25rem !important;
+        gap: 0.4rem !important;
         width: 100% !important;
     }
 
@@ -3940,13 +3940,15 @@ document.addEventListener('DOMContentLoaded', function () {
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         box-sizing: border-box !important;
-        font-size: 0.75rem !important;
-        padding: 0.45rem 0.6rem !important;
-        min-height: 2.6rem;
+        font-size: 0.8rem !important;
+        padding: 0.5rem 0.7rem !important;
+        min-height: 2.8rem;
+        font-weight: 500;
     }
 
     .dashboard-table tbody td:last-child .btn i {
-        font-size: 0.8rem !important;
+        font-size: 0.85rem !important;
+        margin-right: 0.3rem !important;
     }
 
     @media (max-width: 992px) {
@@ -4035,12 +4037,12 @@ document.addEventListener('DOMContentLoaded', function () {
             max-width: 13%;
         }
 
-        /* الإجراءات */
+        /* الإجراءات - عرض أكبر */
         .dashboard-table thead th:nth-child(7),
         .dashboard-table tbody td:nth-child(7) {
-            width: 25%;
+            width: 30%;
             min-width: 0;
-            max-width: 25%;
+            max-width: 30%;
         }
 
         .dashboard-table thead th {
@@ -4067,23 +4069,29 @@ document.addEventListener('DOMContentLoaded', function () {
             font-size: 0.75rem;
         }
 
-        /* تحسين أزرار الإجراءات على الشاشات المتوسطة - حجم أكبر */
+        /* تحسين أزرار الإجراءات على الشاشات المتوسطة - أعرض وأوضح */
+        .dashboard-table tbody td:last-child .d-flex {
+            gap: 0.35rem !important;
+        }
+
         .dashboard-table tbody td:last-child .btn {
             width: 100%;
             justify-content: center;
-            font-size: 0.7rem !important;
-            padding: 0.4rem 0.5rem !important;
+            font-size: 0.75rem !important;
+            padding: 0.45rem 0.6rem !important;
             white-space: normal !important;
             word-break: break-word;
             line-height: 1.3;
             overflow: hidden;
             text-overflow: ellipsis;
-            min-height: 2.5rem;
+            min-height: 2.6rem;
+            font-weight: 500;
         }
 
         .dashboard-table tbody td:last-child .btn i {
-            font-size: 0.75rem !important;
+            font-size: 0.8rem !important;
             flex-shrink: 0;
+            margin-right: 0.25rem !important;
         }
 
         /* تحسين Badge الرصيد */
@@ -4202,34 +4210,36 @@ document.addEventListener('DOMContentLoaded', function () {
 
         .dashboard-table thead th:nth-child(7),
         .dashboard-table tbody td:nth-child(7) {
-            width: 32%;
+            width: 35%;
             min-width: 0;
-            max-width: 32%;
+            max-width: 35%;
         }
 
-        /* تحسين أزرار الإجراءات على الشاشات الصغيرة جداً - حجم أكبر */
+        /* تحسين أزرار الإجراءات على الشاشات الصغيرة جداً - أعرض وأوضح */
         .dashboard-table tbody td:last-child .d-flex {
             display: grid !important;
             grid-template-columns: 1fr 1fr !important;
-            gap: 0.3rem !important;
+            gap: 0.35rem !important;
         }
 
         .dashboard-table tbody td:last-child .btn {
             width: 100%;
             justify-content: center;
-            font-size: 0.65rem !important;
-            padding: 0.35rem 0.4rem !important;
+            font-size: 0.7rem !important;
+            padding: 0.4rem 0.5rem !important;
             white-space: normal !important;
             word-break: break-word;
             line-height: 1.3;
             overflow: hidden;
             text-overflow: ellipsis;
-            min-height: 2.3rem;
+            min-height: 2.5rem;
+            font-weight: 500;
         }
 
         .dashboard-table tbody td:last-child .btn i {
-            font-size: 0.7rem !important;
+            font-size: 0.75rem !important;
             flex-shrink: 0;
+            margin-right: 0.2rem !important;
         }
 
         /* تحسين عمود الموقع على الشاشات الصغيرة */

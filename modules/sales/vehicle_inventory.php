@@ -880,14 +880,44 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                     /* جعل قسم عناصر النقل قابل للتمرير الداخلي */
                     #createTransferModal #transferItems {
                         max-height: 40vh !important;
+                        min-height: 150px !important;
                         overflow-y: auto !important;
                         overflow-x: hidden !important;
-                        -webkit-overflow-scrolling: touch;
-                        padding: 0.5rem;
-                        margin-bottom: 0.5rem;
-                        border: 1px solid rgba(0, 0, 0, 0.1);
-                        border-radius: 0.375rem;
-                        background-color: #f8f9fa;
+                        -webkit-overflow-scrolling: touch !important;
+                        padding: 0.5rem !important;
+                        margin-bottom: 0.5rem !important;
+                        border: 1px solid rgba(0, 0, 0, 0.1) !important;
+                        border-radius: 0.375rem !important;
+                        background-color: #f8f9fa !important;
+                        display: block !important;
+                        position: relative !important;
+                    }
+                    
+                    /* التأكد من أن العناصر داخل #transferItems لا تكسر التخطيط */
+                    #createTransferModal #transferItems .transfer-item {
+                        margin-bottom: 0.75rem !important;
+                    }
+                    
+                    #createTransferModal #transferItems .transfer-item:last-child {
+                        margin-bottom: 0 !important;
+                    }
+                }
+                
+                /* تطبيق نفس الإصلاح على الشاشات الكبيرة أيضاً */
+                @media (min-width: 768px) {
+                    #createTransferModal #transferItems {
+                        max-height: 50vh !important;
+                        min-height: 200px !important;
+                        overflow-y: auto !important;
+                        overflow-x: hidden !important;
+                        -webkit-overflow-scrolling: touch !important;
+                        padding: 0.75rem !important;
+                        margin-bottom: 0.75rem !important;
+                        border: 1px solid rgba(0, 0, 0, 0.1) !important;
+                        border-radius: 0.375rem !important;
+                        background-color: #f8f9fa !important;
+                        display: block !important;
+                        position: relative !important;
                     }
                     
                     #createTransferModal .modal-footer,
@@ -1845,15 +1875,25 @@ document.getElementById('transferForm')?.addEventListener('submit', function(e) 
             // جعل قسم عناصر النقل قابل للتمرير الداخلي (للمودال createTransferModal فقط)
             const transferItems = modalBody.querySelector('#transferItems');
             if (transferItems && modalId === 'createTransferModal') {
-                transferItems.style.maxHeight = '40vh';
-                transferItems.style.overflowY = 'auto';
-                transferItems.style.overflowX = 'hidden';
-                transferItems.style.webkitOverflowScrolling = 'touch';
-                transferItems.style.padding = '0.5rem';
-                transferItems.style.marginBottom = '0.5rem';
-                transferItems.style.border = '1px solid rgba(0, 0, 0, 0.1)';
-                transferItems.style.borderRadius = '0.375rem';
-                transferItems.style.backgroundColor = '#f8f9fa';
+                // تحديد max-height بناءً على حجم الشاشة
+                const isMobile = window.innerWidth <= 767.98;
+                const maxHeight = isMobile ? '40vh' : '50vh';
+                const minHeight = isMobile ? '150px' : '200px';
+                const padding = isMobile ? '0.5rem' : '0.75rem';
+                
+                // تطبيق الأنماط بشكل مباشر وقوي
+                transferItems.style.setProperty('max-height', maxHeight, 'important');
+                transferItems.style.setProperty('min-height', minHeight, 'important');
+                transferItems.style.setProperty('overflow-y', 'auto', 'important');
+                transferItems.style.setProperty('overflow-x', 'hidden', 'important');
+                transferItems.style.setProperty('-webkit-overflow-scrolling', 'touch', 'important');
+                transferItems.style.setProperty('padding', padding, 'important');
+                transferItems.style.setProperty('margin-bottom', padding, 'important');
+                transferItems.style.setProperty('border', '1px solid rgba(0, 0, 0, 0.1)', 'important');
+                transferItems.style.setProperty('border-radius', '0.375rem', 'important');
+                transferItems.style.setProperty('background-color', '#f8f9fa', 'important');
+                transferItems.style.setProperty('display', 'block', 'important');
+                transferItems.style.setProperty('position', 'relative', 'important');
             }
             
             // التأكد من أن modal-footer ثابت
@@ -1864,6 +1904,24 @@ document.getElementById('transferForm')?.addEventListener('submit', function(e) 
         // تطبيق الإصلاح عند فتح المودال
         modal.addEventListener('shown.bs.modal', function() {
             ensureFooterVisible();
+            
+            // إعادة تطبيق الأنماط على #transferItems بعد فتح المودال (للمودال createTransferModal فقط)
+            if (modalId === 'createTransferModal') {
+                setTimeout(function() {
+                    const transferItems = modalBody.querySelector('#transferItems');
+                    if (transferItems) {
+                        const isMobile = window.innerWidth <= 767.98;
+                        const maxHeight = isMobile ? '40vh' : '50vh';
+                        const minHeight = isMobile ? '150px' : '200px';
+                        
+                        transferItems.style.setProperty('max-height', maxHeight, 'important');
+                        transferItems.style.setProperty('min-height', minHeight, 'important');
+                        transferItems.style.setProperty('overflow-y', 'auto', 'important');
+                        transferItems.style.setProperty('overflow-x', 'hidden', 'important');
+                        transferItems.style.setProperty('-webkit-overflow-scrolling', 'touch', 'important');
+                    }
+                }, 150);
+            }
             
             // إضافة padding في الأسفل للمحتوى
             if (!modalBody.querySelector('.mb-footer-spacer')) {

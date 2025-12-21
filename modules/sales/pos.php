@@ -1189,17 +1189,18 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // تحديث عمولة المندوب حسب القواعد الجديدة:
                 // القاعدة 1: عند خصم من الرصيد الدائن لعميل لديه سجل مشتريات:
-                //   - يتم احتساب نسبة 2% من المبلغ كـ نسبة تحصيل للمندوب
-                //   - لا يتم إضافة هذا المبلغ إلى إجمالي تحصيلات المندوب (collections_amount)
-                //   - لا يتم تسجيله في سجل التحصيلات الخاص بالمندوب
-                //   - تُضاف النسبة مباشرة كـ bonus في الراتب
+                //   - يتم احتساب نسبة 2% من المبلغ المخصوم من الرصيد الدائن (creditUsed)
+                //   - تُضاف النسبة إلى collections_bonus فقط (لا تُضاف إلى collections_amount)
+                //   - creditUsed لا يُضاف إلى رصيد الخزنة الإجمالي لأن المبلغ لم يُحصل فعلياً
                 // القاعدة 2: عند خصم من الرصيد الدائن لعميل ليس لديه سجل مشتريات:
-                //   - لا يتم احتساب أي نسبة تحصيل للمندوب
-                // القاعدة 3: نسبة التحصيل تضاف للمندوب فقط في 3 حالات:
-                //   - البيع الكاش (full payment)
-                //   - البيع بالتحصيل الجزئي (تُحتسب النسبة فقط على المبلغ الذي تم تحصيله جزئيًا)
+                //   - يتم احتساب نسبة 2% من المبلغ المخصوم من الرصيد الدائن (creditUsed)
+                //   - تُضاف النسبة إلى collections_bonus فقط (لا تُضاف إلى collections_amount)
+                //   - creditUsed لا يُضاف إلى رصيد الخزنة الإجمالي لأن المبلغ لم يُحصل فعلياً
+                // القاعدة 3: نسبة التحصيل تضاف للمندوب في الحالات التالية:
+                //   - البيع الكاش (full payment) - تُحتسب على كامل المبلغ
+                //   - البيع بالتحصيل الجزئي - تُحتسب فقط على المبلغ المحصل
                 //   - أي مبلغ يقوم المندوب بتحصيله من العملاء من خلال صفحة العملاء
-                //   - البيع بالآجل مع استخدام الرصيد الدائن لعميل لديه رصيد دائن وسجل مرتجعات (نسبة 2%)
+                //   - خصم من الرصيد الدائن (لعميل لديه سجل مشتريات أو ليس له سجل مشتريات)
                 if (($currentUser['role'] ?? '') === 'sales') {
                     try {
                         require_once __DIR__ . '/../../includes/salary_calculator.php';
@@ -1945,19 +1946,19 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                             } else {
                                 error_log('Returns table collections commission: commission amount is zero or negative');
                             }
-                        } elseif ($creditUsed > 0.0001 && ($hasPreviousPurchases ?? false)) {
-                            // الحالة القديمة: خصم من الرصيد الدائن لعميل لديه سجل مشتريات (وليس بالضرورة رصيد دائن + مرتجعات)
+                        } elseif ($creditUsed > 0.0001 && ($hasPreviousPurchases ?? false) && !$commissionApplied) {
+                            // القاعدة الجديدة: خصم من الرصيد الدائن لعميل لديه سجل مشتريات
                             // القاعدة: عند خصم أي مبلغ من الرصيد الدائن لعميل لديه سجل مشتريات سابق
-                            // يتم احتساب نسبة 2% من المبلغ المخصوم (حتى لو كان البيع كاش أو جزئي)
-                            // ملاحظة: لا نضيف هذه النسبة إلى bonus أو collections_bonus
-                            // لأنها لا تُعتبر تحصيلاً فعلياً من العميل (تم خصمها من رصيد دائن)
-                            // يتم تجاهل هذه الحالة لتجنب إضافة مكافآت غير مطلوبة
+                            // يتم احتساب نسبة 2% من المبلغ المخصوم وإضافتها إلى collections_bonus
+                            // ملاحظة: creditUsed لا يُضاف إلى collections_amount أو خزنة المندوب
+                            // لأنه لم يُحصل فعلياً من العميل (تم خصمه من رصيد دائن)
+                            // لكن تُضاف نسبة 2% فقط إلى collections_bonus كعمولة/مكافأة
                             
                             $creditCommissionAmount = round($creditUsed * 0.02, 2);
                             
                             // تسجيل معلومات التشخيص
                             error_log(sprintf(
-                                'Credit balance commission calculation (old rule - SKIPPED): creditUsed=%.2f, hasPreviousPurchases=%s, commissionAmount=%.2f, invoiceId=%d, customerId=%d - Not adding to bonus or collections_bonus',
+                                'Credit balance commission calculation (with purchase history): creditUsed=%.2f, hasPreviousPurchases=%s, commissionAmount=%.2f, invoiceId=%d, customerId=%d',
                                 $creditUsed,
                                 ($hasPreviousPurchases ?? false) ? 'true' : 'false',
                                 $creditCommissionAmount,
@@ -1965,20 +1966,107 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $customerId
                             ));
                             
-                            // لا نضيف هذه النسبة إلى bonus أو collections_bonus
-                            // لأنها لا تُعتبر تحصيلاً فعلياً من العميل
+                            if ($creditCommissionAmount > 0) {
+                                // إضافة النسبة إلى collections_bonus
+                                try {
+                                    $timestamp = strtotime($saleDate) ?: time();
+                                    $targetMonth = (int)date('n', $timestamp);
+                                    $targetYear = (int)date('Y', $timestamp);
+                                    
+                                    $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    if (!$summary['exists']) {
+                                        $creation = createOrUpdateSalary($currentUser['id'], $targetMonth, $targetYear);
+                                        if (!($creation['success'] ?? false)) {
+                                            throw new RuntimeException('Failed to create salary record: ' . ($creation['message'] ?? 'Unknown error'));
+                                        }
+                                        $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    }
+                                    
+                                    if ($summary['exists']) {
+                                        $salary = $summary['salary'];
+                                        $salaryId = (int)($salary['id'] ?? 0);
+                                        
+                                        if ($salaryId > 0) {
+                                            // التحقق من وجود أعمدة collections_bonus
+                                            $hasCollectionsBonusColumn = ensureCollectionsBonusColumn();
+                                            
+                                            if ($hasCollectionsBonusColumn) {
+                                                // ملاحظة هامة: creditUsed لا يُضاف إلى collections_amount أو خزنة المندوب
+                                                // لأنه لم يُحصل فعلياً من العميل (تم خصمه من رصيد دائن)
+                                                // يتم إضافة 2% فقط من creditUsed إلى collections_bonus كعمولة/مكافأة
+                                                // ولا يتم إضافة creditUsed نفسه إلى collections_amount أو أي إجمالي خزنة
+                                                $db->execute(
+                                                    "UPDATE salaries SET 
+                                                        collections_bonus = COALESCE(collections_bonus, 0) + ?,
+                                                        total_amount = COALESCE(total_amount, 0) + ?
+                                                     WHERE id = ?",
+                                                    [$creditCommissionAmount, $creditCommissionAmount, $salaryId]
+                                                );
+                                                
+                                                // تسجيل العملية في السجل
+                                                if (function_exists('logAudit')) {
+                                                    logAudit(
+                                                        $currentUser['id'],
+                                                        'credit_balance_commission_with_purchase_history',
+                                                        'salary',
+                                                        $salaryId,
+                                                        null,
+                                                        [
+                                                            'invoice_id' => $invoiceId,
+                                                            'invoice_number' => $invoiceNumber ?? '',
+                                                            'customer_id' => $customerId,
+                                                            'payment_type' => $paymentType,
+                                                            'credit_used' => $creditUsed,
+                                                            'commission_amount' => $creditCommissionAmount,
+                                                            'month' => $targetMonth,
+                                                            'year' => $targetYear,
+                                                            'has_previous_purchases' => ($hasPreviousPurchases ?? false) ? 'true' : 'false',
+                                                            'note' => 'نسبة تحصيل 2% من المبلغ المدفوع من الرصيد الدائن (لعميل لديه سجل مشتريات) - creditUsed يُضاف إلى amount_added_to_sales لإجمالي المبيعات (صافي) لكن لا يُضاف إلى رصيد الخزنة الإجمالي أو التحصيلات - تُضاف إلى collections_bonus فقط'
+                                                        ]
+                                                    );
+                                                }
+                                                
+                                                error_log(sprintf(
+                                                    'Credit balance commission with purchase history applied successfully: salaryId=%d, creditUsed=%.2f, commissionAmount=%.2f (NOTE: creditUsed NOT added to collections_amount or cash register)',
+                                                    $salaryId,
+                                                    $creditUsed,
+                                                    $creditCommissionAmount
+                                                ));
+                                                
+                                                // تم تطبيق نسبة التحصيلات - منع الحساب المزدوج
+                                                $commissionApplied = true;
+                                            } else {
+                                                // إذا لم تكن الأعمدة موجودة، نستخدم bonus كحل بديل
+                                                error_log('Collections bonus columns not available, using bonus as fallback');
+                                                $db->execute(
+                                                    "UPDATE salaries SET bonus = COALESCE(bonus, 0) + ?, total_amount = COALESCE(total_amount, 0) + ? WHERE id = ?",
+                                                    [$creditCommissionAmount, $creditCommissionAmount, $salaryId]
+                                                );
+                                                $commissionApplied = true;
+                                            }
+                                        } else {
+                                            error_log('Credit balance commission with purchase history: salaryId is invalid or zero');
+                                        }
+                                    } else {
+                                        error_log('Credit balance commission with purchase history: salary summary does not exist after creation attempt');
+                                    }
+                                } catch (Throwable $creditCommissionError) {
+                                    error_log('Error applying credit balance commission with purchase history: ' . $creditCommissionError->getMessage());
+                                    error_log('Credit balance commission with purchase history error trace: ' . $creditCommissionError->getTraceAsString());
+                                }
+                            }
                         }
                         
                         // تحديث عمولة المندوب للحالات العادية
-                        // القاعدة 3: نسبة التحصيل تضاف للمندوب فقط في 3 حالات:
+                        // نسبة التحصيل تضاف للمندوب في الحالات التالية:
                         //   1. البيع الكاش (full payment) - تُحتسب على كامل المبلغ (وليس على الرصيد الدائن)
                         //   2. البيع بالتحصيل الجزئي - تُحتسب فقط على المبلغ المحصل (وليس على المبلغ المخصوم من الرصيد الدائن)
                         //   3. تحصيل من صفحة العملاء - يتم معالجته في صفحة العملاء نفسها
+                        //   4. خصم من الرصيد الدائن - تُحسب النسبة مباشرة في الكود أعلاه (لعميل لديه سجل مشتريات أو ليس له سجل مشتريات)
                         // 
                         // ملاحظة مهمة: عند استخدام الرصيد الدائن:
-                        //   - لا يتم استدعاء refreshSalesCommissionForUser لأنها تحسب من الفواتير المدفوعة بالكامل
-                        //   - النسبة تُحسب مباشرة كـ bonus في الحالة الخاصة أعلاه (لعميل لديه سجل مشتريات)
-                        //   - لا تُحسب نسبة (لعميل ليس لديه سجل مشتريات)
+                        //   - النسبة تُحسب مباشرة وتُضاف إلى collections_bonus في الحالات الخاصة أعلاه
+                        //   - creditUsed لا يُضاف إلى collections_amount أو رصيد الخزنة
                         
                         // البيع الكاش: حساب عمولة على كامل المبلغ (فقط إذا لم يكن هناك استخدام للرصيد الدائن)
                         // إذا كان البيع كاش ولكن تم استخدام الرصيد الدائن، لا نحسب عمولة على الرصيد الدائن هنا
@@ -2023,8 +2111,8 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         
                         // ملاحظة: البيع بالآجل فقط (credit) بدون كاش أو جزئي:
                         //   - إذا كان هناك خصم من رصيد دائن لعميل لديه سجل مشتريات: تُحسب النسبة في الحالة الخاصة أعلاه
-                        //   - إذا كان هناك خصم من رصيد دائن لعميل ليس لديه سجل مشتريات: لا تُحسب نسبة
-                        //   - إذا لم يكن هناك خصم من رصيد دائن: لا تُحسب نسبة (بيع بالآجل فقط)
+                        //   - إذا كان هناك خصم من رصيد دائن لعميل ليس لديه سجل مشتريات: تُحسب النسبة في الحالة الخاصة أعلاه
+                        //   - إذا لم يكن هناك خصم من رصيد دائن: لا تُحسب نسبة (بيع بالآجل فقط بدون استخدام رصيد دائن)
                         //   - لا يتم استدعاء refreshSalesCommissionForUser هنا لتجنب إضافة المبلغ المدفوع من الرصيد الدائن
                         
                         // استدعاء refreshSalesCommissionForUser في جميع الحالات لضمان حساب نسبة التحصيلات من الفواتير المدفوعة بالكامل
