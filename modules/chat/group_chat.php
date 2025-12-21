@@ -50,6 +50,13 @@ foreach ($onlineUsers as $onlineUser) {
 $membersCount = count($onlineUsers);
 ?>
 
+<style>
+/* Hide footer in chat page */
+body .footer {
+  display: none !important;
+}
+</style>
+
 <?php if ($chatCssContent !== ''): ?>
 <style><?php echo $chatCssContent; ?></style>
 <?php else: ?>

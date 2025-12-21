@@ -51,6 +51,7 @@
     isRecording: false,
     audioChunks: [],
     audioStream: null, // حفظ stream لإيقافه لاحقاً
+    pendingMessages: new Map(), // لتتبع الرسائل المؤقتة أثناء الإرسال
   };
 
   const elements = {};
@@ -807,6 +808,133 @@
 
     elements.messageList.innerHTML = '';
     elements.messageList.appendChild(fragment);
+    
+    // Re-render pending messages after regular messages
+    if (state.pendingMessages.size > 0) {
+      state.pendingMessages.forEach((pending, pendingId) => {
+        const messageElement = createPendingMessageElement(pending, pendingId);
+        elements.messageList.appendChild(messageElement);
+      });
+      scrollToBottom(true);
+    }
+    
+    // Setup audio replay handlers after rendering
+    setupAudioReplayHandlers();
+  }
+
+  function addPendingMessage(type, fileName = '') {
+    const pendingId = 'pending_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const pendingMessage = {
+      id: pendingId,
+      type: type, // 'file', 'image', 'audio'
+      fileName: fileName,
+      timestamp: new Date().toISOString(),
+    };
+    
+    state.pendingMessages.set(pendingId, pendingMessage);
+    renderPendingMessages();
+    scrollToBottom(true);
+    
+    return pendingId;
+  }
+
+  function removePendingMessage(pendingId) {
+    if (state.pendingMessages.has(pendingId)) {
+      state.pendingMessages.delete(pendingId);
+      renderPendingMessages();
+    }
+  }
+
+  function renderPendingMessages() {
+    if (!elements.messageList) {
+      return;
+    }
+
+    // Remove existing pending messages
+    const existingPending = elements.messageList.querySelectorAll('[data-pending-message]');
+    existingPending.forEach(el => el.remove());
+
+    // Add all pending messages at the end
+    state.pendingMessages.forEach((pending, pendingId) => {
+      const messageElement = createPendingMessageElement(pending, pendingId);
+      elements.messageList.appendChild(messageElement);
+    });
+    
+    if (state.pendingMessages.size > 0) {
+      requestAnimationFrame(() => {
+        scrollToBottom(true);
+      });
+    }
+  }
+
+  function createPendingMessageElement(pending, pendingId) {
+    const outgoing = true; // Always outgoing for pending messages
+    const messageElement = document.createElement('div');
+    messageElement.className = `chat-message outgoing pending`;
+    messageElement.dataset.pendingMessage = pendingId;
+
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-message-bubble pending-message';
+
+    const content = document.createElement('div');
+    content.className = 'chat-message-content';
+
+    const body = document.createElement('div');
+    body.className = 'chat-message-body';
+    
+    let messageText = '';
+    if (pending.type === 'audio') {
+      messageText = '🎤 جاري إرسال التسجيل الصوتي...';
+    } else if (pending.type === 'image') {
+      messageText = '🖼️ جاري إرسال الصورة...';
+    } else {
+      messageText = `📎 جاري إرسال الملف: ${escapeHTML(pending.fileName)}...`;
+    }
+    
+    body.innerHTML = `
+      <div class="pending-message-content">
+        <span class="pending-spinner"></span>
+        <span class="pending-text">${messageText}</span>
+      </div>
+    `;
+    
+    content.appendChild(body);
+    bubble.appendChild(content);
+    messageElement.appendChild(bubble);
+
+    return messageElement;
+  }
+
+  function setupAudioReplayHandlers() {
+    if (!elements.messageList) {
+      return;
+    }
+    
+    const audioElements = elements.messageList.querySelectorAll('audio');
+    audioElements.forEach((audioEl) => {
+      // Remove existing listeners to avoid duplicates
+      const newAudio = audioEl.cloneNode(true);
+      audioEl.parentNode.replaceChild(newAudio, audioEl);
+      
+      // Allow replay after audio ends
+      newAudio.addEventListener('ended', function() {
+        // Reset to beginning but don't auto-play
+        this.currentTime = 0;
+      });
+      
+      // Reset on error to allow retry
+      newAudio.addEventListener('error', function() {
+        this.load();
+      });
+      
+      // Ensure controls are always available for replay
+      newAudio.addEventListener('pause', function() {
+        // Keep controls visible
+        if (this.ended) {
+          this.currentTime = 0;
+        }
+      });
+    });
   }
 
   function createDayDivider(label) {
@@ -1099,16 +1227,14 @@
             </div>
           `;
         } else if (isAudio) {
+          // Generate unique ID for this audio element
+          const audioId = 'audio_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
           return `
             <div class="chat-message-attachment chat-attachment-audio">
-              <audio controls preload="metadata">
+              <audio id="${audioId}" controls preload="metadata" style="width: 100%; max-width: 250px;">
                 <source src="${safeFileUrl}" type="audio/${fileExtension === 'mp3' ? 'mpeg' : fileExtension === 'webm' ? 'webm' : fileExtension}">
                 متصفحك لا يدعم تشغيل الصوت.
               </audio>
-              <div class="chat-attachment-info">
-                <span class="chat-attachment-name">${fileName}</span>
-                <a href="${safeFileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
-              </div>
             </div>
           `;
         } else {
@@ -1542,12 +1668,16 @@
   }
 
   async function sendAudioMessage(audioBlob) {
+    let pendingId = null;
     try {
       // التحقق من حجم الملف
       if (!audioBlob || audioBlob.size === 0) {
         showToast('التسجيل فارغ. حاول مرة أخرى.', true);
         return;
       }
+
+      // إضافة رسالة مؤقتة
+      pendingId = addPendingMessage('audio', 'تسجيل صوتي');
 
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
@@ -1565,6 +1695,11 @@
         throw new Error(data.error || 'تعذر إرسال التسجيل الصوتي');
       }
 
+      // إزالة الرسالة المؤقتة
+      if (pendingId) {
+        removePendingMessage(pendingId);
+      }
+
       clearReplyAndEdit();
       appendMessages([data.data], true);
       showToast('تم إرسال التسجيل الصوتي');
@@ -1574,6 +1709,9 @@
       }, 500);
     } catch (error) {
       console.error('Error sending audio:', error);
+      if (pendingId) {
+        removePendingMessage(pendingId);
+      }
       showToast(error.message || 'حدث خطأ أثناء إرسال التسجيل', true);
     }
   }
@@ -1610,9 +1748,17 @@
   }
 
   async function sendFile(file) {
+    let pendingId = null;
     try {
       state.isSending = true;
       toggleComposerDisabled(true);
+
+      // تحديد نوع الملف
+      const isImage = file.type.startsWith('image/');
+      const fileType = isImage ? 'image' : 'file';
+      
+      // إضافة رسالة مؤقتة
+      pendingId = addPendingMessage(fileType, file.name);
 
       const formData = new FormData();
       formData.append('file', file);
@@ -1630,6 +1776,11 @@
         throw new Error(data.error || 'تعذر إرسال الملف');
       }
 
+      // إزالة الرسالة المؤقتة
+      if (pendingId) {
+        removePendingMessage(pendingId);
+      }
+
       clearReplyAndEdit();
       appendMessages([data.data], true);
       showToast('تم إرسال الملف');
@@ -1639,6 +1790,9 @@
       }, 500);
     } catch (error) {
       console.error(error);
+      if (pendingId) {
+        removePendingMessage(pendingId);
+      }
       showToast(error.message || 'حدث خطأ أثناء إرسال الملف', true);
     } finally {
       state.isSending = false;
