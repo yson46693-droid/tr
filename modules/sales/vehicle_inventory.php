@@ -830,10 +830,11 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                     }
                 }
 
-                /* إصلاح ظهور الأزرار السفلية للمودال على الهاتف */
+                /* إصلاح ظهور الأزرار السفلية للمودالات على الهاتف */
                 @media (max-width: 767.98px) {
                     /* Modal إنشاء طلب نقل */
-                    #createTransferModal .modal-dialog {
+                    #createTransferModal .modal-dialog,
+                    #addVehicleModal .modal-dialog {
                         margin: 0.5rem;
                         max-height: calc(100vh - 1rem);
                         height: calc(100vh - 1rem);
@@ -841,30 +842,37 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                         flex-direction: column;
                     }
                     
-                    #createTransferModal .modal-dialog.modal-dialog-scrollable {
+                    #createTransferModal .modal-dialog.modal-dialog-scrollable,
+                    #addVehicleModal .modal-dialog.modal-dialog-scrollable {
                         overflow: hidden;
                     }
                     
-                    #createTransferModal .modal-content {
+                    #createTransferModal .modal-content,
+                    #addVehicleModal .modal-content {
                         max-height: 100%;
                         height: 100%;
                         display: flex;
                         flex-direction: column;
                     }
                     
-                    #createTransferModal .modal-header {
+                    #createTransferModal .modal-header,
+                    #addVehicleModal .modal-header {
                         flex-shrink: 0;
                     }
                     
-                    #createTransferModal .modal-body {
+                    #createTransferModal .modal-body,
+                    #addVehicleModal .modal-body {
                         flex: 1;
-                        overflow-y: auto;
-                        overflow-x: hidden;
+                        overflow-y: auto !important;
+                        overflow-x: hidden !important;
                         -webkit-overflow-scrolling: touch;
                         padding-bottom: 1rem;
+                        min-height: 0; /* مهم لضمان عمل flexbox بشكل صحيح */
+                        max-height: none !important; /* إزالة أي max-height محددة inline */
                     }
                     
-                    #createTransferModal .modal-footer {
+                    #createTransferModal .modal-footer,
+                    #addVehicleModal .modal-footer {
                         flex-shrink: 0;
                         background: rgba(255, 255, 255, 0.98);
                         backdrop-filter: blur(6px);
@@ -880,7 +888,8 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                         z-index: 10;
                     }
                     
-                    #createTransferModal .modal-footer .btn {
+                    #createTransferModal .modal-footer .btn,
+                    #addVehicleModal .modal-footer .btn {
                         width: 100%;
                         margin: 0;
                     }
@@ -1168,7 +1177,7 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
             </div>
             <form method="POST" id="transferForm">
                 <input type="hidden" name="action" value="create_transfer">
-                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <div class="modal-body">
                     <div class="row g-3 mb-3">
                         <div class="col-12 col-md-6">
                             <label class="form-label">من المخزن <span class="text-danger">*</span></label>
@@ -1222,11 +1231,6 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                             <label class="form-label">تاريخ النقل <span class="text-danger">*</span></label>
                             <input type="date" class="form-control form-control-lg" name="transfer_date" 
                                    value="<?php echo date('Y-m-d'); ?>" required>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label">السبب</label>
-                            <input type="text" class="form-control form-control-lg" name="reason" 
-                                   placeholder="مثال: تعبئة سيارة المندوب">
                         </div>
                     </div>
                     
@@ -1786,6 +1790,133 @@ document.getElementById('transferForm')?.addEventListener('submit', function(e) 
             // إعادة تحميل الصفحة
             window.location.href = currentUrl.toString();
         }, 3000);
+    }
+})();
+
+// إصلاح ظهور الأزرار السفلية للمودالات على الهاتف عند فتح لوحة المفاتيح
+(function() {
+    'use strict';
+    
+    function fixModalForMobile(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        
+        const modalBody = modal.querySelector('.modal-body');
+        const modalFooter = modal.querySelector('.modal-footer');
+        if (!modalBody || !modalFooter) return;
+        
+        // عند فتح المودال
+        modal.addEventListener('shown.bs.modal', function() {
+            // التأكد من إضافة padding في الأسفل للمحتوى
+            const lastElement = modalBody.lastElementChild;
+            if (lastElement && !lastElement.classList.contains('mb-footer-spacer')) {
+                const spacer = document.createElement('div');
+                spacer.className = 'mb-footer-spacer';
+                spacer.style.height = '1rem';
+                modalBody.appendChild(spacer);
+            }
+            
+            // التأكد من أن modal-body قابل للسكرول
+            modalBody.style.overflowY = 'auto';
+            modalBody.style.maxHeight = 'none';
+        });
+        
+        // عند focus على input/select/textarea
+        modal.addEventListener('focusin', function(e) {
+            if (e.target && (e.target.tagName === 'INPUT' || 
+                            e.target.tagName === 'SELECT' || 
+                            e.target.tagName === 'TEXTAREA')) {
+                // Scroll إلى العنصر لضمان ظهوره
+                setTimeout(function() {
+                    const targetRect = e.target.getBoundingClientRect();
+                    const modalBodyRect = modalBody.getBoundingClientRect();
+                    const modalFooterRect = modalFooter.getBoundingClientRect();
+                    
+                    // إذا كان العنصر مخفياً بسبب modal-footer
+                    if (targetRect.bottom > modalFooterRect.top - 20) {
+                        e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 300);
+            }
+        }, true);
+        
+        // مراقبة إضافة عناصر جديدة في modal-body
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.addedNodes.length > 0) {
+                    // تمت إضافة عناصر جديدة - التأكد من ظهور modal-footer
+                    setTimeout(function() {
+                        // Scroll إلى آخر عنصر مضافة إذا لزم الأمر
+                        const lastChild = modalBody.lastElementChild;
+                        if (lastChild && !lastChild.classList.contains('mb-footer-spacer')) {
+                            const lastChildRect = lastChild.getBoundingClientRect();
+                            const modalFooterRect = modalFooter.getBoundingClientRect();
+                            
+                            // إذا كان آخر عنصر مخفياً بسبب modal-footer، scroll
+                            if (lastChildRect.bottom > modalFooterRect.top - 20) {
+                                lastChild.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            }
+                        }
+                    }, 100);
+                }
+            });
+        });
+        
+        observer.observe(modalBody, { childList: true, subtree: true });
+        
+        // عند فتح لوحة المفاتيح (visualViewport API)
+        if (window.visualViewport) {
+            function handleViewportResize() {
+                const viewport = window.visualViewport;
+                const viewportHeight = viewport.height;
+                const windowHeight = window.innerHeight;
+                
+                // إذا كانت لوحة المفاتيح مفتوحة
+                if (viewportHeight < windowHeight * 0.75) {
+                    // تعديل max-height للمودال
+                    const modalDialog = modal.querySelector('.modal-dialog');
+                    if (modalDialog) {
+                        modalDialog.style.maxHeight = viewportHeight + 'px';
+                    }
+                    
+                    // التأكد من أن modal-footer مرئي
+                    if (modalFooter) {
+                        modalFooter.style.position = 'sticky';
+                        modalFooter.style.bottom = '0';
+                        modalFooter.style.zIndex = '1000';
+                    }
+                } else {
+                    // إعادة القيم الافتراضية
+                    const modalDialog = modal.querySelector('.modal-dialog');
+                    if (modalDialog) {
+                        modalDialog.style.maxHeight = '';
+                    }
+                }
+            }
+            
+            window.visualViewport.addEventListener('resize', handleViewportResize);
+            
+            // تنظيف عند إغلاق المودال
+            modal.addEventListener('hidden.bs.modal', function() {
+                window.visualViewport.removeEventListener('resize', handleViewportResize);
+                observer.disconnect();
+            });
+        }
+    }
+    
+    // تطبيق الإصلاح على جميع المودالات
+    const modalsToFix = ['createTransferModal', 'addVehicleModal'];
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            modalsToFix.forEach(function(modalId) {
+                fixModalForMobile(modalId);
+            });
+        });
+    } else {
+        modalsToFix.forEach(function(modalId) {
+            fixModalForMobile(modalId);
+        });
     }
 })();
 </script>
