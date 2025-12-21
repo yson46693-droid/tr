@@ -134,6 +134,15 @@ $membersCount = count($onlineUsers);
                     rows="1"
                     placeholder="Type message..."
                     autocomplete="off"></textarea>
+                <input type="file" id="chat-file-input" style="display: none;" accept="*/*" data-chat-file-input>
+                <input type="file" id="chat-image-input" style="display: none;" accept="image/*,video/*" capture="environment" data-chat-image-input>
+                <button class="chat-icon-button chat-image-button" type="button" title="صور/فيديو" data-chat-image aria-label="صور/فيديو">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                </button>
                 <button class="chat-icon-button chat-mic-button" type="button" title="تسجيل صوتي" data-chat-mic aria-label="تسجيل صوتي">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>

@@ -24,6 +24,11 @@
     sidebar: '[data-chat-sidebar]',
     sidebarOverlay: '[data-chat-sidebar-overlay]',
     themeToggle: '[data-chat-theme-toggle]',
+    micButton: '[data-chat-mic]',
+    attachButton: '[data-chat-attach]',
+    imageButton: '[data-chat-image]',
+    fileInput: '[data-chat-file-input]',
+    imageInput: '[data-chat-image-input]',
   };
 
   const state = {
@@ -38,6 +43,9 @@
     isSending: false,
     initialized: false,
     pendingFetchTimeout: null,
+    mediaRecorder: null,
+    isRecording: false,
+    audioChunks: [],
   };
 
   const elements = {};
@@ -72,6 +80,11 @@
     elements.sidebar = app.querySelector(selectors.sidebar);
     elements.sidebarOverlay = document.querySelector(selectors.sidebarOverlay);
     elements.themeToggle = app.querySelector(selectors.themeToggle);
+    elements.micButton = app.querySelector(selectors.micButton);
+    elements.attachButton = app.querySelector(selectors.attachButton);
+    elements.imageButton = app.querySelector(selectors.imageButton);
+    elements.fileInput = document.querySelector(selectors.fileInput);
+    elements.imageInput = document.querySelector(selectors.imageInput);
 
     currentUser.id = parseInt(app.dataset.currentUserId || '0', 10);
     currentUser.name = app.dataset.currentUserName || '';
@@ -125,6 +138,29 @@
 
     if (elements.themeToggle) {
       elements.themeToggle.addEventListener('click', toggleTheme);
+    }
+
+    if (elements.micButton) {
+      elements.micButton.addEventListener('click', handleMicClick);
+      elements.micButton.addEventListener('mousedown', handleMicStart);
+      elements.micButton.addEventListener('mouseup', handleMicStop);
+      elements.micButton.addEventListener('mouseleave', handleMicStop);
+      elements.micButton.addEventListener('touchstart', handleMicStart, { passive: true });
+      elements.micButton.addEventListener('touchend', handleMicStop, { passive: true });
+    }
+
+    if (elements.attachButton && elements.fileInput) {
+      elements.attachButton.addEventListener('click', () => {
+        elements.fileInput.click();
+      });
+      elements.fileInput.addEventListener('change', handleFileSelect);
+    }
+
+    if (elements.imageButton && elements.imageInput) {
+      elements.imageButton.addEventListener('click', () => {
+        elements.imageInput.click();
+      });
+      elements.imageInput.addEventListener('change', handleImageSelect);
     }
 
     // Close sidebar when clicking outside on mobile
@@ -1127,6 +1163,173 @@
 
   function escapeAttribute(value) {
     return String(value || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // Microphone recording functions
+  async function handleMicClick() {
+    if (!state.isRecording) {
+      await startRecording();
+    } else {
+      stopRecording();
+    }
+  }
+
+  async function handleMicStart(e) {
+    e.preventDefault();
+    if (!state.isRecording) {
+      await startRecording();
+    }
+  }
+
+  function handleMicStop(e) {
+    e.preventDefault();
+    if (state.isRecording) {
+      stopRecording();
+    }
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      state.mediaRecorder = new MediaRecorder(stream);
+      state.audioChunks = [];
+
+      state.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          state.audioChunks.push(event.data);
+        }
+      };
+
+      state.mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(state.audioChunks, { type: 'audio/webm' });
+        await sendAudioMessage(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      state.mediaRecorder.start();
+      state.isRecording = true;
+      
+      if (elements.micButton) {
+        elements.micButton.classList.add('recording');
+        elements.micButton.style.color = 'var(--chat-red)';
+      }
+      
+      showToast('جاري التسجيل... اضغط مرة أخرى لإيقاف التسجيل');
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      showToast('تعذر الوصول إلى الميكروفون. تأكد من السماح بالوصول.', true);
+    }
+  }
+
+  function stopRecording() {
+    if (state.mediaRecorder && state.isRecording) {
+      state.mediaRecorder.stop();
+      state.isRecording = false;
+      
+      if (elements.micButton) {
+        elements.micButton.classList.remove('recording');
+        elements.micButton.style.color = '';
+      }
+    }
+  }
+
+  async function sendAudioMessage(audioBlob) {
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      formData.append('reply_to', state.replyTo ? state.replyTo.id : '');
+
+      const response = await fetch(`${API_BASE}/send_audio.php`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'تعذر إرسال التسجيل الصوتي');
+      }
+
+      clearReplyAndEdit();
+      appendMessages([data.data], true);
+      showToast('تم إرسال التسجيل الصوتي');
+      scrollToBottom(true);
+      setTimeout(() => {
+        fetchMessages();
+      }, 500);
+    } catch (error) {
+      console.error(error);
+      showToast(error.message || 'حدث خطأ أثناء إرسال التسجيل', true);
+    }
+  }
+
+  // File attachment functions
+  function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) {
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) { // 50MB limit
+      showToast('حجم الملف كبير جداً. الحد الأقصى 50 ميجابايت', true);
+      return;
+    }
+
+    sendFile(file);
+    event.target.value = ''; // Reset input
+  }
+
+  function handleImageSelect(event) {
+    const file = event.target.files[0];
+    if (!file) {
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) { // 50MB limit
+      showToast('حجم الملف كبير جداً. الحد الأقصى 50 ميجابايت', true);
+      return;
+    }
+
+    sendFile(file);
+    event.target.value = ''; // Reset input
+  }
+
+  async function sendFile(file) {
+    try {
+      state.isSending = true;
+      toggleComposerDisabled(true);
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('reply_to', state.replyTo ? state.replyTo.id : '');
+
+      const response = await fetch(`${API_BASE}/send_file.php`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'تعذر إرسال الملف');
+      }
+
+      clearReplyAndEdit();
+      appendMessages([data.data], true);
+      showToast('تم إرسال الملف');
+      scrollToBottom(true);
+      setTimeout(() => {
+        fetchMessages();
+      }, 500);
+    } catch (error) {
+      console.error(error);
+      showToast(error.message || 'حدث خطأ أثناء إرسال الملف', true);
+    } finally {
+      state.isSending = false;
+      toggleComposerDisabled(false);
+    }
   }
 
   document.addEventListener('DOMContentLoaded', init);
