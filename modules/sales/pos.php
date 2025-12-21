@@ -1330,7 +1330,7 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                             if ($calculatedCreditUsed > 0.0001) {
                                 $creditUsed = $calculatedCreditUsed;
                                 
-                                error_log(sprintf(
+                                    error_log(sprintf(
                                     'Recalculated creditUsed for credit payment commission: originalCreditUsed=%.2f, calculatedCreditUsed=%.2f, netTotal=%.2f, creditAvailable=%.2f, originalBalance=%.2f, invoiceId=%d',
                                     $creditUsed ?? 0,
                                     $calculatedCreditUsed,
@@ -1339,10 +1339,11 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $originalBalance ?? 0,
                                     $invoiceId
                                 ));
-                            // حساب نسبة 2% على المبلغ المستخدم من الرصيد الدائن
-                            $creditPaymentCommissionAmount = round($creditUsed * 0.02, 2);
-                            
-                            if ($creditPaymentCommissionAmount > 0) {
+                                
+                                // حساب نسبة 2% على المبلغ المستخدم من الرصيد الدائن
+                                $creditPaymentCommissionAmount = round($calculatedCreditUsed * 0.02, 2);
+                                
+                                if ($creditPaymentCommissionAmount > 0) {
                                 try {
                                     $timestamp = strtotime($saleDate) ?: time();
                                     $targetMonth = (int)date('n', $timestamp);
@@ -1372,12 +1373,12 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                                                          collections_amount = COALESCE(collections_amount, 0) + ?,
                                                          updated_at = NOW()
                                                      WHERE id = ?",
-                                                    [$creditPaymentCommissionAmount, $creditUsed, $salaryId]
+                                                    [$creditPaymentCommissionAmount, $calculatedCreditUsed, $salaryId]
                                                 );
                                                 
                                                 error_log(sprintf(
                                                     'Added collection percentage for credit payment with credit balance: creditUsed=%.2f, commissionAmount=%.2f, invoiceId=%d, customerId=%d, originalBalance=%.2f, hasPreviousPurchases=%s',
-                                                    $creditUsed,
+                                                    $calculatedCreditUsed,
                                                     $creditPaymentCommissionAmount,
                                                     $invoiceId,
                                                     $customerId,
@@ -1391,8 +1392,26 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                                     }
                                 } catch (Throwable $creditPaymentCommissionError) {
                                     error_log('Error adding collection percentage for credit payment with credit balance: ' . $creditPaymentCommissionError->getMessage());
+                                    error_log('Credit payment commission error trace: ' . $creditPaymentCommissionError->getTraceAsString());
                                 }
+                            } else {
+                                error_log(sprintf(
+                                    'WARNING: calculatedCreditUsed is zero or negative: calculatedCreditUsed=%.2f, netTotal=%.2f, creditAvailable=%.2f, originalBalance=%.2f, invoiceId=%d',
+                                    $calculatedCreditUsed,
+                                    $netTotal,
+                                    $creditAvailable,
+                                    $originalBalance ?? 0,
+                                    $invoiceId
+                                ));
                             }
+                        } else {
+                            error_log(sprintf(
+                                'DEBUG: Credit payment commission NOT applied: hasCreditBalance=%s, paymentType=%s, commissionApplied=%s, invoiceId=%d',
+                                $hasCreditBalance ? 'true' : 'false',
+                                $paymentType ?? 'NULL',
+                                $commissionApplied ? 'true' : 'false',
+                                $invoiceId
+                            ));
                         }
                         
                         // التحقق من أن العميل ليس له سجل مشتريات قبل حساب النسبة
@@ -2028,51 +2047,9 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $conn->commit();
-
-                // محاولة إنشاء الفاتورة وإرسالها إلى تليجرام بعد نجاح المعاملة
-                // نستخدم try-catch منفصل لضمان عدم تأثير أي أخطاء على نجاح عملية البيع
-                try {
-                    $invoiceData = getInvoice($invoiceId);
-                    
-                    if (!$invoiceData) {
-                        error_log(sprintf('Failed to get invoice data for invoiceId=%d after POS sale', $invoiceId));
-                    } else {
-                        $invoiceMeta = [
-                            'payment_type' => $paymentType,
-                            'summary' => [
-                                'subtotal' => $subtotal,
-                                'prepaid' => $prepaidAmount,
-                                'net_total' => $netTotal,
-                                'paid' => $effectivePaidAmount,
-                                'due_before_credit' => $baseDueAmount,
-                                'credit_used' => $creditUsed,
-                                'due' => $dueAmount,
-                            ],
-                        ];
-                        
-                        $reportInfo = storeSalesInvoiceDocument($invoiceData, $invoiceMeta);
-                        
-                        if (!$reportInfo) {
-                            error_log(sprintf('Failed to store invoice document for invoiceId=%d after POS sale', $invoiceId));
-                        } else {
-                            // إرسال الفاتورة إلى تليجرام
-                            $telegramResult = sendReportAndDelete($reportInfo, 'sales_pos_invoice', 'فاتورة نقطة بيع المندوب');
-                            $reportInfo['telegram_sent'] = !empty($telegramResult['success']);
-                            
-                            if (empty($telegramResult['success'])) {
-                                error_log(sprintf('Failed to send invoice to Telegram for invoiceId=%d: %s', $invoiceId, $telegramResult['message'] ?? 'Unknown error'));
-                            } else {
-                                error_log(sprintf('Successfully sent invoice to Telegram for invoiceId=%d', $invoiceId));
-                            }
-                            
-                            $posInvoiceLinks = $reportInfo;
-                        }
-                    }
-                } catch (Throwable $invoiceError) {
-                    // تسجيل الخطأ ولكن عدم إيقاف العملية
-                    error_log(sprintf('Error generating/sending invoice after POS sale (invoiceId=%d): %s', $invoiceId, $invoiceError->getMessage()));
-                    error_log('Invoice error trace: ' . $invoiceError->getTraceAsString());
-                }
+                
+                // تسجيل نجاح commit للمساعدة في التشخيص
+                error_log(sprintf('Transaction committed successfully for invoiceId=%d, invoiceNumber=%s', $invoiceId, $invoiceNumber ?? 'N/A'));
 
                 $success = 'تم إتمام عملية البيع بنجاح. رقم الفاتورة: ' . htmlspecialchars($invoiceNumber);
                 if ($createdCustomerId) {
@@ -2112,6 +2089,87 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $conn->rollback();
                 }
                 $error = 'حدث خطأ أثناء حفظ عملية البيع: ' . $exception->getMessage();
+                // في حالة حدوث خطأ، لا نستمر في إنشاء الفاتورة
+                $invoiceId = null;
+            }
+            
+            // إنشاء الفاتورة وإرسالها إلى تليجرام بعد نجاح المعاملة (خارج try-catch الرئيسي)
+            // لضمان تنفيذها حتى لو حدث خطأ في مكان آخر بعد commit
+            if (!empty($invoiceId) && $invoiceId > 0 && empty($error)) {
+                try {
+                    error_log(sprintf('Starting invoice document generation (outside main try-catch) for invoiceId=%d', $invoiceId));
+                    
+                    // التأكد من أن جميع المتغيرات المطلوبة موجودة
+                    if (!isset($paymentType)) {
+                        $paymentType = 'full';
+                    }
+                    if (!isset($subtotal)) $subtotal = 0;
+                    if (!isset($prepaidAmount)) $prepaidAmount = 0;
+                    if (!isset($netTotal)) $netTotal = 0;
+                    if (!isset($effectivePaidAmount)) $effectivePaidAmount = 0;
+                    if (!isset($baseDueAmount)) $baseDueAmount = 0;
+                    if (!isset($creditUsed)) $creditUsed = 0;
+                    if (!isset($dueAmount)) $dueAmount = 0;
+                    
+                    $invoiceData = getInvoice($invoiceId);
+                    
+                    if (!$invoiceData) {
+                        error_log(sprintf('ERROR: Failed to get invoice data for invoiceId=%d after POS sale', $invoiceId));
+                        throw new RuntimeException('Failed to retrieve invoice data');
+                    }
+                    
+                    error_log(sprintf('Invoice data retrieved successfully for invoiceId=%d', $invoiceId));
+                    
+                    $invoiceMeta = [
+                        'payment_type' => $paymentType,
+                        'summary' => [
+                            'subtotal' => $subtotal,
+                            'prepaid' => $prepaidAmount,
+                            'net_total' => $netTotal,
+                            'paid' => $effectivePaidAmount,
+                            'due_before_credit' => $baseDueAmount,
+                            'credit_used' => $creditUsed,
+                            'due' => $dueAmount,
+                        ],
+                    ];
+                    
+                    error_log(sprintf('Calling storeSalesInvoiceDocument for invoiceId=%d', $invoiceId));
+                    $reportInfo = storeSalesInvoiceDocument($invoiceData, $invoiceMeta);
+                    
+                    if (!$reportInfo) {
+                        error_log(sprintf('ERROR: storeSalesInvoiceDocument returned null for invoiceId=%d', $invoiceId));
+                        throw new RuntimeException('Failed to store invoice document');
+                    }
+                    
+                    error_log(sprintf('Invoice document stored successfully for invoiceId=%d', $invoiceId));
+                    
+                    // إرسال الفاتورة إلى تليجرام
+                    error_log(sprintf('Calling sendReportAndDelete for invoiceId=%d', $invoiceId));
+                    $telegramResult = sendReportAndDelete($reportInfo, 'sales_pos_invoice', 'فاتورة نقطة بيع المندوب');
+                    $reportInfo['telegram_sent'] = !empty($telegramResult['success']);
+                    
+                    if (empty($telegramResult['success'])) {
+                        error_log(sprintf('WARNING: Failed to send invoice to Telegram for invoiceId=%d: %s', $invoiceId, $telegramResult['message'] ?? 'Unknown error'));
+                    } else {
+                        error_log(sprintf('SUCCESS: Invoice sent to Telegram for invoiceId=%d', $invoiceId));
+                    }
+                    
+                    $posInvoiceLinks = $reportInfo;
+                    error_log(sprintf('Invoice processing completed successfully for invoiceId=%d', $invoiceId));
+                    
+                } catch (Throwable $invoiceError) {
+                    // تسجيل الخطأ بالتفصيل ولكن عدم إيقاف العملية
+                    error_log(sprintf('CRITICAL ERROR in invoice generation/sending after POS sale (invoiceId=%d): %s', $invoiceId, $invoiceError->getMessage()));
+                    error_log('Invoice error trace: ' . $invoiceError->getTraceAsString());
+                    error_log('Invoice error file: ' . $invoiceError->getFile() . ' line: ' . $invoiceError->getLine());
+                }
+            } else {
+                if (empty($invoiceId)) {
+                    error_log('Skipping invoice generation: invoiceId is empty');
+                }
+                if (!empty($error)) {
+                    error_log('Skipping invoice generation due to error: ' . $error);
+                }
             }
         } else {
             $error = implode('<br>', array_map('htmlspecialchars', $validationErrors));
