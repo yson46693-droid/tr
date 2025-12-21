@@ -3940,9 +3940,8 @@ document.addEventListener('DOMContentLoaded', function () {
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         box-sizing: border-box !important;
-        font-size: 0.8rem !important;
-        padding: 0.5rem 0.7rem !important;
-        min-height: 2.8rem;
+        font-size: 0.75rem !important;
+        padding: 0.35rem 0.8rem !important;
         font-weight: 500;
     }
 
@@ -4069,7 +4068,7 @@ document.addEventListener('DOMContentLoaded', function () {
             font-size: 0.75rem;
         }
 
-        /* تحسين أزرار الإجراءات على الشاشات المتوسطة - أعرض وأوضح */
+        /* تحسين أزرار الإجراءات على الشاشات المتوسطة - أعرض فقط */
         .dashboard-table tbody td:last-child .d-flex {
             gap: 0.35rem !important;
         }
@@ -4077,14 +4076,13 @@ document.addEventListener('DOMContentLoaded', function () {
         .dashboard-table tbody td:last-child .btn {
             width: 100%;
             justify-content: center;
-            font-size: 0.75rem !important;
-            padding: 0.45rem 0.6rem !important;
+            font-size: 0.7rem !important;
+            padding: 0.35rem 0.7rem !important;
             white-space: normal !important;
             word-break: break-word;
             line-height: 1.3;
             overflow: hidden;
             text-overflow: ellipsis;
-            min-height: 2.6rem;
             font-weight: 500;
         }
 
@@ -4215,7 +4213,7 @@ document.addEventListener('DOMContentLoaded', function () {
             max-width: 35%;
         }
 
-        /* تحسين أزرار الإجراءات على الشاشات الصغيرة جداً - أعرض وأوضح */
+        /* تحسين أزرار الإجراءات على الشاشات الصغيرة جداً - أعرض فقط */
         .dashboard-table tbody td:last-child .d-flex {
             display: grid !important;
             grid-template-columns: 1fr 1fr !important;
@@ -4225,14 +4223,13 @@ document.addEventListener('DOMContentLoaded', function () {
         .dashboard-table tbody td:last-child .btn {
             width: 100%;
             justify-content: center;
-            font-size: 0.7rem !important;
-            padding: 0.4rem 0.5rem !important;
+            font-size: 0.65rem !important;
+            padding: 0.3rem 0.6rem !important;
             white-space: normal !important;
             word-break: break-word;
             line-height: 1.3;
             overflow: hidden;
             text-overflow: ellipsis;
-            min-height: 2.5rem;
             font-weight: 500;
         }
 
