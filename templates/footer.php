@@ -512,6 +512,9 @@ if (!defined('ACCESS_ALLOWED')) {
     <script src="<?php echo $assetsUrl; ?>js/main.js?v=<?php echo $cacheVersion; ?>" defer></script>
     <script src="<?php echo $assetsUrl; ?>js/sidebar.js?v=<?php echo $cacheVersion; ?>" defer></script>
     
+    <!-- Modal Mobile Fix JS - إصلاح النماذج على الهواتف المحمولة -->
+    <script src="<?php echo $assetsUrl; ?>js/modal-mobile-fix.js?v=<?php echo $cacheVersion; ?>" defer></script>
+    
     <!-- Medium Priority JS - تحميل مباشر -->
     <script src="<?php echo $assetsUrl; ?>js/fix-modal-interaction.js?v=<?php echo $cacheVersion; ?>" defer></script>
     <script src="<?php echo $assetsUrl; ?>js/notifications.js?v=<?php echo $cacheVersion; ?>" defer></script>

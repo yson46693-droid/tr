@@ -327,6 +327,10 @@ if (ob_get_level() > 0) {
     <link href="<?php echo $assetsUrl; ?>css/sidebar.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
     <noscript><link href="<?php echo $assetsUrl; ?>css/sidebar.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
     
+    <!-- Modal Mobile Fix CSS - إصلاح النماذج على الهواتف المحمولة -->
+    <link href="<?php echo $assetsUrl; ?>css/modal-mobile-fix.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="<?php echo $assetsUrl; ?>css/modal-mobile-fix.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
+    
     <link href="<?php echo $assetsUrl; ?>css/cards.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
     <noscript><link href="<?php echo $assetsUrl; ?>css/cards.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
     
