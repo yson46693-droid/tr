@@ -35,8 +35,44 @@ if (!defined('ACCESS_ALLOWED')) {
         'use strict';
         
         // منع تخزين الصفحة في cache عند عمل refresh - محسّن لمنع Error Code: -2
+        // مع منع refresh loop
+        let pageshowRefreshHandled = false;
         window.addEventListener('pageshow', function(event) {
+            // منع refresh loop - فقط معالجة مرة واحدة لكل صفحة
+            if (pageshowRefreshHandled) {
+                return;
+            }
+            
+            // التحقق من أن الصفحة من cache وليس هناك _refresh parameter موجود بالفعل
             if (event.persisted) {
+                const currentUrl = new URL(window.location.href);
+                const hasRefreshParam = currentUrl.searchParams.has('_refresh') || 
+                                       currentUrl.searchParams.has('_t') ||
+                                       currentUrl.searchParams.has('_nocache');
+                
+                // إذا كان هناك معامل refresh موجود بالفعل، لا نقوم بإضافة واحد جديد
+                if (hasRefreshParam) {
+                    pageshowRefreshHandled = true;
+                    return;
+                }
+                
+                // التحقق من sessionStorage لمنع refresh متكرر في نفس الجلسة
+                try {
+                    const lastRefresh = sessionStorage.getItem('last_pageshow_refresh');
+                    const now = Date.now();
+                    
+                    // إذا كان آخر refresh منذ أقل من 5 ثوان، تجاهل
+                    if (lastRefresh && (now - parseInt(lastRefresh, 10)) < 5000) {
+                        pageshowRefreshHandled = true;
+                        return;
+                    }
+                    
+                    // حفظ timestamp آخر refresh
+                    sessionStorage.setItem('last_pageshow_refresh', now.toString());
+                } catch (e) {
+                    // تجاهل أخطاء sessionStorage
+                }
+                
                 // إذا كانت الصفحة من cache، أعد تحميلها من السيرفر
                 // استخدام طريقة آمنة لمنع Error Code: -2
                 try {
@@ -47,6 +83,9 @@ if (!defined('ACCESS_ALLOWED')) {
                     // استخدام replaceState أولاً ثم reload
                     window.history.replaceState({}, '', url.toString());
                     
+                    // تعيين flag لمنع refresh loop
+                    pageshowRefreshHandled = true;
+                    
                     // استخدام setTimeout لمنع مشاكل التوقيت
                     setTimeout(function() {
                         // استخدام location.href بدلاً من reload(true) لمنع Error Code: -2
@@ -55,6 +94,7 @@ if (!defined('ACCESS_ALLOWED')) {
                 } catch (e) {
                     // في حالة الخطأ، استخدم reload عادي
                     console.warn('Error in pageshow handler, using fallback:', e);
+                    pageshowRefreshHandled = true;
                     setTimeout(function() {
                         window.location.reload();
                     }, 50);
