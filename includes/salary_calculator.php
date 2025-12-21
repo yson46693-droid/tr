@@ -1060,6 +1060,65 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
     $collectionsBonusCalc = cleanFinancialValue($calculation['collections_bonus'] ?? 0);
     $collectionsAmountCalc = cleanFinancialValue($calculation['collections_amount'] ?? ($collectionsBonusCalc > 0 ? $collectionsBonusCalc / 0.02 : 0));
     
+    // إضافة المبالغ المدفوعة من الرصيد الدائن إلى collections_bonus
+    // هذه المبالغ تُحسب مباشرة في pos.php وتُضاف إلى collections_bonus
+    // لذا يجب أن نضيفها إلى الحساب هنا أيضاً لتجنب فقدانها عند إعادة الحساب
+    $creditBalanceCommission = 0;
+    $user = $db->queryOne("SELECT role FROM users WHERE id = ?", [$userId]);
+    if ($user && strtolower((string)($user['role'] ?? '')) === 'sales') {
+        try {
+            $invoicesTableCheck = $db->queryOne("SHOW TABLES LIKE 'invoices'");
+            if (!empty($invoicesTableCheck)) {
+                $hasPaidFromCreditColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'paid_from_credit'"));
+                $hasCreditUsedColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'credit_used'"));
+                
+                if ($hasPaidFromCreditColumn) {
+                    // حساب إجمالي المبالغ المدفوعة من الرصيد الدائن (paid_from_credit > 0)
+                    $creditUsedResult = $db->queryOne(
+                        "SELECT COALESCE(SUM(paid_from_credit), 0) as total_credit_used
+                         FROM invoices
+                         WHERE sales_rep_id = ?
+                         AND MONTH(date) = ?
+                         AND YEAR(date) = ?
+                         AND (paid_from_credit IS NOT NULL AND paid_from_credit > 0)",
+                        [$userId, $month, $year]
+                    );
+                    $totalCreditUsed = floatval($creditUsedResult['total_credit_used'] ?? 0);
+                } elseif ($hasCreditUsedColumn) {
+                    // استخدام credit_used كبديل إذا لم يكن paid_from_credit موجوداً
+                    $creditUsedResult = $db->queryOne(
+                        "SELECT COALESCE(SUM(credit_used), 0) as total_credit_used
+                         FROM invoices
+                         WHERE sales_rep_id = ?
+                         AND MONTH(date) = ?
+                         AND YEAR(date) = ?
+                         AND (credit_used IS NOT NULL AND credit_used > 0)",
+                        [$userId, $month, $year]
+                    );
+                    $totalCreditUsed = floatval($creditUsedResult['total_credit_used'] ?? 0);
+                } else {
+                    $totalCreditUsed = 0;
+                }
+                
+                // حساب نسبة 2% من المبالغ المدفوعة من الرصيد الدائن
+                // هذه النسبة تُضاف مباشرة في pos.php، لذا يجب أن نضيفها هنا أيضاً
+                $creditBalanceCommission = round($totalCreditUsed * 0.02, 2);
+                
+                if ($creditBalanceCommission > 0) {
+                    error_log(sprintf(
+                        'Adding credit balance commission to collections_bonus: userId=%d, month=%d, year=%d, totalCreditUsed=%.2f, commission=%.2f',
+                        $userId, $month, $year, $totalCreditUsed, $creditBalanceCommission
+                    ));
+                }
+            }
+        } catch (Throwable $creditCommissionError) {
+            error_log('Error calculating credit balance commission: ' . $creditCommissionError->getMessage());
+        }
+    }
+    
+    // إضافة نسبة المبالغ المدفوعة من الرصيد الدائن إلى collections_bonus
+    $collectionsBonusCalc = $collectionsBonusCalc + $creditBalanceCommission;
+    
     if (!$calculation['success']) {
         return $calculation;
     }
@@ -1094,10 +1153,12 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                 if ($hasCollectionsBonusColumn) {
                     $existingCollectionsBonus = floatval($currentSalary['collections_bonus'] ?? 0);
                     // collections_bonus يجب أن يكون دائماً = القيمة المحسوبة من جميع التحصيلات في الشهر
-                    // لأن calculateSalesCollections تحسب من جميع collections في الشهر، لذا يجب أن تكون القيمة المحسوبة هي القيمة الصحيحة دائماً
-                    // يجب استخدام القيمة المحسوبة مباشرة (وليس max) لضمان أن نسبة التحصيلات تُحسب بشكل صحيح وتراكمي
+                    // لكن يجب أن نستخدم القيمة الأكبر بين القيمة الموجودة والقيمة المحسوبة
+                    // لأن القيمة الموجودة قد تحتوي على مبالغ مضافة مسبقاً من المبالغ المدفوعة من الرصيد الدائن
+                    // التي تُضاف مباشرة في pos.php قبل استدعاء refreshSalesCommissionForUser
                     $calculatedCollectionsBonus = round($collectionsBonusCalc, 2);
-                    $collectionsBonusCalc = $calculatedCollectionsBonus;
+                    // استخدام القيمة الأكبر لتجنب فقدان المبالغ المضافة مسبقاً
+                    $collectionsBonusCalc = max($existingCollectionsBonus, $calculatedCollectionsBonus);
                     $calculation['collections_bonus'] = $collectionsBonusCalc;
                     $calculation['total_bonus'] = $calculation['bonus'] + $collectionsBonusCalc;
                 
@@ -1146,10 +1207,12 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
             if ($hasCollectionsBonusColumn) {
                 $existingCollectionsBonus = floatval($currentSalary['collections_bonus'] ?? 0);
                 // collections_bonus يجب أن يكون دائماً = القيمة المحسوبة من جميع التحصيلات في الشهر
-                // لأن calculateSalesCollections تحسب من جميع collections في الشهر، لذا يجب أن تكون القيمة المحسوبة هي القيمة الصحيحة دائماً
-                // يجب استخدام القيمة المحسوبة مباشرة (وليس max) لضمان أن نسبة التحصيلات تُحسب بشكل صحيح وتراكمي
+                // لكن يجب أن نستخدم القيمة الأكبر بين القيمة الموجودة والقيمة المحسوبة
+                // لأن القيمة الموجودة قد تحتوي على مبالغ مضافة مسبقاً من المبالغ المدفوعة من الرصيد الدائن
+                // التي تُضاف مباشرة في pos.php قبل استدعاء refreshSalesCommissionForUser
                 $calculatedCollectionsBonus = round($collectionsBonusCalc, 2);
-                $collectionsBonusCalc = $calculatedCollectionsBonus;
+                // استخدام القيمة الأكبر لتجنب فقدان المبالغ المضافة مسبقاً
+                $collectionsBonusCalc = max($existingCollectionsBonus, $calculatedCollectionsBonus);
                 $calculation['collections_bonus'] = $collectionsBonusCalc;
                 $calculation['total_bonus'] = $calculation['bonus'] + $collectionsBonusCalc;
                 
@@ -1372,11 +1435,13 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                 }
                 
                 // collections_bonus يجب أن يكون دائماً = القيمة المحسوبة من جميع التحصيلات في الشهر
-                // لأن calculateSalesCollections تحسب من جميع collections في الشهر، لذا يجب أن تكون القيمة المحسوبة هي القيمة الصحيحة دائماً
-                // يجب استخدام القيمة المحسوبة مباشرة (وليس max) لضمان أن نسبة التحصيلات تُحسب بشكل صحيح وتراكمي
+                // لكن يجب أن نستخدم القيمة الأكبر بين القيمة الموجودة والقيمة المحسوبة
+                // لأن القيمة الموجودة قد تحتوي على مبالغ مضافة مسبقاً من المبالغ المدفوعة من الرصيد الدائن
+                // التي تُضاف مباشرة في pos.php قبل استدعاء refreshSalesCommissionForUser
                 $calculatedCollectionsBonus = round($collectionsBonusCalc, 2);
                 $calculatedCollectionsAmount = round($collectionsAmountCalc, 2);
-                $finalCollectionsBonus = $calculatedCollectionsBonus;
+                // استخدام القيمة الأكبر لتجنب فقدان المبالغ المضافة مسبقاً
+                $finalCollectionsBonus = max($existingCollectionsBonus, $calculatedCollectionsBonus);
                 $finalCollectionsAmount = $calculatedCollectionsAmount;
                 
                 // تحديث فقط إذا كانت القيمة مختلفة
