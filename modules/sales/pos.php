@@ -3974,6 +3974,30 @@ if (!$error) {
     const invoicePrintUrl = null;
     <?php endif; ?>
     
+    // دالة الطباعة
+    window.printInvoice = function() {
+        if (invoicePrintUrl) {
+            const printWindow = window.open(invoicePrintUrl, '_blank');
+            if (printWindow) {
+                printWindow.onload = function() {
+                    setTimeout(function() {
+                        printWindow.print();
+                    }, 500);
+                };
+            }
+        } else if (invoiceUrl) {
+            const printUrl = invoiceUrl + (invoiceUrl.includes('?') ? '&' : '?') + 'print=1';
+            const printWindow = window.open(printUrl, '_blank');
+            if (printWindow) {
+                printWindow.onload = function() {
+                    setTimeout(function() {
+                        printWindow.print();
+                    }, 500);
+                };
+            }
+        }
+    };
+    
     // الانتظار حتى يتم تحميل DOM بالكامل
     function initInvoiceModal() {
         const invoiceModal = document.getElementById('posInvoiceModal');
@@ -3987,6 +4011,18 @@ if (!$error) {
                         backdrop: 'static',
                         keyboard: false
                     });
+                    
+                    // طباعة الفاتورة تلقائياً عند فتح الـ modal
+                    invoiceModal.addEventListener('shown.bs.modal', function() {
+                        // تأخير بسيط للتأكد من تحميل المحتوى
+                        setTimeout(function() {
+                            if (typeof window.printInvoice === 'function') {
+                                console.log('[POS Invoice] Auto-printing invoice...');
+                                window.printInvoice();
+                            }
+                        }, 1000);
+                    }, { once: true });
+                    
                     modal.show();
                     
                     console.log('[POS Invoice] Modal opened successfully');
@@ -4009,30 +4045,6 @@ if (!$error) {
                 setTimeout(initInvoiceModal, 100);
             }
         }
-        
-        // دالة الطباعة
-        window.printInvoice = function() {
-            if (invoicePrintUrl) {
-                const printWindow = window.open(invoicePrintUrl, '_blank');
-                if (printWindow) {
-                    printWindow.onload = function() {
-                        setTimeout(function() {
-                            printWindow.print();
-                        }, 500);
-                    };
-                }
-            } else if (invoiceUrl) {
-                const printUrl = invoiceUrl + (invoiceUrl.includes('?') ? '&' : '?') + 'print=1';
-                const printWindow = window.open(printUrl, '_blank');
-                if (printWindow) {
-                    printWindow.onload = function() {
-                        setTimeout(function() {
-                            printWindow.print();
-                        }, 500);
-                    };
-                }
-            }
-        };
         
         // منع refresh تلقائي عند وجود فاتورة
         const successAlert = document.getElementById('successAlert');
