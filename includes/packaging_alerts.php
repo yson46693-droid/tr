@@ -112,18 +112,29 @@ function processDailyPackagingAlert(): void {
 
     $db = db();
 
+    $today = date('Y-m-d');
+    
+    // التحقق المبكر من قاعدة البيانات لمنع التنفيذ المتكرر
+    // هذا يمنع إرسال التقرير أكثر من مرة في نفس اليوم حتى لو تم استدعاء الدالة من ملفات مختلفة
     $jobState = null;
     try {
         $jobState = $db->queryOne(
-            "SELECT last_sent_at FROM system_daily_jobs WHERE job_key = ? LIMIT 1",
+            "SELECT last_sent_at, last_file_path FROM system_daily_jobs WHERE job_key = ? LIMIT 1",
             [PACKAGING_ALERT_JOB_KEY]
         );
+        
+        // إذا تم الإرسال اليوم بالفعل، تخطي التنفيذ
+        if (!empty($jobState['last_sent_at'])) {
+            $lastSentDate = substr((string)$jobState['last_sent_at'], 0, 10);
+            if ($lastSentDate === $today) {
+                // تم الإرسال اليوم بالفعل، لا حاجة للتنفيذ مرة أخرى
+                return;
+            }
+        }
     } catch (Throwable $stateError) {
         error_log('Packaging alert state error: ' . $stateError->getMessage());
         return;
     }
-
-    $today = date('Y-m-d');
     $existingData = [];
     $existingReportPath = null;
     $existingReportRelative = null;
@@ -177,41 +188,14 @@ function processDailyPackagingAlert(): void {
         }
     }
 
+    // تم نقل التحقق من last_sent_at إلى بداية الدالة لمنع التنفيذ المتكرر
+    // التحقق هنا فقط للتأكد من وجود تقرير سابق يمكن استخدامه
     $jobRelativePath = (string)($jobState['last_file_path'] ?? '');
     $jobReportPath = null;
     if ($jobRelativePath !== '') {
         $candidate = $reportsBase . '/' . ltrim($jobRelativePath, '/\\');
         if (packagingReportFileMatchesDate($candidate, $today)) {
             $jobReportPath = $candidate;
-        }
-    }
-
-    if (!empty($jobState['last_sent_at'])) {
-        $lastSentDate = substr((string)$jobState['last_sent_at'], 0, 10);
-        if (
-            $lastSentDate === $today &&
-            ($existingReportPath !== null || $jobReportPath !== null)
-        ) {
-            $alreadyData = !empty($existingData) ? $existingData : [
-                'date' => $today,
-                'status' => 'already_sent',
-            ];
-            $alreadyData['status'] = 'already_sent';
-            $alreadyData['checked_at'] = date('Y-m-d H:i:s');
-            $alreadyData['last_sent_at'] = $jobState['last_sent_at'];
-            if ($existingReportRelative !== null) {
-                $alreadyData['report_path'] = $existingReportRelative;
-            } elseif ($jobRelativePath !== '') {
-                $alreadyData['report_path'] = $jobRelativePath;
-            }
-            if ($existingViewerPath !== null) {
-                $alreadyData['viewer_path'] = $existingViewerPath;
-            }
-            if ($existingAccessToken !== null) {
-                $alreadyData['access_token'] = $existingAccessToken;
-            }
-            packagingAlertSaveStatus($alreadyData);
-            return;
         }
     }
 

@@ -831,10 +831,12 @@ if (ENABLE_DAILY_LOW_STOCK_REPORT) {
     triggerDailyLowStockReport();
 }
 
-if (ENABLE_DAILY_PACKAGING_ALERT) {
-    require_once __DIR__ . '/packaging_alerts.php';
-    processDailyPackagingAlert();
-}
+// تم نقل processDailyPackagingAlert إلى api/background-tasks.php
+// لتجنب التنفيذ المتكرر - يتم تنفيذها مرة واحدة يومياً عبر AJAX
+// if (ENABLE_DAILY_PACKAGING_ALERT) {
+//     require_once __DIR__ . '/packaging_alerts.php';
+//     processDailyPackagingAlert();
+// }
 
 if (ENABLE_DAILY_CONSUMPTION_REPORT) {
     require_once __DIR__ . '/daily_consumption_sender.php';
