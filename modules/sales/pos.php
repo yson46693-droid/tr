@@ -1316,6 +1316,66 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
                         
+                        // الحالة الخاصة: حساب نسبة التحصيلات عند البيع بالآجل لعميل له رصيد دائن
+                        // يجب حساب نسبة 2% على المبلغ المستخدم من الرصيد الدائن (creditUsed) بغض النظر عن سجل المشتريات
+                        // هذا ينطبق على البيع بالآجل فقط (paymentType === 'credit')
+                        if ($hasCreditBalance && $paymentType === 'credit' && $creditUsed > 0.0001 && !$commissionApplied) {
+                            // حساب نسبة 2% على المبلغ المستخدم من الرصيد الدائن
+                            $creditPaymentCommissionAmount = round($creditUsed * 0.02, 2);
+                            
+                            if ($creditPaymentCommissionAmount > 0) {
+                                try {
+                                    $timestamp = strtotime($saleDate) ?: time();
+                                    $targetMonth = (int)date('n', $timestamp);
+                                    $targetYear = (int)date('Y', $timestamp);
+                                    
+                                    $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    if (!$summary['exists']) {
+                                        $creation = createOrUpdateSalary($currentUser['id'], $targetMonth, $targetYear);
+                                        if (!($creation['success'] ?? false)) {
+                                            throw new RuntimeException('Failed to create salary record: ' . ($creation['message'] ?? 'Unknown error'));
+                                        }
+                                        $summary = getSalarySummary($currentUser['id'], $targetMonth, $targetYear);
+                                    }
+                                    
+                                    if ($summary['exists']) {
+                                        $salary = $summary['salary'];
+                                        $salaryId = (int)($salary['id'] ?? 0);
+                                        
+                                        if ($salaryId > 0) {
+                                            $hasCollectionsBonusColumn = ensureCollectionsBonusColumn();
+                                            
+                                            if ($hasCollectionsBonusColumn) {
+                                                // إضافة نسبة التحصيلات إلى collections_bonus والمبلغ الأساسي إلى collections_amount
+                                                $db->execute(
+                                                    "UPDATE salaries 
+                                                     SET collections_bonus = COALESCE(collections_bonus, 0) + ?, 
+                                                         collections_amount = COALESCE(collections_amount, 0) + ?,
+                                                         updated_at = NOW()
+                                                     WHERE id = ?",
+                                                    [$creditPaymentCommissionAmount, $creditUsed, $salaryId]
+                                                );
+                                                
+                                                error_log(sprintf(
+                                                    'Added collection percentage for credit payment with credit balance: creditUsed=%.2f, commissionAmount=%.2f, invoiceId=%d, customerId=%d, originalBalance=%.2f, hasPreviousPurchases=%s',
+                                                    $creditUsed,
+                                                    $creditPaymentCommissionAmount,
+                                                    $invoiceId,
+                                                    $customerId,
+                                                    $originalBalance ?? 0,
+                                                    ($hasPreviousPurchases ?? false) ? 'true' : 'false'
+                                                ));
+                                                
+                                                $commissionApplied = true; // منع الحساب المزدوج
+                                            }
+                                        }
+                                    }
+                                } catch (Throwable $creditPaymentCommissionError) {
+                                    error_log('Error adding collection percentage for credit payment with credit balance: ' . $creditPaymentCommissionError->getMessage());
+                                }
+                            }
+                        }
+                        
                         // التحقق من أن العميل ليس له سجل مشتريات قبل حساب النسبة
                         // لعميل له سجل مشتريات: يتم التعامل معه في الكود السابق (السطر 1543)
                         if ($hasCreditBalance && !($hasPreviousPurchases ?? false) && ($paymentType === 'credit' || $paymentType === 'partial') && !$commissionApplied) {
