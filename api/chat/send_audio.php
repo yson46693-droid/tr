@@ -49,12 +49,33 @@ try {
     $audioFile = $_FILES['audio'];
     $replyTo = isset($_POST['reply_to']) && $_POST['reply_to'] ? (int) $_POST['reply_to'] : null;
 
-    // Validate file type
-    $allowedTypes = ['audio/webm', 'audio/ogg', 'audio/wav', 'audio/mpeg', 'audio/mp3'];
-    $fileType = mime_content_type($audioFile['tmp_name']);
+    // Validate file type - more flexible checking
+    $fileType = '';
+    if (function_exists('mime_content_type')) {
+        $fileType = mime_content_type($audioFile['tmp_name']);
+    }
     
-    if (!in_array($fileType, $allowedTypes, true)) {
-        throw new InvalidArgumentException('نوع الملف غير مدعوم. يرجى استخدام ملف صوتي.');
+    // Also check by extension as fallback
+    $extension = strtolower(pathinfo($audioFile['name'], PATHINFO_EXTENSION));
+    $audioExtensions = ['webm', 'ogg', 'wav', 'mp3', 'mpeg', 'm4a', 'aac', 'opus'];
+    
+    // If mime type check fails, use extension
+    if (!$fileType || strpos($fileType, 'audio/') !== 0) {
+        if (!in_array($extension, $audioExtensions, true)) {
+            throw new InvalidArgumentException('نوع الملف غير مدعوم. يرجى استخدام ملف صوتي.');
+        }
+        // Set appropriate mime type based on extension
+        $mimeMap = [
+            'webm' => 'audio/webm',
+            'ogg' => 'audio/ogg',
+            'wav' => 'audio/wav',
+            'mp3' => 'audio/mpeg',
+            'mpeg' => 'audio/mpeg',
+            'm4a' => 'audio/mp4',
+            'aac' => 'audio/aac',
+            'opus' => 'audio/opus'
+        ];
+        $fileType = $mimeMap[$extension] ?? 'audio/webm';
     }
 
     // Validate file size (50MB max)
@@ -79,8 +100,10 @@ try {
         throw new RuntimeException('فشل في حفظ الملف');
     }
 
-    // Create relative URL
+    // Create relative URL - use absolute path for better compatibility
+    require_once __DIR__ . '/../../includes/path_helper.php';
     $relativeUrl = 'uploads/chat/audio/' . $filename;
+    $fullUrl = getRelativeUrl($relativeUrl);
     $messageText = '[تسجيل صوتي]';
 
     // Send message with audio attachment
@@ -105,7 +128,7 @@ try {
         // For now, we'll store the URL in message_text or create a simple attachment system
         $db->execute(
             "UPDATE messages SET message_text = ? WHERE id = ?",
-            [$messageText . "\n[FILE:" . $relativeUrl . "]", $messageId]
+            [$messageText . "\n[FILE:" . $fullUrl . ":" . htmlspecialchars('تسجيل صوتي.webm', ENT_QUOTES, 'UTF-8') . "]", $messageId]
         );
 
         $db->commit();

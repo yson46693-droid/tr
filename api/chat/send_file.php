@@ -55,11 +55,34 @@ try {
         throw new InvalidArgumentException('حجم الملف كبير جداً. الحد الأقصى 50 ميجابايت');
     }
 
-    // Determine file type and directory
-    $fileType = mime_content_type($file['tmp_name']);
-    $isImage = strpos($fileType, 'image/') === 0;
-    $isVideo = strpos($fileType, 'video/') === 0;
-    $isAudio = strpos($fileType, 'audio/') === 0;
+    // Determine file type and directory - more flexible checking
+    $fileType = '';
+    if (function_exists('mime_content_type')) {
+        $fileType = mime_content_type($file['tmp_name']);
+    }
+    
+    // Also check by extension as fallback
+    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    $imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'];
+    $videoExtensions = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'flv', 'wmv'];
+    $audioExtensions = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'opus', 'webm'];
+    
+    $isImage = false;
+    $isVideo = false;
+    $isAudio = false;
+    
+    if ($fileType) {
+        $isImage = strpos($fileType, 'image/') === 0;
+        $isVideo = strpos($fileType, 'video/') === 0;
+        $isAudio = strpos($fileType, 'audio/') === 0;
+    }
+    
+    // Fallback to extension check
+    if (!$isImage && !$isVideo && !$isAudio) {
+        $isImage = in_array($extension, $imageExtensions, true);
+        $isVideo = in_array($extension, $videoExtensions, true);
+        $isAudio = in_array($extension, $audioExtensions, true);
+    }
 
     if ($isImage) {
         $uploadDir = __DIR__ . '/../../uploads/chat/images/';
@@ -90,8 +113,10 @@ try {
         throw new RuntimeException('فشل في حفظ الملف');
     }
 
-    // Create relative URL
+    // Create relative URL - use absolute path for better compatibility
+    require_once __DIR__ . '/../../includes/path_helper.php';
     $relativeUrl = 'uploads/chat/' . ($isImage ? 'images/' : ($isVideo ? 'videos/' : ($isAudio ? 'audio/' : 'files/'))) . $filename;
+    $fullUrl = getRelativeUrl($relativeUrl);
 
     // Send message with file attachment
     $db = db();
@@ -104,7 +129,7 @@ try {
             "INSERT INTO messages (user_id, message_text, reply_to) VALUES (?, ?, ?)",
             [
                 $userId,
-                $messageText . "\n[FILE:" . $relativeUrl . ":" . htmlspecialchars($file['name'], ENT_QUOTES, 'UTF-8') . "]",
+                $messageText . "\n[FILE:" . $fullUrl . ":" . htmlspecialchars($file['name'], ENT_QUOTES, 'UTF-8') . "]",
                 $replyTo ?: null,
             ]
         );

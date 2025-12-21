@@ -949,13 +949,104 @@
   }
 
   function renderMessageText(text) {
-    const escaped = escapeHTML(text || '');
+    if (!text) {
+      return '';
+    }
+
+    // استخراج معلومات الملفات المرفقة
+    const filePattern = /\[FILE:([^\]]+):([^\]]+)\]/g;
+    let processedText = text;
+    const fileMatches = [];
+    let match;
+    
+    while ((match = filePattern.exec(text)) !== null) {
+      fileMatches.push({
+        fullMatch: match[0],
+        fileUrl: match[1],
+        fileName: match[2] || match[1].split('/').pop()
+      });
+    }
+
+    // إزالة نمط الملف من النص
+    fileMatches.forEach(file => {
+      processedText = processedText.replace(file.fullMatch, '');
+    });
+
+    // تنظيف النص
+    processedText = processedText.trim();
+    const escaped = escapeHTML(processedText);
+    
     // تحويل الروابط إلى روابط قابلة للنقر
     const withLinks = escaped.replace(
       /(https?:\/\/[^\s]+)/gi,
       (url) => `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(url)}</a>`
     );
-    return withLinks.replace(/\n/g, '<br />');
+    
+    let result = withLinks.replace(/\n/g, '<br />');
+    
+    // إضافة عرض الملفات المرفقة
+    if (fileMatches.length > 0) {
+      const fileHtml = fileMatches.map(file => {
+        const fileUrl = escapeAttribute(file.fileUrl);
+        const fileName = escapeHTML(file.fileName);
+        const fileExtension = fileName.split('.').pop().toLowerCase();
+        const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(fileExtension);
+        const isVideo = ['mp4', 'webm', 'ogg', 'mov', 'avi'].includes(fileExtension);
+        const isAudio = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'webm'].includes(fileExtension);
+        
+        if (isImage) {
+          return `
+            <div class="chat-message-attachment chat-attachment-image">
+              <img src="${fileUrl}" alt="${fileName}" onclick="window.open('${fileUrl}', '_blank')" />
+              <div class="chat-attachment-info">
+                <span class="chat-attachment-name">${fileName}</span>
+                <a href="${fileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
+              </div>
+            </div>
+          `;
+        } else if (isVideo) {
+          return `
+            <div class="chat-message-attachment chat-attachment-video">
+              <video controls preload="metadata">
+                <source src="${fileUrl}" type="video/${fileExtension === 'mp4' ? 'mp4' : fileExtension === 'webm' ? 'webm' : 'ogg'}">
+                متصفحك لا يدعم تشغيل الفيديو.
+              </video>
+              <div class="chat-attachment-info">
+                <span class="chat-attachment-name">${fileName}</span>
+                <a href="${fileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
+              </div>
+            </div>
+          `;
+        } else if (isAudio) {
+          return `
+            <div class="chat-message-attachment chat-attachment-audio">
+              <audio controls preload="metadata">
+                <source src="${fileUrl}" type="audio/${fileExtension === 'mp3' ? 'mpeg' : fileExtension === 'webm' ? 'webm' : fileExtension}">
+                متصفحك لا يدعم تشغيل الصوت.
+              </audio>
+              <div class="chat-attachment-info">
+                <span class="chat-attachment-name">${fileName}</span>
+                <a href="${fileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
+              </div>
+            </div>
+          `;
+        } else {
+          return `
+            <div class="chat-message-attachment chat-attachment-file">
+              <div class="chat-attachment-icon">📄</div>
+              <div class="chat-attachment-info">
+                <span class="chat-attachment-name">${fileName}</span>
+                <a href="${fileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
+              </div>
+            </div>
+          `;
+        }
+      }).join('');
+      
+      result = (result ? result + '<br />' : '') + fileHtml;
+    }
+    
+    return result;
   }
 
   function getInitials(name) {
