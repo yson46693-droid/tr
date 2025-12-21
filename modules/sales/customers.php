@@ -3925,11 +3925,11 @@ document.addEventListener('DOMContentLoaded', function () {
         padding: 1.35rem 1.25rem;
     }
 
-    /* الأزرار في عمود الإجراءات: 2×2 على جميع الشاشات - أعرض */
+    /* الأزرار في عمود الإجراءات: 2×2 على جميع الشاشات */
     .dashboard-table tbody td:last-child .d-flex {
         display: grid !important;
         grid-template-columns: 1fr 1fr !important;
-        gap: 0.4rem !important;
+        gap: 0.25rem !important;
         width: 100% !important;
     }
 
@@ -3937,17 +3937,6 @@ document.addEventListener('DOMContentLoaded', function () {
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        box-sizing: border-box !important;
-        font-size: 0.75rem !important;
-        padding: 0.35rem 0.8rem !important;
-        font-weight: 500;
-    }
-
-    .dashboard-table tbody td:last-child .btn i {
-        font-size: 0.85rem !important;
-        margin-right: 0.3rem !important;
     }
 
     @media (max-width: 992px) {
@@ -4060,7 +4049,7 @@ document.addEventListener('DOMContentLoaded', function () {
         /* تحسين الأزرار في الجدول */
         .dashboard-table .btn {
             font-size: 0.7rem;
-            padding: 0.35rem 0.5rem;
+            padding: 0.25rem 0.4rem;
             white-space: nowrap;
         }
 
@@ -4068,48 +4057,22 @@ document.addEventListener('DOMContentLoaded', function () {
             font-size: 0.75rem;
         }
 
-        /* تحسين أزرار الإجراءات على الشاشات المتوسطة - أعرض فقط */
-        .dashboard-table tbody td:last-child .d-flex {
-            gap: 0.35rem !important;
-        }
-
-        .dashboard-table tbody td:last-child .btn {
-            width: 100%;
-            justify-content: center;
-            font-size: 0.7rem !important;
-            padding: 0.35rem 0.7rem !important;
-            white-space: normal !important;
-            word-break: break-word;
-            line-height: 1.3;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            font-weight: 500;
-        }
-
-        .dashboard-table tbody td:last-child .btn i {
-            font-size: 0.8rem !important;
-            flex-shrink: 0;
-            margin-right: 0.25rem !important;
-        }
-
         /* تحسين Badge الرصيد */
         .dashboard-table .badge {
-            font-size: 0.55rem;
-            padding: 0.15rem 0.3rem;
+            font-size: 0.65rem;
+            padding: 0.2rem 0.4rem;
         }
 
         /* تحسين عمود الموقع */
         .dashboard-table tbody td:nth-child(6) .d-flex {
             flex-direction: column;
             align-items: flex-start;
-            gap: 0.25rem;
+            gap: 0.3rem;
         }
 
         .dashboard-table tbody td:nth-child(6) .btn {
             width: 100%;
             justify-content: center;
-            font-size: 0.65rem;
-            padding: 0.25rem 0.35rem;
         }
     }
 
@@ -4145,7 +4108,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         .dashboard-table .btn {
             font-size: 0.65rem;
-            padding: 0.3rem 0.4rem;
+            padding: 0.2rem 0.35rem;
         }
 
         .dashboard-table .btn i {
@@ -4159,8 +4122,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         .dashboard-table .badge {
-            font-size: 0.5rem;
-            padding: 0.1rem 0.25rem;
+            font-size: 0.6rem;
+            padding: 0.15rem 0.35rem;
         }
 
         /* تحسين عرض الأعمدة على الشاشات الصغيرة جداً */
@@ -4211,38 +4174,6 @@ document.addEventListener('DOMContentLoaded', function () {
             width: 35%;
             min-width: 0;
             max-width: 35%;
-        }
-
-        /* تحسين أزرار الإجراءات على الشاشات الصغيرة جداً - أعرض فقط */
-        .dashboard-table tbody td:last-child .d-flex {
-            display: grid !important;
-            grid-template-columns: 1fr 1fr !important;
-            gap: 0.35rem !important;
-        }
-
-        .dashboard-table tbody td:last-child .btn {
-            width: 100%;
-            justify-content: center;
-            font-size: 0.65rem !important;
-            padding: 0.3rem 0.6rem !important;
-            white-space: normal !important;
-            word-break: break-word;
-            line-height: 1.3;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            font-weight: 500;
-        }
-
-        .dashboard-table tbody td:last-child .btn i {
-            font-size: 0.75rem !important;
-            flex-shrink: 0;
-            margin-right: 0.2rem !important;
-        }
-
-        /* تحسين عمود الموقع على الشاشات الصغيرة */
-        .dashboard-table tbody td:nth-child(6) .btn {
-            font-size: 0.6rem;
-            padding: 0.2rem 0.3rem;
         }
 
         .customers-list-card .card-header {
