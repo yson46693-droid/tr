@@ -876,22 +876,250 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 }
 
 @media (max-width: 768px) {
+    body {
+        padding: 10px !important;
+        margin: 0 !important;
+        overflow-x: hidden !important;
+    }
+
+    .invoice-wrapper {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
     .invoice-card {
-        padding: 24px 18px;
-        border-radius: 18px;
+        padding: 16px 12px !important;
+        border-radius: 12px !important;
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
     }
 
     .invoice-header {
-        flex-direction: column;
-        align-items: flex-start;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 16px !important;
+        margin-bottom: 20px !important;
+    }
+
+    .brand-block {
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 12px !important;
+        width: 100% !important;
+    }
+
+    .logo-placeholder {
+        width: 60px !important;
+        height: 60px !important;
+        flex-shrink: 0 !important;
+    }
+
+    .company-name {
+        font-size: 20px !important;
+        line-height: 1.3 !important;
+    }
+
+    .company-subtitle {
+        font-size: 12px !important;
+    }
+
+    .invoice-meta {
+        width: 100% !important;
+        text-align: right !important;
+    }
+
+    .invoice-title {
+        font-size: 16px !important;
+        margin-bottom: 8px !important;
+    }
+
+    .invoice-number {
+        font-size: 12px !important;
+        margin-bottom: 12px !important;
+    }
+
+    .invoice-number span {
+        font-size: 18px !important;
     }
 
     .invoice-meta-grid {
-        grid-template-columns: repeat(2, minmax(140px, 1fr));
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
     }
 
-    .info-grid, .summary-grid {
-        grid-template-columns: 1fr;
+    .meta-item {
+        padding: 10px 12px !important;
+    }
+
+    .meta-item span {
+        font-size: 11px !important;
+    }
+
+    .meta-item strong {
+        font-size: 13px !important;
+    }
+
+    .info-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+        margin-bottom: 20px !important;
+    }
+
+    .info-card {
+        padding: 14px 16px !important;
+    }
+
+    .info-title {
+        font-size: 14px !important;
+        margin-bottom: 10px !important;
+    }
+
+    .info-item {
+        font-size: 13px !important;
+        margin-bottom: 6px !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        line-height: 1.5 !important;
+        white-space: normal !important;
+        overflow: visible !important;
+    }
+
+    .info-item.name {
+        font-size: 14px !important;
+        font-weight: 600 !important;
+    }
+
+    .items-table {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        margin-bottom: 20px !important;
+    }
+
+    .items-table table {
+        min-width: 600px !important;
+        font-size: 12px !important;
+        width: 100% !important;
+        table-layout: auto !important;
+    }
+
+    .items-table th {
+        padding: 10px 8px !important;
+        font-size: 11px !important;
+    }
+
+    .items-table td {
+        padding: 12px 8px !important;
+        font-size: 12px !important;
+    }
+
+    .items-table .product-name {
+        font-size: 13px !important;
+    }
+
+    .summary-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+        margin: 20px 0 !important;
+    }
+
+    .summary-card {
+        padding: 16px !important;
+        min-height: auto !important;
+    }
+
+    .summary-title {
+        font-size: 14px !important;
+    }
+
+    .summary-row {
+        font-size: 13px !important;
+        gap: 8px !important;
+    }
+
+    .summary-row strong {
+        font-size: 14px !important;
+    }
+
+    .qr-wrapper {
+        padding: 10px !important;
+    }
+
+    .qr-wrapper img {
+        width: 120px !important;
+        height: 120px !important;
+    }
+
+    .qr-note {
+        font-size: 11px !important;
+    }
+
+    .invoice-footer {
+        padding-top: 16px !important;
+    }
+
+    .invoice-footer .thanks {
+        font-size: 14px !important;
+    }
+
+    .invoice-footer .terms {
+        font-size: 11px !important;
+    }
+}
+
+@media print {
+    @page {
+        size: A4;
+        margin: 1cm;
+    }
+
+    body {
+        padding: 0 !important;
+        margin: 0 !important;
+        background: #ffffff !important;
+    }
+
+    .invoice-wrapper {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .invoice-card {
+        box-shadow: none !important;
+        border: none !important;
+        padding: 20px !important;
+        border-radius: 0 !important;
+        page-break-inside: avoid !important;
+    }
+
+    .invoice-card::before {
+        display: none !important;
+    }
+
+    .invoice-header {
+        page-break-inside: avoid !important;
+    }
+
+    .items-table {
+        page-break-inside: auto !important;
+    }
+
+    .items-table tbody tr {
+        page-break-inside: avoid !important;
+        page-break-after: auto !important;
+    }
+
+    .summary-grid {
+        page-break-inside: avoid !important;
+    }
+
+    .btn, .no-print, .card-header, .sidebar, .navbar {
+        display: none !important;
     }
 }
 </style>

@@ -39,25 +39,71 @@ $companyName = COMPANY_NAME;
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        @media print {
-            .no-print {
-                display: none !important;
-            }
-            body {
-                margin: 0;
-                padding: 20px;
-            }
-            .invoice-container {
-                box-shadow: none;
-                border: none;
-            }
+        * {
+            box-sizing: border-box;
         }
+
+        body {
+            margin: 0;
+            padding: 10px;
+            background: #f5f5f5;
+            font-family: 'Tajawal', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow-x: hidden;
+        }
+
         .invoice-container {
             max-width: 800px;
             margin: 0 auto;
             padding: 30px;
             background: white;
             box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            width: 100%;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 5px !important;
+                margin: 0 !important;
+            }
+
+            .invoice-container {
+                max-width: 100% !important;
+                width: 100% !important;
+                padding: 15px 10px !important;
+                margin: 0 !important;
+                box-shadow: none !important;
+            }
+
+            .no-print {
+                padding: 10px !important;
+            }
+
+            .no-print .btn {
+                font-size: 14px !important;
+                padding: 8px 16px !important;
+            }
+        }
+
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+            }
+            .invoice-container {
+                box-shadow: none !important;
+                border: none !important;
+                padding: 20px !important;
+                margin: 0 !important;
+                max-width: 100% !important;
+            }
+            @page {
+                size: A4;
+                margin: 1cm;
+            }
         }
     </style>
 </head>
