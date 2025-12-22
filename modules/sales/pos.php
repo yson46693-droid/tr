@@ -3288,7 +3288,7 @@ if (!$error) {
 
                             <div class="mb-3">
                                 <label class="form-label">الخصم <span class="text-muted">(اختياري)</span></label>
-                                <input type="number" step="1" min="0" class="form-control" id="posDiscountInput" name="discount_amount" placeholder="0" value="0">
+                                <input type="number" step="1" min="0" class="form-control" id="posDiscountInput" name="discount_amount" placeholder="0">
                                 <small class="text-muted">سيتم خصم هذا المبلغ من إجمالي تكلفة المنتجات في السلة</small>
                             </div>
 
@@ -3971,9 +3971,31 @@ if (!$error) {
     }
 
     if (elements.discountInput) {
+        // عند التركيز على الحقل، إذا كانت القيمة "0" أو فارغة، امسحها للسماح بالكتابة المباشرة
+        elements.discountInput.addEventListener('focus', function() {
+            const currentValue = this.value.trim();
+            if (currentValue === '0' || currentValue === '') {
+                this.value = '';
+            }
+            // وضع المؤشر في نهاية النص
+            setTimeout(() => {
+                this.setSelectionRange(this.value.length, this.value.length);
+            }, 0);
+        });
+        
+        // عند فقدان التركيز، إذا كان الحقل فارغاً، ضع "0"
+        elements.discountInput.addEventListener('blur', function() {
+            const currentValue = this.value.trim();
+            if (currentValue === '' || currentValue === '0') {
+                this.value = '';
+            }
+            updateSummary();
+        });
+        
         elements.discountInput.addEventListener('input', function() {
             updateSummary(); // تحديث فوري عند تغيير الخصم
         });
+        
         elements.discountInput.addEventListener('change', function() {
             updateSummary(); // تحديث عند تغيير الخصم
         });

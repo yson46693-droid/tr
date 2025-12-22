@@ -355,6 +355,86 @@ if (function_exists('maybeSendMonthlyProductionDetailedReport')) {
     }
 }
 
+// 6. Daily low stock report (once per day only)
+if (defined('ENABLE_DAILY_LOW_STOCK_REPORT') && ENABLE_DAILY_LOW_STOCK_REPORT) {
+    try {
+        if (!class_exists('Cache')) {
+            require_once __DIR__ . '/../includes/cache.php';
+        }
+        
+        // Load the function if not already loaded
+        if (!function_exists('triggerDailyLowStockReport')) {
+            require_once __DIR__ . '/../includes/daily_low_stock_report.php';
+        }
+        
+        if (function_exists('triggerDailyLowStockReport')) {
+            
+            $cacheKey = 'low_stock_report_' . date('Y-m-d');
+            $lockKey = 'low_stock_report_' . date('Y-m-d');
+            $taskLock = acquireBackgroundTasksLock($lockKey);
+            
+            if ($taskLock) {
+                $alreadyProcessed = Cache::get($cacheKey);
+                
+                if (!$alreadyProcessed) {
+                    triggerDailyLowStockReport();
+                    Cache::put($cacheKey, true, 86400); // 24 hours
+                    $results['low_stock_report'] = ['success' => true];
+                } else {
+                    $results['low_stock_report'] = ['success' => true, 'skipped' => 'already_processed'];
+                }
+                
+                releaseBackgroundTasksLock($taskLock);
+            } else {
+                $results['low_stock_report'] = ['success' => false, 'error' => 'Lock acquisition failed'];
+            }
+        }
+    } catch (Throwable $e) {
+            error_log('Background task: Low stock report error: ' . $e->getMessage());
+            $results['low_stock_report'] = ['success' => false, 'error' => $e->getMessage()];
+        }
+}
+
+// 7. Daily backup delivery (once per day only)
+if (defined('ENABLE_DAILY_BACKUP_DELIVERY') && ENABLE_DAILY_BACKUP_DELIVERY) {
+    try {
+        if (!class_exists('Cache')) {
+            require_once __DIR__ . '/../includes/cache.php';
+        }
+        
+        // Load the function if not already loaded
+        if (!function_exists('triggerDailyBackupDelivery')) {
+            require_once __DIR__ . '/../includes/daily_backup_sender.php';
+        }
+        
+        if (function_exists('triggerDailyBackupDelivery')) {
+            
+            $cacheKey = 'daily_backup_' . date('Y-m-d');
+            $lockKey = 'daily_backup_' . date('Y-m-d');
+            $taskLock = acquireBackgroundTasksLock($lockKey);
+            
+            if ($taskLock) {
+                $alreadyProcessed = Cache::get($cacheKey);
+                
+                if (!$alreadyProcessed) {
+                    triggerDailyBackupDelivery();
+                    Cache::put($cacheKey, true, 86400); // 24 hours
+                    $results['daily_backup'] = ['success' => true];
+                } else {
+                    $results['daily_backup'] = ['success' => true, 'skipped' => 'already_processed'];
+                }
+                
+                releaseBackgroundTasksLock($taskLock);
+            } else {
+                $results['daily_backup'] = ['success' => false, 'error' => 'Lock acquisition failed'];
+            }
+        }
+    } catch (Throwable $e) {
+            error_log('Background task: Daily backup error: ' . $e->getMessage());
+            $results['daily_backup'] = ['success' => false, 'error' => $e->getMessage()];
+        }
+}
+
 // Return results as JSON
 echo json_encode([
     'success' => true,

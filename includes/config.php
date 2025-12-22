@@ -826,10 +826,12 @@ if (!defined('ENABLE_DAILY_ATTENDANCE_PHOTOS_CLEANUP')) {
 }
 
 # وظيفة مساعده لجدولة المهام اليومية بفاصل زمني
-if (ENABLE_DAILY_LOW_STOCK_REPORT) {
-    require_once __DIR__ . '/daily_low_stock_report.php';
-    triggerDailyLowStockReport();
-}
+// تم نقل triggerDailyLowStockReport إلى api/background-tasks.php
+// لتجنب التنفيذ المتكرر - يتم تنفيذها مرة واحدة يومياً عبر AJAX
+// if (ENABLE_DAILY_LOW_STOCK_REPORT) {
+//     require_once __DIR__ . '/daily_low_stock_report.php';
+//     triggerDailyLowStockReport();
+// }
 
 // تم نقل processDailyPackagingAlert إلى api/background-tasks.php
 // لتجنب التنفيذ المتكرر - يتم تنفيذها مرة واحدة يومياً عبر AJAX
@@ -843,10 +845,12 @@ if (ENABLE_DAILY_CONSUMPTION_REPORT) {
     triggerDailyConsumptionReport();
 }
 
-if (ENABLE_DAILY_BACKUP_DELIVERY) {
-    require_once __DIR__ . '/daily_backup_sender.php';
-    triggerDailyBackupDelivery();
-}
+// تم نقل triggerDailyBackupDelivery إلى api/background-tasks.php
+// لتجنب التنفيذ المتكرر - يتم تنفيذها مرة واحدة يومياً عبر AJAX
+// if (ENABLE_DAILY_BACKUP_DELIVERY) {
+//     require_once __DIR__ . '/daily_backup_sender.php';
+//     triggerDailyBackupDelivery();
+// }
 
 /**
  * تشغيل تنظيف صور الحضور والانصراف تلقائياً مرة واحدة يومياً
