@@ -142,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     "SELECT c.id, c.name, c.balance 
                      FROM customers c
                      WHERE c.id = ? AND c.status = 'active' 
-                       AND (c.balance IS NOT NULL AND c.balance > 0)
+                       AND (c.balance IS NOT NULL AND c.balance > 0.01)
                        AND $companyCondition",
                     [$customerId]
                 );
@@ -931,13 +931,17 @@ if (isset($_GET['id'])) {
                     </div>
                     <?php else: ?>
                     <div class="alert alert-warning mb-0">
-                        لا يوجد عملاء مدينون لإضافة موعد تحصيل. يرجى إضافة عميل مدين أولاً.
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        لا يوجد عملاء شركة مدينون (رصيد مدين أكبر من صفر) لإضافة موعد تحصيل. 
+                        <br><small class="text-muted">تأكد من وجود عملاء شركة نشطين برصيد مدين (balance > 0).</small>
                     </div>
                     <?php endif; ?>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-primary" <?php echo $hasDebtorCustomers ? '' : 'disabled'; ?>>حفظ</button>
+                    <button type="submit" class="btn btn-primary" <?php echo $hasDebtorCustomers ? '' : 'disabled'; ?>>
+                        <?php echo $hasDebtorCustomers ? 'حفظ' : 'لا يوجد عملاء مدينون'; ?>
+                    </button>
                 </div>
             </form>
         </div>
