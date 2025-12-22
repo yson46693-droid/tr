@@ -3288,7 +3288,7 @@ if (!$error) {
 
                             <div class="mb-3">
                                 <label class="form-label">الخصم <span class="text-muted">(اختياري)</span></label>
-                                <input type="number" step="0.01" min="0" class="form-control" id="posDiscountInput" name="discount_amount" placeholder="0" value="0">
+                                <input type="number" step="1" min="0" class="form-control" id="posDiscountInput" name="discount_amount" placeholder="0" value="0">
                                 <small class="text-muted">سيتم خصم هذا المبلغ من إجمالي تكلفة المنتجات في السلة</small>
                             </div>
 
