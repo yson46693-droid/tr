@@ -135,7 +135,14 @@
       const cache = await caches.open(CACHE_NAME);
       const cachedResponse = await cache.match(url);
       if (cachedResponse) {
-        return URL.createObjectURL(await cachedResponse.blob());
+        const blob = await cachedResponse.blob();
+        // Convert blob to data URL to avoid CSP blob: restriction
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
       }
     } catch (error) {
       console.warn('Error reading from cache:', error);
