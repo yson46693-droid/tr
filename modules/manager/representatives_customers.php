@@ -982,7 +982,7 @@ try {
                         </tr>
                     <?php else: ?>
                         <?php foreach ($allCustomers as $customer): ?>
-                            <tr>
+                            <tr data-customer-id="<?php echo (int)$customer['id']; ?>">
                                 <td><strong><?php echo htmlspecialchars($customer['name']); ?></strong></td>
                                 <td>
                                     <?php

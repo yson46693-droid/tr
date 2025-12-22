@@ -245,7 +245,7 @@ if (!function_exists('renderCustomerListSection')) {
                                         ? formatCurrency($displayBalanceValue)
                                         : number_format($displayBalanceValue, 2);
                                     ?>
-                                    <tr>
+                                    <tr data-customer-id="<?php echo (int)($customer['id'] ?? 0); ?>">
                                         <td><strong><?php echo htmlspecialchars($customer['name'] ?? '-'); ?></strong></td>
                                         <td><?php echo htmlspecialchars($customer['phone'] ?? '-'); ?></td>
                                         <td>
