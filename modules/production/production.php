@@ -6507,20 +6507,43 @@ $lang = isset($translations) ? $translations : [];
     }
 })();
 
-// إعادة التحميل التلقائي بعد رسائل النجاح والخطأ بعد إنشاء تشغيلة
+// إعادة التحميل التلقائي بعد رسائل النجاح والخطأ بعد إنشاء تشغيلة (مرة واحدة فقط)
 (function() {
     const successAlert = document.getElementById('successAlert');
     const errorAlert = document.getElementById('errorAlert');
+    const refreshKey = 'production_page_refreshed';
+    
+    // تنظيف الـ flag إذا لم تكن هناك رسائل (بعد refresh ناجح)
+    if (!successAlert && !errorAlert) {
+        sessionStorage.removeItem(refreshKey);
+        return;
+    }
     
     // التحقق من وجود رسالة نجاح أو خطأ
     if (successAlert || errorAlert) {
-        // تحديد وقت الانتظار قبل التحديث (3 ثواني للسماح بقراءة الرسالة)
-        const refreshDelay = 3000;
+        const hasRefreshed = sessionStorage.getItem(refreshKey);
         
-        setTimeout(function() {
-            // إعادة تحميل الصفحة بعد التأخير المحدد
-            window.location.reload();
-        }, refreshDelay);
+        // إذا لم نكن قد قمنا بالـ refresh من قبل، قم به
+        if (!hasRefreshed) {
+            // تحديد وقت الانتظار قبل التحديث (3 ثواني للسماح بقراءة الرسالة)
+            const refreshDelay = 3000;
+            
+            // وضع flag قبل عمل الـ refresh
+            sessionStorage.setItem(refreshKey, 'true');
+            
+            setTimeout(function() {
+                // إعادة تحميل الصفحة بدون إعادة إرسال POST request
+                // استخدام window.location.href بدلاً من reload() لضمان GET request فقط
+                const currentUrl = new URL(window.location.href);
+                // إزالة معاملات success و error و _t و _v من URL قبل الـ refresh
+                currentUrl.searchParams.delete('success');
+                currentUrl.searchParams.delete('error');
+                currentUrl.searchParams.delete('_t');
+                currentUrl.searchParams.delete('_v');
+                currentUrl.searchParams.delete('_refresh');
+                window.location.href = currentUrl.toString();
+            }, refreshDelay);
+        }
     }
 })();
 </script>

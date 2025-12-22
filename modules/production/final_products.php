@@ -1515,24 +1515,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION[$sessionErrorKey] = $errorMessage;
                     }
                 }
-            } else {
-                $errorMessage = implode('<br>', $transferErrors);
-                
-                if ($isAjaxRequest) {
-                    header('Content-Type: application/json; charset=utf-8');
-                    http_response_code(400);
-                    echo json_encode([
-                        'success' => false,
-                        'message' => $errorMessage
-                    ], JSON_UNESCAPED_UNICODE);
-                    exit;
-                } else {
-                    $_SESSION[$sessionErrorKey] = $errorMessage;
-                }
             }
-        } else {
-            // حالة عدم توفر مخزن رئيسي أو مخازن وجهة
-            $errorMessage = 'لا يمكن إنشاء طلب النقل حالياً بسبب عدم توفر مخزن رئيسي أو مخازن وجهة نشطة.';
+        }
+        
+        // معالجة الأخطاء (سواء كانت من التحقق الأولي أو من معالجة النقل)
+        if (!empty($transferErrors)) {
+            $errorMessage = implode('<br>', $transferErrors);
             
             if ($isAjaxRequest) {
                 header('Content-Type: application/json; charset=utf-8');
@@ -3376,6 +3364,189 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
                 this.value = maxQty.toFixed(2);
             }
         });
+    }
+    
+    // معالج إرسال النموذج عبر AJAX
+    let isSubmitting = false;
+    transferForm.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        if (isSubmitting) {
+            return;
+        }
+        
+        // التحقق من صحة البيانات
+        const toWarehouseId = transferForm.querySelector('select[name="to_warehouse_id"]').value;
+        const quantity = parseFloat(quantityInput.value || '0');
+        const maxQty = parseFloat(quantityInput.max || '0');
+        
+        if (!toWarehouseId) {
+            showErrorMessage('يرجى اختيار المخزن الوجهة.');
+            return;
+        }
+        
+        if (quantity <= 0) {
+            showErrorMessage('يرجى إدخال كمية صالحة أكبر من الصفر.');
+            return;
+        }
+        
+        if (quantity > maxQty) {
+            showErrorMessage('الكمية المطلوبة تتجاوز الكمية المتاحة.');
+            return;
+        }
+        
+        isSubmitting = true;
+        const submitButton = transferForm.querySelector('button[type="submit"]');
+        const originalButtonText = submitButton ? submitButton.innerHTML : 'إرسال طلب النقل';
+        
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جارٍ الإرسال...';
+        }
+        
+        try {
+            const formData = new FormData(transferForm);
+            
+            const response = await fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData,
+                credentials: 'same-origin'
+            });
+            
+            const contentType = response.headers.get('content-type');
+            let result;
+            
+            if (contentType && contentType.includes('application/json')) {
+                result = await response.json();
+            } else {
+                // الاستجابة HTML - يعني أن الطلب تم بنجاح لكن الخادم لم يعد JSON
+                showSuccessMessage('تم إرسال طلب النقل بنجاح! سيتم مراجعته والموافقة عليه.');
+                
+                const modal = bootstrap.Modal.getInstance(transferModal);
+                if (modal) {
+                    modal.hide();
+                }
+                
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+                return;
+            }
+            
+            if (result.success) {
+                let successMsg = result.message || 'تم إرسال طلب النقل بنجاح!';
+                if (result.transfer_number) {
+                    successMsg += '\nرقم الطلب: ' + result.transfer_number;
+                }
+                
+                showSuccessMessage(successMsg);
+                
+                const modal = bootstrap.Modal.getInstance(transferModal);
+                if (modal) {
+                    modal.hide();
+                }
+                
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                isSubmitting = false;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonText;
+                }
+                showErrorMessage(result.message || result.error || 'حدث خطأ أثناء إرسال الطلب.');
+            }
+        } catch (error) {
+            console.error('Error submitting transfer form:', error);
+            isSubmitting = false;
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
+            }
+            showErrorMessage('حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+        }
+    });
+    
+    // دالة لإظهار رسالة النجاح
+    function showSuccessMessage(message) {
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        const toastId = 'success-toast-' + Date.now();
+        const toastHtml = `
+            <div id="${toastId}" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-check-circle-fill fs-4 me-2"></i>
+                            <strong class="me-auto">تمت العملية بنجاح!</strong>
+                        </div>
+                        <div class="small" style="white-space: pre-line;">${message.replace(/\n/g, '<br>')}</div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        const toastElement = document.getElementById(toastId);
+        if (toastElement && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+            const toast = new bootstrap.Toast(toastElement);
+            toast.show();
+            
+            toastElement.addEventListener('hidden.bs.toast', function() {
+                toastElement.remove();
+            });
+        }
+    }
+    
+    // دالة لإظهار رسالة الخطأ
+    function showErrorMessage(message) {
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        const toastId = 'error-toast-' + Date.now();
+        const toastHtml = `
+            <div id="${toastId}" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-exclamation-triangle-fill fs-4 me-2"></i>
+                            <strong class="me-auto">خطأ!</strong>
+                        </div>
+                        <div class="small">${message}</div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        const toastElement = document.getElementById(toastId);
+        if (toastElement && typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+            const toast = new bootstrap.Toast(toastElement);
+            toast.show();
+            
+            toastElement.addEventListener('hidden.bs.toast', function() {
+                toastElement.remove();
+            });
+        }
     }
 })();
 </script>

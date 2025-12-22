@@ -669,6 +669,55 @@ if (!function_exists('triggerDailyLowStockReport')) {
                     $status = 'failed';
                     $errorMessage = 'إعدادات Telegram غير مكتملة';
                 } else {
+                    // تحديث قاعدة البيانات قبل الإرسال لمنع الإرسال المتكرر في الطلبات المتزامنة
+                    try {
+                        $db->beginTransaction();
+                        
+                        // التحقق مرة أخرى من عدم الإرسال (باستخدام FOR UPDATE lock)
+                        $checkJobState = $db->queryOne(
+                            "SELECT last_sent_at FROM system_daily_jobs WHERE job_key = ? FOR UPDATE",
+                            [LOW_STOCK_REPORT_JOB_KEY]
+                        );
+                        
+                        if (!empty($checkJobState['last_sent_at'])) {
+                            $lastSentDate = substr((string)$checkJobState['last_sent_at'], 0, 10);
+                            if ($lastSentDate === $todayDate) {
+                                // تم الإرسال بالفعل من طلب متزامن آخر
+                                $db->commit();
+                                $alreadySentData = [
+                                    'date' => $todayDate,
+                                    'status' => 'already_sent',
+                                    'checked_at' => date('Y-m-d H:i:s'),
+                                    'note' => 'Report already sent today by concurrent request',
+                                ];
+                                lowStockReportSaveStatus($alreadySentData);
+                                return;
+                            }
+                        }
+                        
+                        // تحديث الحالة قبل الإرسال
+                        if ($jobState) {
+                            $db->execute(
+                                "UPDATE system_daily_jobs SET last_sent_at = NOW(), last_file_path = ?, updated_at = NOW() WHERE job_key = ?",
+                                [$relativePath, LOW_STOCK_REPORT_JOB_KEY]
+                            );
+                        } else {
+                            $db->execute(
+                                "INSERT INTO system_daily_jobs (job_key, last_sent_at, last_file_path) VALUES (?, NOW(), ?)",
+                                [LOW_STOCK_REPORT_JOB_KEY, $relativePath]
+                            );
+                        }
+                        
+                        $db->commit();
+                    } catch (Throwable $jobUpdateError) {
+                        try {
+                            $db->rollback();
+                        } catch (Throwable $ignore) {
+                        }
+                        error_log('Low Stock Report: job state update failed - ' . $jobUpdateError->getMessage());
+                        // نتابع الإرسال حتى لو فشل التحديث
+                    }
+
                     $buttons = [
                         [
                             ['text' => 'عرض التقرير', 'url' => $absoluteReportUrl],
@@ -718,21 +767,7 @@ if (!function_exists('triggerDailyLowStockReport')) {
 
             if ($status === 'completed') {
                 lowStockReportNotifyManager('تم إرسال تقرير المخازن منخفضة الكمية إلى شات Telegram.');
-                try {
-                    if ($jobState) {
-                        $db->execute(
-                            "UPDATE system_daily_jobs SET last_sent_at = NOW(), last_file_path = ?, updated_at = NOW() WHERE job_key = ?",
-                            [$relativePath, LOW_STOCK_REPORT_JOB_KEY]
-                        );
-                    } else {
-                        $db->execute(
-                            "INSERT INTO system_daily_jobs (job_key, last_sent_at, last_file_path) VALUES (?, NOW(), ?)",
-                            [LOW_STOCK_REPORT_JOB_KEY, $relativePath]
-                        );
-                    }
-                } catch (Throwable $jobUpdateError) {
-                    error_log('Low Stock Report: job state update failed - ' . $jobUpdateError->getMessage());
-                }
+                // تم نقل تحديث system_daily_jobs إلى قبل الإرسال أعلاه لمنع التكرار
             }
 
             lowStockReportSaveStatus($finalData);

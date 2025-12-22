@@ -646,6 +646,54 @@ if (!function_exists('triggerDailyBackupDelivery')) {
         }
         $caption = implode("\n", $captionLines);
 
+        // تحديث قاعدة البيانات قبل الإرسال لمنع الإرسال المتكرر في الطلبات المتزامنة
+        try {
+            $db->beginTransaction();
+            
+            // التحقق مرة أخرى من عدم الإرسال (باستخدام FOR UPDATE lock)
+            $existingLogCheck = $db->queryOne(
+                "SELECT id, sent_date, status FROM daily_backup_sent_log 
+                 WHERE sent_date = ? 
+                 FOR UPDATE",
+                [$todayDate]
+            );
+            
+            // إذا وجد سجل لإرسال اليوم وكانت الحالة 'sent'، لا ترسل مرة أخرى
+            if (!empty($existingLogCheck) && ($existingLogCheck['status'] ?? null) === 'sent') {
+                $db->commit();
+                $statusData['status'] = 'already_sent';
+                $statusData['note'] = 'Backup already sent today by concurrent request';
+                dailyBackupSaveStatus($statusData);
+                return; // تم الإرسال مسبقاً اليوم، لا حاجة لإعادة الإرسال
+            }
+            
+            // تحديث السجل قبل الإرسال (باستخدام INSERT ... ON DUPLICATE KEY UPDATE)
+            $db->execute(
+                "INSERT INTO daily_backup_sent_log (sent_date, sent_at, backup_file_path, backup_id, status)
+                 VALUES (?, NOW(), ?, ?, 'sent')
+                 ON DUPLICATE KEY UPDATE 
+                     sent_at = NOW(),
+                     backup_file_path = VALUES(backup_file_path),
+                     backup_id = VALUES(backup_id),
+                     status = 'sent',
+                     error_message = NULL",
+                [
+                    $todayDate,
+                    $backupRelativePath ?? $backupFilePath,
+                    $backupId
+                ]
+            );
+            
+            $db->commit();
+        } catch (Throwable $preSendError) {
+            try {
+                $db->rollback();
+            } catch (Throwable $ignore) {
+            }
+            error_log('Daily Backup: failed pre-send logging - ' . $preSendError->getMessage());
+            // نتابع الإرسال حتى لو فشل السجل
+        }
+
         $sendResult = sendTelegramFile($backupFilePath, $caption);
 
         if ($sendResult === false) {
@@ -688,34 +736,8 @@ if (!function_exists('triggerDailyBackupDelivery')) {
             return;
         }
 
-        // ===== تسجيل نجاح إرسال النسخة الاحتياطية في قاعدة البيانات =====
-        try {
-            $db->beginTransaction();
-            
-            $db->execute(
-                "INSERT INTO daily_backup_sent_log (sent_date, sent_at, backup_file_path, backup_id, status)
-                 VALUES (?, NOW(), ?, ?, 'sent')
-                 ON DUPLICATE KEY UPDATE 
-                     sent_at = NOW(),
-                     backup_file_path = VALUES(backup_file_path),
-                     backup_id = VALUES(backup_id),
-                     status = 'sent',
-                     error_message = NULL",
-                [
-                    $todayDate,
-                    $backupRelativePath ?? $backupFilePath,
-                    $backupId
-                ]
-            );
-            
-            $db->commit();
-        } catch (Throwable $logError) {
-            try {
-                $db->rollback();
-            } catch (Throwable $ignore) {
-            }
-            error_log('Daily Backup: failed logging sent backup - ' . $logError->getMessage());
-        }
+        // تم نقل تسجيل نجاح الإرسال إلى قبل الإرسال أعلاه لمنع التكرار
+        // إذا فشل الإرسال، سيتم تحديث الحالة إلى 'failed' في الكود أدناه
 
         $fileLogValue = $backupRelativePath ?? $backupFilePath;
         if (strlen($fileLogValue) > 510) {
