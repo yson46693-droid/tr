@@ -2433,6 +2433,7 @@ if ($isProductionRole) {
 <div class="header">
     <i class="bi bi-box-seam" style="font-size: 24px;"></i>
     <span>منتجات المصنع</span>
+    <?php if (!$isProductionRole): ?>
     <div style="margin-right: auto; margin-left: 20px;">
         <button
             type="button"
@@ -2449,6 +2450,7 @@ if ($isProductionRole) {
             طلب نقل منتجات
         </button>
     </div>
+    <?php endif; ?>
 </div>
 
 <!-- حقول البحث والفلترة -->
@@ -3381,6 +3383,75 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
 </div>
 
 <!-- Modal نقل منتج خارجي -->
+<div class="modal fade" id="transferExternalProductModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <form class="modal-content" method="POST" id="transferExternalProductForm">
+            <input type="hidden" name="action" value="transfer_external_product">
+            <input type="hidden" name="transfer_token" value="<?php echo htmlspecialchars($_SESSION['transfer_submission_token'] ?? ''); ?>">
+            <input type="hidden" name="product_id" id="transferExternalProductId" value="">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>نقل منتج خارجي</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">اسم المنتج</label>
+                    <input type="text" class="form-control" id="transferExternalProductName" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية المتاحة</label>
+                    <input type="text" class="form-control" id="transferExternalAvailableQty" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">المخزن الوجهة <span class="text-danger">*</span></label>
+                    <select class="form-select" name="to_warehouse_id" required>
+                        <option value="">اختر المخزن الوجهة</option>
+                        <?php if (!empty($destinationWarehouses)): ?>
+                            <?php foreach ($destinationWarehouses as $warehouse): ?>
+                                <option value="<?php echo (int)$warehouse['id']; ?>">
+                                    <?php if ($warehouse['warehouse_type'] === 'vehicle' && !empty($warehouse['rep_name'])): ?>
+                                        <?php 
+                                        $repName = htmlspecialchars($warehouse['rep_name'] ?? '');
+                                        $repUsername = htmlspecialchars($warehouse['rep_username'] ?? '');
+                                        $vehicleNumber = htmlspecialchars($warehouse['vehicle_number'] ?? '');
+                                        echo $repName . ' - ' . $repUsername . ' - ' . $vehicleNumber;
+                                        ?>
+                                    <?php else: ?>
+                                        <?php echo htmlspecialchars($warehouse['name']); ?>
+                                        <?php if (!empty($warehouse['warehouse_type'])): ?>
+                                            (<?php echo htmlspecialchars($warehouse['warehouse_type']); ?>)
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية المراد نقلها <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" name="quantity" id="transferExternalQuantity" step="0.01" min="0.01" required>
+                    <small class="text-muted">الحد الأقصى: <span id="transferExternalMaxQty">0</span></small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">تاريخ النقل</label>
+                    <input type="date" class="form-control" name="transfer_date" value="<?php echo date('Y-m-d'); ?>">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">ملاحظات</label>
+                    <textarea class="form-control" name="notes" rows="2" placeholder="ملاحظات إضافية (اختياري)"></textarea>
+                </div>
+                <div class="alert alert-warning mb-0">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    سيتم إرسال طلب النقل إلى المدير للموافقة عليه.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="submit" class="btn btn-primary">إرسال طلب النقل</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <script>
 (function() {
