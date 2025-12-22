@@ -2247,6 +2247,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // إضافة المنتجات إلى سجل مشتريات العميل
                 if ($invoiceData) {
                     try {
+                        // التحقق من تطابق customer_id بين الفاتورة والطلب
+                        $invoiceCheck = $db->queryOne(
+                            "SELECT customer_id FROM invoices WHERE id = ?",
+                            [$order['invoice_id']]
+                        );
+                        
+                        if (!$invoiceCheck) {
+                            throw new RuntimeException('الفاتورة غير موجودة');
+                        }
+                        
+                        $invoiceCustomerId = (int)($invoiceCheck['customer_id'] ?? 0);
+                        $orderCustomerId = (int)($order['customer_id'] ?? 0);
+                        
+                        if ($invoiceCustomerId !== $orderCustomerId) {
+                            error_log(sprintf(
+                                'ERROR: customer_id mismatch in shipping_orders! Invoice customer_id: %d, Order customer_id: %d, Invoice ID: %d',
+                                $invoiceCustomerId,
+                                $orderCustomerId,
+                                $order['invoice_id']
+                            ));
+                            throw new RuntimeException('تضارب في بيانات العميل: customer_id في الفاتورة لا يطابق customer_id في الطلب');
+                        }
+                        
                         // التأكد من أن جدول customer_purchase_history موجود
                         customerHistoryEnsureSetup();
                         
@@ -2264,7 +2287,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 invoice_status = VALUES(invoice_status),
                                 updated_at = NOW()",
                             [
-                                $order['customer_id'],
+                                $orderCustomerId,
                                 $order['invoice_id'],
                                 $invoiceData['invoice_number'] ?? '',
                                 $invoiceData['date'] ?? date('Y-m-d'),

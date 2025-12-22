@@ -169,6 +169,13 @@ class Database {
             // تم تعطيله مؤقتاً لتجنب timeout
             // $this->ensureVehicleInventoryAutoUpgrade();
             
+            // تشغيل migration لإضافة Foreign Key Constraints
+            try {
+                $this->ensureCustomerIntegrityConstraints();
+            } catch (Throwable $e) {
+                error_log('Customer integrity constraints migration error (non-critical): ' . $e->getMessage());
+            }
+            
         } catch (Exception $e) {
             // تسجيل الخطأ في ملف السجل
             error_log("Database connection error: " . $e->getMessage());
@@ -764,6 +771,175 @@ class Database {
 
         } catch (Throwable $customerFlagsError) {
             error_log('Customers flags migration error: ' . $customerFlagsError->getMessage());
+        }
+    }
+    
+    /**
+     * إضافة Foreign Key Constraints لضمان سلامة بيانات العملاء والفواتير
+     * يتم تشغيلها تلقائياً مرة واحدة فقط
+     */
+    private function ensureCustomerIntegrityConstraints(): void
+    {
+        static $migrationEnsured = false;
+
+        if ($migrationEnsured) {
+            return;
+        }
+
+        $migrationEnsured = true;
+
+        try {
+            $flagFile = dirname(__DIR__) . '/runtime/customer_integrity_constraints.flag';
+
+            // إذا تم تشغيل الهجرة من قبل، تخطي
+            if (file_exists($flagFile)) {
+                return;
+            }
+
+            // التحقق من وجود الجداول
+            $invoicesTableExists = $this->connection->query("SHOW TABLES LIKE 'invoices'");
+            $customersTableExists = $this->connection->query("SHOW TABLES LIKE 'customers'");
+            $cphTableExists = $this->connection->query("SHOW TABLES LIKE 'customer_purchase_history'");
+            
+            if (!($invoicesTableExists instanceof mysqli_result && $invoicesTableExists->num_rows > 0) ||
+                !($customersTableExists instanceof mysqli_result && $customersTableExists->num_rows > 0)) {
+                if ($invoicesTableExists instanceof mysqli_result) {
+                    $invoicesTableExists->free();
+                }
+                if ($customersTableExists instanceof mysqli_result) {
+                    $customersTableExists->free();
+                }
+                if ($cphTableExists instanceof mysqli_result) {
+                    $cphTableExists->free();
+                }
+                return;
+            }
+            
+            if ($invoicesTableExists instanceof mysqli_result) {
+                $invoicesTableExists->free();
+            }
+            if ($customersTableExists instanceof mysqli_result) {
+                $customersTableExists->free();
+            }
+            if ($cphTableExists instanceof mysqli_result) {
+                $cphTableExists->free();
+            }
+
+            // التحقق من وجود Foreign Keys الحالية
+            $fkInvoicesCustomer = false;
+            $fkCphCustomer = false;
+            $fkCphInvoice = false;
+            
+            try {
+                $fkCheck = $this->connection->query("
+                    SELECT CONSTRAINT_NAME 
+                    FROM information_schema.TABLE_CONSTRAINTS 
+                    WHERE TABLE_SCHEMA = DATABASE() 
+                    AND TABLE_NAME = 'invoices' 
+                    AND CONSTRAINT_NAME = 'fk_invoices_customer'
+                ");
+                if ($fkCheck instanceof mysqli_result && $fkCheck->num_rows > 0) {
+                    $fkInvoicesCustomer = true;
+                }
+                if ($fkCheck instanceof mysqli_result) {
+                    $fkCheck->free();
+                }
+            } catch (Throwable $e) {
+                error_log('Error checking invoices FK: ' . $e->getMessage());
+            }
+            
+            try {
+                $fkCheck = $this->connection->query("
+                    SELECT CONSTRAINT_NAME 
+                    FROM information_schema.TABLE_CONSTRAINTS 
+                    WHERE TABLE_SCHEMA = DATABASE() 
+                    AND TABLE_NAME = 'customer_purchase_history' 
+                    AND CONSTRAINT_NAME = 'fk_cph_customer'
+                ");
+                if ($fkCheck instanceof mysqli_result && $fkCheck->num_rows > 0) {
+                    $fkCphCustomer = true;
+                }
+                if ($fkCheck instanceof mysqli_result) {
+                    $fkCheck->free();
+                }
+            } catch (Throwable $e) {
+                error_log('Error checking cph customer FK: ' . $e->getMessage());
+            }
+            
+            try {
+                $fkCheck = $this->connection->query("
+                    SELECT CONSTRAINT_NAME 
+                    FROM information_schema.TABLE_CONSTRAINTS 
+                    WHERE TABLE_SCHEMA = DATABASE() 
+                    AND TABLE_NAME = 'customer_purchase_history' 
+                    AND CONSTRAINT_NAME = 'fk_cph_invoice'
+                ");
+                if ($fkCheck instanceof mysqli_result && $fkCheck->num_rows > 0) {
+                    $fkCphInvoice = true;
+                }
+                if ($fkCheck instanceof mysqli_result) {
+                    $fkCheck->free();
+                }
+            } catch (Throwable $e) {
+                error_log('Error checking cph invoice FK: ' . $e->getMessage());
+            }
+
+            // إضافة Foreign Keys المفقودة
+            if (!$fkInvoicesCustomer) {
+                try {
+                    $this->connection->query("
+                        ALTER TABLE invoices 
+                        ADD CONSTRAINT fk_invoices_customer 
+                        FOREIGN KEY (customer_id) REFERENCES customers(id) 
+                        ON DELETE RESTRICT
+                    ");
+                    $this->clearCache();
+                    error_log('Added FK constraint: fk_invoices_customer');
+                } catch (Throwable $e) {
+                    // قد يفشل إذا كانت هناك بيانات غير متطابقة، نسجل الخطأ فقط
+                    error_log('Error adding fk_invoices_customer: ' . $e->getMessage());
+                }
+            }
+            
+            if (!$fkCphCustomer) {
+                try {
+                    $this->connection->query("
+                        ALTER TABLE customer_purchase_history 
+                        ADD CONSTRAINT fk_cph_customer 
+                        FOREIGN KEY (customer_id) REFERENCES customers(id) 
+                        ON DELETE CASCADE
+                    ");
+                    $this->clearCache();
+                    error_log('Added FK constraint: fk_cph_customer');
+                } catch (Throwable $e) {
+                    error_log('Error adding fk_cph_customer: ' . $e->getMessage());
+                }
+            }
+            
+            if (!$fkCphInvoice) {
+                try {
+                    $this->connection->query("
+                        ALTER TABLE customer_purchase_history 
+                        ADD CONSTRAINT fk_cph_invoice 
+                        FOREIGN KEY (invoice_id) REFERENCES invoices(id) 
+                        ON DELETE CASCADE
+                    ");
+                    $this->clearCache();
+                    error_log('Added FK constraint: fk_cph_invoice');
+                } catch (Throwable $e) {
+                    error_log('Error adding fk_cph_invoice: ' . $e->getMessage());
+                }
+            }
+
+            // إنشاء flag file للإشارة إلى اكتمال الهجرة
+            $flagDir = dirname($flagFile);
+            if (!is_dir($flagDir)) {
+                @mkdir($flagDir, 0775, true);
+            }
+            @file_put_contents($flagFile, date('c'));
+
+        } catch (Throwable $error) {
+            error_log('Customer integrity constraints migration error: ' . $error->getMessage());
         }
     }
     

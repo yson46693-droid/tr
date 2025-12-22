@@ -29,6 +29,41 @@ function createInvoice($customerId, $salesRepId, $date, $items, $taxRate = 0, $d
             return ['success' => false, 'message' => 'يجب تسجيل الدخول'];
         }
         
+        // التحقق من صحة customer_id قبل إنشاء الفاتورة
+        if ($customerId <= 0) {
+            return ['success' => false, 'message' => 'معرف العميل غير صالح'];
+        }
+        
+        // التحقق من وجود العميل وحالته
+        $customer = $db->queryOne(
+            "SELECT id, status, rep_id, created_by FROM customers WHERE id = ?",
+            [$customerId]
+        );
+        
+        if (!$customer) {
+            return ['success' => false, 'message' => 'العميل غير موجود'];
+        }
+        
+        if ($customer['status'] !== 'active') {
+            return ['success' => false, 'message' => 'العميل غير نشط'];
+        }
+        
+        // التحقق من ملكية المندوب للعميل (إذا كان المستخدم مندوب مبيعات)
+        if ($salesRepId && $createdBy) {
+            require_once __DIR__ . '/auth.php';
+            $currentUser = getCurrentUser();
+            if ($currentUser && ($currentUser['role'] ?? '') === 'sales') {
+                $salesRepIdInt = (int)$salesRepId;
+                $customerRepId = !empty($customer['rep_id']) ? (int)$customer['rep_id'] : null;
+                $customerCreatedBy = !empty($customer['created_by']) ? (int)$customer['created_by'] : null;
+                
+                // التحقق من أن العميل ينتمي للمندوب
+                if ($customerRepId !== $salesRepIdInt && $customerCreatedBy !== $salesRepIdInt) {
+                    return ['success' => false, 'message' => 'هذا العميل غير مرتبط بك'];
+                }
+            }
+        }
+        
         // التحقق من وجود عمود created_from_pos وإضافته إذا لم يكن موجوداً
         $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
         if (!$hasCreatedFromPosColumn) {

@@ -1580,6 +1580,11 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد من CSV
         </button>
         <?php endif; ?>
+        <?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?>
+        <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#customerExportModal">
+            <i class="bi bi-download me-2"></i>تصدير عملاء محددين
+        </button>
+        <?php endif; ?>
         <?php if ($section === 'company' || $isSalesUser): ?>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
             <i class="bi bi-person-plus me-2"></i>إضافة عميل جديد
@@ -5525,6 +5530,65 @@ document.addEventListener('DOMContentLoaded', function () {
 </div>
 <?php endif; ?>
 
+<!-- Modal تصدير العملاء المحددين -->
+<?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?>
+<div class="modal fade" id="customerExportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-download me-2"></i>تصدير عملاء محددين إلى Excel
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="customer-export-alerts mb-3"></div>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">حدد العملاء المراد تصديرهم:</h6>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-primary" id="selectAllCustomers">
+                                <i class="bi bi-check-square me-1"></i>تحديد الكل
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="deselectAllCustomers">
+                                <i class="bi bi-square me-1"></i>إلغاء التحديد
+                            </button>
+                        </div>
+                    </div>
+                    <div id="exportCustomersList">
+                        <div class="text-center text-muted py-4">
+                            <span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل قائمة العملاء...
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="exportActionButtons" style="display: none;" class="mt-3 p-3 bg-light rounded">
+                    <h6 class="mb-3">تم توليد ملف Excel بنجاح</h6>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="button" class="btn btn-primary" id="printExcelBtn">
+                            <i class="bi bi-printer me-2"></i>طباعة
+                        </button>
+                        <button type="button" class="btn btn-success" id="downloadExcelBtn">
+                            <i class="bi bi-download me-2"></i>تحميل الملف
+                        </button>
+                        <button type="button" class="btn btn-info" id="shareExcelBtn">
+                            <i class="bi bi-share me-2"></i>مشاركة
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-primary" id="generateExcelBtn" disabled>
+                    <i class="bi bi-file-earmark-excel me-2"></i>توليد ملف Excel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php endif; // end if ($section === 'company') ?>
 
 <!-- إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات -->
@@ -5678,3 +5742,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 })();
 </script>
+
+<!-- Customer Export Script -->
+<script src="<?php echo ASSETS_URL; ?>js/customer_export.js?v=<?php echo time(); ?>"></script>

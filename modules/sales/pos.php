@@ -892,8 +892,30 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     ));
                 }
                 
-                // إضافة الفاتورة إلى سجل مشتريات العميل
+                // إضافة الفاتورة إلى سجل مشتريات العميل (داخل نفس الـ transaction)
+                // التحقق من تطابق customer_id بين الفاتورة والبيانات الممررة
                 try {
+                    // التحقق من تطابق customer_id في الفاتورة
+                    $invoiceCheck = $db->queryOne(
+                        "SELECT customer_id FROM invoices WHERE id = ?",
+                        [$invoiceId]
+                    );
+                    
+                    if (!$invoiceCheck) {
+                        throw new RuntimeException('الفاتورة غير موجودة');
+                    }
+                    
+                    $invoiceCustomerId = (int)($invoiceCheck['customer_id'] ?? 0);
+                    if ($invoiceCustomerId !== (int)$customerId) {
+                        error_log(sprintf(
+                            'ERROR: customer_id mismatch! Invoice customer_id: %d, Provided: %d, Invoice ID: %d',
+                            $invoiceCustomerId,
+                            $customerId,
+                            $invoiceId
+                        ));
+                        throw new RuntimeException('تضارب في بيانات العميل: customer_id في الفاتورة لا يطابق البيانات الممررة');
+                    }
+                    
                     customerHistoryEnsureSetup();
                     $db->execute(
                         "INSERT INTO customer_purchase_history
@@ -919,7 +941,8 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                 } catch (Throwable $historyError) {
                     error_log('Error adding invoice to customer purchase history: ' . $historyError->getMessage());
-                    // لا نوقف العملية إذا فشل تسجيل التاريخ، لكن نسجل الخطأ
+                    // في حالة الخطأ، نوقف العملية ونتدحرج
+                    throw $historyError;
                 }
                 
                 // تسجيل التحصيل في جدول التحصيلات إذا كان هناك مبلغ محصل فعلياً

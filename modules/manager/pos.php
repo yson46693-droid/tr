@@ -994,6 +994,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $invoiceStatus = 'partial';
                 }
 
+                // إضافة الفاتورة إلى سجل مشتريات العميل (داخل نفس الـ transaction)
+                // التحقق من تطابق customer_id بين الفاتورة والبيانات الممررة
+                try {
+                    // التحقق من تطابق customer_id في الفاتورة
+                    $invoiceCheck = $db->queryOne(
+                        "SELECT customer_id FROM invoices WHERE id = ?",
+                        [$invoiceId]
+                    );
+                    
+                    if (!$invoiceCheck) {
+                        throw new RuntimeException('الفاتورة غير موجودة');
+                    }
+                    
+                    $invoiceCustomerId = (int)($invoiceCheck['customer_id'] ?? 0);
+                    if ($invoiceCustomerId !== (int)$tempCustomerId) {
+                        error_log(sprintf(
+                            'ERROR: customer_id mismatch in manager/pos.php! Invoice customer_id: %d, Provided: %d, Invoice ID: %d',
+                            $invoiceCustomerId,
+                            $tempCustomerId,
+                            $invoiceId
+                        ));
+                        throw new RuntimeException('تضارب في بيانات العميل: customer_id في الفاتورة لا يطابق البيانات الممررة');
+                    }
+                    
+                    // التأكد من تحميل دالة customerHistoryEnsureSetup
+                    if (!function_exists('customerHistoryEnsureSetup')) {
+                        require_once __DIR__ . '/../../includes/customer_history.php';
+                    }
+                    
+                    customerHistoryEnsureSetup();
+                    $db->execute(
+                        "INSERT INTO customer_purchase_history
+                            (customer_id, invoice_id, invoice_number, invoice_date, invoice_total, paid_amount, invoice_status,
+                             return_total, return_count, created_at)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, NOW())
+                         ON DUPLICATE KEY UPDATE
+                            invoice_number = VALUES(invoice_number),
+                            invoice_date = VALUES(invoice_date),
+                            invoice_total = VALUES(invoice_total),
+                            paid_amount = VALUES(paid_amount),
+                            invoice_status = VALUES(invoice_status),
+                            updated_at = NOW()",
+                        [
+                            $tempCustomerId,
+                            $invoiceId,
+                            $invoiceNumber,
+                            $saleDate,
+                            $netTotal,
+                            $effectivePaidAmount,
+                            $invoiceStatus
+                        ]
+                    );
+                } catch (Throwable $historyError) {
+                    error_log('Error adding invoice to customer purchase history in manager/pos.php: ' . $historyError->getMessage());
+                    // في حالة الخطأ، نوقف العملية ونتدحرج
+                    throw $historyError;
+                }
+
                 // لا يتم تحديث الفاتورة بعد إنشائها من نقطة البيع
                 // الفاتورة يجب أن تبقى على تفاصيلها الأصلية ولا يتم تحديثها أبداً
                 // تم تعطيل التحديث التالي لضمان عدم تحديث فواتير نقطة البيع
