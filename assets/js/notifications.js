@@ -943,28 +943,47 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // إضافة event listener لزر مسح كل الإشعارات
-    const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-    if (clearAllBtn) {
-        clearAllBtn.addEventListener('click', async function(e) {
+    function initClearAllButton() {
+        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+        if (!clearAllBtn) {
+            return;
+        }
+        
+        // إذا كان الزر قد تم تهيئته بالفعل، لا نعيد التهيئة
+        if (clearAllBtn.hasAttribute('data-initialized')) {
+            return;
+        }
+        
+        // إزالة أي event listeners سابقة لتجنب التكرار
+        const newBtn = clearAllBtn.cloneNode(true);
+        clearAllBtn.parentNode.replaceChild(newBtn, clearAllBtn);
+        
+        // إضافة علامة للزر
+        newBtn.setAttribute('data-initialized', 'true');
+        
+        // إضافة event listener جديد
+        newBtn.addEventListener('click', async function(e) {
             e.preventDefault();
             e.stopPropagation();
-            e.stopImmediatePropagation(); // منع انتشار الحدث لأي معالجات أخرى
+            e.stopImmediatePropagation();
             
             if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
-                return;
+                return false;
             }
             
             // تعطيل الزر أثناء المعالجة
-            const originalHTML = clearAllBtn.innerHTML;
-            clearAllBtn.disabled = true;
-            clearAllBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
+            const originalHTML = newBtn.innerHTML;
+            const originalDisabled = newBtn.disabled;
+            newBtn.disabled = true;
+            newBtn.style.pointerEvents = 'none';
+            newBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
             
             try {
                 const result = await deleteAllNotifications();
                 
                 // إذا كان المستخدم قد سجل خروج، لا نتابع
                 if (result && result.loggedOut) {
-                    return;
+                    return false;
                 }
                 
                 // إعادة تحميل الإشعارات بعد الحذف
@@ -980,7 +999,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
                 if (error.message && error.message.includes('Unauthorized')) {
                     console.warn('User logged out during notification deletion');
-                    return;
+                    return false;
                 }
                 console.error('Error in deleteAllNotifications:', error);
                 // إظهار رسالة خطأ فقط للأخطاء الأخرى
@@ -990,11 +1009,55 @@ document.addEventListener('DOMContentLoaded', function() {
             } finally {
                 // إعادة تمكين الزر فقط إذا لم يتم إعادة التوجيه
                 if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
-                    clearAllBtn.disabled = false;
-                    clearAllBtn.innerHTML = originalHTML;
+                    newBtn.disabled = originalDisabled;
+                    newBtn.style.pointerEvents = '';
+                    newBtn.innerHTML = originalHTML;
                 }
             }
+            
+            return false;
         }, true); // استخدام capture phase لضمان التنفيذ أولاً
+        
+        // أيضاً إضافة onclick مباشرة كـ fallback (لكن نستخدم addEventListener كطريقة أساسية)
+        // إزالة أي onclick سابق
+        newBtn.removeAttribute('onclick');
+        
+        // إضافة معالج مباشر كـ fallback إضافي
+        newBtn.onclick = async function(e) {
+            // هذا سيعمل فقط إذا فشل addEventListener
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        };
+    }
+    
+    // تهيئة الزر عند تحميل الصفحة
+    initClearAllButton();
+    
+    // إعادة تهيئة الزر بعد تحديث قائمة الإشعارات (في حالة إعادة بناء DOM)
+    // استخدام MutationObserver لمراقبة تغييرات DOM
+    const observer = new MutationObserver(function(mutations) {
+        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+        if (clearAllBtn && !clearAllBtn.hasAttribute('data-initialized')) {
+            initClearAllButton();
+        }
+    });
+    
+    // مراقبة تغييرات في dropdown menu
+    const notificationsDropdown = document.querySelector('.notifications-dropdown');
+    if (notificationsDropdown) {
+        observer.observe(notificationsDropdown, {
+            childList: true,
+            subtree: true
+        });
+    }
+    
+    // أيضاً إعادة تهيئة الزر عند فتح dropdown
+    const notificationDropdownToggle = document.getElementById('notificationsDropdown');
+    if (notificationDropdownToggle) {
+        notificationDropdownToggle.addEventListener('shown.bs.dropdown', function() {
+            setTimeout(initClearAllButton, 50);
+        });
     }
 });
 

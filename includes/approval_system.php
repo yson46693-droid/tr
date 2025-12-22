@@ -937,11 +937,45 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
             } elseif ($status === 'rejected') {
                 try {
                     $entityColumnName = getApprovalsEntityColumn();
-                    $approvalRow = $db->queryOne(
-                        "SELECT rejection_reason FROM approvals WHERE type = 'warehouse_transfer' AND `{$entityColumnName}` = ? ORDER BY updated_at DESC LIMIT 1",
-                        [$entityId]
-                    );
-                    $reason = $approvalRow['rejection_reason'] ?? 'تم رفض طلب النقل.';
+                    
+                    // التحقق من وجود عمود rejection_reason أو استخدام notes/approval_notes
+                    $columns = $db->query("SHOW COLUMNS FROM approvals") ?? [];
+                    $hasRejectionReason = false;
+                    $hasNotesColumn = false;
+                    $hasApprovalNotesColumn = false;
+                    $rejectionColumn = 'rejection_reason';
+                    $notesColumn = 'notes';
+                    
+                    foreach ($columns as $column) {
+                        $fieldName = $column['Field'] ?? '';
+                        if ($fieldName === 'rejection_reason') {
+                            $hasRejectionReason = true;
+                        } elseif ($fieldName === 'notes') {
+                            $hasNotesColumn = true;
+                        } elseif ($fieldName === 'approval_notes') {
+                            $hasApprovalNotesColumn = true;
+                            $notesColumn = 'approval_notes';
+                        }
+                    }
+                    
+                    // بناء استعلام SELECT بناءً على الأعمدة المتاحة
+                    if ($hasRejectionReason) {
+                        $approvalRow = $db->queryOne(
+                            "SELECT rejection_reason FROM approvals WHERE type = 'warehouse_transfer' AND `{$entityColumnName}` = ? ORDER BY updated_at DESC LIMIT 1",
+                            [$entityId]
+                        );
+                        $reason = $approvalRow['rejection_reason'] ?? 'تم رفض طلب النقل.';
+                    } elseif ($hasNotesColumn || $hasApprovalNotesColumn) {
+                        $approvalRow = $db->queryOne(
+                            "SELECT {$notesColumn} FROM approvals WHERE type = 'warehouse_transfer' AND `{$entityColumnName}` = ? ORDER BY updated_at DESC LIMIT 1",
+                            [$entityId]
+                        );
+                        $reason = $approvalRow[$notesColumn] ?? 'تم رفض طلب النقل.';
+                    } else {
+                        // إذا لم يكن هناك أي عمود للملاحظات، استخدام رسالة افتراضية
+                        $reason = 'تم رفض طلب النقل.';
+                    }
+                    
                     $result = rejectWarehouseTransfer($entityId, $reason, $approvedBy);
                     if (!($result['success'] ?? false)) {
                         $errorMessage = $result['message'] ?? 'تعذر رفض طلب النقل.';
