@@ -5268,7 +5268,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <!-- Modal إضافة عميل جديد -->
 <div class="modal fade" id="addCustomerModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-md-down">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">إضافة عميل جديد</h5>

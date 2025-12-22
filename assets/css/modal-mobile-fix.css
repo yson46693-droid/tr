@@ -221,6 +221,31 @@
     #customerHistoryModal .modal-body {
         padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px) + 30px);
     }
+    
+    /* ===== إصلاح ظهور الأزرار في addCustomerModal على الهاتف ===== */
+    #addCustomerModal.modal-fullscreen-md-down .modal-footer {
+        position: sticky !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        z-index: 1056 !important;
+        background: rgba(255, 255, 255, 0.98) !important;
+        backdrop-filter: blur(6px) !important;
+        border-top: 1px solid rgba(0, 0, 0, 0.1) !important;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1) !important;
+        padding-top: 1rem !important;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+        margin-top: 0 !important;
+    }
+    
+    #addCustomerModal.modal-fullscreen-md-down .modal-body {
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px) + 80px) !important;
+    }
+    
+    /* التأكد من أن الأزرار مرئية دائماً */
+    #addCustomerModal.modal-fullscreen-md-down .modal-footer .btn {
+        min-height: 44px !important; /* الحد الأدنى للمساحة القابلة للنقر على الهاتف */
+    }
 }
 
 /* ===== Landscape Orientation Fix ===== */
