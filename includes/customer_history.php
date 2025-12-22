@@ -120,8 +120,42 @@ function customerHistorySyncForCustomer(int $customerId): array
     // تسجيل عدد الفواتير للتشخيص
     error_log("customerHistorySyncForCustomer: Found " . count($invoiceRows) . " invoices for customer_id=$customerId since $cutoffDate");
 
-    // استخدام الفواتير فقط (بدون المبيعات المباشرة)
-    $allInvoiceRows = $invoiceRows;
+    // إضافة تحقق إضافي للتأكد من أن الفاتورة تنتمي فعلياً للعميل
+    // هذا مهم لمنع عرض فواتير لعملاء آخرين
+    $validInvoiceRows = [];
+    foreach ($invoiceRows as $invoiceRow) {
+        $invoiceId = (int)($invoiceRow['id'] ?? 0);
+        if ($invoiceId <= 0) {
+            continue;
+        }
+        
+        // التحقق من تطابق customer_id في الفاتورة
+        $invoiceCheck = $db->queryOne(
+            "SELECT customer_id FROM invoices WHERE id = ?",
+            [$invoiceId]
+        );
+        
+        if (!$invoiceCheck) {
+            error_log("customerHistorySyncForCustomer: Invoice ID $invoiceId not found, skipping");
+            continue;
+        }
+        
+        $invoiceCustomerId = (int)($invoiceCheck['customer_id'] ?? 0);
+        if ($invoiceCustomerId !== $customerId) {
+            error_log(sprintf(
+                "customerHistorySyncForCustomer: WARNING - Invoice ID %d has customer_id %d but expected %d, skipping",
+                $invoiceId,
+                $invoiceCustomerId,
+                $customerId
+            ));
+            continue;
+        }
+        
+        $validInvoiceRows[] = $invoiceRow;
+    }
+
+    // استخدام الفواتير الصحيحة فقط (بدون المبيعات المباشرة)
+    $allInvoiceRows = $validInvoiceRows;
 
     // إنشاء معرفات الفواتير
     $invoiceIds = [];
@@ -243,6 +277,73 @@ function customerHistorySyncForCustomer(int $customerId): array
     
     // تسجيل عدد السجلات للتشخيص
     error_log("customerHistorySyncForCustomer: Found " . count($historyRows) . " history records for customer_id=$customerId");
+
+    // إضافة تحقق إضافي للتأكد من تطابق customer_id في السجلات
+    // هذا مهم لمنع عرض سجلات مشتريات لعملاء آخرين
+    $validHistoryRows = [];
+    foreach ($historyRows as $row) {
+        $rowCustomerId = (int)($row['customer_id'] ?? 0);
+        if ($rowCustomerId !== $customerId) {
+            error_log(sprintf(
+                "customerHistorySyncForCustomer: WARNING - History record ID %d has customer_id %d but expected %d, skipping",
+                $row['id'] ?? 'N/A',
+                $rowCustomerId,
+                $customerId
+            ));
+            continue;
+        }
+        
+        // التحقق من أن الفاتورة تنتمي فعلياً للعميل
+        $invoiceId = (int)($row['invoice_id'] ?? 0);
+        if ($invoiceId > 0) {
+            $invoiceCheck = $db->queryOne(
+                "SELECT customer_id FROM invoices WHERE id = ?",
+                [$invoiceId]
+            );
+            
+            if ($invoiceCheck) {
+                $invoiceCustomerId = (int)($invoiceCheck['customer_id'] ?? 0);
+                if ($invoiceCustomerId !== $customerId) {
+                    error_log(sprintf(
+                        "customerHistorySyncForCustomer: WARNING - History record references invoice ID %d with customer_id %d but expected %d, deleting invalid record",
+                        $invoiceId,
+                        $invoiceCustomerId,
+                        $customerId
+                    ));
+                    // حذف السجل الخاطئ
+                    try {
+                        $db->execute(
+                            "DELETE FROM customer_purchase_history WHERE id = ?",
+                            [$row['id']]
+                        );
+                    } catch (Throwable $deleteError) {
+                        error_log('Error deleting invalid history record: ' . $deleteError->getMessage());
+                    }
+                    continue;
+                }
+            } else {
+                // الفاتورة غير موجودة، احذف السجل
+                error_log(sprintf(
+                    "customerHistorySyncForCustomer: WARNING - History record references non-existent invoice ID %d, deleting invalid record",
+                    $invoiceId
+                ));
+                try {
+                    $db->execute(
+                        "DELETE FROM customer_purchase_history WHERE id = ?",
+                        [$row['id']]
+                    );
+                } catch (Throwable $deleteError) {
+                    error_log('Error deleting invalid history record: ' . $deleteError->getMessage());
+                }
+                continue;
+            }
+        }
+        
+        $validHistoryRows[] = $row;
+    }
+
+    // استخدام السجلات الصحيحة فقط
+    $historyRows = $validHistoryRows;
 
     $invoicesPayload = [];
     $summaryTotals = [
@@ -506,6 +607,17 @@ function customerHistoryGetHistory(int $customerId): array
         ];
     }
 
+    // تنظيف السجلات الخاطئة قبل المزامنة (مرة واحدة فقط لتجنب التأثير على الأداء)
+    static $cleanupDone = false;
+    if (!$cleanupDone) {
+        try {
+            customerHistoryCleanupInvalidRecords();
+            $cleanupDone = true;
+        } catch (Throwable $e) {
+            error_log('Error running cleanup in customerHistoryGetHistory: ' . $e->getMessage());
+        }
+    }
+
     $history = customerHistorySyncForCustomer($customerId);
 
     return [
@@ -513,5 +625,97 @@ function customerHistoryGetHistory(int $customerId): array
         'customer'     => $customer,
         'history'      => $history,
     ];
+}
+
+/**
+ * تنظيف السجلات الخاطئة من customer_purchase_history
+ * حذف السجلات التي لا تطابق customer_id في الفاتورة
+ * يمكن استدعاؤها يدوياً أو تلقائياً
+ */
+function customerHistoryCleanupInvalidRecords(): void
+{
+    try {
+        $db = db();
+        
+        // جلب جميع السجلات
+        $allRecords = $db->query(
+            "SELECT id, customer_id, invoice_id FROM customer_purchase_history"
+        );
+        
+        if (empty($allRecords)) {
+            return;
+        }
+        
+        $deletedCount = 0;
+        foreach ($allRecords as $record) {
+            $recordId = (int)($record['id'] ?? 0);
+            $recordCustomerId = (int)($record['customer_id'] ?? 0);
+            $invoiceId = (int)($record['invoice_id'] ?? 0);
+            
+            if ($invoiceId <= 0) {
+                // invoice_id غير صالح، احذف السجل
+                try {
+                    $db->execute(
+                        "DELETE FROM customer_purchase_history WHERE id = ?",
+                        [$recordId]
+                    );
+                    $deletedCount++;
+                    error_log("customerHistoryCleanupInvalidRecords: Deleted record ID $recordId (invalid invoice_id)");
+                } catch (Throwable $e) {
+                    error_log('Error deleting record with invalid invoice_id: ' . $e->getMessage());
+                }
+                continue;
+            }
+            
+            // التحقق من تطابق customer_id في الفاتورة
+            $invoice = $db->queryOne(
+                "SELECT customer_id FROM invoices WHERE id = ?",
+                [$invoiceId]
+            );
+            
+            if (!$invoice) {
+                // الفاتورة غير موجودة، احذف السجل
+                try {
+                    $db->execute(
+                        "DELETE FROM customer_purchase_history WHERE id = ?",
+                        [$recordId]
+                    );
+                    $deletedCount++;
+                    error_log("customerHistoryCleanupInvalidRecords: Deleted record ID $recordId (invoice $invoiceId not found)");
+                } catch (Throwable $e) {
+                    error_log('Error deleting record with missing invoice: ' . $e->getMessage());
+                }
+                continue;
+            }
+            
+            $invoiceCustomerId = (int)($invoice['customer_id'] ?? 0);
+            if ($invoiceCustomerId !== $recordCustomerId) {
+                // customer_id غير متطابق، احذف السجل
+                error_log(sprintf(
+                    "customerHistoryCleanupInvalidRecords: Deleting record ID %d - invoice %d has customer_id %d but record has %d",
+                    $recordId,
+                    $invoiceId,
+                    $invoiceCustomerId,
+                    $recordCustomerId
+                ));
+                try {
+                    $db->execute(
+                        "DELETE FROM customer_purchase_history WHERE id = ?",
+                        [$recordId]
+                    );
+                    $deletedCount++;
+                } catch (Throwable $e) {
+                    error_log('Error deleting mismatched record: ' . $e->getMessage());
+                }
+            }
+        }
+        
+        if ($deletedCount > 0) {
+            error_log("customerHistoryCleanupInvalidRecords: Deleted $deletedCount invalid records");
+        }
+        
+    } catch (Throwable $e) {
+        error_log('customerHistoryCleanupInvalidRecords error: ' . $e->getMessage());
+    }
 }
 
