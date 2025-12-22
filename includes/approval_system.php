@@ -557,6 +557,7 @@ function rejectRequest($approvalId, $approvedBy, $rejectionReason) {
         $hasRejectionReason = false;
         $hasNotesColumn = false;
         $hasApprovalNotesColumn = false;
+        $hasRejectedAt = false;
         $rejectionColumn = 'rejection_reason';
         $notesColumn = 'notes';
         
@@ -569,28 +570,33 @@ function rejectRequest($approvalId, $approvedBy, $rejectionReason) {
             } elseif ($fieldName === 'approval_notes') {
                 $hasApprovalNotesColumn = true;
                 $notesColumn = 'approval_notes';
+            } elseif ($fieldName === 'rejected_at') {
+                $hasRejectedAt = true;
             }
         }
+        
+        // بناء جزء rejected_at بناءً على وجود العمود
+        $rejectedAtClause = $hasRejectedAt ? ', rejected_at = NOW()' : '';
         
         // تحديث حالة الموافقة - التأكد من حفظ البيانات مباشرة في قاعدة البيانات
         if ($hasRejectionReason) {
             // استخدام عمود rejection_reason إذا كان موجوداً
             $db->execute(
-                "UPDATE approvals SET status = 'rejected', approved_by = ?, rejected_at = NOW(), rejection_reason = ? 
+                "UPDATE approvals SET status = 'rejected', approved_by = ?{$rejectedAtClause}, rejection_reason = ? 
                  WHERE id = ?",
                 [$approvedBy, $rejectionReason, $approvalId]
             );
         } elseif ($hasNotesColumn || $hasApprovalNotesColumn) {
             // استخدام عمود notes أو approval_notes إذا كان rejection_reason غير موجود
             $db->execute(
-                "UPDATE approvals SET status = 'rejected', approved_by = ?, rejected_at = NOW(), {$notesColumn} = ? 
+                "UPDATE approvals SET status = 'rejected', approved_by = ?{$rejectedAtClause}, {$notesColumn} = ? 
                  WHERE id = ?",
                 [$approvedBy, $rejectionReason, $approvalId]
             );
         } else {
             // إذا لم يكن هناك أي عمود للملاحظات، تحديث بدون سبب الرفض
             $db->execute(
-                "UPDATE approvals SET status = 'rejected', approved_by = ?, rejected_at = NOW() 
+                "UPDATE approvals SET status = 'rejected', approved_by = ?{$rejectedAtClause} 
                  WHERE id = ?",
                 [$approvedBy, $approvalId]
             );

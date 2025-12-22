@@ -1539,6 +1539,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$isAjaxRequest) {
             productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
             exit;
+        } else {
+            // حماية إضافية: إذا كان الطلب AJAX ولم يتم إرسال response بعد، أرسل response افتراضي
+            // (يجب ألا يصل الكود إلى هنا في الحالة الطبيعية)
+            if (!headers_sent()) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(500);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'حدث خطأ غير متوقع أثناء معالجة الطلب.'
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
         }
         
     } elseif ($postAction === 'create_transfer_from_sales_rep') {
@@ -3416,27 +3428,51 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
                 credentials: 'same-origin'
             });
             
-            const contentType = response.headers.get('content-type');
-            let result;
-            
-            if (contentType && contentType.includes('application/json')) {
-                result = await response.json();
-            } else {
-                // الاستجابة HTML - يعني أن الطلب تم بنجاح لكن الخادم لم يعد JSON
-                showSuccessMessage('تم إرسال طلب النقل بنجاح! سيتم مراجعته والموافقة عليه.');
-                
-                const modal = bootstrap.Modal.getInstance(transferModal);
-                if (modal) {
-                    modal.hide();
-                }
-                
-                setTimeout(() => {
-                    window.location.reload();
-                }, 2000);
-                return;
+            // التحقق من حالة الاستجابة
+            if (!response.ok && response.status !== 400 && response.status !== 500) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            if (result.success) {
+            const contentType = response.headers.get('content-type') || '';
+            let result;
+            
+            // محاولة قراءة الاستجابة كـ JSON أولاً
+            const responseText = await response.text();
+            
+            if (contentType.includes('application/json')) {
+                try {
+                    // إزالة أي whitespace قبل وبعد JSON
+                    const trimmedText = responseText.trim();
+                    result = JSON.parse(trimmedText);
+                } catch (parseError) {
+                    console.error('Error parsing JSON response:', parseError);
+                    console.error('Response text:', responseText.substring(0, 500));
+                    throw new Error('خطأ في قراءة استجابة الخادم: ' + parseError.message);
+                }
+            } else {
+                // إذا لم تكن JSON، قد تكون HTML (redirect response)
+                console.log('Non-JSON response received:', responseText.substring(0, 200));
+                
+                // إذا كان status 200 وليس JSON، قد يعني أن الطلب نجح لكن الخادم لم يعد JSON
+                if (response.ok) {
+                    showSuccessMessage('تم إرسال طلب النقل بنجاح! سيتم مراجعته والموافقة عليه.');
+                    
+                    const modal = bootstrap.Modal.getInstance(transferModal);
+                    if (modal) {
+                        modal.hide();
+                    }
+                    
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                    return;
+                } else {
+                    throw new Error('حدث خطأ في الخادم');
+                }
+            }
+            
+            // معالجة النتيجة
+            if (result && result.success) {
                 let successMsg = result.message || 'تم إرسال طلب النقل بنجاح!';
                 if (result.transfer_number) {
                     successMsg += '\nرقم الطلب: ' + result.transfer_number;
@@ -3458,7 +3494,8 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
                     submitButton.disabled = false;
                     submitButton.innerHTML = originalButtonText;
                 }
-                showErrorMessage(result.message || result.error || 'حدث خطأ أثناء إرسال الطلب.');
+                const errorMsg = result ? (result.message || result.error || 'حدث خطأ أثناء إرسال الطلب.') : 'حدث خطأ غير معروف.';
+                showErrorMessage(errorMsg);
             }
         } catch (error) {
             console.error('Error submitting transfer form:', error);
@@ -3467,7 +3504,8 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
                 submitButton.disabled = false;
                 submitButton.innerHTML = originalButtonText;
             }
-            showErrorMessage('حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+            const errorMessage = error.message || 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.';
+            showErrorMessage(errorMessage);
         }
     });
     
