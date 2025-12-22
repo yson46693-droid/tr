@@ -1218,8 +1218,9 @@ body:has([data-chat-app]) .footer,
 .chat-message-attachment.chat-attachment-image {
   background: transparent !important;
   border: none !important;
-  padding: 0;
+  padding: 0 !important;
   margin-top: 4px;
+  overflow: visible !important;
 }
 
 /* Audio attachments should not have background or border */
