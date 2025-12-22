@@ -468,13 +468,22 @@ $tableHeaderStyle = $isSalesRecords ? 'background: linear-gradient(135deg,rgb(37
                                 <td style="<?php echo $isSalesRecords ? 'padding: 1rem;' : ''; ?>"><?php echo htmlspecialchars($sale['salesperson_name'] ?? '-'); ?></td>
                                 <?php endif; ?>
                                 <td style="<?php echo $isSalesRecords ? 'padding: 1rem;' : ''; ?>">
-                                    <a href="<?php echo getRelativeUrl('print_invoice.php?id=' . (int)($sale['invoice_id'] ?? 0)); ?>" 
-                                       target="_blank" 
-                                       class="btn btn-sm <?php echo $isSalesRecords ? 'btn-light shadow-sm' : 'btn-primary'; ?>" 
-                                       title="طباعة الفاتورة"
-                                       style="<?php echo $isSalesRecords ? 'font-weight: 600;' : ''; ?>">
-                                        <i class="bi bi-printer me-1"></i>طباعة
-                                    </a>
+                                    <div class="btn-group" role="group">
+                                        <a href="<?php echo getRelativeUrl('print_invoice.php?id=' . (int)($sale['invoice_id'] ?? 0)); ?>" 
+                                           target="_blank" 
+                                           class="btn btn-sm <?php echo $isSalesRecords ? 'btn-light shadow-sm' : 'btn-primary'; ?>" 
+                                           title="طباعة الفاتورة"
+                                           style="<?php echo $isSalesRecords ? 'font-weight: 600;' : ''; ?>">
+                                            <i class="bi bi-printer me-1"></i>طباعة
+                                        </a>
+                                        <button type="button" 
+                                                class="btn btn-sm <?php echo $isSalesRecords ? 'btn-light shadow-sm' : 'btn-success'; ?>" 
+                                                title="مشاركة الفاتورة إلى الشات"
+                                                onclick="shareInvoiceToChat(<?php echo (int)($sale['invoice_id'] ?? 0); ?>)"
+                                                style="<?php echo $isSalesRecords ? 'font-weight: 600;' : ''; ?>">
+                                            <i class="bi bi-share me-1"></i>مشاركة
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -528,3 +537,50 @@ $tableHeaderStyle = $isSalesRecords ? 'background: linear-gradient(135deg,rgb(37
     </div>
 </div>
 <?php endif; ?>
+
+<script>
+async function shareInvoiceToChat(invoiceId) {
+    if (!invoiceId || invoiceId <= 0) {
+        alert('رقم الفاتورة غير صحيح');
+        return;
+    }
+
+    // إظهار مؤشر التحميل
+    const button = event.target.closest('button');
+    const originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>جاري الإرسال...';
+
+    try {
+        const response = await fetch('<?php echo getRelativeUrl("api/chat/share_invoice.php"); ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                invoice_id: invoiceId
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'تعذر مشاركة الفاتورة');
+        }
+
+        alert('تم مشاركة الفاتورة بنجاح في الشات');
+        
+        // فتح الشات إذا كان متاحاً
+        if (typeof window.openChat !== 'undefined') {
+            window.openChat();
+        }
+    } catch (error) {
+        console.error('Error sharing invoice:', error);
+        alert(error.message || 'حدث خطأ أثناء مشاركة الفاتورة');
+    } finally {
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+    }
+}
+</script>

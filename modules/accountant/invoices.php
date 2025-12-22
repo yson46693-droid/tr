@@ -282,10 +282,18 @@ if (isset($_GET['id'])) {
                                     </span>
                                 </td>
                                 <td>
-                                    <a href="<?php echo getRelativeUrl('print_invoice.php?id=' . $invoice['id'] . '&print=1'); ?>" 
-                                       class="btn btn-secondary btn-sm" target="_blank" title="طباعة">
-                                        <i class="bi bi-printer"></i> طباعة
-                                    </a>
+                                    <div class="btn-group" role="group">
+                                        <a href="<?php echo getRelativeUrl('print_invoice.php?id=' . $invoice['id'] . '&print=1'); ?>" 
+                                           class="btn btn-secondary btn-sm" target="_blank" title="طباعة">
+                                            <i class="bi bi-printer"></i> طباعة
+                                        </a>
+                                        <button type="button" 
+                                                class="btn btn-success btn-sm" 
+                                                title="مشاركة الفاتورة إلى الشات"
+                                                onclick="shareInvoiceToChat(<?php echo $invoice['id']; ?>)">
+                                            <i class="bi bi-share"></i> مشاركة
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -708,5 +716,50 @@ function deleteInvoiceConfirm(invoiceId) {
         }, 3000);
     }
 })();
+
+async function shareInvoiceToChat(invoiceId) {
+    if (!invoiceId || invoiceId <= 0) {
+        alert('رقم الفاتورة غير صحيح');
+        return;
+    }
+
+    // إظهار مؤشر التحميل
+    const button = event.target.closest('button');
+    const originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>جاري الإرسال...';
+
+    try {
+        const response = await fetch('<?php echo getRelativeUrl("api/chat/share_invoice.php"); ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                invoice_id: invoiceId
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'تعذر مشاركة الفاتورة');
+        }
+
+        alert('تم مشاركة الفاتورة بنجاح في الشات');
+        
+        // فتح الشات إذا كان متاحاً
+        if (typeof window.openChat !== 'undefined') {
+            window.openChat();
+        }
+    } catch (error) {
+        console.error('Error sharing invoice:', error);
+        alert(error.message || 'حدث خطأ أثناء مشاركة الفاتورة');
+    } finally {
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+    }
+}
 </script>
 

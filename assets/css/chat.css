@@ -214,6 +214,49 @@ body:has([data-chat-app]) .footer,
   font-family: var(--chat-font-family);
 }
 
+.chat-sidebar-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chat-sidebar-close {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--chat-text);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.chat-sidebar-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--chat-danger);
+}
+
+.dark-mode .chat-sidebar-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.chat-sidebar-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Show close button on mobile */
+@media (max-width: 1100px) {
+  .chat-sidebar-close {
+    display: flex;
+  }
+}
+
 .chat-sidebar-search {
   padding: 16px 20px;
   position: relative;

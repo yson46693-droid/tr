@@ -115,6 +115,9 @@ $companyName = COMPANY_NAME;
                     <button class="btn btn-primary" onclick="window.print()">
                         <i class="bi bi-printer me-2"></i>طباعة
                     </button>
+                    <button class="btn btn-success" onclick="shareInvoiceToChat(<?php echo $invoiceId; ?>)">
+                        <i class="bi bi-share me-2"></i>مشاركة إلى الشات
+                    </button>
                     <a href="<?php echo getRelativeUrl('dashboard/accountant.php?page=invoices'); ?>" class="btn btn-secondary">
                         <i class="bi bi-arrow-left me-2"></i>رجوع
                     </a>
@@ -137,6 +140,51 @@ $companyName = COMPANY_NAME;
                 }, 500);
             }
         };
+
+        async function shareInvoiceToChat(invoiceId) {
+            if (!invoiceId || invoiceId <= 0) {
+                alert('رقم الفاتورة غير صحيح');
+                return;
+            }
+
+            // إظهار مؤشر التحميل
+            const button = event.target.closest('button');
+            const originalHtml = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>جاري الإرسال...';
+
+            try {
+                const response = await fetch('<?php echo getRelativeUrl("api/chat/share_invoice.php"); ?>', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        invoice_id: invoiceId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'تعذر مشاركة الفاتورة');
+                }
+
+                alert('تم مشاركة الفاتورة بنجاح في الشات');
+                
+                // فتح الشات إذا كان متاحاً
+                if (typeof window.openChat !== 'undefined') {
+                    window.openChat();
+                }
+            } catch (error) {
+                console.error('Error sharing invoice:', error);
+                alert(error.message || 'حدث خطأ أثناء مشاركة الفاتورة');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalHtml;
+            }
+        }
     </script>
 </body>
 </html>

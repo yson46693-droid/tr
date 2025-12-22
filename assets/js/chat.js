@@ -2,6 +2,8 @@
   const API_BASE = window.CHAT_API_BASE || '/api/chat';
   const PRESENCE_INTERVAL = 30000;
   const POLLING_INTERVAL = 30000; // زيادة من 12 ثانية إلى 30 ثانية لتقليل الضغط على السيرفر
+  const CACHE_NAME = 'chat-media-cache-v1';
+  const MAX_CACHE_SIZE = 100 * 1024 * 1024; // 100MB maximum cache size
 
   const selectors = {
     app: '[data-chat-app]',
@@ -20,6 +22,7 @@
     search: '[data-chat-search]',
     emptyState: '[data-chat-empty]',
     sidebarToggle: '[data-chat-sidebar-toggle]',
+    sidebarClose: '[data-chat-sidebar-close]',
     membersToggle: '[data-chat-members-toggle]',
     sidebar: '[data-chat-sidebar]',
     sidebarOverlay: '[data-chat-sidebar-overlay]',
@@ -82,6 +85,7 @@
     elements.search = app.querySelector(selectors.search);
     elements.emptyState = app.querySelector(selectors.emptyState);
     elements.sidebarToggle = document.querySelector(selectors.sidebarToggle);
+    elements.sidebarClose = app.querySelector(selectors.sidebarClose);
     elements.membersToggle = app.querySelector(selectors.membersToggle);
     elements.sidebar = app.querySelector(selectors.sidebar);
     elements.sidebarOverlay = document.querySelector(selectors.sidebarOverlay);
@@ -102,12 +106,111 @@
 
     initTheme();
     bindEvents();
+    initMediaCache();
     fetchMessages(true);
     startPresenceUpdates();
     startPolling();
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     state.initialized = true;
+  }
+
+  // Media Cache Management
+  async function initMediaCache() {
+    if ('caches' in window) {
+      try {
+        await caches.open(CACHE_NAME);
+      } catch (error) {
+        console.warn('Failed to initialize media cache:', error);
+      }
+    }
+  }
+
+  async function getCachedMedia(url) {
+    if (!('caches' in window)) {
+      return null;
+    }
+
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const cachedResponse = await cache.match(url);
+      if (cachedResponse) {
+        return URL.createObjectURL(await cachedResponse.blob());
+      }
+    } catch (error) {
+      console.warn('Error reading from cache:', error);
+    }
+    return null;
+  }
+
+  async function cacheMedia(url) {
+    if (!('caches' in window)) {
+      return;
+    }
+
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      // Check if already cached
+      const existing = await cache.match(url);
+      if (existing) {
+        return; // Already cached
+      }
+
+      // Fetch and cache
+      const response = await fetch(url, { credentials: 'include' });
+      if (response.ok) {
+        await cache.put(url, response.clone());
+        
+        // Cleanup old cache if needed
+        setTimeout(() => cleanupCache(), 1000);
+      }
+    } catch (error) {
+      console.warn('Error caching media:', error);
+    }
+  }
+
+  async function cleanupCache() {
+    if (!('caches' in window)) {
+      return;
+    }
+
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const keys = await cache.keys();
+      
+      // Calculate total size (approximate)
+      let totalSize = 0;
+      const entries = [];
+      
+      for (const request of keys) {
+        const response = await cache.match(request);
+        if (response) {
+          const blob = await response.blob();
+          const size = blob.size;
+          totalSize += size;
+          entries.push({ request, size, url: request.url });
+        }
+      }
+
+      // If cache is too large, remove oldest entries
+      if (totalSize > MAX_CACHE_SIZE) {
+        // Sort by URL (which often contains timestamp) or use a simple FIFO
+        entries.sort((a, b) => a.url.localeCompare(b.url));
+        
+        let removedSize = 0;
+        const targetSize = MAX_CACHE_SIZE * 0.7; // Keep 70% of max size
+        
+        for (const entry of entries) {
+          if (totalSize - removedSize <= targetSize) {
+            break;
+          }
+          await cache.delete(entry.request);
+          removedSize += entry.size;
+        }
+      }
+    } catch (error) {
+      console.warn('Error cleaning up cache:', error);
+    }
   }
 
   function bindEvents() {
@@ -136,6 +239,10 @@
 
     if (elements.sidebarToggle) {
       elements.sidebarToggle.addEventListener('click', toggleSidebar);
+    }
+
+    if (elements.sidebarClose) {
+      elements.sidebarClose.addEventListener('click', closeSidebar);
     }
 
     if (elements.membersToggle) {
@@ -1203,10 +1310,50 @@
         const isVideo = ['mp4', 'webm', 'ogg', 'mov', 'avi'].includes(fileExtension);
         const isAudio = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'webm'].includes(fileExtension);
         
+        // Generate unique ID for caching
+        const mediaId = 'media_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        
+        // Load from cache or fetch and cache
+        (async () => {
+          try {
+            // Try to get from cache first
+            const cachedUrl = await getCachedMedia(apiUrl);
+            if (cachedUrl) {
+              const element = document.querySelector(`[data-media-id="${mediaId}"]`);
+              if (element) {
+                if (element.tagName === 'IMG') {
+                  element.src = cachedUrl;
+                } else if (element.tagName === 'VIDEO' || element.tagName === 'AUDIO') {
+                  const source = element.querySelector('source');
+                  if (source) {
+                    source.src = cachedUrl;
+                    element.load();
+                  }
+                }
+              }
+            } else {
+              // Cache the media in background
+              cacheMedia(apiUrl).then(() => {
+                // After caching, update the element if still visible
+                const element = document.querySelector(`[data-media-id="${mediaId}"]`);
+                if (element) {
+                  getCachedMedia(apiUrl).then(cachedUrl => {
+                    if (cachedUrl && element.tagName === 'IMG') {
+                      element.src = cachedUrl;
+                    }
+                  });
+                }
+              });
+            }
+          } catch (error) {
+            console.warn('Error loading cached media:', error);
+          }
+        })();
+        
         if (isImage) {
           return `
             <div class="chat-message-attachment chat-attachment-image">
-              <img src="${safeFileUrl}" alt="${fileName}" onclick="window.open('${safeFileUrl}', '_blank')" />
+              <img data-media-id="${mediaId}" src="${safeFileUrl}" alt="${fileName}" onclick="window.open('${safeFileUrl}', '_blank')" loading="lazy" />
               <div class="chat-attachment-info">
                 <span class="chat-attachment-name">${fileName}</span>
                 <a href="${safeFileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
@@ -1216,7 +1363,7 @@
         } else if (isVideo) {
           return `
             <div class="chat-message-attachment chat-attachment-video">
-              <video controls preload="metadata">
+              <video data-media-id="${mediaId}" controls preload="metadata">
                 <source src="${safeFileUrl}" type="video/${fileExtension === 'mp4' ? 'mp4' : fileExtension === 'webm' ? 'webm' : 'ogg'}">
                 متصفحك لا يدعم تشغيل الفيديو.
               </video>
@@ -1231,7 +1378,7 @@
           const audioId = 'audio_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
           return `
             <div class="chat-message-attachment chat-attachment-audio">
-              <audio id="${audioId}" controls preload="metadata" style="width: 100%; max-width: 250px;">
+              <audio id="${audioId}" data-media-id="${mediaId}" controls preload="metadata" style="width: 100%; max-width: 250px;">
                 <source src="${safeFileUrl}" type="audio/${fileExtension === 'mp3' ? 'mpeg' : fileExtension === 'webm' ? 'webm' : fileExtension}">
                 متصفحك لا يدعم تشغيل الصوت.
               </audio>
@@ -1716,8 +1863,195 @@
     }
   }
 
+  // Image compression function
+  async function compressImage(file, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Calculate new dimensions (70% of original)
+          const newWidth = Math.floor(img.width * 0.7);
+          const newHeight = Math.floor(img.height * 0.7);
+          
+          canvas.width = newWidth;
+          canvas.height = newHeight;
+          
+          // Draw and compress
+          ctx.drawImage(img, 0, 0, newWidth, newHeight);
+          
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], file.name, {
+                type: file.type,
+                lastModified: Date.now()
+              });
+              resolve(compressedFile);
+            } else {
+              reject(new Error('Failed to compress image'));
+            }
+          }, file.type, quality);
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Video compression function - simplified approach
+  async function compressVideo(file, quality = 0.7) {
+    // For videos, compression is complex and time-consuming
+    // We'll use a simpler approach: reduce quality by re-encoding
+    // Note: Full video compression requires server-side processing for best results
+    // This function will attempt basic compression but may fall back to original
+    
+    return new Promise((resolve, reject) => {
+      // Check if file is already small enough (less than 10MB)
+      if (file.size < 10 * 1024 * 1024) {
+        resolve(file); // No need to compress small videos
+        return;
+      }
+      
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      
+      const timeout = setTimeout(() => {
+        URL.revokeObjectURL(video.src);
+        resolve(file); // Return original if compression takes too long
+      }, 30000); // 30 second timeout
+      
+      video.onloadedmetadata = () => {
+        clearTimeout(timeout);
+        
+        // Calculate new dimensions (70% of original)
+        const newWidth = Math.floor(video.videoWidth * 0.7);
+        const newHeight = Math.floor(video.videoHeight * 0.7);
+        
+        // If video is already small, return original
+        if (newWidth === video.videoWidth && newHeight === video.videoHeight && file.size < 20 * 1024 * 1024) {
+          URL.revokeObjectURL(video.src);
+          resolve(file);
+          return;
+        }
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+        
+        // Try to use MediaRecorder for compression
+        let mediaRecorder;
+        const chunks = [];
+        
+        try {
+          const stream = canvas.captureStream(30);
+          
+          // Try different codecs
+          const codecs = [
+            'video/webm;codecs=vp9',
+            'video/webm;codecs=vp8',
+            'video/webm',
+            'video/mp4'
+          ];
+          
+          let selectedCodec = null;
+          for (const codec of codecs) {
+            if (MediaRecorder.isTypeSupported(codec)) {
+              selectedCodec = codec;
+              break;
+            }
+          }
+          
+          if (!selectedCodec) {
+            URL.revokeObjectURL(video.src);
+            resolve(file); // Return original if no codec supported
+            return;
+          }
+          
+          mediaRecorder = new MediaRecorder(stream, {
+            mimeType: selectedCodec,
+            videoBitsPerSecond: Math.floor(2000000 * quality) // Adjust bitrate based on quality
+          });
+          
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+              chunks.push(e.data);
+            }
+          };
+          
+          mediaRecorder.onstop = () => {
+            clearTimeout(timeout);
+            const blob = new Blob(chunks, { type: selectedCodec });
+            
+            // Only use compressed if it's actually smaller
+            if (blob.size < file.size) {
+              const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.webm'), {
+                type: selectedCodec,
+                lastModified: Date.now()
+              });
+              URL.revokeObjectURL(video.src);
+              stream.getTracks().forEach(track => track.stop());
+              resolve(compressedFile);
+            } else {
+              URL.revokeObjectURL(video.src);
+              stream.getTracks().forEach(track => track.stop());
+              resolve(file); // Return original if compression didn't help
+            }
+          };
+          
+          mediaRecorder.onerror = (e) => {
+            clearTimeout(timeout);
+            URL.revokeObjectURL(video.src);
+            resolve(file); // Return original on error
+          };
+          
+          video.onplay = () => {
+            mediaRecorder.start();
+            
+            const drawFrame = () => {
+              if (!video.paused && !video.ended) {
+                ctx.drawImage(video, 0, 0, newWidth, newHeight);
+                requestAnimationFrame(drawFrame);
+              } else if (video.ended) {
+                mediaRecorder.stop();
+              }
+            };
+            
+            drawFrame();
+          };
+          
+          video.currentTime = 0;
+          video.play().catch(() => {
+            clearTimeout(timeout);
+            URL.revokeObjectURL(video.src);
+            resolve(file); // Return original if play fails
+          });
+        } catch (error) {
+          clearTimeout(timeout);
+          URL.revokeObjectURL(video.src);
+          resolve(file); // Return original on error
+        }
+      };
+      
+      video.onerror = () => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(video.src);
+        resolve(file); // Return original on error
+      };
+      
+      video.src = URL.createObjectURL(file);
+    });
+  }
+
   // File attachment functions
-  function handleFileSelect(event) {
+  async function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) {
       return;
@@ -1728,11 +2062,24 @@
       return;
     }
 
-    sendFile(file);
+    // Check if it's a video
+    if (file.type.startsWith('video/')) {
+      try {
+        showToast('جاري ضغط الفيديو...', false);
+        const compressedFile = await compressVideo(file);
+        sendFile(compressedFile);
+      } catch (error) {
+        console.error('Video compression error:', error);
+        sendFile(file); // Send original if compression fails
+      }
+    } else {
+      sendFile(file);
+    }
+    
     event.target.value = ''; // Reset input
   }
 
-  function handleImageSelect(event) {
+  async function handleImageSelect(event) {
     const file = event.target.files[0];
     if (!file) {
       return;
@@ -1743,7 +2090,20 @@
       return;
     }
 
-    sendFile(file);
+    // Compress image
+    if (file.type.startsWith('image/')) {
+      try {
+        showToast('جاري ضغط الصورة...', false);
+        const compressedFile = await compressImage(file, 0.7);
+        sendFile(compressedFile);
+      } catch (error) {
+        console.error('Image compression error:', error);
+        sendFile(file); // Send original if compression fails
+      }
+    } else {
+      sendFile(file);
+    }
+    
     event.target.value = ''; // Reset input
   }
 
