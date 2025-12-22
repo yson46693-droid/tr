@@ -1344,6 +1344,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $isAjaxRequest = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
                         strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
         
+        // تنظيف أي output buffer موجود قبل إرسال JSON
+        if ($isAjaxRequest) {
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+        }
+        
         if ($submissionToken === '' || $submissionToken !== $storedToken) {
             $errorMessage = 'تم إرسال هذا الطلب مسبقاً. يرجى عدم إعادة تحميل الصفحة.';
             
@@ -1542,6 +1549,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // حماية إضافية: إذا كان الطلب AJAX ولم يتم إرسال response بعد، أرسل response افتراضي
             // (يجب ألا يصل الكود إلى هنا في الحالة الطبيعية)
+            // تنظيف أي output buffer موجود
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+            
             if (!headers_sent()) {
                 header('Content-Type: application/json; charset=utf-8');
                 http_response_code(500);
@@ -1549,6 +1561,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'success' => false,
                     'message' => 'حدث خطأ غير متوقع أثناء معالجة الطلب.'
                 ], JSON_UNESCAPED_UNICODE);
+                exit;
+            } else {
+                // إذا تم إرسال headers بالفعل، لا يمكن إرسال JSON
+                // لكن يجب التأكد من عدم استمرار التنفيذ
                 exit;
             }
         }
@@ -3441,9 +3457,12 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
             
             if (contentType.includes('application/json')) {
                 try {
-                    // إزالة أي whitespace قبل وبعد JSON
+                    // إزالة أي whitespace أو HTML قبل وبعد JSON
                     const trimmedText = responseText.trim();
-                    result = JSON.parse(trimmedText);
+                    // محاولة استخراج JSON من النص إذا كان هناك HTML قبل
+                    const jsonMatch = trimmedText.match(/\{[\s\S]*\}/);
+                    const jsonText = jsonMatch ? jsonMatch[0] : trimmedText;
+                    result = JSON.parse(jsonText);
                 } catch (parseError) {
                     console.error('Error parsing JSON response:', parseError);
                     console.error('Response text:', responseText.substring(0, 500));
