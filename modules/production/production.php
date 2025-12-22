@@ -6495,7 +6495,6 @@ $lang = isset($translations) ? $translations : [];
     </div>
 <?php endif; ?>
 
-<!-- لا حاجة لإعادة التحميل التلقائي - preventDuplicateSubmission يتولى ذلك -->
 <script>
 // إزالة معاملات _t و _refresh من URL بعد التحميل
 (function() {
@@ -6505,6 +6504,23 @@ $lang = isset($translations) ? $translations : [];
         urlParams.delete('_refresh');
         const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
         window.history.replaceState({}, '', newUrl);
+    }
+})();
+
+// إعادة التحميل التلقائي بعد رسائل النجاح والخطأ بعد إنشاء تشغيلة
+(function() {
+    const successAlert = document.getElementById('successAlert');
+    const errorAlert = document.getElementById('errorAlert');
+    
+    // التحقق من وجود رسالة نجاح أو خطأ
+    if (successAlert || errorAlert) {
+        // تحديد وقت الانتظار قبل التحديث (3 ثواني للسماح بقراءة الرسالة)
+        const refreshDelay = 3000;
+        
+        setTimeout(function() {
+            // إعادة تحميل الصفحة بعد التأخير المحدد
+            window.location.reload();
+        }, refreshDelay);
     }
 })();
 </script>

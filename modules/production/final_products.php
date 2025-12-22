@@ -1340,10 +1340,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $sessionTokenKey = 'transfer_submission_token';
         $storedToken = $_SESSION[$sessionTokenKey] ?? null;
         
+        // التحقق من أن الطلب هو AJAX request
+        $isAjaxRequest = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+                        strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+        
         if ($submissionToken === '' || $submissionToken !== $storedToken) {
-            $_SESSION[$sessionErrorKey] = 'تم إرسال هذا الطلب مسبقاً. يرجى عدم إعادة تحميل الصفحة.';
-            productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
-            exit;
+            $errorMessage = 'تم إرسال هذا الطلب مسبقاً. يرجى عدم إعادة تحميل الصفحة.';
+            
+            if ($isAjaxRequest) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(400);
+                echo json_encode([
+                    'success' => false,
+                    'message' => $errorMessage
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            } else {
+                $_SESSION[$sessionErrorKey] = $errorMessage;
+                productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+                exit;
+            }
         }
         
         unset($_SESSION[$sessionTokenKey]);
@@ -1452,25 +1468,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             ]
                         );
                         
-                        $_SESSION[$sessionSuccessKey] = sprintf(
+                        $successMessage = sprintf(
                             'تم إرسال طلب نقل المنتج الخارجي رقم %s إلى المدير للموافقة عليه.',
                             $transferNumber
                         );
+                        
+                        if ($isAjaxRequest) {
+                            header('Content-Type: application/json; charset=utf-8');
+                            echo json_encode([
+                                'success' => true,
+                                'message' => $successMessage,
+                                'transfer_number' => $transferNumber
+                            ], JSON_UNESCAPED_UNICODE);
+                            exit;
+                        } else {
+                            $_SESSION[$sessionSuccessKey] = $successMessage;
+                        }
                     } else {
                         $errorMessage = $result['message'] ?? 'تعذر إنشاء طلب النقل.';
-                        $_SESSION[$sessionErrorKey] = $errorMessage;
+                        
+                        if ($isAjaxRequest) {
+                            header('Content-Type: application/json; charset=utf-8');
+                            http_response_code(400);
+                            echo json_encode([
+                                'success' => false,
+                                'message' => $errorMessage
+                            ], JSON_UNESCAPED_UNICODE);
+                            exit;
+                        } else {
+                            $_SESSION[$sessionErrorKey] = $errorMessage;
+                        }
                     }
                 } catch (Exception $e) {
                     error_log('transfer_external_product error: ' . $e->getMessage());
-                    $_SESSION[$sessionErrorKey] = 'حدث خطأ أثناء إنشاء طلب النقل. يرجى المحاولة لاحقاً.';
+                    $errorMessage = 'حدث خطأ أثناء إنشاء طلب النقل. يرجى المحاولة لاحقاً.';
+                    
+                    if ($isAjaxRequest) {
+                        header('Content-Type: application/json; charset=utf-8');
+                        http_response_code(500);
+                        echo json_encode([
+                            'success' => false,
+                            'message' => $errorMessage
+                        ], JSON_UNESCAPED_UNICODE);
+                        exit;
+                    } else {
+                        $_SESSION[$sessionErrorKey] = $errorMessage;
+                    }
                 }
             } else {
-                $_SESSION[$sessionErrorKey] = implode('<br>', $transferErrors);
+                $errorMessage = implode('<br>', $transferErrors);
+                
+                if ($isAjaxRequest) {
+                    header('Content-Type: application/json; charset=utf-8');
+                    http_response_code(400);
+                    echo json_encode([
+                        'success' => false,
+                        'message' => $errorMessage
+                    ], JSON_UNESCAPED_UNICODE);
+                    exit;
+                } else {
+                    $_SESSION[$sessionErrorKey] = $errorMessage;
+                }
+            }
+        } else {
+            // حالة عدم توفر مخزن رئيسي أو مخازن وجهة
+            $errorMessage = 'لا يمكن إنشاء طلب النقل حالياً بسبب عدم توفر مخزن رئيسي أو مخازن وجهة نشطة.';
+            
+            if ($isAjaxRequest) {
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(400);
+                echo json_encode([
+                    'success' => false,
+                    'message' => $errorMessage
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            } else {
+                $_SESSION[$sessionErrorKey] = $errorMessage;
             }
         }
         
-        productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
-        exit;
+        // إعادة التوجيه فقط للطلبات غير AJAX
+        if (!$isAjaxRequest) {
+            productionSafeRedirect($productionInventoryUrl, $productionRedirectParams, $productionRedirectRole);
+            exit;
+        }
         
     } elseif ($postAction === 'create_transfer_from_sales_rep') {
         // التحقق من duplicate submission
