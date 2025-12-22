@@ -973,7 +973,26 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
+        // إضافة event listener مؤقت لمنع الإغلاق أثناء confirm
+        const preventCloseHandler = function(e) {
+            if (isClearingNotifications || clearAllBtn.hasAttribute('data-prevent-close')) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+            }
+        };
+        if (dropdownToggle) {
+            dropdownToggle.addEventListener('hide.bs.dropdown', preventCloseHandler, true);
+        }
+        
+        const confirmed = confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟');
+        
+        // إزالة event listener المؤقت
+        if (dropdownToggle) {
+            dropdownToggle.removeEventListener('hide.bs.dropdown', preventCloseHandler, true);
+        }
+        
+        if (!confirmed) {
             isClearingNotifications = false;
             clearAllBtn.removeAttribute('data-prevent-close');
             // إعادة تفعيل autoClose
@@ -998,11 +1017,44 @@ document.addEventListener('DOMContentLoaded', function() {
         isClearingNotifications = true;
         clearAllBtn.setAttribute('data-prevent-close', 'true');
         
+        // إضافة event listener قوي لمنع الإغلاق أثناء العملية
+        let preventCloseDuringOperation = null;
+        let checkInterval = null;
+        
+        preventCloseDuringOperation = function(e) {
+            if (isClearingNotifications || clearAllBtn.hasAttribute('data-prevent-close')) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                return false;
+            }
+        };
+        if (dropdownToggle) {
+            dropdownToggle.addEventListener('hide.bs.dropdown', preventCloseDuringOperation, true);
+        }
+        
+        // دالة لإعادة فتح القائمة إذا أُغلقت
+        const ensureDropdownOpen = function() {
+            if (dropdownToggle && dropdownInstance) {
+                const isShown = dropdownToggle.classList.contains('show');
+                if (!isShown && isClearingNotifications) {
+                    dropdownInstance.show();
+                }
+            }
+        };
+        
+        // مراقبة إغلاق القائمة وإعادة فتحها
+        checkInterval = setInterval(ensureDropdownOpen, 100);
+        
         try {
             const result = await deleteAllNotifications();
             
             // إذا كان المستخدم قد سجل خروج، لا نتابع
             if (result && result.loggedOut) {
+                clearInterval(checkInterval);
+                if (dropdownToggle) {
+                    dropdownToggle.removeEventListener('hide.bs.dropdown', preventCloseDuringOperation, true);
+                }
                 return false;
             }
             
@@ -1027,6 +1079,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
             }
         } finally {
+            // إيقاف مراقبة إعادة الفتح
+            if (checkInterval) {
+                clearInterval(checkInterval);
+            }
+            
+            // إزالة event listener
+            if (dropdownToggle && preventCloseDuringOperation) {
+                dropdownToggle.removeEventListener('hide.bs.dropdown', preventCloseDuringOperation, true);
+            }
+            
             // إعادة تعيين flag بعد اكتمال العملية
             isClearingNotifications = false;
             clearAllBtn.removeAttribute('data-prevent-close');
@@ -1112,8 +1174,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Preventing dropdown close - clear button was clicked');
                 e.preventDefault();
                 e.stopPropagation();
+                e.stopImmediatePropagation();
                 // لا نعيد تعيين isClearingNotifications هنا - يجب أن يبقى true حتى اكتمال العملية
                 // سيتم إعادة التعيين في finally block في handleClearAllNotifications
+                return false;
             }
         }, true); // capture phase
         
