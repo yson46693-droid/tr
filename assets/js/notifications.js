@@ -942,63 +942,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }, { once: false, passive: true });
     }
     
-    // معالج حذف جميع الإشعارات
+    // معالج حذف جميع الإشعارات - نسخة مبسطة وموثوقة
     async function handleClearAllNotifications(e) {
-        if (e) {
-            // منع إغلاق dropdown - يجب أن يكون أول شيء
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-        }
+        console.log('handleClearAllNotifications called');
         
-        const clearAllBtn = e && e.target ? e.target.closest('#clearAllNotificationsBtn') : document.getElementById('clearAllNotificationsBtn');
+        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
         if (!clearAllBtn) {
             console.warn('clearAllNotificationsBtn not found');
             return false;
         }
         
-        // منع إغلاق dropdown قبل التأكيد
+        // منع إغلاق dropdown
         isClearingNotifications = true;
         clearAllBtn.setAttribute('data-prevent-close', 'true');
         
-        // منع إغلاق Bootstrap dropdown مباشرة
-        const dropdownToggle = document.getElementById('notificationsDropdown');
-        let dropdownInstance = null;
-        let originalAutoClose = true;
-        if (dropdownToggle && typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
-            dropdownInstance = bootstrap.Dropdown.getInstance(dropdownToggle);
-            if (dropdownInstance) {
-                originalAutoClose = dropdownInstance._config.autoClose;
-                dropdownInstance._config.autoClose = false;
-            }
-        }
-        
-        // إضافة event listener مؤقت لمنع الإغلاق أثناء confirm
-        const preventCloseHandler = function(e) {
-            if (isClearingNotifications || clearAllBtn.hasAttribute('data-prevent-close')) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-            }
-        };
-        if (dropdownToggle) {
-            dropdownToggle.addEventListener('hide.bs.dropdown', preventCloseHandler, true);
-        }
-        
-        const confirmed = confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟');
-        
-        // إزالة event listener المؤقت
-        if (dropdownToggle) {
-            dropdownToggle.removeEventListener('hide.bs.dropdown', preventCloseHandler, true);
-        }
-        
-        if (!confirmed) {
+        // التأكيد من المستخدم
+        if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
             isClearingNotifications = false;
             clearAllBtn.removeAttribute('data-prevent-close');
-            // إعادة تفعيل autoClose
-            if (dropdownInstance) {
-                dropdownInstance._config.autoClose = originalAutoClose;
-            }
             return false;
         }
         
@@ -1010,158 +971,94 @@ document.addEventListener('DOMContentLoaded', function() {
         clearAllBtn.style.opacity = '0.6';
         clearAllBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
         
-        // التأكد من أن dropdown يبقى مفتوحاً أثناء العملية
-        if (dropdownInstance) {
-            dropdownInstance._config.autoClose = false;
-        }
-        isClearingNotifications = true;
-        clearAllBtn.setAttribute('data-prevent-close', 'true');
-        
-        // إضافة event listener قوي لمنع الإغلاق أثناء العملية
-        let preventCloseDuringOperation = null;
-        let checkInterval = null;
-        
-        preventCloseDuringOperation = function(e) {
-            if (isClearingNotifications || clearAllBtn.hasAttribute('data-prevent-close')) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                return false;
-            }
-        };
-        if (dropdownToggle) {
-            dropdownToggle.addEventListener('hide.bs.dropdown', preventCloseDuringOperation, true);
-        }
-        
-        // دالة لإعادة فتح القائمة إذا أُغلقت
-        const ensureDropdownOpen = function() {
-            if (dropdownToggle && dropdownInstance) {
-                const isShown = dropdownToggle.classList.contains('show');
-                if (!isShown && isClearingNotifications) {
-                    dropdownInstance.show();
-                }
-            }
-        };
-        
-        // مراقبة إغلاق القائمة وإعادة فتحها
-        checkInterval = setInterval(ensureDropdownOpen, 100);
-        
         try {
             const result = await deleteAllNotifications();
             
-            // إذا كان المستخدم قد سجل خروج، لا نتابع
             if (result && result.loggedOut) {
-                clearInterval(checkInterval);
-                if (dropdownToggle) {
-                    dropdownToggle.removeEventListener('hide.bs.dropdown', preventCloseDuringOperation, true);
-                }
                 return false;
             }
             
             // إعادة تحميل الإشعارات بعد الحذف
             if (typeof loadNotifications === 'function') {
-                await loadNotifications();
+                setTimeout(() => loadNotifications(), 100);
             }
             
             // تحديث العداد للتأكد
             if (typeof updateNotificationBadge === 'function') {
-                await updateNotificationBadge(0);
+                updateNotificationBadge(0);
             }
+            
+            console.log('تم مسح الإشعارات بنجاح');
+            
         } catch (error) {
             // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
             if (error.message && error.message.includes('Unauthorized')) {
                 console.warn('User logged out during notification deletion');
                 return false;
             }
-            console.error('Error in deleteAllNotifications:', error);
+            console.error('Error in handleClearAllNotifications:', error);
+            
             // إظهار رسالة خطأ فقط للأخطاء الأخرى
             if (error.message && !error.message.includes('Unauthorized')) {
                 alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
             }
+            
         } finally {
-            // إيقاف مراقبة إعادة الفتح
-            if (checkInterval) {
-                clearInterval(checkInterval);
-            }
-            
-            // إزالة event listener
-            if (dropdownToggle && preventCloseDuringOperation) {
-                dropdownToggle.removeEventListener('hide.bs.dropdown', preventCloseDuringOperation, true);
-            }
-            
-            // إعادة تعيين flag بعد اكتمال العملية
+            // إعادة تعيين الحالة والزر
             isClearingNotifications = false;
             clearAllBtn.removeAttribute('data-prevent-close');
-            
-            // إعادة تفعيل autoClose
-            if (dropdownToggle && typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
-                const dropdownInstance = bootstrap.Dropdown.getInstance(dropdownToggle);
-                if (dropdownInstance) {
-                    dropdownInstance._config.autoClose = originalAutoClose;
-                }
-            }
-            
-            // إعادة تمكين الزر فقط إذا لم يتم إعادة التوجيه
-            if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
-                clearAllBtn.disabled = originalDisabled;
-                clearAllBtn.style.pointerEvents = '';
-                clearAllBtn.style.opacity = '';
-                clearAllBtn.innerHTML = originalHTML;
-            }
+            clearAllBtn.disabled = originalDisabled;
+            clearAllBtn.style.pointerEvents = '';
+            clearAllBtn.style.opacity = '';
+            clearAllBtn.innerHTML = originalHTML;
         }
         
         return false;
     }
     
-    // استخدام event delegation على dropdown menu - الطريقة الأكثر موثوقية
-    let clearAllButtonClickHandler = null;
-    let clearAllButtonMousedownHandler = null;
+    // نظام مبسط لزر مسح الإشعارات
     let isClearingNotifications = false;
     
     function setupClearAllButton() {
-        const notificationsDropdown = document.querySelector('.notifications-dropdown');
-        if (!notificationsDropdown) {
+        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+        if (!clearAllBtn) {
             return;
         }
         
-        // إزالة event listeners السابقة إذا كانت موجودة
-        if (clearAllButtonClickHandler) {
-            notificationsDropdown.removeEventListener('click', clearAllButtonClickHandler, true);
+        // إزالة جميع event listeners السابقة
+        clearAllBtn.replaceWith(clearAllBtn.cloneNode(true));
+        
+        // الحصول على المرجع الجديد بعد الاستنساخ
+        const newClearAllBtn = document.getElementById('clearAllNotificationsBtn');
+        if (!newClearAllBtn) {
+            return;
         }
-        if (clearAllButtonMousedownHandler) {
-            notificationsDropdown.removeEventListener('mousedown', clearAllButtonMousedownHandler, true);
-        }
         
-        // إنشاء mousedown handler - يحدث قبل click ويمكن أن يمنع الإغلاق
-        clearAllButtonMousedownHandler = function(e) {
-            const clearAllBtn = e.target.closest('#clearAllNotificationsBtn');
-            if (clearAllBtn) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                // تعيين flag لمنع إغلاق dropdown
-                isClearingNotifications = true;
-                clearAllBtn.setAttribute('data-prevent-close', 'true');
-            }
-        };
+        // إضافة event listener واحد بسيط
+        newClearAllBtn.addEventListener('click', function(e) {
+            console.log('Clear all button clicked - event details:', e);
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            
+            // منع إغلاق dropdown
+            isClearingNotifications = true;
+            newClearAllBtn.setAttribute('data-prevent-close', 'true');
+            
+            // تشغيل دالة المسح
+            handleClearAllNotifications(e);
+        }, true);
         
-        // إنشاء click handler
-        clearAllButtonClickHandler = function(e) {
-            const clearAllBtn = e.target.closest('#clearAllNotificationsBtn');
-            if (clearAllBtn) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                // تعيين flag لمنع إغلاق dropdown
-                isClearingNotifications = true;
-                clearAllBtn.setAttribute('data-prevent-close', 'true');
-                handleClearAllNotifications(e);
-            }
-        };
+        // إضافة event listener إضافي للـ mousedown للتأكد
+        newClearAllBtn.addEventListener('mousedown', function(e) {
+            console.log('Clear all button mousedown');
+            e.stopPropagation();
+        }, true);
         
-        // إضافة event listeners في capture phase قبل Bootstrap
-        notificationsDropdown.addEventListener('mousedown', clearAllButtonMousedownHandler, true);
-        notificationsDropdown.addEventListener('click', clearAllButtonClickHandler, true);
+        // التأكد من أن الزر قابل للنقر
+        newClearAllBtn.style.pointerEvents = 'auto';
+        newClearAllBtn.style.cursor = 'pointer';
+        newClearAllBtn.style.userSelect = 'none';
     }
     
     // منع إغلاق Bootstrap dropdown عند النقر على الزر
@@ -1174,10 +1071,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Preventing dropdown close - clear button was clicked');
                 e.preventDefault();
                 e.stopPropagation();
-                e.stopImmediatePropagation();
                 // لا نعيد تعيين isClearingNotifications هنا - يجب أن يبقى true حتى اكتمال العملية
                 // سيتم إعادة التعيين في finally block في handleClearAllNotifications
-                return false;
             }
         }, true); // capture phase
         
@@ -1200,30 +1095,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // إضافة event listener على document كـ fallback نهائي - في أسرع وقت ممكن
-    document.addEventListener('mousedown', function(e) {
-        const clearAllBtn = e.target.closest('#clearAllNotificationsBtn');
-        if (clearAllBtn) {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            isClearingNotifications = true;
-            clearAllBtn.setAttribute('data-prevent-close', 'true');
-        }
-    }, true); // capture phase - في أسرع وقت ممكن
-    
-    document.addEventListener('click', function(e) {
-        const clearAllBtn = e.target.closest('#clearAllNotificationsBtn');
-        if (clearAllBtn) {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            isClearingNotifications = true;
-            clearAllBtn.setAttribute('data-prevent-close', 'true');
-            handleClearAllNotifications(e);
-        }
-    }, true); // capture phase
-    
     // إضافة CSS للتأكد من أن الزر قابل للنقر
     const style = document.createElement('style');
     style.textContent = `
@@ -1234,31 +1105,15 @@ document.addEventListener('DOMContentLoaded', function() {
             z-index: 10 !important;
             position: relative !important;
         }
-        #clearAllNotificationsBtn:hover {
-            opacity: 0.8 !important;
-        }
-        #clearAllNotificationsBtn:active {
-            opacity: 0.6 !important;
-        }
         .dropdown-header #clearAllNotificationsBtn {
             pointer-events: auto !important;
             cursor: pointer !important;
         }
-        /* منع إغلاق dropdown عند النقر على الزر */
         .notifications-dropdown #clearAllNotificationsBtn {
             pointer-events: auto !important;
         }
     `;
     document.head.appendChild(style);
-    
-    // التأكد من أن الزر قابل للنقر
-    const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-    if (clearAllBtn) {
-        clearAllBtn.style.pointerEvents = 'auto';
-        clearAllBtn.style.cursor = 'pointer';
-        clearAllBtn.style.userSelect = 'none';
-        clearAllBtn.setAttribute('data-bs-auto-close', 'false');
-    }
 });
 
 // إيقاف التحديث عند مغادرة الصفحة
