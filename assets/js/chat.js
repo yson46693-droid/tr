@@ -1320,53 +1320,33 @@
         // Generate unique ID for caching
         const mediaId = 'media_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         
-        // Load from cache or fetch and cache
-        (async () => {
-          try {
-            // Try to get from cache first
-            const cachedUrl = await getCachedMedia(apiUrl);
-            if (cachedUrl) {
-              const element = document.querySelector(`[data-media-id="${mediaId}"]`);
-              if (element) {
-                if (element.tagName === 'IMG') {
-                  element.src = cachedUrl;
-                } else if (element.tagName === 'VIDEO' || element.tagName === 'AUDIO') {
-                  const source = element.querySelector('source');
-                  if (source) {
-                    source.src = cachedUrl;
-                    element.load();
-                  }
-                }
-              }
-            } else {
-              // Cache the media in background
-              cacheMedia(apiUrl).then(() => {
-                // After caching, update the element if still visible
-                const element = document.querySelector(`[data-media-id="${mediaId}"]`);
-                if (element) {
-                  getCachedMedia(apiUrl).then(cachedUrl => {
-                    if (cachedUrl && element.tagName === 'IMG') {
-                      element.src = cachedUrl;
-                    }
-                  });
-                }
-              });
-            }
-          } catch (error) {
-            console.warn('Error loading cached media:', error);
-          }
-        })();
-        
         if (isImage) {
-          return `
+          // Return HTML with image - load from cache in background
+          const imageHtml = `
             <div class="chat-message-attachment chat-attachment-image">
               <img data-media-id="${mediaId}" src="${safeFileUrl}" alt="${fileName}" onclick="window.open('${safeFileUrl}', '_blank')" loading="lazy" />
-              <div class="chat-attachment-info">
-                <span class="chat-attachment-name">${fileName}</span>
-                <a href="${safeFileUrl}" download="${fileName}" class="chat-attachment-download">📥 تحميل</a>
-              </div>
             </div>
           `;
+          
+          // Try to load from cache in background and update if available
+          (async () => {
+            try {
+              const cachedUrl = await getCachedMedia(apiUrl);
+              if (cachedUrl) {
+                const element = document.querySelector(`[data-media-id="${mediaId}"]`);
+                if (element && element.tagName === 'IMG') {
+                  element.src = cachedUrl;
+                }
+              } else {
+                // Cache the media in background for next time
+                cacheMedia(apiUrl).catch(() => {});
+              }
+            } catch (error) {
+              console.warn('Error loading cached media:', error);
+            }
+          })();
+          
+          return imageHtml;
         } else if (isVideo) {
           return `
             <div class="chat-message-attachment chat-attachment-video">

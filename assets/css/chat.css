@@ -1214,12 +1214,26 @@ body:has([data-chat-app]) .footer,
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+/* Image attachments - no background, show image directly */
+.chat-message-attachment.chat-attachment-image {
+  background: transparent !important;
+  border: none !important;
+  padding: 0;
+  margin-top: 4px;
+}
+
 /* Audio attachments should not have background or border */
 .chat-message-attachment.chat-attachment-audio {
   background: transparent !important;
   border: none !important;
   margin-top: 4px;
   padding: 0;
+}
+
+.chat-attachment-image {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .chat-attachment-image img {
@@ -1230,10 +1244,26 @@ body:has([data-chat-app]) .footer,
   display: block;
   cursor: pointer;
   transition: transform 0.2s ease;
+  border-radius: 8px;
+  background: transparent;
 }
 
 .chat-attachment-image img:hover {
   transform: scale(1.02);
+}
+
+.chat-attachment-image .chat-attachment-info {
+  display: none;
+}
+
+.chat-attachment-image img:not([src]) + .chat-attachment-info,
+.chat-attachment-image:has(img[style*="display: none"]) .chat-attachment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 8px;
 }
 
 .chat-attachment-video video {
