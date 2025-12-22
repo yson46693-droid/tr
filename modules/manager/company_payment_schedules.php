@@ -436,29 +436,35 @@ $schedules = $db->query($sql, $params);
 $hasCreatedByAdmin = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'created_by_admin'"));
 $hasRepId = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'rep_id'"));
 
-if ($hasCreatedByAdmin && $hasRepId) {
-    $customers = $db->query(
-        "SELECT id, name FROM customers 
-         WHERE status = 'active' 
-         AND (created_by_admin = 1 OR rep_id IS NULL OR created_by IN (SELECT id FROM users WHERE role IN ('manager', 'accountant')))
-         ORDER BY name"
-    );
-    
-    $debtorCustomers = $db->query(
-        "SELECT id, name, balance FROM customers 
-         WHERE status = 'active' 
-         AND (created_by_admin = 1 OR rep_id IS NULL OR created_by IN (SELECT id FROM users WHERE role IN ('manager', 'accountant')))
-         AND balance IS NOT NULL AND balance > 0
-         ORDER BY name"
-    );
-} else {
-    $customers = $db->query("SELECT id, name FROM customers WHERE status = 'active' ORDER BY name");
-    $debtorCustomers = $db->query(
-        "SELECT id, name, balance FROM customers 
-         WHERE status = 'active' 
-         AND balance IS NOT NULL AND balance > 0
-         ORDER BY name"
-    );
+try {
+    if ($hasCreatedByAdmin && $hasRepId) {
+        $customers = $db->query(
+            "SELECT id, name FROM customers 
+             WHERE status = 'active' 
+             AND (created_by_admin = 1 OR rep_id IS NULL OR created_by IN (SELECT id FROM users WHERE role IN ('manager', 'accountant')))
+             ORDER BY name"
+        );
+        
+        $debtorCustomers = $db->query(
+            "SELECT id, name, balance FROM customers 
+             WHERE status = 'active' 
+             AND (created_by_admin = 1 OR rep_id IS NULL OR created_by IN (SELECT id FROM users WHERE role IN ('manager', 'accountant')))
+             AND balance IS NOT NULL AND balance > 0.01
+             ORDER BY name"
+        );
+    } else {
+        $customers = $db->query("SELECT id, name FROM customers WHERE status = 'active' ORDER BY name");
+        $debtorCustomers = $db->query(
+            "SELECT id, name, balance FROM customers 
+             WHERE status = 'active' 
+             AND balance IS NOT NULL AND balance > 0.01
+             ORDER BY name"
+        );
+    }
+} catch (Throwable $e) {
+    error_log('Error fetching company customers: ' . $e->getMessage());
+    $customers = [];
+    $debtorCustomers = [];
 }
 
 $hasDebtorCustomers = !empty($debtorCustomers);
@@ -534,8 +540,7 @@ if (isset($_GET['id'])) {
             تم إرسال <?php echo $sentReminders; ?> تذكير
         </div>
         <?php endif; ?>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addScheduleModal"
-                <?php echo $hasDebtorCustomers ? '' : 'disabled'; ?>>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addScheduleModal">
             <i class="bi bi-plus-circle me-2"></i>إضافة موعد تحصيل
         </button>
     </div>
