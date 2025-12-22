@@ -991,6 +991,13 @@ document.addEventListener('DOMContentLoaded', function() {
         clearAllBtn.style.opacity = '0.6';
         clearAllBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
         
+        // التأكد من أن dropdown يبقى مفتوحاً أثناء العملية
+        if (dropdownInstance) {
+            dropdownInstance._config.autoClose = false;
+        }
+        isClearingNotifications = true;
+        clearAllBtn.setAttribute('data-prevent-close', 'true');
+        
         try {
             const result = await deleteAllNotifications();
             
@@ -1020,16 +1027,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
             }
         } finally {
-            // إعادة تعيين flag
+            // إعادة تعيين flag بعد اكتمال العملية
             isClearingNotifications = false;
             clearAllBtn.removeAttribute('data-prevent-close');
             
             // إعادة تفعيل autoClose
-            const dropdownToggle = document.getElementById('notificationsDropdown');
             if (dropdownToggle && typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
                 const dropdownInstance = bootstrap.Dropdown.getInstance(dropdownToggle);
                 if (dropdownInstance) {
-                    dropdownInstance._config.autoClose = true;
+                    dropdownInstance._config.autoClose = originalAutoClose;
                 }
             }
             
@@ -1106,20 +1112,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Preventing dropdown close - clear button was clicked');
                 e.preventDefault();
                 e.stopPropagation();
-                isClearingNotifications = false;
-                if (clearAllBtn) {
-                    clearAllBtn.removeAttribute('data-prevent-close');
-                }
+                // لا نعيد تعيين isClearingNotifications هنا - يجب أن يبقى true حتى اكتمال العملية
+                // سيتم إعادة التعيين في finally block في handleClearAllNotifications
             }
         }, true); // capture phase
         
         // أيضاً منع الإغلاق في hidePrevented event
         notificationDropdownToggle.addEventListener('hidePrevented.bs.dropdown', function() {
-            isClearingNotifications = false;
-            const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-            if (clearAllBtn) {
-                clearAllBtn.removeAttribute('data-prevent-close');
-            }
+            // لا نعيد تعيين isClearingNotifications هنا أيضاً
+            // سيتم إعادة التعيين في finally block في handleClearAllNotifications
         });
     }
     
