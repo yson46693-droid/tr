@@ -1321,22 +1321,25 @@
         const mediaId = 'media_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         
         if (isImage) {
-          // Return HTML with image - load from cache in background
+          // Return HTML with image - always use original URL first
           const imageHtml = `
             <div class="chat-message-attachment chat-attachment-image">
-              <img data-media-id="${mediaId}" src="${safeFileUrl}" alt="${fileName}" onclick="window.open('${safeFileUrl}', '_blank')" loading="lazy" />
+              <img data-media-id="${mediaId}" data-api-url="${escapeAttribute(apiUrl)}" src="${safeFileUrl}" alt="${fileName}" onclick="window.open('${safeFileUrl}', '_blank')" loading="lazy" />
             </div>
           `;
           
           // Try to load from cache in background and update if available
-          (async () => {
+          // Use setTimeout to ensure DOM is ready
+          setTimeout(async () => {
             try {
+              const element = document.querySelector(`[data-media-id="${mediaId}"]`);
+              if (!element) return;
+              
+              // Try to get from cache
               const cachedUrl = await getCachedMedia(apiUrl);
-              if (cachedUrl) {
-                const element = document.querySelector(`[data-media-id="${mediaId}"]`);
-                if (element && element.tagName === 'IMG') {
-                  element.src = cachedUrl;
-                }
+              if (cachedUrl && element.tagName === 'IMG') {
+                // Only update if image hasn't loaded yet or if cached version is available
+                element.src = cachedUrl;
               } else {
                 // Cache the media in background for next time
                 cacheMedia(apiUrl).catch(() => {});
@@ -1344,7 +1347,7 @@
             } catch (error) {
               console.warn('Error loading cached media:', error);
             }
-          })();
+          }, 100);
           
           return imageHtml;
         } else if (isVideo) {

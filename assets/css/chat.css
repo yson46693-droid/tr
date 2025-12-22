@@ -1231,39 +1231,28 @@ body:has([data-chat-app]) .footer,
 }
 
 .chat-attachment-image {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .chat-attachment-image img {
-  width: 100%;
+  width: auto;
   max-width: 400px;
   max-height: 400px;
+  height: auto;
   object-fit: contain;
-  display: block;
+  display: block !important;
   cursor: pointer;
   transition: transform 0.2s ease;
   border-radius: 8px;
   background: transparent;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .chat-attachment-image img:hover {
   transform: scale(1.02);
-}
-
-.chat-attachment-image .chat-attachment-info {
-  display: none;
-}
-
-.chat-attachment-image img:not([src]) + .chat-attachment-info,
-.chat-attachment-image:has(img[style*="display: none"]) .chat-attachment-info {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px;
-  background: rgba(0, 0, 0, 0.03);
-  border-radius: 8px;
 }
 
 .chat-attachment-video video {
