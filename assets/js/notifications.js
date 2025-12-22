@@ -945,9 +945,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // معالج حذف جميع الإشعارات
     async function handleClearAllNotifications(e) {
         console.log('handleClearAllNotifications called', e);
+        
+        // منع إغلاق dropdown - يجب أن يكون أول شيء
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
+        
+        // منع إغلاق Bootstrap dropdown
+        if (e.stopImmediatePropagation) {
+            e.stopImmediatePropagation();
+        }
         
         const clearAllBtn = e.target.closest('#clearAllNotificationsBtn') || document.getElementById('clearAllNotificationsBtn');
         if (!clearAllBtn) {
@@ -955,8 +962,25 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
         
+        // منع إغلاق dropdown باستخدام Bootstrap API
+        const dropdownElement = clearAllBtn.closest('.dropdown');
+        if (dropdownElement) {
+            const dropdown = bootstrap.Dropdown.getInstance(dropdownElement.querySelector('[data-bs-toggle="dropdown"]'));
+            if (dropdown) {
+                // منع الإغلاق التلقائي
+                dropdown._config.autoClose = false;
+            }
+        }
+        
         console.log('clearAllNotificationsBtn found, showing confirm');
         if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
+            // إعادة تفعيل الإغلاق التلقائي إذا ألغى المستخدم
+            if (dropdownElement) {
+                const dropdown = bootstrap.Dropdown.getInstance(dropdownElement.querySelector('[data-bs-toggle="dropdown"]'));
+                if (dropdown) {
+                    dropdown._config.autoClose = true;
+                }
+            }
             return false;
         }
         
@@ -1035,6 +1059,24 @@ document.addEventListener('DOMContentLoaded', function() {
         newBtn.style.cursor = 'pointer';
         newBtn.style.userSelect = 'none';
         
+        // منع إغلاق dropdown عند النقر - يجب أن يكون أول event listener
+        newBtn.addEventListener('click', function(e) {
+            console.log('Button click event fired - preventing dropdown close');
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            
+            // منع إغلاق Bootstrap dropdown
+            const dropdownToggle = document.getElementById('notificationsDropdown');
+            if (dropdownToggle) {
+                const dropdownInstance = bootstrap.Dropdown.getInstance(dropdownToggle);
+                if (dropdownInstance) {
+                    // تعطيل الإغلاق التلقائي مؤقتاً
+                    dropdownInstance._config.autoClose = false;
+                }
+            }
+        }, true); // capture phase - يجب أن يكون أولاً
+        
         // إضافة event listeners متعددة لضمان العمل
         newBtn.addEventListener('click', function(e) {
             console.log('Button click event fired (capture)');
@@ -1051,15 +1093,12 @@ document.addEventListener('DOMContentLoaded', function() {
             handleClearAllNotifications(e);
         };
         
-        // منع إغلاق dropdown عند النقر
-        newBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-        }, true);
-        
-        // إضافة mousedown أيضاً
+        // إضافة mousedown أيضاً لمنع الإغلاق
         newBtn.addEventListener('mousedown', function(e) {
             console.log('Button mousedown event fired');
+            e.preventDefault();
             e.stopPropagation();
+            e.stopImmediatePropagation();
         }, true);
     }
     
@@ -1072,9 +1111,20 @@ document.addEventListener('DOMContentLoaded', function() {
         notificationsDropdown.addEventListener('click', function(e) {
             const clearAllBtn = e.target.closest('#clearAllNotificationsBtn');
             if (clearAllBtn) {
-                console.log('Clear all button clicked via delegation');
+                console.log('Clear all button clicked via delegation - preventing dropdown close');
                 e.preventDefault();
                 e.stopPropagation();
+                e.stopImmediatePropagation();
+                
+                // منع إغلاق Bootstrap dropdown
+                const dropdownToggle = document.getElementById('notificationsDropdown');
+                if (dropdownToggle) {
+                    const dropdownInstance = bootstrap.Dropdown.getInstance(dropdownToggle);
+                    if (dropdownInstance) {
+                        dropdownInstance._config.autoClose = false;
+                    }
+                }
+                
                 handleClearAllNotifications(e);
             }
         }, true); // capture phase لضمان التنفيذ أولاً
@@ -1085,13 +1135,90 @@ document.addEventListener('DOMContentLoaded', function() {
     // تهيئة الزر عند تحميل الصفحة
     initClearAllButton();
     
+    // متغير لتتبع ما إذا كان الزر تم النقر عليه
+    let isClearButtonClicked = false;
+    
+    // منع إغلاق dropdown عند النقر على الزر - حل شامل
+    function preventDropdownClose() {
+        const dropdownToggle = document.getElementById('notificationsDropdown');
+        if (!dropdownToggle) {
+            return;
+        }
+        
+        // التحقق من وجود Bootstrap
+        if (typeof bootstrap === 'undefined' || !bootstrap.Dropdown) {
+            console.warn('Bootstrap not loaded, using fallback method');
+            // استخدام طريقة بديلة بدون Bootstrap API
+            const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+            if (clearAllBtn) {
+                clearAllBtn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // منع propagation فقط
+                }, true);
+            }
+            return;
+        }
+        
+        // إضافة event listener على dropdown toggle لمنع الإغلاق عند النقر على الزر
+        dropdownToggle.addEventListener('hide.bs.dropdown', function(e) {
+            if (isClearButtonClicked) {
+                console.log('Preventing dropdown close because clear button was clicked');
+                e.preventDefault();
+                e.stopPropagation();
+                isClearButtonClicked = false; // إعادة تعيين المتغير
+            }
+        }, true); // capture phase
+            
+            // أيضاً منع الإغلاق عند النقر على الزر مباشرة
+            const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+            if (clearAllBtn) {
+                // تعيين المتغير عند النقر
+                clearAllBtn.addEventListener('mousedown', function() {
+                    isClearButtonClicked = true;
+                    console.log('Clear button mousedown - setting flag');
+                }, true);
+                
+                clearAllBtn.addEventListener('click', function(e) {
+                    isClearButtonClicked = true;
+                    console.log('Clear button click - setting flag');
+                    
+                    // منع الإغلاق التلقائي للـ dropdown
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
+                        const dropdownInstance = bootstrap.Dropdown.getInstance(dropdownToggle);
+                        if (dropdownInstance) {
+                            // تعطيل الإغلاق التلقائي مؤقتاً
+                            const originalAutoClose = dropdownInstance._config.autoClose;
+                            dropdownInstance._config.autoClose = false;
+                            console.log('Disabled dropdown auto-close');
+                            
+                            // إعادة تفعيل الإغلاق التلقائي بعد ثانيتين (بعد انتهاء العملية)
+                            setTimeout(() => {
+                                const currentInstance = bootstrap.Dropdown.getInstance(dropdownToggle);
+                                if (currentInstance) {
+                                    currentInstance._config.autoClose = originalAutoClose;
+                                    isClearButtonClicked = false;
+                                    console.log('Re-enabled dropdown auto-close');
+                                }
+                            }, 2000);
+                        }
+                    }
+                }, true);
+            }
+        }
+    }
+    
+    // استدعاء الدالة بعد تهيئة الزر
+    setTimeout(preventDropdownClose, 100);
+    
     // إعادة تهيئة الزر بعد تحديث قائمة الإشعارات (في حالة إعادة بناء DOM)
     // استخدام MutationObserver لمراقبة تغييرات DOM
     const observer = new MutationObserver(function(mutations) {
         const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
         if (clearAllBtn) {
             // إعادة تهيئة فقط إذا لم يكن لديه event listener
-            setTimeout(initClearAllButton, 50);
+            setTimeout(() => {
+                initClearAllButton();
+                preventDropdownClose();
+            }, 50);
         }
     });
     
@@ -1108,7 +1235,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const notificationDropdownToggle = document.getElementById('notificationsDropdown');
     if (notificationDropdownToggle) {
         notificationDropdownToggle.addEventListener('shown.bs.dropdown', function() {
-            setTimeout(initClearAllButton, 50);
+            setTimeout(() => {
+                initClearAllButton();
+                preventDropdownClose();
+            }, 50);
         });
     }
     
@@ -1116,9 +1246,20 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('click', function(e) {
         const clearAllBtn = e.target.closest('#clearAllNotificationsBtn');
         if (clearAllBtn) {
-            console.log('Clear all button clicked via document delegation');
+            console.log('Clear all button clicked via document delegation - preventing dropdown close');
             e.preventDefault();
             e.stopPropagation();
+            e.stopImmediatePropagation();
+            
+            // منع إغلاق Bootstrap dropdown
+            const dropdownToggle = document.getElementById('notificationsDropdown');
+            if (dropdownToggle) {
+                const dropdownInstance = bootstrap.Dropdown.getInstance(dropdownToggle);
+                if (dropdownInstance) {
+                    dropdownInstance._config.autoClose = false;
+                }
+            }
+            
             handleClearAllNotifications(e);
         }
     }, true); // capture phase
@@ -1143,8 +1284,23 @@ document.addEventListener('DOMContentLoaded', function() {
             pointer-events: auto !important;
             cursor: pointer !important;
         }
+        /* منع إغلاق dropdown عند النقر على الزر */
+        .notifications-dropdown #clearAllNotificationsBtn {
+            pointer-events: auto !important;
+        }
     `;
     document.head.appendChild(style);
+    
+    // إضافة data-bs-auto-close="false" على dropdown menu لمنع الإغلاق التلقائي
+    const notificationsDropdownMenu = document.querySelector('.notifications-dropdown');
+    if (notificationsDropdownMenu) {
+        notificationsDropdownMenu.setAttribute('data-bs-auto-close', 'outside');
+        // أو يمكن تعطيله تماماً للزر فقط
+        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+        if (clearAllBtn) {
+            clearAllBtn.setAttribute('data-bs-auto-close', 'false');
+        }
+    }
 });
 
 // إيقاف التحديث عند مغادرة الصفحة
