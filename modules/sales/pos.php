@@ -269,6 +269,7 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $saleDate = $_POST['sale_date'] ?? date('Y-m-d');
         $customerMode = $_POST['customer_mode'] ?? 'existing';
         $paymentType = $_POST['payment_type'] ?? 'full';
+        $discountAmount = cleanFinancialValue($_POST['discount_amount'] ?? 0);
         $prepaidAmount = cleanFinancialValue($_POST['prepaid_amount'] ?? 0);
         $paidAmountInput = cleanFinancialValue($_POST['paid_amount'] ?? 0);
         $notes = trim($_POST['notes'] ?? '');
@@ -352,8 +353,16 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $validationErrors[] = 'لا يمكن إتمام عملية بيع بمجموع صفري.';
         }
 
-        $prepaidAmount = max(0, min($prepaidAmount, $subtotal));
-        $netTotal = round($subtotal - $prepaidAmount, 2);
+        // تطبيق الخصم على الإجمالي
+        $discountAmount = max(0, min($discountAmount, $subtotal));
+        $subtotalAfterDiscount = round($subtotal - $discountAmount, 2);
+        
+        if ($subtotalAfterDiscount < 0) {
+            $subtotalAfterDiscount = 0;
+        }
+
+        $prepaidAmount = max(0, min($prepaidAmount, $subtotalAfterDiscount));
+        $netTotal = round($subtotalAfterDiscount - $prepaidAmount, 2);
 
         $effectivePaidAmount = 0.0;
         if ($paymentType === 'full') {
@@ -705,8 +714,8 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $currentUser['id'],
                     $saleDate,
                     $invoiceItems,
-                    0,
-                    $prepaidAmount,
+                    0,  // taxRate
+                    $discountAmount,  // discountAmount
                     $notes,
                     $currentUser['id'],
                     $dueDate,  // تمرير تاريخ الاستحقاق
@@ -2101,6 +2110,7 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         $paymentType = 'full';
                     }
                     if (!isset($subtotal)) $subtotal = 0;
+                    if (!isset($discountAmount)) $discountAmount = 0;
                     if (!isset($prepaidAmount)) $prepaidAmount = 0;
                     if (!isset($netTotal)) $netTotal = 0;
                     if (!isset($effectivePaidAmount)) $effectivePaidAmount = 0;
@@ -2121,6 +2131,7 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         'payment_type' => $paymentType,
                         'summary' => [
                             'subtotal' => $subtotal,
+                            'discount' => $discountAmount,
                             'prepaid' => $prepaidAmount,
                             'net_total' => $netTotal,
                             'paid' => $effectivePaidAmount,
@@ -3275,6 +3286,12 @@ if (!$error) {
                                 </div>
                             </div>
 
+                            <div class="mb-3">
+                                <label class="form-label">الخصم <span class="text-muted">(اختياري)</span></label>
+                                <input type="number" step="0.01" min="0" class="form-control" id="posDiscountInput" name="discount_amount" placeholder="0" value="0">
+                                <small class="text-muted">سيتم خصم هذا المبلغ من إجمالي تكلفة المنتجات في السلة</small>
+                            </div>
+
                             <div class="row g-2 g-md-3 align-items-start mb-3">
                                 <div class="col-12 col-sm-6">
                                     <div class="pos-summary-card-neutral">
@@ -3383,6 +3400,7 @@ if (!$error) {
 (function () {
     const locale = <?php echo json_encode($pageDirection === 'rtl' ? 'ar-EG' : 'en-US'); ?>;
     const currencySymbolRaw = <?php echo json_encode(CURRENCY_SYMBOL); ?>;
+    const isSalesRep = <?php echo json_encode(($currentUser['role'] ?? '') === 'sales'); ?>;
     const inventory = <?php
         $inventoryForJs = [];
         foreach ($vehicleInventory as $item) {
@@ -3440,6 +3458,7 @@ if (!$error) {
         netTotal: document.getElementById('posNetTotal'),
         dueAmount: document.getElementById('posDueAmount'),
         prepaidInput: document.getElementById('posPrepaidInput'),
+        discountInput: document.getElementById('posDiscountInput'),
         paymentOptionCards: document.querySelectorAll('[data-payment-option]'),
         paymentRadios: document.querySelectorAll('input[name="payment_type"]'),
         partialWrapper: document.getElementById('posPartialWrapper'),
@@ -3569,22 +3588,40 @@ if (!$error) {
             const price = sanitizeNumber(item.unit_price);
             return total + (qty * price);
         }, 0);
+        
+        // الحصول على الخصم
+        let discount = sanitizeNumber(elements.discountInput ? elements.discountInput.value : '0');
+        let sanitizedSubtotal = sanitizeNumber(subtotal);
+        
+        // التأكد من أن الخصم لا يتجاوز المجموع الفرعي ولا يكون سالباً
+        if (discount < 0) {
+            discount = 0;
+        }
+        if (discount > sanitizedSubtotal) {
+            discount = sanitizedSubtotal;
+        }
+        if (elements.discountInput) {
+            elements.discountInput.value = discount.toFixed(2);
+        }
+        
+        // حساب الإجمالي بعد خصم الخصم
+        const subtotalAfterDiscount = sanitizeNumber(sanitizedSubtotal - discount);
+        
         // الحصول على المبلغ المدفوع مسبقاً
         let prepaid = sanitizeNumber(elements.prepaidInput ? elements.prepaidInput.value : '0');
-        let sanitizedSubtotal = sanitizeNumber(subtotal);
 
-        // التأكد من أن المبلغ المدفوع مسبقاً لا يتجاوز المجموع الفرعي
+        // التأكد من أن المبلغ المدفوع مسبقاً لا يتجاوز المجموع الفرعي بعد الخصم
         if (prepaid < 0) {
             prepaid = 0;
         }
-        if (prepaid > sanitizedSubtotal) {
-            prepaid = sanitizedSubtotal;
+        if (prepaid > subtotalAfterDiscount) {
+            prepaid = subtotalAfterDiscount;
         }
         if (elements.prepaidInput) {
             elements.prepaidInput.value = prepaid.toFixed(2);
         }
 
-        const netTotal = sanitizeNumber(sanitizedSubtotal - prepaid);
+        const netTotal = sanitizeNumber(subtotalAfterDiscount - prepaid);
         let paidAmount = 0;
         const paymentType = Array.from(elements.paymentRadios).find((radio) => radio.checked)?.value || 'full';
 
@@ -3722,7 +3759,7 @@ if (!$error) {
                         </div>
                     </td>
                     <td data-label="سعر الوحدة">
-                        <input type="number" step="0.01" min="0" class="form-control" data-cart-price data-unique-id="${uniqueId}" value="${sanitizedPrice.toFixed(2)}" aria-label="سعر الوحدة">
+                        <input type="number" step="0.01" min="0" class="form-control" data-cart-price data-unique-id="${uniqueId}" value="${sanitizedPrice.toFixed(2)}" aria-label="سعر الوحدة" ${isSalesRep ? 'readonly style="background-color: #f8f9fa; cursor: not-allowed;"' : ''}>
                     </td>
                     <td data-label="الإجمالي" class="fw-semibold">${formatCurrency(sanitizedQty * sanitizedPrice)}</td>
                     <td data-label="إجراءات" class="text-end">
@@ -3888,8 +3925,20 @@ if (!$error) {
                 // renderCart() تستدعي updateSummary() تلقائياً
             }
             if (priceInput) {
-                updateUnitPrice(uniqueId, priceInput.value);
-                // renderCart() تستدعي updateSummary() تلقائياً
+                // منع تعديل السعر للمندوبين
+                if (!isSalesRep) {
+                    updateUnitPrice(uniqueId, priceInput.value);
+                    // renderCart() تستدعي updateSummary() تلقائياً
+                } else {
+                    // إعادة تعيين السعر الأصلي للمندوبين
+                    const item = cart.find((entry) => entry.unique_id === uniqueId);
+                    if (item) {
+                        const product = inventoryMap.get(uniqueId);
+                        if (product) {
+                            priceInput.value = sanitizeNumber(product.unit_price).toFixed(2);
+                        }
+                    }
+                }
             }
         });
     }
@@ -3918,6 +3967,15 @@ if (!$error) {
         });
         elements.prepaidInput.addEventListener('change', function() {
             updateSummary(); // تحديث عند تغيير المبلغ المدفوع مسبقاً
+        });
+    }
+
+    if (elements.discountInput) {
+        elements.discountInput.addEventListener('input', function() {
+            updateSummary(); // تحديث فوري عند تغيير الخصم
+        });
+        elements.discountInput.addEventListener('change', function() {
+            updateSummary(); // تحديث عند تغيير الخصم
         });
     }
 
