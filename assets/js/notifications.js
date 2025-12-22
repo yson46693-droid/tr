@@ -515,34 +515,7 @@ async function updateNotificationList(notifications) {
             // إذا كان الإشعار من نوع "تنبيه: تأخير في الحضور"، لا يتم التحويل
             const notification = notifications.find(n => (n.id == notificationId || String(n.id) === String(notificationId)));
             if (notification && notification.link && notification.title !== 'تنبيه: تأخير في الحضور') {
-                const link = String(notification.link).trim();
-                
-                // التحقق من صحة الرابط قبل التوجيه
-                if (link && link !== '#' && link !== '' && link !== 'null' && link !== 'undefined') {
-                    // التحقق من أن الرابط يبدأ بـ / أو http أو https
-                    if (link.startsWith('/') || link.startsWith('http://') || link.startsWith('https://')) {
-                        // تنظيف الرابط من أي مسافات أو أحرف غير صالحة
-                        const cleanLink = link.replace(/\s+/g, '');
-                        
-                        // التحقق من أن الرابط لا يحتوي على مسارات خطيرة
-                        if (!cleanLink.includes('../') && !cleanLink.includes('..\\')) {
-                            try {
-                                window.location.href = cleanLink;
-                            } catch (error) {
-                                console.error('Error redirecting to notification link:', error, cleanLink);
-                                alert('عذراً، حدث خطأ أثناء التوجيه إلى الصفحة المطلوبة.');
-                            }
-                        } else {
-                            console.warn('Invalid notification link (contains dangerous path):', cleanLink);
-                            alert('عذراً، رابط الإشعار غير صحيح.');
-                        }
-                    } else {
-                        console.warn('Invalid notification link format:', link);
-                        alert('عذراً، رابط الإشعار غير صحيح.');
-                    }
-                } else {
-                    console.warn('Empty or invalid notification link:', link);
-                }
+                window.location.href = notification.link;
             }
         });
     });
@@ -873,18 +846,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // تم دمج notifications polling في unified polling system
-        // نستخدم unified polling إذا كان متاحاً، وإلا نستخدم النظام القديم
         if (!window.__notificationAutoRefreshActive) {
             window.__notificationAutoRefreshActive = true;
-            
-            // إذا كان unified polling نشطاً، لا نستخدم polling منفصل
-            if (window.__unifiedPollingActive) {
-                // سنعتمد على unified polling فقط
-                return;
-            }
-            
-            // Fallback: استخدام النظام القديم إذا لم يكن unified polling متاحاً
+            // التحقق من أن الصفحة مرئية قبل الطلب
             notificationCheckInterval = setInterval(function() {
                 if (!document.hidden) {
                     loadNotifications();
@@ -892,30 +856,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }, pollInterval);
         }
     }
-    
-    // دالة للتعامل مع الإشعارات من unified polling system
-    window.handleUnifiedNotifications = async function(notificationsData) {
-        if (!notificationsData || !notificationsData.notifications) {
-            return;
-        }
-        
-        try {
-            const notifications = Array.isArray(notificationsData.notifications) ? notificationsData.notifications : [];
-            const displayNotifications = filterDisplayableNotifications(notifications);
-            const unreadCount = notificationsData.unread_count || displayNotifications.filter(isNotificationUnread).length;
-            
-            // تحديث العداد
-            updateNotificationBadge(unreadCount);
-            
-            // معالجة إشعارات المتصفح
-            await handleBrowserNotifications(displayNotifications);
-            
-            // تحديث قائمة الإشعارات
-            await updateNotificationList(displayNotifications);
-        } catch (error) {
-            console.error('Error handling unified notifications:', error);
-        }
-    };
     
     // طلب الإذن عند النقر على أيقونة الإشعارات (user-generated event)
     // البحث عن أيقونة الإشعارات في header
@@ -942,228 +882,59 @@ document.addEventListener('DOMContentLoaded', function() {
         }, { once: false, passive: true });
     }
     
-    // معالج حذف جميع الإشعارات - نسخة مبسطة وموثوقة
-    async function handleClearAllNotifications(e) {
-        console.log('handleClearAllNotifications called');
-        
-        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-        if (!clearAllBtn) {
-            console.warn('clearAllNotificationsBtn not found');
-            return false;
-        }
-        
-        // منع إغلاق dropdown
-        isClearingNotifications = true;
-        clearAllBtn.setAttribute('data-prevent-close', 'true');
-        
-        // التأكيد من المستخدم
-        if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
-            isClearingNotifications = false;
-            clearAllBtn.removeAttribute('data-prevent-close');
-            return false;
-        }
-        
-        // تعطيل الزر أثناء المعالجة
-        const originalHTML = clearAllBtn.innerHTML;
-        const originalDisabled = clearAllBtn.disabled;
-        clearAllBtn.disabled = true;
-        clearAllBtn.style.pointerEvents = 'none';
-        clearAllBtn.style.opacity = '0.6';
-        clearAllBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
-        
-        try {
-            const result = await deleteAllNotifications();
-            
-            if (result && result.loggedOut) {
-                return false;
-            }
-            
-            // إعادة تحميل الإشعارات بعد الحذف
-            if (typeof loadNotifications === 'function') {
-                setTimeout(() => loadNotifications(), 100);
-            }
-            
-            // تحديث العداد للتأكد
-            if (typeof updateNotificationBadge === 'function') {
-                updateNotificationBadge(0);
-            }
-            
-            console.log('تم مسح الإشعارات بنجاح');
-            
-        } catch (error) {
-            // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
-            if (error.message && error.message.includes('Unauthorized')) {
-                console.warn('User logged out during notification deletion');
-                return false;
-            }
-            console.error('Error in handleClearAllNotifications:', error);
-            
-            // إظهار رسالة خطأ فقط للأخطاء الأخرى
-            if (error.message && !error.message.includes('Unauthorized')) {
-                alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
-            }
-            
-        } finally {
-            // إعادة تعيين الحالة والزر
-            isClearingNotifications = false;
-            clearAllBtn.removeAttribute('data-prevent-close');
-            clearAllBtn.disabled = originalDisabled;
-            clearAllBtn.style.pointerEvents = '';
-            clearAllBtn.style.opacity = '';
-            clearAllBtn.innerHTML = originalHTML;
-        }
-        
-        return false;
-    }
-    
-    // نظام مبسط لزر مسح الإشعارات
-    let isClearingNotifications = false;
-    
-    function setupClearAllButton() {
-        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-        if (!clearAllBtn) {
-            return;
-        }
-        
-        // إزالة جميع event listeners السابقة
-        const newBtn = clearAllBtn.cloneNode(true);
-        clearAllBtn.parentNode.replaceChild(newBtn, clearAllBtn);
-        
-        // الحصول على المرجع الجديد بعد الاستنساخ
-        const btn = document.getElementById('clearAllNotificationsBtn');
-        if (!btn) {
-            return;
-        }
-        
-        // إضافة onclick مباشرة لضمان العمل
-        btn.onclick = function(e) {
-            console.log('Clear all button clicked - onclick handler');
+    // إضافة event listener لزر مسح كل الإشعارات
+    const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', async function(e) {
             e.preventDefault();
             e.stopPropagation();
-            e.stopImmediatePropagation();
+            e.stopImmediatePropagation(); // منع انتشار الحدث لأي معالجات أخرى
             
-            // منع إغلاق dropdown
-            isClearingNotifications = true;
-            btn.setAttribute('data-prevent-close', 'true');
+            if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
+                return;
+            }
             
-            // تشغيل دالة المسح
-            handleClearAllNotifications(e).catch(err => {
-                console.error('Error in handleClearAllNotifications:', err);
-            });
+            // تعطيل الزر أثناء المعالجة
+            const originalHTML = clearAllBtn.innerHTML;
+            clearAllBtn.disabled = true;
+            clearAllBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
             
-            return false;
-        };
-        
-        // إضافة event listener للـ click أيضاً كنسخة احتياطية
-        btn.addEventListener('click', function(e) {
-            console.log('Clear all button clicked - addEventListener handler');
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            return false;
-        }, { capture: true, passive: false });
-        
-        // إضافة event listener للـ mousedown لمنع إغلاق dropdown
-        btn.addEventListener('mousedown', function(e) {
-            console.log('Clear all button mousedown');
-            e.stopPropagation();
-            isClearingNotifications = true;
-            btn.setAttribute('data-prevent-close', 'true');
-        }, { capture: true });
-        
-        // التأكد من أن الزر قابل للنقر
-        btn.style.pointerEvents = 'auto';
-        btn.style.cursor = 'pointer';
-        btn.style.userSelect = 'none';
-        btn.style.zIndex = '9999';
-        btn.style.position = 'relative';
-        btn.style.display = 'inline-block';
-    }
-    
-    // منع إغلاق Bootstrap dropdown عند النقر على الزر
-    const notificationDropdownToggle = document.getElementById('notificationsDropdown');
-    if (notificationDropdownToggle) {
-        // منع الإغلاق عند النقر على الزر - يجب أن يكون في capture phase
-        notificationDropdownToggle.addEventListener('hide.bs.dropdown', function(e) {
-            const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-            if (isClearingNotifications || (clearAllBtn && clearAllBtn.hasAttribute('data-prevent-close'))) {
-                console.log('Preventing dropdown close - clear button was clicked');
-                e.preventDefault();
-                e.stopPropagation();
-                // لا نعيد تعيين isClearingNotifications هنا - يجب أن يبقى true حتى اكتمال العملية
-                // سيتم إعادة التعيين في finally block في handleClearAllNotifications
+            try {
+                const result = await deleteAllNotifications();
+                
+                // إذا كان المستخدم قد سجل خروج، لا نتابع
+                if (result && result.loggedOut) {
+                    return;
+                }
+                
+                // إعادة تحميل الإشعارات بعد الحذف
+                if (typeof loadNotifications === 'function') {
+                    await loadNotifications();
+                }
+                
+                // تحديث العداد للتأكد
+                if (typeof updateNotificationBadge === 'function') {
+                    await updateNotificationBadge(0);
+                }
+            } catch (error) {
+                // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
+                if (error.message && error.message.includes('Unauthorized')) {
+                    console.warn('User logged out during notification deletion');
+                    return;
+                }
+                console.error('Error in deleteAllNotifications:', error);
+                // إظهار رسالة خطأ فقط للأخطاء الأخرى
+                if (error.message && !error.message.includes('Unauthorized')) {
+                    alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
+                }
+            } finally {
+                // إعادة تمكين الزر فقط إذا لم يتم إعادة التوجيه
+                if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
+                    clearAllBtn.disabled = false;
+                    clearAllBtn.innerHTML = originalHTML;
+                }
             }
-        }, true); // capture phase
-        
-        // أيضاً منع الإغلاق في hidePrevented event
-        notificationDropdownToggle.addEventListener('hidePrevented.bs.dropdown', function() {
-            // لا نعيد تعيين isClearingNotifications هنا أيضاً
-            // سيتم إعادة التعيين في finally block في handleClearAllNotifications
-        });
-    }
-    
-    // تهيئة الزر عند تحميل الصفحة - مع عدة محاولات للتأكد
-    function initializeClearButton() {
-        if (document.getElementById('clearAllNotificationsBtn')) {
-            setupClearAllButton();
-            return true;
-        }
-        return false;
-    }
-    
-    // محاولة التهيئة فوراً
-    initializeClearButton();
-    
-    // محاولة التهيئة بعد تأخير قصير
-    setTimeout(() => {
-        initializeClearButton();
-    }, 100);
-    
-    // إعادة تهيئة الزر عند فتح dropdown
-    if (notificationDropdownToggle) {
-        notificationDropdownToggle.addEventListener('shown.bs.dropdown', function() {
-            setTimeout(() => {
-                initializeClearButton();
-            }, 50);
-        });
-        
-        // أيضاً تهيئة عند التحضير للفتح
-        notificationDropdownToggle.addEventListener('show.bs.dropdown', function() {
-            setTimeout(() => {
-                initializeClearButton();
-            }, 10);
-        });
-    }
-    
-    // إضافة CSS للتأكد من أن الزر قابل للنقر
-    const styleId = 'clearAllNotificationsBtnStyles';
-    let existingStyle = document.getElementById(styleId);
-    if (!existingStyle) {
-        const style = document.createElement('style');
-        style.id = styleId;
-        style.textContent = `
-            #clearAllNotificationsBtn {
-                pointer-events: auto !important;
-                cursor: pointer !important;
-                user-select: none !important;
-                z-index: 9999 !important;
-                position: relative !important;
-                display: inline-block !important;
-            }
-            .dropdown-header #clearAllNotificationsBtn {
-                pointer-events: auto !important;
-                cursor: pointer !important;
-                z-index: 9999 !important;
-            }
-            .notifications-dropdown #clearAllNotificationsBtn {
-                pointer-events: auto !important;
-                z-index: 9999 !important;
-            }
-            .dropdown-header {
-                position: relative;
-            }
-        `;
-        document.head.appendChild(style);
+        }, true); // استخدام capture phase لضمان التنفيذ أولاً
     }
 });
 
