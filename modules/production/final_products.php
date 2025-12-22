@@ -2604,6 +2604,8 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     /* Modal طلب نقل منتجات من المخزن الرئيسي */
     #requestTransferModal .modal-dialog {
         margin: 0.5rem;
+        max-width: calc(100% - 1rem) !important;
+        width: calc(100% - 1rem) !important;
         max-height: calc(100vh - 1rem);
         height: calc(100vh - 1rem);
         display: flex;
@@ -2626,11 +2628,47 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     }
     
     #requestTransferModal .modal-body {
+        max-height: none !important;
+        height: auto !important;
         flex: 1;
         overflow-y: auto;
         overflow-x: hidden;
         -webkit-overflow-scrolling: touch;
         padding-bottom: 1rem;
+    }
+    
+    /* تحسين عرض العناصر في النموذج على الهاتف */
+    #requestTransferModal .transfer-item .col-md-5,
+    #requestTransferModal .transfer-item .col-md-4,
+    #requestTransferModal .transfer-item .col-md-3 {
+        width: 100%;
+        flex: 0 0 100%;
+        max-width: 100%;
+        margin-bottom: 0.75rem;
+    }
+    
+    #requestTransferModal .transfer-item .col-md-3:last-child {
+        margin-bottom: 0;
+    }
+    
+    /* تحسين عرض الحقول الأخرى */
+    #requestTransferModal .row.g-3 > .col-md-6 {
+        width: 100%;
+        flex: 0 0 100%;
+        max-width: 100%;
+        margin-bottom: 1rem;
+    }
+    
+    /* تحسين حجم الخط في القوائم المنسدلة */
+    #requestTransferModal .form-select {
+        font-size: 16px !important; /* منع التكبير التلقائي على iOS */
+        padding: 0.75rem !important;
+    }
+    
+    /* تحسين حجم الخط في الحقول */
+    #requestTransferModal .form-control {
+        font-size: 16px !important;
+        padding: 0.75rem !important;
     }
     
     #requestTransferModal .modal-footer {
@@ -2652,6 +2690,8 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     #requestTransferModal .modal-footer .btn {
         width: 100%;
         margin: 0;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
     }
 }
 
@@ -3833,7 +3873,7 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
 
 <?php if ($primaryWarehouse): ?>
 <div class="modal fade" id="requestTransferModal" tabindex="-1" aria-labelledby="requestTransferModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" style="max-width: 95%;">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -3846,7 +3886,7 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
                 <input type="hidden" name="action" value="create_transfer">
                 <input type="hidden" name="from_warehouse_id" value="<?php echo intval($primaryWarehouse['id']); ?>">
                 <input type="hidden" name="transfer_token" id="transferToken" value="">
-                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <div class="modal-body">
                     <?php if (!$canCreateTransfers): ?>
                         <div class="alert alert-warning d-flex align-items-center gap-2 mb-0">
                             <i class="bi bi-exclamation-triangle-fill fs-5"></i>
@@ -3862,13 +3902,13 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
                         </div>
                     <?php else: ?>
                         <div class="row g-3 mb-3">
-                            <div class="col-md-6">
+                            <div class="col-12 col-md-6">
                                 <label class="form-label">من المخزن</label>
                                 <div class="form-control-plaintext fw-semibold" id="transferFromWarehouse">
                                     <?php echo htmlspecialchars($primaryWarehouse['name']); ?> (مخزن رئيسي)
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-12 col-md-6">
                                 <label class="form-label" for="transferToWarehouse">إلى المخزن <span class="text-danger">*</span></label>
                                 <select class="form-select" name="to_warehouse_id" id="transferToWarehouse" required>
                                     <option value="">اختر المخزن الوجهة</option>
@@ -3891,11 +3931,11 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
                         </div>
 
                         <div class="row g-3 mb-3">
-                            <div class="col-md-6">
+                            <div class="col-12 col-md-6">
                                 <label class="form-label" for="transferDate">تاريخ النقل <span class="text-danger">*</span></label>
                                 <input type="date" id="transferDate" class="form-control" name="transfer_date" value="<?php echo date('Y-m-d'); ?>" required>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-12 col-md-6">
                                 <label class="form-label" for="transferReason">السبب</label>
                                 <input type="text" id="transferReason" class="form-control" name="reason" placeholder="مثال: تجهيز مخزون لمندوب المبيعات">
                             </div>
@@ -3905,7 +3945,7 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
                             <div class="form-label">عناصر النقل <span class="text-danger">*</span></div>
                             <div id="mainWarehouseTransferItems">
                                 <div class="transfer-item row g-2 align-items-end mb-2">
-                                    <div class="col-md-5">
+                                    <div class="col-12 col-md-5">
                                         <label class="form-label small text-muted" for="transferProduct0">المنتج</label>
                                         <select id="transferProduct0" class="form-select product-select" name="items[0][product_select]" required>
                                             <option value="">اختر المنتج</option>
@@ -3929,11 +3969,11 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
-                                    <div class="col-md-4">
+                                    <div class="col-12 col-md-4">
                                         <label class="form-label small text-muted" for="transferQuantity0">الكمية</label>
                                         <input type="number" id="transferQuantity0" step="0.01" min="0.01" class="form-control quantity-input" name="items[0][quantity]" placeholder="الكمية" required>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-12 col-md-3">
                                         <label class="form-label small text-muted d-block">&nbsp;</label>
                                         <button type="button" class="btn btn-outline-danger btn-sm w-100 remove-transfer-item" title="حذف العنصر">
                                             <i class="bi bi-trash"></i> حذف
@@ -4077,17 +4117,17 @@ if (!window.transferFormInitialized) {
             });
             
             wrapper.innerHTML = `
-                <div class="col-md-5">
+                <div class="col-12 col-md-5">
                     <label class="form-label small text-muted" for="transferProduct${index}">المنتج</label>
                     <select id="transferProduct${index}" class="form-select product-select" name="items[${index}][product_select]" required>
                         ${optionsHtml}
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-12 col-md-4">
                     <label class="form-label small text-muted" for="transferQuantity${index}">الكمية</label>
                     <input type="number" id="transferQuantity${index}" step="0.01" min="0.01" class="form-control quantity-input" name="items[${index}][quantity]" placeholder="الكمية" required>
                 </div>
-                <div class="col-md-3">
+                <div class="col-12 col-md-3">
                     <label class="form-label small text-muted d-block">&nbsp;</label>
                     <button type="button" class="btn btn-outline-danger btn-sm w-100 remove-transfer-item" title="حذف العنصر">
                         <i class="bi bi-trash"></i> حذف
