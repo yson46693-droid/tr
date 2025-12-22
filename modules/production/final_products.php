@@ -3936,7 +3936,6 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
                     <?php else: ?>
                         <div class="row g-3 mb-3">
                             <div class="col-12 col-md-6">
-                                <label class="form-label">من المخزن</label>
                                 <div class="form-control-plaintext fw-semibold" id="transferFromWarehouse">
                                     <?php echo htmlspecialchars($primaryWarehouse['name']); ?> (مخزن رئيسي)
                                 </div>
@@ -3965,12 +3964,7 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
 
                         <div class="row g-3 mb-3">
                             <div class="col-12 col-md-6">
-                                <label class="form-label" for="transferDate">تاريخ النقل <span class="text-danger">*</span></label>
                                 <input type="date" id="transferDate" class="form-control" name="transfer_date" value="<?php echo date('Y-m-d'); ?>" required>
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label class="form-label" for="transferReason">السبب</label>
-                                <input type="text" id="transferReason" class="form-control" name="reason" placeholder="مثال: تجهيز مخزون لمندوب المبيعات">
                             </div>
                         </div>
 
