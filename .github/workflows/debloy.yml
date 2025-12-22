@@ -28,7 +28,7 @@ jobs:
           security: loose
           timeout: 120000
           log-level: standard
-          server-dir: /v1/
+          server-dir: /htdocs/albarakah/
 
 
           # مهم: لا يحذف ملفات السيرفر

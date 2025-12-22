@@ -2600,40 +2600,59 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
 }
 
 /* إصلاح ظهور الأزرار السفلية للمودال على الهاتف */
-@media (max-width: 767.98px) {
+@media (max-width: 991.98px) {
     /* Modal طلب نقل منتجات من المخزن الرئيسي */
     #requestTransferModal .modal-dialog {
-        margin: 0.5rem;
-        max-width: calc(100% - 1rem) !important;
-        width: calc(100% - 1rem) !important;
-        max-height: calc(100vh - 1rem);
-        height: calc(100vh - 1rem);
+        margin: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        max-height: 100vh !important;
+        height: 100vh !important;
         display: flex;
         flex-direction: column;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+    }
+    
+    #requestTransferModal {
+        padding: 0 !important;
+    }
+    
+    #requestTransferModal .modal-dialog.modal-dialog-centered {
+        margin: 0 !important;
     }
     
     #requestTransferModal .modal-dialog.modal-dialog-scrollable {
-        overflow: hidden;
+        overflow: hidden !important;
     }
     
     #requestTransferModal .modal-content {
-        max-height: 100%;
-        height: 100%;
+        max-height: 100vh !important;
+        height: 100vh !important;
         display: flex;
         flex-direction: column;
+        border-radius: 0 !important;
+        margin: 0 !important;
+        border: none !important;
     }
     
     #requestTransferModal .modal-header {
         flex-shrink: 0;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        padding: 1rem;
     }
     
     #requestTransferModal .modal-body {
         max-height: none !important;
         height: auto !important;
-        flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
+        flex: 1 1 auto;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
         -webkit-overflow-scrolling: touch;
+        padding: 1rem;
         padding-bottom: 1rem;
     }
     
@@ -2673,7 +2692,7 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     
     #requestTransferModal .modal-footer {
         flex-shrink: 0;
-        background: rgba(255, 255, 255, 0.98);
+        background: rgba(255, 255, 255, 0.98) !important;
         backdrop-filter: blur(6px);
         border-top: 1px solid rgba(0, 0, 0, 0.1);
         display: flex;
@@ -2682,8 +2701,7 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
         padding: 1rem;
         box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
         margin-top: 0;
-        position: sticky;
-        bottom: 0;
+        position: relative;
         z-index: 10;
     }
     
@@ -2692,6 +2710,21 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
         margin: 0;
         padding: 0.75rem 1rem;
         font-size: 1rem;
+    }
+}
+
+/* إصلاحات إضافية للشاشات الصغيرة جداً */
+@media (max-width: 575.98px) {
+    #requestTransferModal .modal-header {
+        padding: 0.75rem;
+    }
+    
+    #requestTransferModal .modal-body {
+        padding: 0.75rem;
+    }
+    
+    #requestTransferModal .modal-footer {
+        padding: 0.75rem;
     }
 }
 
@@ -3873,7 +3906,7 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
 
 <?php if ($primaryWarehouse): ?>
 <div class="modal fade" id="requestTransferModal" tabindex="-1" aria-labelledby="requestTransferModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" style="max-width: 95%;">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -4268,34 +4301,41 @@ if (!window.transferFormInitialized) {
                     }
                 }
                 
-                // إصلاح تموضع الـ modal
-                requestTransferModal.style.position = 'fixed';
-                requestTransferModal.style.top = '0';
-                requestTransferModal.style.left = '0';
-                requestTransferModal.style.zIndex = '1055';
-                requestTransferModal.style.width = '100%';
-                requestTransferModal.style.height = '100%';
-                requestTransferModal.style.display = 'block';
-                
-                // التأكد من أن الـ modal-dialog في الموضع الصحيح
-                const modalDialog = requestTransferModal.querySelector('.modal-dialog');
-                if (modalDialog) {
-                    modalDialog.style.position = 'relative';
-                    modalDialog.style.zIndex = 'auto';
-                    modalDialog.style.margin = '1.75rem auto';
-                }
-                
-                // التأكد من أن الـ modal-content في الموضع الصحيح
-                const modalContent = requestTransferModal.querySelector('.modal-content');
-                if (modalContent) {
-                    modalContent.style.position = 'relative';
-                    modalContent.style.zIndex = 'auto';
+                // فقط على الشاشات الكبيرة (أكبر من 992px) - لا نعدل styles على الهاتف
+                if (window.innerWidth > 991.98) {
+                    const modalDialog = requestTransferModal.querySelector('.modal-dialog');
+                    if (modalDialog) {
+                        modalDialog.style.margin = '1.75rem auto';
+                    }
                 }
             });
             
             // تنظيف عند إغلاق النموذج
             requestTransferModal.addEventListener('hidden.bs.modal', function() {
-                // إزالة أي backdrops متبقية
+                // إزالة أي styles يدوية تم إضافتها
+                requestTransferModal.style.position = '';
+                requestTransferModal.style.top = '';
+                requestTransferModal.style.left = '';
+                requestTransferModal.style.zIndex = '';
+                requestTransferModal.style.width = '';
+                requestTransferModal.style.height = '';
+                requestTransferModal.style.display = '';
+                requestTransferModal.style.padding = '';
+                
+                const modalDialog = requestTransferModal.querySelector('.modal-dialog');
+                if (modalDialog) {
+                    modalDialog.style.position = '';
+                    modalDialog.style.zIndex = '';
+                    modalDialog.style.margin = '';
+                }
+                
+                const modalContent = requestTransferModal.querySelector('.modal-content');
+                if (modalContent) {
+                    modalContent.style.position = '';
+                    modalContent.style.zIndex = '';
+                }
+                
+                // تنظيف backdrops
                 const backdrops = document.querySelectorAll('.modal-backdrop');
                 backdrops.forEach(backdrop => backdrop.remove());
                 
