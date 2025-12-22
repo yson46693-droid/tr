@@ -3213,7 +3213,7 @@ if (ob_get_level() > 0) {
                         <span class="badge" id="notificationBadge" aria-live="polite" aria-atomic="true">0</span>
                         <span class="visually-hidden"><?php echo isset($lang['notifications']) ? $lang['notifications'] : 'الإشعارات'; ?></span>
                     </a>
-                    <ul class="dropdown-menu dropdown-menu-end notifications-dropdown" aria-labelledby="notificationsDropdown">
+                    <ul class="dropdown-menu dropdown-menu-end notifications-dropdown" aria-labelledby="notificationsDropdown" data-bs-auto-close="outside">
                         <li><h6 class="dropdown-header">
                             <?php echo isset($lang['notifications']) ? $lang['notifications'] : 'الإشعارات'; ?>
                             <button type="button" 
