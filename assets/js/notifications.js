@@ -944,20 +944,19 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // معالج حذف جميع الإشعارات
     async function handleClearAllNotifications(e) {
-        console.log('handleClearAllNotifications called', e);
+        if (e) {
+            // منع إغلاق dropdown - يجب أن يكون أول شيء
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+        }
         
-        // منع إغلاق dropdown - يجب أن يكون أول شيء
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        
-        const clearAllBtn = e.target.closest('#clearAllNotificationsBtn') || document.getElementById('clearAllNotificationsBtn');
+        const clearAllBtn = e && e.target ? e.target.closest('#clearAllNotificationsBtn') : document.getElementById('clearAllNotificationsBtn');
         if (!clearAllBtn) {
             console.warn('clearAllNotificationsBtn not found');
             return false;
         }
         
-        console.log('clearAllNotificationsBtn found, showing confirm');
         if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
             return false;
         }
@@ -1011,89 +1010,35 @@ document.addEventListener('DOMContentLoaded', function() {
         return false;
     }
     
-    // إضافة event listener لزر مسح كل الإشعارات باستخدام event delegation
-    function initClearAllButton() {
-        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-        if (!clearAllBtn) {
-            console.warn('clearAllNotificationsBtn not found in DOM');
+    // استخدام event delegation على dropdown menu - الطريقة الأكثر موثوقية
+    let clearAllButtonHandler = null;
+    
+    function setupClearAllButton() {
+        const notificationsDropdown = document.querySelector('.notifications-dropdown');
+        if (!notificationsDropdown) {
             return;
         }
         
-        console.log('Initializing clearAllNotificationsBtn');
-        
-        // التأكد من أن الزر قابل للنقر
-        clearAllBtn.style.pointerEvents = 'auto';
-        clearAllBtn.style.cursor = 'pointer';
-        clearAllBtn.style.userSelect = 'none';
-        
-        // إزالة أي event listeners سابقة
-        const newBtn = clearAllBtn.cloneNode(true);
-        if (clearAllBtn.parentNode) {
-            clearAllBtn.parentNode.replaceChild(newBtn, clearAllBtn);
+        // إزالة event listener السابق إذا كان موجوداً
+        if (clearAllButtonHandler) {
+            notificationsDropdown.removeEventListener('click', clearAllButtonHandler, true);
         }
         
-        // التأكد من أن الزر الجديد قابل للنقر
-        newBtn.style.pointerEvents = 'auto';
-        newBtn.style.cursor = 'pointer';
-        newBtn.style.userSelect = 'none';
-        
-        // إضافة event listeners - يجب أن نمنع الإغلاق أولاً
-        newBtn.addEventListener('mousedown', function(e) {
-            console.log('Button mousedown - preventing dropdown close');
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            // تعيين flag لمنع إغلاق dropdown
-            newBtn.setAttribute('data-prevent-close', 'true');
-        }, true);
-        
-        // إضافة event listeners متعددة لضمان العمل
-        newBtn.addEventListener('click', function(e) {
-            console.log('Button click event fired (capture)');
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            handleClearAllNotifications(e);
-        }, true); // capture phase - يجب أن يكون قبل Bootstrap
-        
-        newBtn.addEventListener('click', function(e) {
-            console.log('Button click event fired (bubble)');
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            handleClearAllNotifications(e);
-        }, false); // bubble phase
-        
-        newBtn.onclick = function(e) {
-            console.log('Button onclick fired');
-            e.preventDefault();
-            e.stopPropagation();
-            handleClearAllNotifications(e);
-            return false;
-        };
-    }
-    
-    // استخدام event delegation على dropdown menu نفسه - يجب أن يكون قبل Bootstrap
-    const notificationsDropdown = document.querySelector('.notifications-dropdown');
-    if (notificationsDropdown) {
-        console.log('Setting up event delegation on notifications dropdown');
-        
-        // إضافة event delegation في capture phase قبل Bootstrap
-        notificationsDropdown.addEventListener('click', function(e) {
+        // إنشاء handler جديد
+        clearAllButtonHandler = function(e) {
             const clearAllBtn = e.target.closest('#clearAllNotificationsBtn');
             if (clearAllBtn) {
-                console.log('Clear all button clicked via delegation - preventing dropdown close');
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
-                
                 // تعيين flag لمنع إغلاق dropdown
                 clearAllBtn.setAttribute('data-prevent-close', 'true');
-                
                 handleClearAllNotifications(e);
             }
-        }, true); // capture phase - يجب أن يكون قبل Bootstrap
-    } else {
-        console.warn('notifications-dropdown not found');
+        };
+        
+        // إضافة event delegation في capture phase قبل Bootstrap
+        notificationsDropdown.addEventListener('click', clearAllButtonHandler, true);
     }
     
     // منع إغلاق Bootstrap dropdown عند النقر على الزر
@@ -1102,47 +1047,21 @@ document.addEventListener('DOMContentLoaded', function() {
         // منع الإغلاق عند النقر على الزر
         notificationDropdownToggle.addEventListener('hide.bs.dropdown', function(e) {
             const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-            if (clearAllBtn && clearAllBtn.getAttribute('data-prevent-close') === 'true') {
-                console.log('Preventing dropdown close - clear button was clicked');
+            if (clearAllBtn && clearAllBtn.hasAttribute('data-prevent-close')) {
                 e.preventDefault();
                 e.stopPropagation();
-                // إزالة flag بعد منع الإغلاق
                 clearAllBtn.removeAttribute('data-prevent-close');
             }
-        }, true); // capture phase
-    }
-    
-    // تهيئة الزر عند تحميل الصفحة
-    initClearAllButton();
-    
-    // إعادة تهيئة الزر بعد تحديث قائمة الإشعارات (في حالة إعادة بناء DOM)
-    // استخدام MutationObserver لمراقبة تغييرات DOM
-    const observer = new MutationObserver(function(mutations) {
-        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-        if (clearAllBtn) {
-            // إعادة تهيئة فقط إذا لم يكن لديه event listener
-            setTimeout(() => {
-                initClearAllButton();
-            }, 50);
-        }
-    });
-    
-    // مراقبة تغييرات في dropdown menu
-    const dropdownMenu = document.querySelector('.notifications-dropdown');
-    if (dropdownMenu) {
-        observer.observe(dropdownMenu, {
-            childList: true,
-            subtree: true
         });
     }
     
-    // أيضاً إعادة تهيئة الزر عند فتح dropdown
-    const notificationDropdownToggle = document.getElementById('notificationsDropdown');
+    // تهيئة الزر عند تحميل الصفحة
+    setupClearAllButton();
+    
+    // إعادة تهيئة الزر عند فتح dropdown
     if (notificationDropdownToggle) {
         notificationDropdownToggle.addEventListener('shown.bs.dropdown', function() {
-            setTimeout(() => {
-                initClearAllButton();
-            }, 50);
+            setupClearAllButton();
         });
     }
     
@@ -1150,19 +1069,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('click', function(e) {
         const clearAllBtn = e.target.closest('#clearAllNotificationsBtn');
         if (clearAllBtn) {
-            console.log('Clear all button clicked via document delegation - preventing dropdown close');
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
             
-            // منع إغلاق Bootstrap dropdown
-            const dropdownToggle = document.getElementById('notificationsDropdown');
-            if (dropdownToggle) {
-                const dropdownInstance = bootstrap.Dropdown.getInstance(dropdownToggle);
-                if (dropdownInstance) {
-                    dropdownInstance._config.autoClose = false;
-                }
-            }
+            // تعيين flag لمنع إغلاق dropdown
+            clearAllBtn.setAttribute('data-prevent-close', 'true');
             
             handleClearAllNotifications(e);
         }
@@ -1195,15 +1107,13 @@ document.addEventListener('DOMContentLoaded', function() {
     `;
     document.head.appendChild(style);
     
-    // إضافة data-bs-auto-close="false" على dropdown menu لمنع الإغلاق التلقائي
-    const notificationsDropdownMenu = document.querySelector('.notifications-dropdown');
-    if (notificationsDropdownMenu) {
-        notificationsDropdownMenu.setAttribute('data-bs-auto-close', 'outside');
-        // أو يمكن تعطيله تماماً للزر فقط
-        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-        if (clearAllBtn) {
-            clearAllBtn.setAttribute('data-bs-auto-close', 'false');
-        }
+    // التأكد من أن الزر قابل للنقر
+    const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+    if (clearAllBtn) {
+        clearAllBtn.style.pointerEvents = 'auto';
+        clearAllBtn.style.cursor = 'pointer';
+        clearAllBtn.style.userSelect = 'none';
+        clearAllBtn.setAttribute('data-bs-auto-close', 'false');
     }
 });
 

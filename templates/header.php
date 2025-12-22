@@ -3221,6 +3221,7 @@ if (ob_get_level() > 0) {
                                     id="clearAllNotificationsBtn" 
                                     title="مسح كل الإشعارات" 
                                     aria-label="<?php echo isset($lang['clear_all_notifications']) ? $lang['clear_all_notifications'] : 'مسح كل الإشعارات'; ?>"
+                                    data-bs-auto-close="false"
                                     style="font-size: 11px; text-decoration: none;">
                                 <i class="bi bi-trash" aria-hidden="true"></i> 
                                 <span>مسح الكل</span>

@@ -149,11 +149,11 @@ if (!$isLoginPage) {
     set_exception_handler('handleException');
 }
 
-define('DB_HOST', 'sql209.infinityfree.com');
+define('DB_HOST', 'localhost:3306');
 define('DB_PORT', '3306');
-define('DB_USER', 'if0_40723116');
-define('DB_PASS', 'Osama74444');
-define('DB_NAME', 'if0_40723116_a');
+define('DB_USER', 'osama74');
+define('DB_PASS', 'QEvhhbM52d1?kgt#');
+define('DB_NAME', 'albarakah_db_v1');
 
 // إعدادات المنطقة الزمنية - مصر/القاهرة
 date_default_timezone_set('Africa/Cairo');
