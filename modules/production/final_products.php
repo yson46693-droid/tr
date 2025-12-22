@@ -661,6 +661,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
             
             if ($isAjaxRequest) {
+                // تنظيف أي output buffer موجود قبل إرسال JSON
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
                 header('Content-Type: application/json; charset=utf-8');
                 http_response_code(400);
                 echo json_encode([
@@ -1179,6 +1183,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                             strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
                             
                             if ($isAjaxRequest) {
+                                // تنظيف أي output buffer موجود قبل إرسال JSON
+                                while (ob_get_level() > 0) {
+                                    ob_end_clean();
+                                }
                                 // إرجاع JSON للـ AJAX request
                                 header('Content-Type: application/json; charset=utf-8');
                                 echo json_encode([
@@ -1219,6 +1227,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
                         
                         if ($isAjaxRequest) {
+                            // تنظيف أي output buffer موجود قبل إرسال JSON
+                            while (ob_get_level() > 0) {
+                                ob_end_clean();
+                            }
                             // إرجاع JSON للـ AJAX request
                             header('Content-Type: application/json; charset=utf-8');
                             echo json_encode([
@@ -1286,6 +1298,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
                         
                         if ($isAjaxRequest) {
+                            // تنظيف أي output buffer موجود قبل إرسال JSON
+                            while (ob_get_level() > 0) {
+                                ob_end_clean();
+                            }
                             header('Content-Type: application/json; charset=utf-8');
                             echo json_encode([
                                 'success' => true,
@@ -1320,6 +1336,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
             
             if ($isAjaxRequest) {
+                // تنظيف أي output buffer موجود قبل إرسال JSON
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
                 header('Content-Type: application/json; charset=utf-8');
                 http_response_code(400);
                 echo json_encode([
@@ -1481,6 +1501,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         );
                         
                         if ($isAjaxRequest) {
+                            // تنظيف أي output buffer موجود قبل إرسال JSON
+                            while (ob_get_level() > 0) {
+                                ob_end_clean();
+                            }
                             header('Content-Type: application/json; charset=utf-8');
                             echo json_encode([
                                 'success' => true,
@@ -1495,6 +1519,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $errorMessage = $result['message'] ?? 'تعذر إنشاء طلب النقل.';
                         
                         if ($isAjaxRequest) {
+                            // تنظيف أي output buffer موجود قبل إرسال JSON
+                            while (ob_get_level() > 0) {
+                                ob_end_clean();
+                            }
                             header('Content-Type: application/json; charset=utf-8');
                             http_response_code(400);
                             echo json_encode([
@@ -1511,6 +1539,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $errorMessage = 'حدث خطأ أثناء إنشاء طلب النقل. يرجى المحاولة لاحقاً.';
                     
                     if ($isAjaxRequest) {
+                        // تنظيف أي output buffer موجود قبل إرسال JSON
+                        while (ob_get_level() > 0) {
+                            ob_end_clean();
+                        }
                         header('Content-Type: application/json; charset=utf-8');
                         http_response_code(500);
                         echo json_encode([

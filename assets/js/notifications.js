@@ -942,93 +942,144 @@ document.addEventListener('DOMContentLoaded', function() {
         }, { once: false, passive: true });
     }
     
-    // إضافة event listener لزر مسح كل الإشعارات
-    function initClearAllButton() {
-        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+    // معالج حذف جميع الإشعارات
+    async function handleClearAllNotifications(e) {
+        console.log('handleClearAllNotifications called', e);
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        const clearAllBtn = e.target.closest('#clearAllNotificationsBtn') || document.getElementById('clearAllNotificationsBtn');
         if (!clearAllBtn) {
-            return;
+            console.warn('clearAllNotificationsBtn not found');
+            return false;
         }
         
-        // إذا كان الزر قد تم تهيئته بالفعل، لا نعيد التهيئة
-        if (clearAllBtn.hasAttribute('data-initialized')) {
-            return;
+        console.log('clearAllNotificationsBtn found, showing confirm');
+        if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
+            return false;
         }
         
-        // إزالة أي event listeners سابقة لتجنب التكرار
-        const newBtn = clearAllBtn.cloneNode(true);
-        clearAllBtn.parentNode.replaceChild(newBtn, clearAllBtn);
+        // تعطيل الزر أثناء المعالجة
+        const originalHTML = clearAllBtn.innerHTML;
+        const originalDisabled = clearAllBtn.disabled;
+        clearAllBtn.disabled = true;
+        clearAllBtn.style.pointerEvents = 'none';
+        clearAllBtn.style.opacity = '0.6';
+        clearAllBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
         
-        // إضافة علامة للزر
-        newBtn.setAttribute('data-initialized', 'true');
-        
-        // إضافة event listener جديد
-        newBtn.addEventListener('click', async function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
+        try {
+            const result = await deleteAllNotifications();
             
-            if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
+            // إذا كان المستخدم قد سجل خروج، لا نتابع
+            if (result && result.loggedOut) {
                 return false;
             }
             
-            // تعطيل الزر أثناء المعالجة
-            const originalHTML = newBtn.innerHTML;
-            const originalDisabled = newBtn.disabled;
-            newBtn.disabled = true;
-            newBtn.style.pointerEvents = 'none';
-            newBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
-            
-            try {
-                const result = await deleteAllNotifications();
-                
-                // إذا كان المستخدم قد سجل خروج، لا نتابع
-                if (result && result.loggedOut) {
-                    return false;
-                }
-                
-                // إعادة تحميل الإشعارات بعد الحذف
-                if (typeof loadNotifications === 'function') {
-                    await loadNotifications();
-                }
-                
-                // تحديث العداد للتأكد
-                if (typeof updateNotificationBadge === 'function') {
-                    await updateNotificationBadge(0);
-                }
-            } catch (error) {
-                // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
-                if (error.message && error.message.includes('Unauthorized')) {
-                    console.warn('User logged out during notification deletion');
-                    return false;
-                }
-                console.error('Error in deleteAllNotifications:', error);
-                // إظهار رسالة خطأ فقط للأخطاء الأخرى
-                if (error.message && !error.message.includes('Unauthorized')) {
-                    alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
-                }
-            } finally {
-                // إعادة تمكين الزر فقط إذا لم يتم إعادة التوجيه
-                if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
-                    newBtn.disabled = originalDisabled;
-                    newBtn.style.pointerEvents = '';
-                    newBtn.innerHTML = originalHTML;
-                }
+            // إعادة تحميل الإشعارات بعد الحذف
+            if (typeof loadNotifications === 'function') {
+                await loadNotifications();
             }
             
-            return false;
-        }, true); // استخدام capture phase لضمان التنفيذ أولاً
+            // تحديث العداد للتأكد
+            if (typeof updateNotificationBadge === 'function') {
+                await updateNotificationBadge(0);
+            }
+        } catch (error) {
+            // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
+            if (error.message && error.message.includes('Unauthorized')) {
+                console.warn('User logged out during notification deletion');
+                return false;
+            }
+            console.error('Error in deleteAllNotifications:', error);
+            // إظهار رسالة خطأ فقط للأخطاء الأخرى
+            if (error.message && !error.message.includes('Unauthorized')) {
+                alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
+            }
+        } finally {
+            // إعادة تمكين الزر فقط إذا لم يتم إعادة التوجيه
+            if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
+                clearAllBtn.disabled = originalDisabled;
+                clearAllBtn.style.pointerEvents = '';
+                clearAllBtn.style.opacity = '';
+                clearAllBtn.innerHTML = originalHTML;
+            }
+        }
         
-        // أيضاً إضافة onclick مباشرة كـ fallback (لكن نستخدم addEventListener كطريقة أساسية)
-        // إزالة أي onclick سابق
-        newBtn.removeAttribute('onclick');
+        return false;
+    }
+    
+    // إضافة event listener لزر مسح كل الإشعارات باستخدام event delegation
+    function initClearAllButton() {
+        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+        if (!clearAllBtn) {
+            console.warn('clearAllNotificationsBtn not found in DOM');
+            return;
+        }
         
-        // إضافة معالج مباشر كـ fallback إضافي
-        newBtn.onclick = async function(e) {
-            // هذا سيعمل فقط إذا فشل addEventListener
-            e.preventDefault();
-            e.stopPropagation();
-            return false;
+        console.log('Initializing clearAllNotificationsBtn');
+        
+        // التأكد من أن الزر قابل للنقر
+        clearAllBtn.style.pointerEvents = 'auto';
+        clearAllBtn.style.cursor = 'pointer';
+        clearAllBtn.style.userSelect = 'none';
+        
+        // إزالة أي event listeners سابقة
+        const newBtn = clearAllBtn.cloneNode(true);
+        if (clearAllBtn.parentNode) {
+            clearAllBtn.parentNode.replaceChild(newBtn, clearAllBtn);
+        }
+        
+        // التأكد من أن الزر الجديد قابل للنقر
+        newBtn.style.pointerEvents = 'auto';
+        newBtn.style.cursor = 'pointer';
+        newBtn.style.userSelect = 'none';
+        
+        // إضافة event listeners متعددة لضمان العمل
+        newBtn.addEventListener('click', function(e) {
+            console.log('Button click event fired (capture)');
+            handleClearAllNotifications(e);
+        }, true); // capture phase
+        
+        newBtn.addEventListener('click', function(e) {
+            console.log('Button click event fired (bubble)');
+            handleClearAllNotifications(e);
+        }, false); // bubble phase
+        
+        newBtn.onclick = function(e) {
+            console.log('Button onclick fired');
+            handleClearAllNotifications(e);
         };
+        
+        // منع إغلاق dropdown عند النقر
+        newBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+        }, true);
+        
+        // إضافة mousedown أيضاً
+        newBtn.addEventListener('mousedown', function(e) {
+            console.log('Button mousedown event fired');
+            e.stopPropagation();
+        }, true);
+    }
+    
+    // استخدام event delegation على dropdown menu نفسه
+    const notificationsDropdown = document.querySelector('.notifications-dropdown');
+    if (notificationsDropdown) {
+        console.log('Setting up event delegation on notifications dropdown');
+        
+        // إضافة event delegation مباشرة بدون استبدال
+        notificationsDropdown.addEventListener('click', function(e) {
+            const clearAllBtn = e.target.closest('#clearAllNotificationsBtn');
+            if (clearAllBtn) {
+                console.log('Clear all button clicked via delegation');
+                e.preventDefault();
+                e.stopPropagation();
+                handleClearAllNotifications(e);
+            }
+        }, true); // capture phase لضمان التنفيذ أولاً
+    } else {
+        console.warn('notifications-dropdown not found');
     }
     
     // تهيئة الزر عند تحميل الصفحة
@@ -1038,15 +1089,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // استخدام MutationObserver لمراقبة تغييرات DOM
     const observer = new MutationObserver(function(mutations) {
         const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-        if (clearAllBtn && !clearAllBtn.hasAttribute('data-initialized')) {
-            initClearAllButton();
+        if (clearAllBtn) {
+            // إعادة تهيئة فقط إذا لم يكن لديه event listener
+            setTimeout(initClearAllButton, 50);
         }
     });
     
     // مراقبة تغييرات في dropdown menu
-    const notificationsDropdown = document.querySelector('.notifications-dropdown');
-    if (notificationsDropdown) {
-        observer.observe(notificationsDropdown, {
+    const dropdownMenu = document.querySelector('.notifications-dropdown');
+    if (dropdownMenu) {
+        observer.observe(dropdownMenu, {
             childList: true,
             subtree: true
         });
@@ -1059,6 +1111,40 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(initClearAllButton, 50);
         });
     }
+    
+    // إضافة event listener على document كـ fallback نهائي
+    document.addEventListener('click', function(e) {
+        const clearAllBtn = e.target.closest('#clearAllNotificationsBtn');
+        if (clearAllBtn) {
+            console.log('Clear all button clicked via document delegation');
+            e.preventDefault();
+            e.stopPropagation();
+            handleClearAllNotifications(e);
+        }
+    }, true); // capture phase
+    
+    // إضافة CSS للتأكد من أن الزر قابل للنقر
+    const style = document.createElement('style');
+    style.textContent = `
+        #clearAllNotificationsBtn {
+            pointer-events: auto !important;
+            cursor: pointer !important;
+            user-select: none !important;
+            z-index: 10 !important;
+            position: relative !important;
+        }
+        #clearAllNotificationsBtn:hover {
+            opacity: 0.8 !important;
+        }
+        #clearAllNotificationsBtn:active {
+            opacity: 0.6 !important;
+        }
+        .dropdown-header #clearAllNotificationsBtn {
+            pointer-events: auto !important;
+            cursor: pointer !important;
+        }
+    `;
+    document.head.appendChild(style);
 });
 
 // إيقاف التحديث عند مغادرة الصفحة

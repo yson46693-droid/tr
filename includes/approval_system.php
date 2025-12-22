@@ -943,6 +943,7 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                     $hasRejectionReason = false;
                     $hasNotesColumn = false;
                     $hasApprovalNotesColumn = false;
+                    $hasUpdatedAt = false;
                     $rejectionColumn = 'rejection_reason';
                     $notesColumn = 'notes';
                     
@@ -955,19 +956,24 @@ function updateEntityStatus($type, $entityId, $status, $approvedBy) {
                         } elseif ($fieldName === 'approval_notes') {
                             $hasApprovalNotesColumn = true;
                             $notesColumn = 'approval_notes';
+                        } elseif ($fieldName === 'updated_at') {
+                            $hasUpdatedAt = true;
                         }
                     }
+                    
+                    // تحديد عمود الترتيب بناءً على الأعمدة المتاحة
+                    $orderByColumn = $hasUpdatedAt ? 'updated_at' : 'created_at';
                     
                     // بناء استعلام SELECT بناءً على الأعمدة المتاحة
                     if ($hasRejectionReason) {
                         $approvalRow = $db->queryOne(
-                            "SELECT rejection_reason FROM approvals WHERE type = 'warehouse_transfer' AND `{$entityColumnName}` = ? ORDER BY updated_at DESC LIMIT 1",
+                            "SELECT rejection_reason FROM approvals WHERE type = 'warehouse_transfer' AND `{$entityColumnName}` = ? ORDER BY {$orderByColumn} DESC LIMIT 1",
                             [$entityId]
                         );
                         $reason = $approvalRow['rejection_reason'] ?? 'تم رفض طلب النقل.';
                     } elseif ($hasNotesColumn || $hasApprovalNotesColumn) {
                         $approvalRow = $db->queryOne(
-                            "SELECT {$notesColumn} FROM approvals WHERE type = 'warehouse_transfer' AND `{$entityColumnName}` = ? ORDER BY updated_at DESC LIMIT 1",
+                            "SELECT {$notesColumn} FROM approvals WHERE type = 'warehouse_transfer' AND `{$entityColumnName}` = ? ORDER BY {$orderByColumn} DESC LIMIT 1",
                             [$entityId]
                         );
                         $reason = $approvalRow[$notesColumn] ?? 'تم رفض طلب النقل.';
