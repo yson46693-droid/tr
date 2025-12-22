@@ -1026,39 +1026,58 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // إزالة جميع event listeners السابقة
-        clearAllBtn.replaceWith(clearAllBtn.cloneNode(true));
+        const newBtn = clearAllBtn.cloneNode(true);
+        clearAllBtn.parentNode.replaceChild(newBtn, clearAllBtn);
         
         // الحصول على المرجع الجديد بعد الاستنساخ
-        const newClearAllBtn = document.getElementById('clearAllNotificationsBtn');
-        if (!newClearAllBtn) {
+        const btn = document.getElementById('clearAllNotificationsBtn');
+        if (!btn) {
             return;
         }
         
-        // إضافة event listener واحد بسيط
-        newClearAllBtn.addEventListener('click', function(e) {
-            console.log('Clear all button clicked - event details:', e);
+        // إضافة onclick مباشرة لضمان العمل
+        btn.onclick = function(e) {
+            console.log('Clear all button clicked - onclick handler');
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
             
             // منع إغلاق dropdown
             isClearingNotifications = true;
-            newClearAllBtn.setAttribute('data-prevent-close', 'true');
+            btn.setAttribute('data-prevent-close', 'true');
             
             // تشغيل دالة المسح
-            handleClearAllNotifications(e);
-        }, true);
+            handleClearAllNotifications(e).catch(err => {
+                console.error('Error in handleClearAllNotifications:', err);
+            });
+            
+            return false;
+        };
         
-        // إضافة event listener إضافي للـ mousedown للتأكد
-        newClearAllBtn.addEventListener('mousedown', function(e) {
+        // إضافة event listener للـ click أيضاً كنسخة احتياطية
+        btn.addEventListener('click', function(e) {
+            console.log('Clear all button clicked - addEventListener handler');
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            return false;
+        }, { capture: true, passive: false });
+        
+        // إضافة event listener للـ mousedown لمنع إغلاق dropdown
+        btn.addEventListener('mousedown', function(e) {
             console.log('Clear all button mousedown');
             e.stopPropagation();
-        }, true);
+            isClearingNotifications = true;
+            btn.setAttribute('data-prevent-close', 'true');
+        }, { capture: true });
         
         // التأكد من أن الزر قابل للنقر
-        newClearAllBtn.style.pointerEvents = 'auto';
-        newClearAllBtn.style.cursor = 'pointer';
-        newClearAllBtn.style.userSelect = 'none';
+        btn.style.pointerEvents = 'auto';
+        btn.style.cursor = 'pointer';
+        btn.style.userSelect = 'none';
+        btn.style.zIndex = '9999';
+        btn.style.position = 'relative';
+        btn.style.display = 'inline-block';
     }
     
     // منع إغلاق Bootstrap dropdown عند النقر على الزر
@@ -1083,37 +1102,69 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // تهيئة الزر عند تحميل الصفحة
-    setupClearAllButton();
+    // تهيئة الزر عند تحميل الصفحة - مع عدة محاولات للتأكد
+    function initializeClearButton() {
+        if (document.getElementById('clearAllNotificationsBtn')) {
+            setupClearAllButton();
+            return true;
+        }
+        return false;
+    }
+    
+    // محاولة التهيئة فوراً
+    initializeClearButton();
+    
+    // محاولة التهيئة بعد تأخير قصير
+    setTimeout(() => {
+        initializeClearButton();
+    }, 100);
     
     // إعادة تهيئة الزر عند فتح dropdown
     if (notificationDropdownToggle) {
         notificationDropdownToggle.addEventListener('shown.bs.dropdown', function() {
             setTimeout(() => {
-                setupClearAllButton();
+                initializeClearButton();
+            }, 50);
+        });
+        
+        // أيضاً تهيئة عند التحضير للفتح
+        notificationDropdownToggle.addEventListener('show.bs.dropdown', function() {
+            setTimeout(() => {
+                initializeClearButton();
             }, 10);
         });
     }
     
     // إضافة CSS للتأكد من أن الزر قابل للنقر
-    const style = document.createElement('style');
-    style.textContent = `
-        #clearAllNotificationsBtn {
-            pointer-events: auto !important;
-            cursor: pointer !important;
-            user-select: none !important;
-            z-index: 10 !important;
-            position: relative !important;
-        }
-        .dropdown-header #clearAllNotificationsBtn {
-            pointer-events: auto !important;
-            cursor: pointer !important;
-        }
-        .notifications-dropdown #clearAllNotificationsBtn {
-            pointer-events: auto !important;
-        }
-    `;
-    document.head.appendChild(style);
+    const styleId = 'clearAllNotificationsBtnStyles';
+    let existingStyle = document.getElementById(styleId);
+    if (!existingStyle) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+            #clearAllNotificationsBtn {
+                pointer-events: auto !important;
+                cursor: pointer !important;
+                user-select: none !important;
+                z-index: 9999 !important;
+                position: relative !important;
+                display: inline-block !important;
+            }
+            .dropdown-header #clearAllNotificationsBtn {
+                pointer-events: auto !important;
+                cursor: pointer !important;
+                z-index: 9999 !important;
+            }
+            .notifications-dropdown #clearAllNotificationsBtn {
+                pointer-events: auto !important;
+                z-index: 9999 !important;
+            }
+            .dropdown-header {
+                position: relative;
+            }
+        `;
+        document.head.appendChild(style);
+    }
 });
 
 // إيقاف التحديث عند مغادرة الصفحة
