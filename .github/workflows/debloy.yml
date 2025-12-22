@@ -28,7 +28,7 @@ jobs:
           security: loose
           timeout: 120000
           log-level: standard
-          server-dir: /albarakah.egsystem.top/httpddocs/
+          server-dir: /albarakah.egsystem.top/httpdocs/
 
 
           # مهم: لا يحذف ملفات السيرفر
