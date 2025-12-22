@@ -95,7 +95,8 @@ class WebAuthn {
             'excludeCredentials' => $excludeCredentials, // منع إعادة تسجيل البصمة نفسها
             'authenticatorSelection' => [
                 'userVerification' => 'preferred', // مهم للموبايل - يسمح بـ Face ID/Touch ID
-                'requireResidentKey' => false
+                'requireResidentKey' => true, // true لحفظ passkeys على الجهاز (مطلوب لأجهزة Android وOPPO)
+                'authenticatorAttachment' => 'platform' // استخدام authenticator المدمج في الجهاز
             ]
         ];
     }

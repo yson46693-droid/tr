@@ -210,7 +210,23 @@ class SimpleWebAuthn {
                 authenticatorSelection.userVerification = 'preferred';
             }
 
-            // إذا لم يحدد الخادم نوع authenticatorAttachment، نتركه فارغاً
+            // الكشف عن الأجهزة المحمولة (Android, OPPO, etc.)
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isOPPO = /OPPO|OnePlus|Realme/i.test(navigator.userAgent);
+            
+            // للأجهزة المحمولة وخاصة OPPO، نضمن حفظ passkeys على الجهاز
+            if (isMobile || isOPPO) {
+                // إذا لم يكن requireResidentKey محدداً من الخادم، نضيفه
+                if (!('requireResidentKey' in authenticatorSelection)) {
+                    authenticatorSelection.requireResidentKey = true;
+                }
+                // إذا لم يكن authenticatorAttachment محدداً، نضيفه للأجهزة المحمولة
+                if (!('authenticatorAttachment' in authenticatorSelection)) {
+                    authenticatorSelection.authenticatorAttachment = 'platform';
+                }
+            }
+
+            // إذا لم يحدد الخادم نوع authenticatorAttachment ولم نضيفه أعلاه، نتركه فارغاً
             if (!('authenticatorAttachment' in authenticatorSelection)) {
                 delete authenticatorSelection.authenticatorAttachment;
             }
