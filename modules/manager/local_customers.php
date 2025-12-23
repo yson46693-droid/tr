@@ -3654,7 +3654,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 <!-- رسالة التحميل -->
                 <div id="selectRepMessage" class="text-center text-muted py-4">
-                    <span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل قائمة العملاء المحليين...
+                    <span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل قائمة العملاء المحليين المدينين...
                 </div>
                 
                 <!-- أزرار الإجراءات بعد التوليد -->

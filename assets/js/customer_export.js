@@ -12,6 +12,12 @@
     let currentSection = 'company'; // 'company' or 'delegates'
     let generatedFileUrl = null;
     
+    // متغيرات pagination للعملاء المحليين
+    let localCustomersPage = 1;
+    let localCustomersTotalPages = 1;
+    let localCustomersTotal = 0;
+    let allLocalCustomers = []; // لتخزين جميع العملاء المحددين عبر الصفحات
+    
     /**
      * حساب مسار API بناءً على موقع الصفحة الحالية
      */
@@ -176,6 +182,12 @@
         collectionAmounts = {};
         generatedFileUrl = null;
         
+        // إعادة تعيين pagination
+        localCustomersPage = 1;
+        localCustomersTotalPages = 1;
+        localCustomersTotal = 0;
+        allLocalCustomers = [];
+        
         const customersList = document.getElementById('exportCustomersList');
         if (customersList) {
             customersList.innerHTML = '';
@@ -234,9 +246,9 @@
     }
     
     /**
-     * جلب العملاء المحليين عبر API
+     * جلب العملاء المحليين عبر API مع pagination
      */
-    async function loadLocalCustomers() {
+    async function loadLocalCustomers(page = 1) {
         const customersList = document.getElementById('exportCustomersList');
         const customersSection = document.getElementById('customersSection');
         const selectRepMessage = document.getElementById('selectRepMessage');
@@ -248,7 +260,7 @@
         // إظهار رسالة التحميل
         if (selectRepMessage) {
             selectRepMessage.style.display = 'block';
-            selectRepMessage.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل العملاء المحليين...';
+            selectRepMessage.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل العملاء المحليين المدينين...';
         }
         
         if (customersSection) {
@@ -256,7 +268,7 @@
         }
         
         try {
-            const response = await fetch(getApiPath('get_local_customers_for_export.php'), {
+            const response = await fetch(getApiPath('get_local_customers_for_export.php') + '?page=' + page, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -270,8 +282,19 @@
                 throw new Error(result.message || 'فشل في جلب العملاء المحليين');
             }
             
-            // عرض قائمة العملاء (ستقوم الدالة بإخفاء/إظهار الأقسام حسب الحاجة)
-            displayCustomersList(result.customers || []);
+            // تحديث معلومات pagination
+            localCustomersPage = result.page || page;
+            localCustomersTotalPages = result.total_pages || 1;
+            localCustomersTotal = result.total || 0;
+            
+            // عرض قائمة العملاء مع pagination
+            displayCustomersList(result.customers || [], {
+                hasPagination: true,
+                currentPage: localCustomersPage,
+                totalPages: localCustomersTotalPages,
+                total: localCustomersTotal,
+                onPageChange: loadLocalCustomers
+            });
             
         } catch (error) {
             console.error('Load local customers error:', error);
@@ -400,9 +423,9 @@
     }
     
     /**
-     * عرض قائمة العملاء في الجدول
+     * عرض قائمة العملاء في الجدول مع دعم pagination
      */
-    function displayCustomersList(customers) {
+    function displayCustomersList(customers, paginationOptions = null) {
         const customersList = document.getElementById('exportCustomersList');
         const customersSection = document.getElementById('customersSection');
         const selectRepMessage = document.getElementById('selectRepMessage');
@@ -429,7 +452,7 @@
         }
         
         // إذا لم يكن هناك عملاء صالحين
-        if (validCustomers.length === 0) {
+        if (validCustomers.length === 0 && (!paginationOptions || paginationOptions.currentPage === 1)) {
             // إخفاء قسم العملاء
             if (customersSection) {
                 customersSection.style.display = 'none';
@@ -481,26 +504,98 @@
             const regionName = escapeHtml((customer.region_name || '').trim() || '-');
             const balance = customer.balance_formatted || '0.00 ج.م';
             
+            // التحقق من أن العميل محدد مسبقاً
+            const isChecked = selectedCustomers.indexOf(customerId) !== -1;
+            const checkedAttr = isChecked ? ' checked' : '';
+            
             // التأكد مرة أخرى من صحة البيانات قبل إضافتها
             if (customerId > 0 && customerName !== '') {
                 html += '<tr data-customer-id="' + customerId + '">';
-                html += '<td><input type="checkbox" class="form-check-input customer-export-checkbox" value="' + customerId + '"></td>';
+                html += '<td><input type="checkbox" class="form-check-input customer-export-checkbox" value="' + customerId + '"' + checkedAttr + '></td>';
                 html += '<td><strong>' + customerName + '</strong></td>';
                 html += '<td>' + phone + '</td>';
                 html += '<td>' + address + '</td>';
                 html += '<td>' + regionName + '</td>';
                 html += '<td>' + balance + '</td>';
-                html += '<td><input type="number" step="0.01" min="0" class="form-control form-control-sm collection-amount-input" data-customer-id="' + customerId + '" placeholder="مبلغ اختياري"></td>';
+                const collectionAmount = collectionAmounts[customerId] || '';
+                html += '<td><input type="number" step="0.01" min="0" class="form-control form-control-sm collection-amount-input" data-customer-id="' + customerId + '" placeholder="مبلغ اختياري" value="' + (collectionAmount ? collectionAmount : '') + '"></td>';
                 html += '</tr>';
             }
         });
         
         html += '</tbody></table>';
+        
+        // إضافة pagination إذا كان مطلوباً
+        if (paginationOptions && paginationOptions.hasPagination && paginationOptions.totalPages > 1) {
+            html += '<nav aria-label="تنقل الصفحات" class="mt-3">';
+            html += '<ul class="pagination justify-content-center mb-0">';
+            
+            // زر الصفحة السابقة
+            if (paginationOptions.currentPage > 1) {
+                html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (paginationOptions.currentPage - 1) + '">السابق</a></li>';
+            } else {
+                html += '<li class="page-item disabled"><span class="page-link">السابق</span></li>';
+            }
+            
+            // أرقام الصفحات (عرض 5 صفحات حول الصفحة الحالية)
+            const startPage = Math.max(1, paginationOptions.currentPage - 2);
+            const endPage = Math.min(paginationOptions.totalPages, paginationOptions.currentPage + 2);
+            
+            if (startPage > 1) {
+                html += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
+                if (startPage > 2) {
+                    html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                if (i === paginationOptions.currentPage) {
+                    html += '<li class="page-item active"><span class="page-link">' + i + '</span></li>';
+                } else {
+                    html += '<li class="page-item"><a class="page-link" href="#" data-page="' + i + '">' + i + '</a></li>';
+                }
+            }
+            
+            if (endPage < paginationOptions.totalPages) {
+                if (endPage < paginationOptions.totalPages - 1) {
+                    html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                }
+                html += '<li class="page-item"><a class="page-link" href="#" data-page="' + paginationOptions.totalPages + '">' + paginationOptions.totalPages + '</a></li>';
+            }
+            
+            // زر الصفحة التالية
+            if (paginationOptions.currentPage < paginationOptions.totalPages) {
+                html += '<li class="page-item"><a class="page-link" href="#" data-page="' + (paginationOptions.currentPage + 1) + '">التالي</a></li>';
+            } else {
+                html += '<li class="page-item disabled"><span class="page-link">التالي</span></li>';
+            }
+            
+            html += '</ul>';
+            html += '<div class="text-center text-muted small mt-2">';
+            html += 'عرض ' + validCustomers.length + ' من ' + paginationOptions.total + ' عميل (صفحة ' + paginationOptions.currentPage + ' من ' + paginationOptions.totalPages + ')';
+            html += '</div>';
+            html += '</nav>';
+        }
+        
         customersList.innerHTML = html;
         
-        // تفعيل زر التوليد إذا كان هناك عملاء
+        // ربط أحداث pagination
+        if (paginationOptions && paginationOptions.hasPagination && paginationOptions.onPageChange) {
+            const pageLinks = customersList.querySelectorAll('.page-link[data-page]');
+            pageLinks.forEach(function(link) {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const page = parseInt(this.getAttribute('data-page'), 10);
+                    if (page > 0 && page <= paginationOptions.totalPages) {
+                        paginationOptions.onPageChange(page);
+                    }
+                });
+            });
+        }
+        
+        // تفعيل زر التوليد إذا كان هناك عملاء محددين
         if (generateBtn) {
-            generateBtn.disabled = false;
+            generateBtn.disabled = selectedCustomers.length === 0;
         }
         
         // ربط أحداث checkbox

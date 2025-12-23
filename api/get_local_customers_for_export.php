@@ -83,13 +83,29 @@ try {
     
     $db = db();
     
-    // جلب العملاء المحليين
+    // معاملات pagination
+    $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+    $perPage = 50; // 50 عميل في كل صفحة
+    $offset = ($page - 1) * $perPage;
+    
+    // جلب إجمالي عدد العملاء المدينين فقط
+    $totalCountResult = $db->queryOne(
+        "SELECT COUNT(*) as total
+         FROM local_customers c
+         WHERE c.status = 'active' AND c.balance > 0"
+    );
+    $totalCount = (int)($totalCountResult['total'] ?? 0);
+    $totalPages = ceil($totalCount / $perPage);
+    
+    // جلب العملاء المحليين المدينين فقط مع pagination
     $customers = $db->query(
         "SELECT c.*, r.name as region_name
          FROM local_customers c
          LEFT JOIN regions r ON c.region_id = r.id
-         WHERE c.status = 'active'
-         ORDER BY c.name ASC"
+         WHERE c.status = 'active' AND c.balance > 0
+         ORDER BY c.name ASC
+         LIMIT ? OFFSET ?",
+        [$perPage, $offset]
     );
     
     // جلب أرقام الهواتف الإضافية لكل عميل
@@ -125,13 +141,18 @@ try {
             'balance' => $balance,
             'balance_formatted' => number_format(abs($balance), 2) . ' ج.م',
             'address' => trim($customer['address'] ?? ''),
+            'region_name' => trim($customer['region_name'] ?? ''),
         ];
     }
     
     returnJsonResponse([
         'success' => true,
         'customers' => $result,
-        'total' => count($result)
+        'total' => $totalCount,
+        'page' => $page,
+        'per_page' => $perPage,
+        'total_pages' => $totalPages,
+        'has_more' => $page < $totalPages
     ]);
     
 } catch (Exception $e) {

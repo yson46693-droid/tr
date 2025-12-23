@@ -1,6 +1,6 @@
 <?php
 /**
- * صفحة إدارة الجداول الزمنية للتحصيل - عملاء الشركة فقط
+ * صفحة إدارة الجداول الزمنية للتحصيل - العملاء المحليين فقط
  */
 
 if (!defined('ACCESS_ALLOWED')) {
@@ -19,6 +19,12 @@ $currentUser = getCurrentUser();
 $db = db();
 $error = '';
 $success = '';
+
+// التحقق من وجود جدول local_customers
+$localCustomersTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
+if (empty($localCustomersTableExists)) {
+    die('جدول العملاء المحليين غير موجود. يرجى التأكد من إعداد قاعدة البيانات.');
+}
 
 // Pagination
 $pageNum = isset($_GET['p']) ? max(1, intval($_GET['p'])) : 1;
@@ -66,18 +72,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['act
     }
 }
 
-// دالة مساعدة للحصول على شرط عملاء الشركة
-function getCompanyCustomersCondition() {
+// دالة مساعدة للتحقق من أن العميل هو عميل محلي
+function isLocalCustomer($customerId) {
     $db = db();
-    $hasCreatedByAdmin = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'created_by_admin'"));
-    $hasRepId = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'rep_id'"));
-    
-    if ($hasCreatedByAdmin && $hasRepId) {
-        return "(c.created_by_admin = 1 OR c.rep_id IS NULL OR c.created_by IN (SELECT id FROM users WHERE role IN ('manager', 'accountant')))";
-    } else {
-        // إذا لم تكن الأعمدة موجودة، نعتبر جميع العملاء عملاء شركة
-        return "1=1";
-    }
+    $localCustomer = $db->queryOne(
+        "SELECT id FROM local_customers WHERE id = ? AND status = 'active'",
+        [$customerId]
+    );
+    return !empty($localCustomer);
 }
 
 // معالجة العمليات
@@ -136,19 +138,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'يرجى إدخال تاريخ استحقاق صحيح.';
         } else {
             try {
-                // التحقق من أن العميل هو عميل شركة
-                $companyCondition = getCompanyCustomersCondition();
+                // التحقق من أن العميل هو عميل محلي
                 $customer = $db->queryOne(
-                    "SELECT c.id, c.name, c.balance 
-                     FROM customers c
-                     WHERE c.id = ? AND c.status = 'active' 
-                       AND (c.balance IS NOT NULL AND c.balance > 0.01)
-                       AND $companyCondition",
+                    "SELECT id, name, balance 
+                     FROM local_customers
+                     WHERE id = ? AND status = 'active' 
+                       AND (balance IS NOT NULL AND balance > 0.01)",
                     [$customerId]
                 );
                 
                 if (!$customer) {
-                    $error = 'لا يمكنك إنشاء موعد تحصيل لهذا العميل.';
+                    $error = 'لا يمكنك إنشاء موعد تحصيل لهذا العميل. يجب أن يكون العميل عميلاً محلياً نشطاً برصيد مدين.';
                 } else {
                     $dueDateObj = DateTime::createFromFormat('Y-m-d', $dueDate);
                     if ($dueDateObj < new DateTime('today')) {
@@ -179,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     'customer_id' => $customerId,
                                     'amount' => $amount,
                                     'due_date' => $dueDate,
-                                    'company_customer' => true
+                                    'local_customer' => true
                                 ]
                             );
                         }
@@ -207,17 +207,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'يرجى إدخال تاريخ استحقاق صحيح.';
         } else {
             try {
-                // التحقق من أن الجدول مرتبط بعميل شركة
-                $companyCondition = getCompanyCustomersCondition();
+                // التحقق من أن الجدول مرتبط بعميل محلي
                 $schedule = $db->queryOne(
                     "SELECT ps.* FROM payment_schedules ps
-                     INNER JOIN customers c ON ps.customer_id = c.id
-                     WHERE ps.id = ? AND $companyCondition",
+                     INNER JOIN local_customers lc ON ps.customer_id = lc.id
+                     WHERE ps.id = ? AND lc.status = 'active'",
                     [$scheduleId]
                 );
 
                 if (!$schedule) {
-                    $error = 'لا يمكنك تعديل هذا الجدول.';
+                    $error = 'لا يمكنك تعديل هذا الجدول. يجب أن يكون مرتبطاً بعميل محلي نشط.';
                 } elseif ($schedule['status'] === 'paid' || $schedule['status'] === 'cancelled') {
                     $error = 'لا يمكن تعديل جدول مدفوع أو ملغى.';
                 } else {
@@ -255,7 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'amount' => $amount,
                             'due_date' => $dueDateObj->format('Y-m-d'),
                             'status' => $newStatus,
-                            'company_customer' => true
+                            'local_customer' => true
                         ]
                     );
 
@@ -273,17 +272,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'معرف الجدول غير صالح.';
         } else {
             try {
-                // التحقق من أن الجدول مرتبط بعميل شركة
-                $companyCondition = getCompanyCustomersCondition();
+                // التحقق من أن الجدول مرتبط بعميل محلي
                 $schedule = $db->queryOne(
                     "SELECT ps.* FROM payment_schedules ps
-                     INNER JOIN customers c ON ps.customer_id = c.id
-                     WHERE ps.id = ? AND $companyCondition",
+                     INNER JOIN local_customers lc ON ps.customer_id = lc.id
+                     WHERE ps.id = ? AND lc.status = 'active'",
                     [$scheduleId]
                 );
 
                 if (!$schedule) {
-                    $error = 'لا يمكنك تمييز هذا الجدول.';
+                    $error = 'لا يمكنك تمييز هذا الجدول. يجب أن يكون مرتبطاً بعميل محلي نشط.';
                 } elseif ($schedule['status'] === 'paid') {
                     $error = 'هذا الجدول مدفوع بالفعل.';
                 } elseif ($schedule['status'] === 'cancelled') {
@@ -310,7 +308,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         [
                             'status' => 'paid',
                             'payment_date' => date('Y-m-d'),
-                            'company_customer' => true
+                            'local_customer' => true
                         ]
                     );
 
@@ -330,23 +328,20 @@ updateOverdueSchedules();
 // إرسال التذكيرات المعلقة
 $sentReminders = sendPaymentReminders($currentUser['id']);
 
-// الحصول على شرط عملاء الشركة
-$companyCondition = getCompanyCustomersCondition();
-
-// الحصول على البيانات - فقط جداول عملاء الشركة
+// الحصول على البيانات - فقط جداول العملاء المحليين
 $saleNumberColumnCheck = $db->queryOne("SHOW COLUMNS FROM sales LIKE 'sale_number'");
 $hasSaleNumberColumn = !empty($saleNumberColumnCheck);
 
 if ($hasSaleNumberColumn) {
     $countSql = "SELECT COUNT(*) as total 
                  FROM payment_schedules ps
-                 INNER JOIN customers c ON ps.customer_id = c.id
-                 WHERE $companyCondition";
+                 INNER JOIN local_customers lc ON ps.customer_id = lc.id
+                 WHERE lc.status = 'active'";
 } else {
     $countSql = "SELECT COUNT(*) as total 
                  FROM payment_schedules ps
-                 INNER JOIN customers c ON ps.customer_id = c.id
-                 WHERE $companyCondition";
+                 INNER JOIN local_customers lc ON ps.customer_id = lc.id
+                 WHERE lc.status = 'active'";
 }
 
 $countParams = [];
@@ -382,21 +377,21 @@ $totalPages = ceil($totalSchedules / $perPage);
 
 // جلب الجداول
 if ($hasSaleNumberColumn) {
-    $sql = "SELECT ps.*, s.sale_number, c.name as customer_name, 
+    $sql = "SELECT ps.*, s.sale_number, lc.name as customer_name, 
                    u.full_name as sales_rep_name, u.username as sales_rep_username
             FROM payment_schedules ps
-            INNER JOIN customers c ON ps.customer_id = c.id
+            INNER JOIN local_customers lc ON ps.customer_id = lc.id
             LEFT JOIN sales s ON ps.sale_id = s.id
             LEFT JOIN users u ON ps.sales_rep_id = u.id
-            WHERE $companyCondition";
+            WHERE lc.status = 'active'";
 } else {
-    $sql = "SELECT ps.*, s.id as sale_number, c.name as customer_name, 
+    $sql = "SELECT ps.*, s.id as sale_number, lc.name as customer_name, 
                    u.full_name as sales_rep_name, u.username as sales_rep_username
             FROM payment_schedules ps
-            INNER JOIN customers c ON ps.customer_id = c.id
+            INNER JOIN local_customers lc ON ps.customer_id = lc.id
             LEFT JOIN sales s ON ps.sale_id = s.id
             LEFT JOIN users u ON ps.sales_rep_id = u.id
-            WHERE $companyCondition";
+            WHERE lc.status = 'active'";
 }
 
 $params = [];
@@ -432,37 +427,22 @@ $params[] = $offset;
 
 $schedules = $db->query($sql, $params);
 
-// جلب عملاء الشركة
-$hasCreatedByAdmin = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'created_by_admin'"));
-$hasRepId = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'rep_id'"));
-
+// جلب العملاء المحليين
 try {
-    if ($hasCreatedByAdmin && $hasRepId) {
-        $customers = $db->query(
-            "SELECT id, name FROM customers 
-             WHERE status = 'active' 
-             AND (created_by_admin = 1 OR rep_id IS NULL OR created_by IN (SELECT id FROM users WHERE role IN ('manager', 'accountant')))
-             ORDER BY name"
-        );
-        
-        $debtorCustomers = $db->query(
-            "SELECT id, name, balance FROM customers 
-             WHERE status = 'active' 
-             AND (created_by_admin = 1 OR rep_id IS NULL OR created_by IN (SELECT id FROM users WHERE role IN ('manager', 'accountant')))
-             AND balance IS NOT NULL AND balance > 0.01
-             ORDER BY name"
-        );
-    } else {
-        $customers = $db->query("SELECT id, name FROM customers WHERE status = 'active' ORDER BY name");
-        $debtorCustomers = $db->query(
-            "SELECT id, name, balance FROM customers 
-             WHERE status = 'active' 
-             AND balance IS NOT NULL AND balance > 0.01
-             ORDER BY name"
-        );
-    }
+    $customers = $db->query(
+        "SELECT id, name FROM local_customers 
+         WHERE status = 'active' 
+         ORDER BY name"
+    );
+    
+    $debtorCustomers = $db->query(
+        "SELECT id, name, balance FROM local_customers 
+         WHERE status = 'active' 
+         AND balance IS NOT NULL AND balance > 0.01
+         ORDER BY name"
+    );
 } catch (Throwable $e) {
-    error_log('Error fetching company customers: ' . $e->getMessage());
+    error_log('Error fetching local customers: ' . $e->getMessage());
     $customers = [];
     $debtorCustomers = [];
 }
@@ -485,8 +465,8 @@ $statsSql = "SELECT
         COALESCE(SUM(CASE WHEN ps.status = 'pending' THEN ps.amount END), 0) as pending_amount,
         COALESCE(SUM(CASE WHEN ps.status = 'overdue' THEN ps.amount END), 0) as overdue_amount
      FROM payment_schedules ps
-     INNER JOIN customers c ON ps.customer_id = c.id
-     WHERE $companyCondition";
+     INNER JOIN local_customers lc ON ps.customer_id = lc.id
+     WHERE lc.status = 'active'";
 
 $statsParams = [];
 $statsQuery = $db->queryOne($statsSql, $statsParams);
@@ -508,31 +488,31 @@ if (isset($_GET['id'])) {
     
     if ($hasSaleNumberColumn) {
         $selectedSchedule = $db->queryOne(
-            "SELECT ps.*, s.sale_number, c.name as customer_name, c.phone as customer_phone,
+            "SELECT ps.*, s.sale_number, lc.name as customer_name, lc.phone as customer_phone,
                     u.full_name as sales_rep_name
              FROM payment_schedules ps
-             INNER JOIN customers c ON ps.customer_id = c.id
+             INNER JOIN local_customers lc ON ps.customer_id = lc.id
              LEFT JOIN sales s ON ps.sale_id = s.id
              LEFT JOIN users u ON ps.sales_rep_id = u.id
-             WHERE ps.id = ? AND $companyCondition",
+             WHERE ps.id = ? AND lc.status = 'active'",
             [$scheduleId]
         );
     } else {
         $selectedSchedule = $db->queryOne(
-            "SELECT ps.*, s.id as sale_number, c.name as customer_name, c.phone as customer_phone,
+            "SELECT ps.*, s.id as sale_number, lc.name as customer_name, lc.phone as customer_phone,
                     u.full_name as sales_rep_name
              FROM payment_schedules ps
-             INNER JOIN customers c ON ps.customer_id = c.id
+             INNER JOIN local_customers lc ON ps.customer_id = lc.id
              LEFT JOIN sales s ON ps.sale_id = s.id
              LEFT JOIN users u ON ps.sales_rep_id = u.id
-             WHERE ps.id = ? AND $companyCondition",
+             WHERE ps.id = ? AND lc.status = 'active'",
             [$scheduleId]
         );
     }
 }
 ?>
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
-    <h2 class="mb-0"><i class="bi bi-calendar-check me-2"></i>جداول التحصيل - عملاء الشركة</h2>
+    <h2 class="mb-0"><i class="bi bi-calendar-check me-2"></i>جداول التحصيل - العملاء المحليين</h2>
     <div class="d-flex align-items-center gap-2">
         <?php if ($sentReminders > 0): ?>
         <div class="alert alert-info mb-0 py-2 px-3">
@@ -565,7 +545,7 @@ if (isset($_GET['id'])) {
 <?php if (!$hasDebtorCustomers): ?>
     <div class="alert alert-warning">
         <i class="bi bi-info-circle-fill me-2"></i>
-        لا توجد عملاء مدينون حالياً. قم بإضافة عميل أو تحديث رصيد العملاء ليظهر هنا.
+        لا توجد عملاء محليون مدينون حالياً. قم بإضافة عميل محلي أو تحديث رصيد العملاء المحليين ليظهر هنا.
     </div>
 <?php endif; ?>
 
@@ -915,7 +895,7 @@ if (isset($_GET['id'])) {
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <small class="text-muted">يتم عرض عملاء الشركة المدينين فقط.</small>
+                        <small class="text-muted">يتم عرض العملاء المحليين المدينين فقط.</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
@@ -932,8 +912,8 @@ if (isset($_GET['id'])) {
                     <?php else: ?>
                     <div class="alert alert-warning mb-0">
                         <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                        لا يوجد عملاء شركة مدينون (رصيد مدين أكبر من صفر) لإضافة موعد تحصيل. 
-                        <br><small class="text-muted">تأكد من وجود عملاء شركة نشطين برصيد مدين (balance > 0).</small>
+                        لا يوجد عملاء محليون مدينون (رصيد مدين أكبر من صفر) لإضافة موعد تحصيل. 
+                        <br><small class="text-muted">تأكد من وجود عملاء محليين نشطين برصيد مدين (balance > 0).</small>
                     </div>
                     <?php endif; ?>
                 </div>
