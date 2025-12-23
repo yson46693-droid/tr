@@ -1569,7 +1569,7 @@ $salesRepInfo = $db->queryOne(
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" action="" id="addCashBalanceForm">
+            <form method="POST" action="javascript:void(0);" id="addCashBalanceForm" onsubmit="return false;">
                 <input type="hidden" name="action" value="add_cash_balance">
                 <div class="modal-body">
                     <div class="mb-3">
@@ -1606,79 +1606,77 @@ $salesRepInfo = $db->queryOne(
 </div>
 <?php endif; ?>
 
-<!-- إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات -->
+<!-- معالجة نموذج إضافة الرصيد عبر AJAX -->
 <script>
 // تم إزالة كود إعادة التحميل التلقائي لأننا الآن نحدث البيانات مباشرة عبر AJAX
 // لا حاجة لإعادة تحميل الصفحة بعد إضافة الرصيد
 
 // معالجة نموذج إضافة الرصيد عبر AJAX
 (function() {
-    const addCashBalanceModal = document.getElementById('addCashBalanceModal');
-    const addCashBalanceForm = document.getElementById('addCashBalanceForm');
-    const cashBalanceAmount = document.getElementById('cashBalanceAmount');
-    const cashBalanceDescription = document.getElementById('cashBalanceDescription');
-    
-    // تحسينات الأداء على الهاتف المحمول
-    function optimizeForMobile() {
-        if (!addCashBalanceModal) return;
+    // الانتظار حتى يتم تحميل DOM بالكامل
+    function initCashBalanceModal() {
+        const addCashBalanceModal = document.getElementById('addCashBalanceModal');
+        const addCashBalanceForm = document.getElementById('addCashBalanceForm');
+        const cashBalanceAmount = document.getElementById('cashBalanceAmount');
+        const cashBalanceDescription = document.getElementById('cashBalanceDescription');
         
-        // إزالة تأخير الـ touch events على iOS/Android
-        const inputs = addCashBalanceModal.querySelectorAll('input, textarea, select');
-        inputs.forEach(input => {
-            // إضافة touch-action مباشرة
-            input.style.touchAction = 'manipulation';
-            input.style.webkitTapHighlightColor = 'transparent';
-            
-            // استخدام input event بدلاً من keyup/keydown للأداء الأفضل
-            // (input event أسرع على الهاتف)
-            input.addEventListener('input', function() {
-                // Force reflow لضمان عرض النص فوراً
-                void this.offsetHeight;
-            }, { passive: true });
-            
-            // منع أي delays في focus (فقط للحقول النصية)
-            if (input.type !== 'submit' && input.type !== 'button') {
-                input.addEventListener('touchstart', function(e) {
-                    // Focus فوراً بدون delay
-                    if (document.activeElement !== this) {
-                        this.focus();
-                    }
-                }, { passive: true });
-            }
-        });
-        
-        // تحسين modal rendering
-        if (addCashBalanceModal) {
-            addCashBalanceModal.style.transform = 'translateZ(0)';
-            addCashBalanceModal.style.webkitTransform = 'translateZ(0)';
+        // التحقق من وجود العناصر
+        if (!addCashBalanceModal || !addCashBalanceForm) {
+            // إعادة المحاولة بعد 100ms إذا لم تكن العناصر جاهزة
+            setTimeout(initCashBalanceModal, 100);
+            return;
         }
-    }
-    
-    // تطبيق التحسينات عند فتح الـ modal
-    if (addCashBalanceModal) {
+        
+        // تحسينات الأداء على الهاتف المحمول
+        function optimizeForMobile() {
+            if (!addCashBalanceModal) return;
+            
+            const inputs = addCashBalanceModal.querySelectorAll('input, textarea, select');
+            inputs.forEach(input => {
+                input.style.touchAction = 'manipulation';
+                input.style.webkitTapHighlightColor = 'transparent';
+                
+                input.addEventListener('input', function() {
+                    void this.offsetHeight;
+                }, { passive: true });
+                
+                if (input.type !== 'submit' && input.type !== 'button') {
+                    input.addEventListener('touchstart', function(e) {
+                        if (document.activeElement !== this) {
+                            this.focus();
+                        }
+                    }, { passive: true });
+                }
+            });
+            
+            if (addCashBalanceModal) {
+                addCashBalanceModal.style.transform = 'translateZ(0)';
+                addCashBalanceModal.style.webkitTransform = 'translateZ(0)';
+            }
+        }
+        
+        // تطبيق التحسينات عند فتح الـ modal
         addCashBalanceModal.addEventListener('shown.bs.modal', function() {
             optimizeForMobile();
-            // Focus على الحقل الأول فوراً
             if (cashBalanceAmount) {
                 setTimeout(() => {
                     cashBalanceAmount.focus();
                 }, 100);
             }
-        });
-    }
-    
-    if (addCashBalanceForm) {
+        }, { once: false });
+        
+        // معالجة إرسال النموذج
         addCashBalanceForm.addEventListener('submit', function(e) {
             e.preventDefault();
             e.stopPropagation();
+            e.stopImmediatePropagation(); // منع أي معالجات أخرى
             
             const amount = parseFloat(cashBalanceAmount.value) || 0;
             const submitBtn = addCashBalanceForm.querySelector('button[type="submit"]');
-            const originalBtnText = submitBtn.innerHTML;
+            const originalBtnText = submitBtn ? submitBtn.innerHTML : '';
             
             // التحقق من المبلغ
             if (isNaN(amount) || amount <= 0) {
-                // إضافة رسالة خطأ مرئية
                 let errorDiv = cashBalanceAmount.parentElement.querySelector('.invalid-feedback');
                 if (!errorDiv) {
                     errorDiv = document.createElement('div');
@@ -1690,13 +1688,18 @@ $salesRepInfo = $db->queryOne(
                 cashBalanceAmount.focus();
                 return false;
             } else {
-                // إزالة رسالة الخطأ إذا كانت موجودة
                 cashBalanceAmount.classList.remove('is-invalid');
+                const errorDiv = cashBalanceAmount.parentElement.querySelector('.invalid-feedback');
+                if (errorDiv) {
+                    errorDiv.remove();
+                }
             }
             
             // تعطيل الزر وإظهار loading
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري الإضافة...';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري الإضافة...';
+            }
             
             // إعداد FormData
             const formData = new FormData(addCashBalanceForm);
@@ -1717,63 +1720,82 @@ $salesRepInfo = $db->queryOne(
             })
             .then(data => {
                 // إعادة تفعيل الزر
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalBtnText;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                }
                 
                 if (data.success) {
-                    // إظهار رسالة نجاح
                     showAlert('success', data.message);
                     
-                    // تحديث البيانات مباشرة بدون إعادة تحميل الصفحة
                     if (data.newTotalCashAdditions !== undefined) {
-                        // تحديث رصيد الخزنة الإجمالي
                         updateCashRegisterBalance(data.newTotalCashAdditions);
                     }
                     
-                    // إضافة السجل الجديد إلى الجدول
                     if (data.lastAddition) {
                         addCashAdditionToTable(data.lastAddition);
                     }
                     
                     // إغلاق الـ modal
-                    const modalInstance = bootstrap.Modal.getInstance(addCashBalanceModal);
-                    if (modalInstance) {
-                        modalInstance.hide();
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                        const modalInstance = bootstrap.Modal.getInstance(addCashBalanceModal);
+                        if (modalInstance) {
+                            modalInstance.hide();
+                        }
                     }
+                    
+                    // إعادة تعيين النموذج
+                    addCashBalanceForm.reset();
                 } else {
-                    // إظهار رسالة خطأ
                     showAlert('danger', data.message);
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalBtnText;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                }
                 showAlert('danger', 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
             });
+            
+            return false; // منع إرسال النموذج بشكل افتراضي
         });
-    }
-    
-    // إزالة رسالة الخطأ عند البدء بالكتابة (مبسط للأداء الأفضل)
-    if (cashBalanceAmount) {
-        // استخدام input event للأداء الأفضل على الهاتف
-        cashBalanceAmount.addEventListener('input', function() {
-            if (this.classList.contains('is-invalid')) {
-                this.classList.remove('is-invalid');
-            }
-        }, { passive: true });
-    }
-    
-    // إعادة تعيين النموذج عند إغلاق الـ modal
-    if (addCashBalanceModal && addCashBalanceForm) {
+        
+        // إزالة رسالة الخطأ عند البدء بالكتابة
+        if (cashBalanceAmount) {
+            cashBalanceAmount.addEventListener('input', function() {
+                if (this.classList.contains('is-invalid')) {
+                    this.classList.remove('is-invalid');
+                    const errorDiv = this.parentElement.querySelector('.invalid-feedback');
+                    if (errorDiv) {
+                        errorDiv.remove();
+                    }
+                }
+            }, { passive: true });
+        }
+        
+        // إعادة تعيين النموذج عند إغلاق الـ modal
         addCashBalanceModal.addEventListener('hidden.bs.modal', function() {
             addCashBalanceForm.reset();
-            // إزالة رسائل الخطأ
             if (cashBalanceAmount) {
                 cashBalanceAmount.classList.remove('is-invalid');
+                const errorDiv = cashBalanceAmount.parentElement.querySelector('.invalid-feedback');
+                if (errorDiv) {
+                    errorDiv.remove();
+                }
             }
         });
     }
+    
+    // تهيئة عند تحميل الصفحة
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initCashBalanceModal);
+    } else {
+        // DOM محمل بالفعل
+        initCashBalanceModal();
+    }
+    
     
     // دالة لإظهار رسائل التنبيه
     function showAlert(type, message) {
