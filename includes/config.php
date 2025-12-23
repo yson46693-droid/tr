@@ -238,7 +238,7 @@ if (defined('PRIVATE_STORAGE_PATH') && is_dir(PRIVATE_STORAGE_PATH)) {
 // إعدادات الأمان
 define('PASSWORD_MIN_LENGTH', 6);
 define('CSRF_TOKEN_NAME', 'csrf_token');
-define('REQUEST_USAGE_MONITOR_ENABLED', false); // معطل لتقليل الضغط على السيرفر
+// REQUEST_USAGE_MONITOR_ENABLED تم تعريفه مسبقاً في السطر 203-204
 define('REQUEST_USAGE_THRESHOLD_PER_USER', 4000); // الحد اليومي لكل مستخدم قبل إنشاء تنبيه
 define('REQUEST_USAGE_THRESHOLD_PER_IP', 30000);    // الحد اليومي لكل عنوان IP قبل إنشاء تنبيه
 define('REQUEST_USAGE_ALERT_WINDOW_MINUTES', 1440); // فترة المراقبة بالدقائق (افتراضياً يوم كامل)
