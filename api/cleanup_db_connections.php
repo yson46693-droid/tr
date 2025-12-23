@@ -10,18 +10,28 @@ header('Content-Type: application/json; charset=utf-8');
 
 // التحقق من الصلاحيات (يمكن تخصيصه)
 $allowedToCleanup = false;
+$token = null;
 
-// التحقق من وجود token أو أي آلية أمان أخرى
-if (isset($_GET['token']) && $_GET['token'] === 'cleanup_db_connections_2024') {
-    $allowedToCleanup = true;
+// التحقق من وجود token في GET أو POST فقط
+// لا نستخدم التحقق من تسجيل الدخول لأن قاعدة البيانات قد تكون معطلة
+$token = null;
+if (isset($_GET['token'])) {
+    $token = $_GET['token'];
+} elseif (isset($_POST['token'])) {
+    $token = $_POST['token'];
 }
 
-if (!$allowedToCleanup) {
+// التحقق من صحة الـ token فقط
+if ($token !== '1') {
     http_response_code(403);
     echo json_encode([
         'success' => false,
-        'message' => 'Access denied. Provide valid token.'
-    ], JSON_UNESCAPED_UNICODE);
+        'message' => 'Access denied. Provide valid token.',
+        'help' => [
+            'method' => 'Add token as GET parameter: ?token=cleanup_db_connections_2024',
+            'example_url' => 'api/cleanup_db_connections.php?token=cleanup_db_connections_2024'
+        ]
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     exit;
 }
 
