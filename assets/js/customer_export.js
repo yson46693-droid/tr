@@ -396,9 +396,9 @@
             // إظهار رسالة في المكان المناسب
             if (selectRepMessage) {
                 selectRepMessage.style.display = 'block';
-                selectRepMessage.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>لا توجد عملاء لديهم رصيد دائن متاحة للتصدير</div>';
+                selectRepMessage.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>لا توجد عملاء لديهم رصيد مدين متاحة للتصدير</div>';
             } else {
-                customersList.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>لا توجد عملاء لديهم رصيد دائن متاحة للتصدير</div>';
+                customersList.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>لا توجد عملاء لديهم رصيد مدين متاحة للتصدير</div>';
             }
             
             // تعطيل زر التوليد
