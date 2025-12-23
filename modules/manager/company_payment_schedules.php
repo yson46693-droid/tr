@@ -20,6 +20,11 @@ $db = db();
 $error = '';
 $success = '';
 
+// إظهار رسالة نجاح بعد إعادة التوجيه من إنشاء موعد جديد
+if (isset($_GET['created']) && $_GET['created'] == '1') {
+    $success = 'تم إضافة موعد التحصيل بنجاح.';
+}
+
 // التحقق من وجود جدول local_customers
 $localCustomersTableExists = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
 if (empty($localCustomersTableExists)) {
