@@ -3443,7 +3443,7 @@ try {
     $salesRepsList = [];
 }
 ?>
-<div class="modal fade" id="customerExportModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="customerExportModal" tabindex="-1" aria-hidden="true" data-section="delegates">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
@@ -3466,6 +3466,9 @@ try {
                             </option>
                         <?php endforeach; ?>
                     </select>
+                    <div class="form-text text-info">
+                        <i class="bi bi-info-circle me-1"></i>سيتم عرض العملاء أصحاب الرصيد الدائن فقط (الذين لديهم رصيد سالب)
+                    </div>
                 </div>
                 
                 <!-- قائمة العملاء -->

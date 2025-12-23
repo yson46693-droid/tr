@@ -53,6 +53,13 @@
                 return;
             }
             
+            // إذا كان قسم عملاء المندوبين (delegates)، انتظر اختيار المندوب
+            if (currentSection === 'delegates') {
+                // إظهار رسالة اختيار المندوب
+                showSelectRepMessage();
+                return;
+            }
+            
             // إذا كان هناك اختيار مندوب، انتظر اختياره
             if (repSelect && repSelect.tagName === 'SELECT') {
                 // إظهار رسالة اختيار المندوب
@@ -62,6 +69,9 @@
                 const repId = repSelect ? repSelect.value : null;
                 if (repId && repId !== '') {
                     loadCustomersByRep(parseInt(repId, 10));
+                } else {
+                    // إذا لم يكن هناك معرف مندوب، إظهار رسالة اختيار المندوب
+                    showSelectRepMessage();
                 }
             }
         });
@@ -386,9 +396,9 @@
             // إظهار رسالة في المكان المناسب
             if (selectRepMessage) {
                 selectRepMessage.style.display = 'block';
-                selectRepMessage.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>لا توجد عملاء متاحة للتصدير</div>';
+                selectRepMessage.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>لا توجد عملاء لديهم رصيد دائن متاحة للتصدير</div>';
             } else {
-                customersList.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>لا توجد عملاء متاحة للتصدير</div>';
+                customersList.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>لا توجد عملاء لديهم رصيد دائن متاحة للتصدير</div>';
             }
             
             // تعطيل زر التوليد

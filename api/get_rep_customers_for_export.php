@@ -114,11 +114,12 @@ try {
     // جلب عملاء المندوب
     // فحص أمني: العملاء يظهرون فقط للمندوب الذي أنشأهم (created_by)
     // وليس بناءً على rep_id - هذا يضمن عدم ظهور عملاء المندوب القديم للمندوب الجديد
+    // فلترة: عرض العملاء أصحاب الرصيد الدائن فقط (balance < 0)
     $customers = $db->query(
         "SELECT c.*, r.name as region_name
          FROM customers c
          LEFT JOIN regions r ON c.region_id = r.id
-         WHERE c.created_by = ? AND c.status = 'active'
+         WHERE c.created_by = ? AND c.status = 'active' AND (c.balance IS NOT NULL AND c.balance < 0)
          ORDER BY c.name ASC",
         [$repId]
     );
@@ -168,7 +169,8 @@ try {
         $customerName = trim($customer['name'] ?? '');
         
         // التأكد من أن البيانات صحيحة قبل الإضافة
-        if (!empty($customerName) && $customerId > 0) {
+        // فلترة: عرض العملاء أصحاب الرصيد الدائن فقط (balance < 0)
+        if (!empty($customerName) && $customerId > 0 && $balance < 0) {
             $result[] = [
                 'id' => $customerId,
                 'name' => $customerName,
@@ -182,11 +184,14 @@ try {
     }
     
     // فلترة النتيجة النهائية للتأكد من عدم وجود بيانات غير صالحة
+    // فلترة: عرض العملاء أصحاب الرصيد الدائن فقط (balance < 0)
     $result = array_filter($result, function($customer) {
-        // التأكد من وجود معرف واسم صالحين
+        // التأكد من وجود معرف واسم صالحين ورصيد دائن
         return isset($customer['id']) && 
                (int)$customer['id'] > 0 && 
-               !empty(trim($customer['name'] ?? ''));
+               !empty(trim($customer['name'] ?? '')) &&
+               isset($customer['balance']) &&
+               (float)$customer['balance'] < 0;
     });
     
     // إعادة ترقيم المصفوفة
