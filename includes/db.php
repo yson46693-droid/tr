@@ -20,14 +20,8 @@ class Database {
     private static $instance = null;
     private $connection;
     private $inTransaction = false;
-    private static $connectionClosed = false;
-    private static $shutdownRegistered = false;
-    private static $migrationsRun = false; // إضافة flag لتشغيل الـ migrations مرة واحدة فقط
     
     private function __construct() {
-        // إعادة تعيين حالة الإغلاق عند إنشاء اتصال جديد
-        self::$connectionClosed = false;
-        
         try {
             // إعدادات timeout للاتصال بقاعدة البيانات
             // استخدام timeout قصير لمنع تعليق الخادم
@@ -42,67 +36,24 @@ class Database {
             // استخدام mysqli_report لتقليل الأخطاء أثناء الاتصال
             mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
             
-            // التحقق من حالة "Too many connections" ومحاولة إغلاق اتصالات قديمة
-            $maxAttempts = 3;
-            $attempt = 0;
-            $connected = false;
-            
-            while ($attempt < $maxAttempts && !$connected) {
+            try {
+                $this->connection = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+            } catch (mysqli_sql_exception $e) {
+                // إذا فشل الاتصال، حاول بدون قاعدة البيانات أولاً للتحقق من الاتصال
                 try {
-                    $this->connection = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
-                    if (!$this->connection->connect_error) {
-                        $connected = true;
-                        break;
+                    $testConnection = @new mysqli(DB_HOST, DB_USER, DB_PASS, null, DB_PORT);
+                    if ($testConnection->connect_error) {
+                        throw new Exception("Cannot connect to MySQL server: " . $testConnection->connect_error);
                     }
-                } catch (mysqli_sql_exception $e) {
-                    $errorMessage = $e->getMessage();
-                    
-                    // التحقق من أخطاء حد الاتصالات (max_user_connections أو Too many connections)
-                    $isConnectionLimitError = stripos($errorMessage, 'Too many connections') !== false || 
-                                            stripos($errorMessage, 'max_user_connections') !== false;
-                    
-                    // إذا كان الخطأ متعلق بحد الاتصالات، انتظر قليلاً وحاول مرة أخرى
-                    if ($isConnectionLimitError && $attempt < $maxAttempts - 1) {
-                        $attempt++;
-                        usleep(500000); // انتظر 0.5 ثانية
-                        continue;
-                    }
-                    
-                    // إذا كان الخطأ متعلق بحد الاتصالات بعد استنفاد المحاولات
-                    if ($isConnectionLimitError) {
-                        throw new Exception("MySQL connection error: User " . DB_USER . " already has more than 'max_user_connections' active connections. Please wait a moment and try again, or contact your database administrator to increase the limit.");
-                    }
-                    
-                    // إذا فشل الاتصال لأسباب أخرى (وليس حد الاتصالات)، حاول بدون قاعدة البيانات للتحقق
-                    // لا نقوم بإنشاء اتصال اختبار إذا كان الخطأ متعلق بحد الاتصالات
-                    try {
-                        $testConnection = @new mysqli(DB_HOST, DB_USER, DB_PASS, null, DB_PORT);
-                        if ($testConnection->connect_error) {
-                            $testConnection->close();
-                            throw new Exception("Cannot connect to MySQL server: " . $testConnection->connect_error);
-                        }
-                        $testConnection->close();
-                        throw new Exception("Database '" . DB_NAME . "' not found or access denied. Please check database name and user permissions.");
-                    } catch (mysqli_sql_exception $testError) {
-                        throw new Exception("MySQL connection error: " . $testError->getMessage());
-                    }
+                    $testConnection->close();
+                    throw new Exception("Database '" . DB_NAME . "' not found or access denied. Please check database name and user permissions.");
+                } catch (mysqli_sql_exception $testError) {
+                    throw new Exception("MySQL connection error: " . $testError->getMessage());
                 }
-                
-                $attempt++;
-            }
-            
-            if (!$connected) {
-                throw new Exception("Failed to connect after {$maxAttempts} attempts. The database user has reached the maximum number of allowed connections (max_user_connections). Please wait a moment and try again, or contact your database administrator.");
             }
             
             if ($this->connection->connect_error) {
                 throw new Exception("Connection failed: " . $this->connection->connect_error);
-            }
-            
-            // تسجيل دالة لإغلاق الاتصال تلقائياً عند انتهاء الطلب (مرة واحدة فقط)
-            if (!self::$shutdownRegistered) {
-                register_shutdown_function([$this, 'autoClose']);
-                self::$shutdownRegistered = true;
             }
             
             // تعيين timeout للاتصال بعد الاتصال الناجح
@@ -112,172 +63,110 @@ class Database {
                 $optReadTimeout = defined('MYSQLI_OPT_READ_TIMEOUT') ? MYSQLI_OPT_READ_TIMEOUT : 11;
                 $optWriteTimeout = defined('MYSQLI_OPT_WRITE_TIMEOUT') ? MYSQLI_OPT_WRITE_TIMEOUT : 12;
                 
-                // محاولة تعيين خيارات الاتصال مع معالجة الأخطاء
-                try {
-                    $this->connection->options($optConnectTimeout, $connectTimeout);
-                } catch (Exception $e) {
-                    error_log("Database connection timeout option error: " . $e->getMessage());
-                }
-                
-                try {
-                    $this->connection->options($optReadTimeout, $readTimeout);
-                } catch (Exception $e) {
-                    error_log("Database read timeout option error: " . $e->getMessage());
-                }
-                
-                try {
-                    $this->connection->options($optWriteTimeout, $writeTimeout);
-                } catch (Exception $e) {
-                    error_log("Database write timeout option error: " . $e->getMessage());
-                }
+                @$this->connection->options($optConnectTimeout, $connectTimeout);
+                @$this->connection->options($optReadTimeout, $readTimeout);
+                @$this->connection->options($optWriteTimeout, $writeTimeout);
             }
             
             // تعيين ترميز UTF-8
             $this->connection->set_charset("utf8mb4");
             
-            // تعيين wait_timeout وinteractive_timeout لتقليل الاتصالات المعلقة
-            // تقليل الوقت إلى 60 ثانية (1 دقيقة) بدلاً من 300 (5 دقائق) لتقليل الاتصالات المعلقة
-            try {
-                $this->connection->query("SET SESSION wait_timeout = 60"); // 1 دقيقة
-                $this->connection->query("SET SESSION interactive_timeout = 60"); // 1 دقيقة
-            } catch (Exception $e) {
-                // تجاهل الأخطاء في تعيين timeout
-                error_log("Warning: Could not set connection timeout: " . $e->getMessage());
-            }
-            
             // تعيين المنطقة الزمنية لتوقيت القاهرة (UTC+2)
             // مصر تستخدم توقيت UTC+2 بدون توقيت صيفي
             $this->connection->query("SET time_zone = '+02:00'");
             
-            // تشغيل الـ migrations مرة واحدة فقط باستخدام static flag لتقليل الضغط على قاعدة البيانات
-            if (!self::$migrationsRun) {
-                try {
-                    $columnCheck = $this->connection->query("SHOW COLUMNS FROM `users` LIKE 'profile_photo'");
-                    if ($columnCheck instanceof mysqli_result) {
-                        if ($columnCheck->num_rows === 0) {
-                            $this->connection->query("ALTER TABLE `users` ADD COLUMN `profile_photo` LONGTEXT NULL AFTER `phone`");
-                            // مسح الكاش بعد تعديل الجدول
-                            $this->clearCache();
-                        }
-                        $columnCheck->free();
+            try {
+                $columnCheck = $this->connection->query("SHOW COLUMNS FROM `users` LIKE 'profile_photo'");
+                if ($columnCheck instanceof mysqli_result) {
+                    if ($columnCheck->num_rows === 0) {
+                        $this->connection->query("ALTER TABLE `users` ADD COLUMN `profile_photo` LONGTEXT NULL AFTER `phone`");
+                        // مسح الكاش بعد تعديل الجدول
+                        $this->clearCache();
                     }
-                } catch (Throwable $migrationError) {
-                    error_log('Profile photo column migration error: ' . $migrationError->getMessage());
+                    $columnCheck->free();
                 }
+            } catch (Throwable $migrationError) {
+                error_log('Profile photo column migration error: ' . $migrationError->getMessage());
+            }
 
-                // إنشاء جدول جلسات PWA Splash Screen تلقائياً من ملف SQL
-                try {
-                    $tableCheck = $this->connection->query("SHOW TABLES LIKE 'pwa_splash_sessions'");
-                    if ($tableCheck instanceof mysqli_result && $tableCheck->num_rows === 0) {
-                        // قراءة ملف SQL وتنفيذه
-                        $migrationFile = __DIR__ . '/../database/migrations/add_pwa_splash_sessions.sql';
-                        if (file_exists($migrationFile)) {
-                            $sql = file_get_contents($migrationFile);
-                            
-                            // إزالة التعليقات والمسافات الزائدة
-                            $sql = preg_replace('/--.*$/m', '', $sql);
-                            $sql = trim($sql);
-                            
-                            // تنفيذ الاستعلامات
-                            if (!empty($sql)) {
-                                // تقسيم الاستعلامات إذا كان هناك أكثر من واحد
-                                $queries = array_filter(array_map('trim', explode(';', $sql)));
-                                foreach ($queries as $query) {
-                                    if (!empty($query) && !preg_match('/^--/', $query)) {
-                                        $this->connection->query($query);
-                                        // مسح الكاش بعد تنفيذ الاستعلام
-                                        $this->clearCache();
-                                    }
+            // إنشاء جدول جلسات PWA Splash Screen تلقائياً من ملف SQL
+            try {
+                $tableCheck = $this->connection->query("SHOW TABLES LIKE 'pwa_splash_sessions'");
+                if ($tableCheck instanceof mysqli_result && $tableCheck->num_rows === 0) {
+                    // قراءة ملف SQL وتنفيذه
+                    $migrationFile = __DIR__ . '/../database/migrations/add_pwa_splash_sessions.sql';
+                    if (file_exists($migrationFile)) {
+                        $sql = file_get_contents($migrationFile);
+                        
+                        // إزالة التعليقات والمسافات الزائدة
+                        $sql = preg_replace('/--.*$/m', '', $sql);
+                        $sql = trim($sql);
+                        
+                        // تنفيذ الاستعلامات
+                        if (!empty($sql)) {
+                            // تقسيم الاستعلامات إذا كان هناك أكثر من واحد
+                            $queries = array_filter(array_map('trim', explode(';', $sql)));
+                            foreach ($queries as $query) {
+                                if (!empty($query) && !preg_match('/^--/', $query)) {
+                                    $this->connection->query($query);
+                                    // مسح الكاش بعد تنفيذ الاستعلام
+                                    $this->clearCache();
                                 }
                             }
-                        } else {
-                            // إذا لم يوجد الملف، استخدم الكود المباشر كبديل
-                            $this->connection->query("
-                                CREATE TABLE IF NOT EXISTS `pwa_splash_sessions` (
-                                  `id` int(11) NOT NULL AUTO_INCREMENT,
-                                  `user_id` int(11) DEFAULT NULL,
-                                  `session_token` varchar(64) NOT NULL,
-                                  `ip_address` varchar(45) DEFAULT NULL,
-                                  `user_agent` text DEFAULT NULL,
-                                  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                                  `expires_at` timestamp NOT NULL,
-                                  PRIMARY KEY (`id`),
-                                  UNIQUE KEY `session_token` (`session_token`),
-                                  KEY `user_id` (`user_id`),
-                                  KEY `expires_at` (`expires_at`),
-                                  CONSTRAINT `pwa_splash_sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-                                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-                            ");
-                            // مسح الكاش بعد إنشاء الجدول
-                            $this->clearCache();
                         }
+                    } else {
+                        // إذا لم يوجد الملف، استخدم الكود المباشر كبديل
+                        $this->connection->query("
+                            CREATE TABLE IF NOT EXISTS `pwa_splash_sessions` (
+                              `id` int(11) NOT NULL AUTO_INCREMENT,
+                              `user_id` int(11) DEFAULT NULL,
+                              `session_token` varchar(64) NOT NULL,
+                              `ip_address` varchar(45) DEFAULT NULL,
+                              `user_agent` text DEFAULT NULL,
+                              `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                              `expires_at` timestamp NOT NULL,
+                              PRIMARY KEY (`id`),
+                              UNIQUE KEY `session_token` (`session_token`),
+                              KEY `user_id` (`user_id`),
+                              KEY `expires_at` (`expires_at`),
+                              CONSTRAINT `pwa_splash_sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                        ");
+                        // مسح الكاش بعد إنشاء الجدول
+                        $this->clearCache();
                     }
-                    if ($tableCheck instanceof mysqli_result) {
-                        $tableCheck->free();
-                    }
-                } catch (Throwable $migrationError) {
-                    error_log('PWA splash sessions table migration error: ' . $migrationError->getMessage());
                 }
-
-                // التحقق من وجود أعمدة created_from_pos و created_by_admin في جدول customers
-                // تم تعطيله مؤقتاً لتجنب timeout - يمكن تفعيله لاحقاً بعد إصلاح المشكلة
-                // try {
-                //     $this->ensureCustomerFlagsMigration();
-                // } catch (Throwable $e) {
-                //     error_log('Customer flags migration error (non-critical): ' . $e->getMessage());
-                // }
-
-                // تم تعطيله مؤقتاً لتجنب timeout
-                // $this->ensureVehicleInventoryAutoUpgrade();
-                
-                // تشغيل migration لإضافة Foreign Key Constraints
-                try {
-                    $this->ensureCustomerIntegrityConstraints();
-                } catch (Throwable $e) {
-                    error_log('Customer integrity constraints migration error (non-critical): ' . $e->getMessage());
+                if ($tableCheck instanceof mysqli_result) {
+                    $tableCheck->free();
                 }
-                
-                // إضافة عمود unique_code للعملاء
-                try {
-                    require_once __DIR__ . '/customer_code_generator.php';
-                    ensureCustomerUniqueCodeColumn('customers');
-                    ensureCustomerUniqueCodeColumn('local_customers');
-                } catch (Throwable $e) {
-                    error_log('Customer unique_code migration error (non-critical): ' . $e->getMessage());
-                }
-                
-                // تعيين flag بعد تشغيل الـ migrations
-                self::$migrationsRun = true;
+            } catch (Throwable $migrationError) {
+                error_log('PWA splash sessions table migration error: ' . $migrationError->getMessage());
             }
+
+            // التحقق من وجود أعمدة created_from_pos و created_by_admin في جدول customers
+            // تم تعطيله مؤقتاً لتجنب timeout - يمكن تفعيله لاحقاً بعد إصلاح المشكلة
+            // try {
+            //     $this->ensureCustomerFlagsMigration();
+            // } catch (Throwable $e) {
+            //     error_log('Customer flags migration error (non-critical): ' . $e->getMessage());
+            // }
+
+            // تم تعطيله مؤقتاً لتجنب timeout
+            // $this->ensureVehicleInventoryAutoUpgrade();
             
         } catch (Exception $e) {
             // تسجيل الخطأ في ملف السجل
             error_log("Database connection error: " . $e->getMessage());
             error_log("Connection details - Host: " . DB_HOST . ", Port: " . DB_PORT . ", Database: " . DB_NAME . ", User: " . DB_USER);
             
-            $errorMsg = $e->getMessage();
-            $isMaxConnectionsError = stripos($errorMsg, 'max_user_connections') !== false || 
-                                     stripos($errorMsg, 'Too many connections') !== false;
-            
             // رسالة خطأ واضحة للمستخدم
             $errorMessage = "خطأ في الاتصال بقاعدة البيانات.\n\n";
-            
-            if ($isMaxConnectionsError) {
-                $errorMessage .= "⚠️ تم الوصول إلى الحد الأقصى لعدد الاتصالات المسموح بها للمستخدم.\n\n";
-                $errorMessage .= "الحلول المقترحة:\n";
-                $errorMessage .= "1. انتظر قليلاً (30-60 ثانية) ثم أعد المحاولة\n";
-                $errorMessage .= "2. أغلق الصفحات المفتوحة الأخرى التي تستخدم نفس قاعدة البيانات\n";
-                $errorMessage .= "3. إذا استمرت المشكلة، اتصل بمسؤول قاعدة البيانات لزيادة حد الاتصالات\n";
-                $errorMessage .= "4. يمكن تشغيل script التنظيف: api/cleanup_db_connections.php?token=cleanup_db_connections_2024\n\n";
-            } else {
-                $errorMessage .= "الرجاء التحقق من:\n";
-                $errorMessage .= "1. أن خادم MySQL (XAMPP) يعمل\n";
-                $errorMessage .= "2. إعدادات الاتصال في ملف config.php صحيحة\n";
-                $errorMessage .= "3. اسم قاعدة البيانات موجود\n";
-                $errorMessage .= "4. المستخدم لديه صلاحيات الوصول\n\n";
-            }
-            
-            $errorMessage .= "تفاصيل الخطأ: " . htmlspecialchars($errorMsg);
+            $errorMessage .= "الرجاء التحقق من:\n";
+            $errorMessage .= "1. أن خادم MySQL (XAMPP) يعمل\n";
+            $errorMessage .= "2. إعدادات الاتصال في ملف config.php صحيحة\n";
+            $errorMessage .= "3. اسم قاعدة البيانات موجود\n";
+            $errorMessage .= "4. المستخدم لديه صلاحيات الوصول\n\n";
+            $errorMessage .= "تفاصيل الخطأ: " . htmlspecialchars($e->getMessage());
             
             die("<div style='font-family: Arial, sans-serif; padding: 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; color: #721c24; direction: rtl; text-align: right;'>" . 
                 "<h3 style='margin-top: 0;'>⚠️ خطأ في الاتصال بقاعدة البيانات</h3>" . 
@@ -289,28 +178,13 @@ class Database {
             error_log("Database connection error (Throwable): " . $e->getMessage());
             error_log("Connection details - Host: " . DB_HOST . ", Port: " . DB_PORT . ", Database: " . DB_NAME . ", User: " . DB_USER);
             
-            $errorMsg = $e->getMessage();
-            $isMaxConnectionsError = stripos($errorMsg, 'max_user_connections') !== false || 
-                                     stripos($errorMsg, 'Too many connections') !== false;
-            
             $errorMessage = "خطأ في الاتصال بقاعدة البيانات.\n\n";
-            
-            if ($isMaxConnectionsError) {
-                $errorMessage .= "⚠️ تم الوصول إلى الحد الأقصى لعدد الاتصالات المسموح بها للمستخدم.\n\n";
-                $errorMessage .= "الحلول المقترحة:\n";
-                $errorMessage .= "1. انتظر قليلاً (30-60 ثانية) ثم أعد المحاولة\n";
-                $errorMessage .= "2. أغلق الصفحات المفتوحة الأخرى التي تستخدم نفس قاعدة البيانات\n";
-                $errorMessage .= "3. إذا استمرت المشكلة، اتصل بمسؤول قاعدة البيانات لزيادة حد الاتصالات\n";
-                $errorMessage .= "4. يمكن تشغيل script التنظيف: api/cleanup_db_connections.php?token=cleanup_db_connections_2024\n\n";
-            } else {
-                $errorMessage .= "الرجاء التحقق من:\n";
-                $errorMessage .= "1. أن خادم MySQL (XAMPP) يعمل\n";
-                $errorMessage .= "2. إعدادات الاتصال في ملف config.php صحيحة\n";
-                $errorMessage .= "3. اسم قاعدة البيانات موجود\n";
-                $errorMessage .= "4. المستخدم لديه صلاحيات الوصول\n\n";
-            }
-            
-            $errorMessage .= "تفاصيل الخطأ: " . htmlspecialchars($errorMsg);
+            $errorMessage .= "الرجاء التحقق من:\n";
+            $errorMessage .= "1. أن خادم MySQL (XAMPP) يعمل\n";
+            $errorMessage .= "2. إعدادات الاتصال في ملف config.php صحيحة\n";
+            $errorMessage .= "3. اسم قاعدة البيانات موجود\n";
+            $errorMessage .= "4. المستخدم لديه صلاحيات الوصول\n\n";
+            $errorMessage .= "تفاصيل الخطأ: " . htmlspecialchars($e->getMessage());
             
             die("<div style='font-family: Arial, sans-serif; padding: 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; color: #721c24; direction: rtl; text-align: right;'>" . 
                 "<h3 style='margin-top: 0;'>⚠️ خطأ في الاتصال بقاعدة البيانات</h3>" . 
@@ -323,26 +197,6 @@ class Database {
     public static function getInstance() {
         if (self::$instance === null) {
             self::$instance = new self();
-        } else {
-            // تحسين فحص الاتصال - تجنب ping() لتقليل فتح اتصالات جديدة
-            if (self::$instance->connection && !self::$connectionClosed) {
-                try {
-                    // استخدام query بسيط بدلاً من ping() لتجنب فتح اتصالات جديدة
-                    @self::$instance->connection->query("SELECT 1");
-                    // إذا نجح الاستعلام، الاتصال نشط
-                } catch (Exception $e) {
-                    // الاتصال غير نشط، إعادة إنشاء الاتصال
-                    if (self::$instance->connection) {
-                        @self::$instance->connection->close();
-                    }
-                    self::$connectionClosed = false;
-                    self::$instance = new self();
-                }
-            } else if (self::$connectionClosed) {
-                // إذا كان الاتصال مغلق، إعادة إنشاء
-                self::$connectionClosed = false;
-                self::$instance = new self();
-            }
         }
         return self::$instance;
     }
@@ -538,71 +392,11 @@ class Database {
     }
     
     /**
-     * الحصول على آخر رسالة خطأ من قاعدة البيانات
-     */
-    public function getLastError() {
-        return $this->connection->error ?? null;
-    }
-    
-    /**
-     * الحصول على رقم آخر خطأ من قاعدة البيانات
-     */
-    public function getLastErrno() {
-        return $this->connection->errno ?? 0;
-    }
-    
-    /**
      * إغلاق الاتصال
      */
     public function close() {
-        if ($this->connection && !self::$connectionClosed) {
-            try {
-                // إغلاق أي معاملة نشطة قبل إغلاق الاتصال
-                if ($this->inTransaction) {
-                    $this->rollback();
-                }
-                $this->connection->close();
-                self::$connectionClosed = true;
-                $this->connection = null;
-            } catch (Exception $e) {
-                error_log("Error closing database connection: " . $e->getMessage());
-            }
-        }
-    }
-    
-    /**
-     * إغلاق الاتصال تلقائياً عند انتهاء الطلب
-     * يتم إغلاق الاتصال دائماً حتى لو كان في معاملة (سيتم rollback تلقائياً)
-     */
-    public function autoClose() {
-        if (!self::$connectionClosed && $this->connection) {
-            try {
-                // إغلاق الاتصال دائماً حتى لو كان في معاملة (سيتم rollback تلقائياً)
-                if ($this->inTransaction) {
-                    // محاولة commit أولاً، وإذا فشل rollback
-                    try {
-                        $this->commit();
-                    } catch (Exception $e) {
-                        try {
-                            $this->rollback();
-                        } catch (Exception $rollbackError) {
-                            error_log("Error rolling back transaction in autoClose: " . $rollbackError->getMessage());
-                        }
-                    }
-                }
-                $this->close();
-            } catch (Exception $e) {
-                error_log("Error in autoClose: " . $e->getMessage());
-                try {
-                    if ($this->connection) {
-                        @$this->connection->close();
-                        self::$connectionClosed = true;
-                        $this->connection = null;
-                    }
-                } catch (Exception $closeError) {
-                    error_log("Error closing connection in autoClose: " . $closeError->getMessage());
-                }
-            }
+        if ($this->connection) {
+            $this->connection->close();
         }
     }
     
@@ -955,175 +749,6 @@ class Database {
 
         } catch (Throwable $customerFlagsError) {
             error_log('Customers flags migration error: ' . $customerFlagsError->getMessage());
-        }
-    }
-    
-    /**
-     * إضافة Foreign Key Constraints لضمان سلامة بيانات العملاء والفواتير
-     * يتم تشغيلها تلقائياً مرة واحدة فقط
-     */
-    private function ensureCustomerIntegrityConstraints(): void
-    {
-        static $migrationEnsured = false;
-
-        if ($migrationEnsured) {
-            return;
-        }
-
-        $migrationEnsured = true;
-
-        try {
-            $flagFile = dirname(__DIR__) . '/runtime/customer_integrity_constraints.flag';
-
-            // إذا تم تشغيل الهجرة من قبل، تخطي
-            if (file_exists($flagFile)) {
-                return;
-            }
-
-            // التحقق من وجود الجداول
-            $invoicesTableExists = $this->connection->query("SHOW TABLES LIKE 'invoices'");
-            $customersTableExists = $this->connection->query("SHOW TABLES LIKE 'customers'");
-            $cphTableExists = $this->connection->query("SHOW TABLES LIKE 'customer_purchase_history'");
-            
-            if (!($invoicesTableExists instanceof mysqli_result && $invoicesTableExists->num_rows > 0) ||
-                !($customersTableExists instanceof mysqli_result && $customersTableExists->num_rows > 0)) {
-                if ($invoicesTableExists instanceof mysqli_result) {
-                    $invoicesTableExists->free();
-                }
-                if ($customersTableExists instanceof mysqli_result) {
-                    $customersTableExists->free();
-                }
-                if ($cphTableExists instanceof mysqli_result) {
-                    $cphTableExists->free();
-                }
-                return;
-            }
-            
-            if ($invoicesTableExists instanceof mysqli_result) {
-                $invoicesTableExists->free();
-            }
-            if ($customersTableExists instanceof mysqli_result) {
-                $customersTableExists->free();
-            }
-            if ($cphTableExists instanceof mysqli_result) {
-                $cphTableExists->free();
-            }
-
-            // التحقق من وجود Foreign Keys الحالية
-            $fkInvoicesCustomer = false;
-            $fkCphCustomer = false;
-            $fkCphInvoice = false;
-            
-            try {
-                $fkCheck = $this->connection->query("
-                    SELECT CONSTRAINT_NAME 
-                    FROM information_schema.TABLE_CONSTRAINTS 
-                    WHERE TABLE_SCHEMA = DATABASE() 
-                    AND TABLE_NAME = 'invoices' 
-                    AND CONSTRAINT_NAME = 'fk_invoices_customer'
-                ");
-                if ($fkCheck instanceof mysqli_result && $fkCheck->num_rows > 0) {
-                    $fkInvoicesCustomer = true;
-                }
-                if ($fkCheck instanceof mysqli_result) {
-                    $fkCheck->free();
-                }
-            } catch (Throwable $e) {
-                error_log('Error checking invoices FK: ' . $e->getMessage());
-            }
-            
-            try {
-                $fkCheck = $this->connection->query("
-                    SELECT CONSTRAINT_NAME 
-                    FROM information_schema.TABLE_CONSTRAINTS 
-                    WHERE TABLE_SCHEMA = DATABASE() 
-                    AND TABLE_NAME = 'customer_purchase_history' 
-                    AND CONSTRAINT_NAME = 'fk_cph_customer'
-                ");
-                if ($fkCheck instanceof mysqli_result && $fkCheck->num_rows > 0) {
-                    $fkCphCustomer = true;
-                }
-                if ($fkCheck instanceof mysqli_result) {
-                    $fkCheck->free();
-                }
-            } catch (Throwable $e) {
-                error_log('Error checking cph customer FK: ' . $e->getMessage());
-            }
-            
-            try {
-                $fkCheck = $this->connection->query("
-                    SELECT CONSTRAINT_NAME 
-                    FROM information_schema.TABLE_CONSTRAINTS 
-                    WHERE TABLE_SCHEMA = DATABASE() 
-                    AND TABLE_NAME = 'customer_purchase_history' 
-                    AND CONSTRAINT_NAME = 'fk_cph_invoice'
-                ");
-                if ($fkCheck instanceof mysqli_result && $fkCheck->num_rows > 0) {
-                    $fkCphInvoice = true;
-                }
-                if ($fkCheck instanceof mysqli_result) {
-                    $fkCheck->free();
-                }
-            } catch (Throwable $e) {
-                error_log('Error checking cph invoice FK: ' . $e->getMessage());
-            }
-
-            // إضافة Foreign Keys المفقودة
-            if (!$fkInvoicesCustomer) {
-                try {
-                    $this->connection->query("
-                        ALTER TABLE invoices 
-                        ADD CONSTRAINT fk_invoices_customer 
-                        FOREIGN KEY (customer_id) REFERENCES customers(id) 
-                        ON DELETE RESTRICT
-                    ");
-                    $this->clearCache();
-                    error_log('Added FK constraint: fk_invoices_customer');
-                } catch (Throwable $e) {
-                    // قد يفشل إذا كانت هناك بيانات غير متطابقة، نسجل الخطأ فقط
-                    error_log('Error adding fk_invoices_customer: ' . $e->getMessage());
-                }
-            }
-            
-            if (!$fkCphCustomer) {
-                try {
-                    $this->connection->query("
-                        ALTER TABLE customer_purchase_history 
-                        ADD CONSTRAINT fk_cph_customer 
-                        FOREIGN KEY (customer_id) REFERENCES customers(id) 
-                        ON DELETE CASCADE
-                    ");
-                    $this->clearCache();
-                    error_log('Added FK constraint: fk_cph_customer');
-                } catch (Throwable $e) {
-                    error_log('Error adding fk_cph_customer: ' . $e->getMessage());
-                }
-            }
-            
-            if (!$fkCphInvoice) {
-                try {
-                    $this->connection->query("
-                        ALTER TABLE customer_purchase_history 
-                        ADD CONSTRAINT fk_cph_invoice 
-                        FOREIGN KEY (invoice_id) REFERENCES invoices(id) 
-                        ON DELETE CASCADE
-                    ");
-                    $this->clearCache();
-                    error_log('Added FK constraint: fk_cph_invoice');
-                } catch (Throwable $e) {
-                    error_log('Error adding fk_cph_invoice: ' . $e->getMessage());
-                }
-            }
-
-            // إنشاء flag file للإشارة إلى اكتمال الهجرة
-            $flagDir = dirname($flagFile);
-            if (!is_dir($flagDir)) {
-                @mkdir($flagDir, 0775, true);
-            }
-            @file_put_contents($flagFile, date('c'));
-
-        } catch (Throwable $error) {
-            error_log('Customer integrity constraints migration error: ' . $error->getMessage());
         }
     }
     
