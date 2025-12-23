@@ -1687,13 +1687,13 @@ $salesRepInfo = $db->queryOne(
         });
     }
     
-    // إزالة رسالة الخطأ عند البدء بالكتابة
+    // إزالة رسالة الخطأ عند البدء بالكتابة (استخدام passive listener للأداء الأفضل)
     if (cashBalanceAmount) {
         cashBalanceAmount.addEventListener('input', function() {
             if (this.classList.contains('is-invalid')) {
                 this.classList.remove('is-invalid');
             }
-        });
+        }, { passive: true });
     }
     
     // إعادة تعيين النموذج عند إغلاق الـ modal
