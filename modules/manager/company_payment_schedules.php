@@ -1357,15 +1357,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const successAlert = document.getElementById('successAlert');
     const errorAlert = document.getElementById('errorAlert');
     
-    const alertElement = successAlert || errorAlert;
+    // التحقق من وجود معاملات في URL تشير إلى رسالة جديدة
+    const currentUrl = new URL(window.location.href);
+    const hasMessageParams = currentUrl.searchParams.has('success') || 
+                             currentUrl.searchParams.has('error') ||
+                             currentUrl.searchParams.has('created');
     
-    if (alertElement && alertElement.dataset.autoRefresh === 'true') {
-        setTimeout(function() {
-            const currentUrl = new URL(window.location.href);
-            currentUrl.searchParams.delete('success');
-            currentUrl.searchParams.delete('error');
-            window.location.href = currentUrl.toString();
-        }, 3000);
+    // فقط إذا كان هناك معاملات رسالة في URL و alert موجود
+    if ((successAlert || errorAlert) && hasMessageParams) {
+        const alertElement = successAlert || errorAlert;
+        
+        if (alertElement && alertElement.dataset.autoRefresh === 'true') {
+            // عمل refresh مرة واحدة فقط بعد 3 ثوانٍ
+            setTimeout(function() {
+                // إزالة معاملات الرسائل من URL
+                currentUrl.searchParams.delete('success');
+                currentUrl.searchParams.delete('error');
+                currentUrl.searchParams.delete('created');
+                // إزالة _nocache إذا كان موجوداً
+                currentUrl.searchParams.delete('_nocache');
+                window.location.href = currentUrl.toString();
+            }, 3000);
+        }
     }
 })();
 </script>

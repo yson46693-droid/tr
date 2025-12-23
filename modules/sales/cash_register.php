@@ -141,10 +141,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         } else {
             echo json_encode(['success' => false, 'message' => $error], JSON_UNESCAPED_UNICODE);
         }
-        exit;
+        exit; // إيقاف تنفيذ الكود تماماً للطلبات AJAX
     }
     
-    // إعادة التوجيه لتجنب إعادة إرسال النموذج (للطلبات العادية)
+    // إعادة التوجيه لتجنب إعادة إرسال النموذج (للطلبات العادية فقط - غير AJAX)
+    // هذا الكود لن ينفذ أبداً للطلبات AJAX لأننا خرجنا بالفعل
     if (!empty($success)) {
         $_SESSION['success'] = $success;
     }
