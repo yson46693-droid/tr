@@ -1496,15 +1496,15 @@ function createWarehouseTransfer($fromWarehouseId, $toWarehouseId, $transferDate
         
         $transferNumber = generateTransferNumber();
         
-        // التحقق من دور المستخدم - إذا كان المدير، ننفذ النقل مباشرة بدون موافقة
+        // التحقق من دور المستخدم - إذا كان المدير أو المحاسب، ننفذ النقل مباشرة بدون موافقة
         require_once __DIR__ . '/auth.php';
         $requesterUser = getUserById($requestedBy);
-        $isManager = ($requesterUser && strtolower($requesterUser['role'] ?? '') === 'manager');
+        $isManagerOrAccountant = ($requesterUser && in_array(strtolower($requesterUser['role'] ?? ''), ['manager', 'accountant'], true));
         
         // تحديد الحالة الابتدائية للنقل
-        // إذا كان المدير، نبدأ بحالة 'approved' للتنفيذ المباشر
-        // إذا لم يكن المدير، نبدأ بحالة 'pending' للموافقة
-        $initialStatus = $isManager ? 'approved' : 'pending';
+        // إذا كان المدير أو المحاسب، نبدأ بحالة 'approved' للتنفيذ المباشر
+        // إذا لم يكن كذلك، نبدأ بحالة 'pending' للموافقة
+        $initialStatus = $isManagerOrAccountant ? 'approved' : 'pending';
         
         $db->execute(
             "INSERT INTO warehouse_transfers 
@@ -1520,8 +1520,8 @@ function createWarehouseTransfer($fromWarehouseId, $toWarehouseId, $transferDate
                 $reason,
                 $initialStatus,
                 $requestedBy,
-                $isManager ? $requestedBy : null, // إذا كان المدير، يكون هو الموافق أيضاً
-                $isManager ? date('Y-m-d H:i:s') : null, // تاريخ الموافقة إذا كان المدير
+                $isManagerOrAccountant ? $requestedBy : null, // إذا كان المدير أو المحاسب، يكون هو الموافق أيضاً
+                $isManagerOrAccountant ? date('Y-m-d H:i:s') : null, // تاريخ الموافقة إذا كان المدير أو المحاسب
                 $notes
             ]
         );
@@ -1717,21 +1717,21 @@ function createWarehouseTransfer($fromWarehouseId, $toWarehouseId, $transferDate
         
         // النقل تم إنشاؤه بنجاح، الآن نقوم بعمليات إضافية (لا يجب أن تؤثر على نجاح العملية)
         
-        // إذا كان المدير، تنفيذ النقل مباشرة بدون المرور بنظام الموافقات
-        if ($isManager) {
-            // تنفيذ النقل مباشرة للمدير
+        // إذا كان المدير أو المحاسب، تنفيذ النقل مباشرة بدون المرور بنظام الموافقات
+        if ($isManagerOrAccountant) {
+            // تنفيذ النقل مباشرة للمدير أو المحاسب
             try {
                 $transferResult = executeWarehouseTransferDirectly($transferId, $requestedBy);
                 if (!($transferResult['success'] ?? false)) {
-                    error_log('Manager warehouse transfer direct execution warning: ' . ($transferResult['message'] ?? 'Unknown error'));
+                    error_log('Manager/Accountant warehouse transfer direct execution warning: ' . ($transferResult['message'] ?? 'Unknown error'));
                     // حتى لو فشل التنفيذ، النقل تم إنشاؤه بنجاح
                 }
             } catch (Exception $executionException) {
                 // لا نسمح لفشل التنفيذ بإلغاء نجاح إنشاء النقل
-                error_log('Manager warehouse transfer direct execution exception: ' . $executionException->getMessage());
+                error_log('Manager/Accountant warehouse transfer direct execution exception: ' . $executionException->getMessage());
             }
         } else {
-            // إذا لم يكن المدير، إنشاء طلب موافقة
+            // إذا لم يكن المدير أو المحاسب، إنشاء طلب موافقة
             if ($initialStatus === 'pending') {
                 try {
                     require_once __DIR__ . '/approval_system.php';
