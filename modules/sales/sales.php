@@ -221,7 +221,18 @@ if (empty($salesTableCheck)) {
 }
 
 // الحصول على العملاء
-$customers = $db->query("SELECT id, name FROM customers WHERE status = 'active' ORDER BY name");
+// إذا كان المستخدم مندوب (sales)، يمكنه فقط رؤية العملاء الذين أنشأهم (created_by فقط)
+// وليس بناءً على rep_id - هذا يضمن عدم ظهور عملاء المندوب القديم للمندوب الجديد
+if (isset($currentUser['role']) && $currentUser['role'] === 'sales') {
+    $currentUserId = (int)($currentUser['id'] ?? 0);
+    $customers = $db->query(
+        "SELECT id, name FROM customers WHERE created_by = ? AND status = 'active' ORDER BY name",
+        [$currentUserId]
+    );
+} else {
+    // للمديرين والمحاسبين: يمكنهم رؤية جميع العملاء النشطين
+    $customers = $db->query("SELECT id, name FROM customers WHERE status = 'active' ORDER BY name");
+}
 
 ?>
 

@@ -375,10 +375,34 @@ if ($page === 'orders' && isset($_GET['ajax']) && $_GET['ajax'] === 'get_custome
         
         if ($salesRepId > 0) {
             $db = db();
-            $customers = $db->query(
-                "SELECT id, name FROM customers WHERE (created_by = ? OR rep_id = ?) AND status = 'active' ORDER BY name ASC",
-                [$salesRepId, $salesRepId]
-            );
+            
+            // إذا كان المستخدم مندوب (sales)، يمكنه فقط رؤية العملاء الذين أنشأهم (created_by فقط)
+            // وليس بناءً على rep_id - هذا يضمن عدم ظهور عملاء المندوب القديم للمندوب الجديد
+            $currentUserRole = strtolower($currentUser['role'] ?? '');
+            $currentUserId = (int)($currentUser['id'] ?? 0);
+            
+            if ($currentUserRole === 'sales' && $currentUserId > 0) {
+                // إذا كان المستخدم مندوب ويريد جلب عملائه، يجب أن يكون salesRepId = currentUserId
+                if ($salesRepId !== $currentUserId) {
+                    $response = [
+                        'success' => false,
+                        'message' => 'غير مصرح لك بالوصول'
+                    ];
+                    echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    exit;
+                }
+                // استخدام created_by فقط للمندوب
+                $customers = $db->query(
+                    "SELECT id, name FROM customers WHERE created_by = ? AND status = 'active' ORDER BY name ASC",
+                    [$salesRepId]
+                );
+            } else {
+                // للمديرين والمحاسبين: يمكنهم رؤية عملاء المندوب (rep_id OR created_by)
+                $customers = $db->query(
+                    "SELECT id, name FROM customers WHERE (created_by = ? OR rep_id = ?) AND status = 'active' ORDER BY name ASC",
+                    [$salesRepId, $salesRepId]
+                );
+            }
             
             $response = [
                 'success' => true,
