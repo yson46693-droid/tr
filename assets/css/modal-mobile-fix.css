@@ -275,6 +275,62 @@
     #addCashBalanceModal .modal-footer {
         flex-shrink: 0 !important;
     }
+    
+    /* ===== تحسينات الأداء للكتابة على الهاتف ===== */
+    #addCashBalanceModal input,
+    #addCashBalanceModal textarea,
+    #addCashBalanceModal select {
+        /* إزالة تأخير الـ touch على iOS/Android */
+        touch-action: manipulation !important;
+        /* تحسين rendering */
+        will-change: contents !important;
+        /* إزالة أي transitions قد تسبب التأخير */
+        transition: none !important;
+        /* تحسين font rendering */
+        -webkit-font-smoothing: antialiased !important;
+        -moz-osx-font-smoothing: grayscale !important;
+        /* منع highlight عند اللمس */
+        -webkit-tap-highlight-color: transparent !important;
+        /* تحسين text rendering */
+        text-rendering: optimizeSpeed !important;
+        /* منع user-select delay */
+        -webkit-user-select: text !important;
+        user-select: text !important;
+    }
+    
+    /* تحسين focus performance */
+    #addCashBalanceModal input:focus,
+    #addCashBalanceModal textarea:focus {
+        outline: none !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
+        /* إزالة أي transitions */
+        transition: none !important;
+    }
+    
+    /* تحسين button performance */
+    #addCashBalanceModal .btn {
+        touch-action: manipulation !important;
+        -webkit-tap-highlight-color: transparent !important;
+        /* إزالة transitions */
+        transition: none !important;
+    }
+    
+    /* تحسين modal rendering */
+    #addCashBalanceModal.modal {
+        /* تحسين compositing */
+        transform: translateZ(0) !important;
+        -webkit-transform: translateZ(0) !important;
+        /* إزالة transitions */
+        transition: none !important;
+    }
+    
+    #addCashBalanceModal .modal-dialog {
+        /* تحسين compositing */
+        transform: translateZ(0) !important;
+        -webkit-transform: translateZ(0) !important;
+        /* إزالة transitions */
+        transition: none !important;
+    }
 }
 
 /* ===== Landscape Orientation Fix ===== */

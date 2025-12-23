@@ -1597,6 +1597,56 @@ $salesRepInfo = $db->queryOne(
     const addCashBalanceModal = document.getElementById('addCashBalanceModal');
     const addCashBalanceForm = document.getElementById('addCashBalanceForm');
     const cashBalanceAmount = document.getElementById('cashBalanceAmount');
+    const cashBalanceDescription = document.getElementById('cashBalanceDescription');
+    
+    // تحسينات الأداء على الهاتف المحمول
+    function optimizeForMobile() {
+        if (!addCashBalanceModal) return;
+        
+        // إزالة تأخير الـ touch events على iOS/Android
+        const inputs = addCashBalanceModal.querySelectorAll('input, textarea, select');
+        inputs.forEach(input => {
+            // إضافة touch-action مباشرة
+            input.style.touchAction = 'manipulation';
+            input.style.webkitTapHighlightColor = 'transparent';
+            
+            // استخدام input event بدلاً من keyup/keydown للأداء الأفضل
+            // (input event أسرع على الهاتف)
+            input.addEventListener('input', function() {
+                // Force reflow لضمان عرض النص فوراً
+                void this.offsetHeight;
+            }, { passive: true });
+            
+            // منع أي delays في focus (فقط للحقول النصية)
+            if (input.type !== 'submit' && input.type !== 'button') {
+                input.addEventListener('touchstart', function(e) {
+                    // Focus فوراً بدون delay
+                    if (document.activeElement !== this) {
+                        this.focus();
+                    }
+                }, { passive: true });
+            }
+        });
+        
+        // تحسين modal rendering
+        if (addCashBalanceModal) {
+            addCashBalanceModal.style.transform = 'translateZ(0)';
+            addCashBalanceModal.style.webkitTransform = 'translateZ(0)';
+        }
+    }
+    
+    // تطبيق التحسينات عند فتح الـ modal
+    if (addCashBalanceModal) {
+        addCashBalanceModal.addEventListener('shown.bs.modal', function() {
+            optimizeForMobile();
+            // Focus على الحقل الأول فوراً
+            if (cashBalanceAmount) {
+                setTimeout(() => {
+                    cashBalanceAmount.focus();
+                }, 100);
+            }
+        });
+    }
     
     if (addCashBalanceForm) {
         addCashBalanceForm.addEventListener('submit', function(e) {
@@ -1689,10 +1739,34 @@ $salesRepInfo = $db->queryOne(
     
     // إزالة رسالة الخطأ عند البدء بالكتابة (استخدام passive listener للأداء الأفضل)
     if (cashBalanceAmount) {
+        // استخدام input event للأداء الأفضل على الهاتف
         cashBalanceAmount.addEventListener('input', function() {
-            if (this.classList.contains('is-invalid')) {
-                this.classList.remove('is-invalid');
-            }
+            // استخدام requestAnimationFrame لضمان استجابة فورية
+            requestAnimationFrame(() => {
+                if (this.classList.contains('is-invalid')) {
+                    this.classList.remove('is-invalid');
+                }
+            });
+        }, { passive: true });
+        
+        // إزالة أي delays في الكتابة
+        cashBalanceAmount.addEventListener('compositionstart', function() {
+            // السماح بالكتابة فوراً
+        }, { passive: true });
+        
+        cashBalanceAmount.addEventListener('compositionend', function() {
+            // Force reflow لضمان عرض النص
+            void this.offsetHeight;
+        }, { passive: true });
+    }
+    
+    // نفس التحسينات لحقل الوصف
+    if (cashBalanceDescription) {
+        cashBalanceDescription.addEventListener('input', function() {
+            requestAnimationFrame(() => {
+                // Force reflow لضمان عرض النص فوراً
+                void this.offsetHeight;
+            });
         }, { passive: true });
     }
     

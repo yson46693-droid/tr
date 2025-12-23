@@ -154,6 +154,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($dueDateObj < new DateTime('today')) {
                         $error = 'لا يمكن تحديد موعد تحصيل في تاريخ سابق.';
                     } else {
+                        // للعملاء المحليين، sales_rep_id يجب أن يكون NULL لأنهم ليسوا عملاء مندوب مبيعات
+                        // هذه الصفحة مخصصة للعملاء المحليين فقط (يستخدمها المدير والمحاسب)
                         $result = $db->execute(
                             "INSERT INTO payment_schedules 
                                 (sale_id, customer_id, sales_rep_id, amount, due_date, installment_number, total_installments, status, created_by, created_at) 
@@ -299,7 +301,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // رسائل خطأ محددة حسب نوع الخطأ
                 $errorType = '';
                 $errorMsgLower = strtolower($createScheduleError->getMessage());
-                if (strpos($errorMsgLower, 'duplicate') !== false || strpos($errorMsgLower, 'مكرر') !== false) {
+                if (strpos($errorMsgLower, 'sales_rep_id') !== false && strpos($errorMsgLower, 'cannot be null') !== false) {
+                    $errorType = '<div style="background: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; margin: 10px 0;">';
+                    $errorType .= '<strong>⚠️ خطأ في بنية قاعدة البيانات:</strong><br>';
+                    $errorType .= 'عمود <code>sales_rep_id</code> في جدول <code>payment_schedules</code> لا يقبل NULL.<br>';
+                    $errorType .= 'هذه الصفحة مخصصة للعملاء المحليين فقط ولا تحتاج لمندوب مبيعات.<br><br>';
+                    $errorType .= '<strong>الحل:</strong> يجب تعديل بنية قاعدة البيانات للسماح بـ NULL في عمود <code>sales_rep_id</code> للعملاء المحليين.<br>';
+                    $errorType .= 'قم بتنفيذ هذا الاستعلام في قاعدة البيانات:<br>';
+                    $errorType .= '<code style="background: #f0f0f0; padding: 5px; display: block; margin-top: 5px;">ALTER TABLE payment_schedules MODIFY COLUMN sales_rep_id INT(11) NULL;</code>';
+                    $errorType .= '</div>';
+                } elseif (strpos($errorMsgLower, 'duplicate') !== false || strpos($errorMsgLower, 'مكرر') !== false) {
                     $errorType = '<div style="background: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; margin: 10px 0;">';
                     $errorType .= '<strong>⚠️ خطأ التكرار:</strong> يوجد موعد تحصيل مكرر لهذا العميل في نفس التاريخ.';
                     $errorType .= '</div>';
