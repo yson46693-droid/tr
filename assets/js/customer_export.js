@@ -28,7 +28,20 @@
             // تحديد القسم الحالي من data attribute
             const currentSection = exportModal.getAttribute('data-section') || '';
             
-            // إذا كان قسم عملاء الشركة، جلب عملاء الشركة مباشرة
+            // التحقق من وجود hidden input للمندوب (إذا كان المستخدم مندوب)
+            const repSelect = document.getElementById('exportRepSelect');
+            const isSalesUser = repSelect && repSelect.tagName === 'INPUT' && repSelect.value && repSelect.value !== '';
+            
+            // إذا كان المستخدم مندوب (sales user)، يجب جلب عملائه من API وليس عملاء الشركة
+            if (isSalesUser) {
+                const repId = parseInt(repSelect.value, 10);
+                if (repId > 0) {
+                    loadCustomersByRep(repId);
+                    return;
+                }
+            }
+            
+            // إذا كان قسم عملاء الشركة (وليس مندوب)، جلب عملاء الشركة مباشرة
             if (currentSection === 'company') {
                 loadCompanyCustomers();
                 return;
@@ -41,14 +54,13 @@
             }
             
             // إذا كان هناك اختيار مندوب، انتظر اختياره
-            const repSelect = document.getElementById('exportRepSelect');
             if (repSelect && repSelect.tagName === 'SELECT') {
                 // إظهار رسالة اختيار المندوب
                 showSelectRepMessage();
             } else {
-                // إذا كان المستخدم مندوب، جلب عملائه مباشرة
+                // إذا كان هناك معرف مندوب في hidden input (لحالات أخرى)
                 const repId = repSelect ? repSelect.value : null;
-                if (repId) {
+                if (repId && repId !== '') {
                     loadCustomersByRep(parseInt(repId, 10));
                 }
             }
