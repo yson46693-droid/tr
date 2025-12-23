@@ -98,12 +98,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $notes = trim($_POST['notes'] ?? '');
         
         if ($scheduleId > 0) {
-            $result = recordPayment($scheduleId, $paymentDate, $amount, $notes);
-            if ($result['success']) {
-                $success = $result['message'];
-            } else {
-                $error = $result['message'];
+            try {
+                // التحقق من أن الجدول مرتبط بعميل محلي
+                $schedule = $db->queryOne(
+                    "SELECT ps.* FROM payment_schedules ps
+                     INNER JOIN local_customers lc ON ps.customer_id = lc.id
+                     WHERE ps.id = ? AND lc.status = 'active'
+                     AND NOT EXISTS (
+                         SELECT 1 FROM customers c WHERE c.id = ps.customer_id
+                     )",
+                    [$scheduleId]
+                );
+                
+                if (!$schedule) {
+                    $error = 'الجدول الزمني غير موجود أو غير مرتبط بعميل محلي نشط.';
+                } elseif ($schedule['status'] === 'paid') {
+                    $error = 'تم دفع هذه الدفعة بالفعل.';
+                } else {
+                    // فقط تحديث payment_schedules - لا تأثير على أي حسابات
+                    $paymentAmount = $amount ?? (float)$schedule['amount'];
+                    
+                    $db->execute(
+                        "UPDATE payment_schedules 
+                         SET payment_date = ?, status = 'paid', updated_at = NOW() 
+                         WHERE id = ?",
+                        [$paymentDate, $scheduleId]
+                    );
+                    
+                    logAudit(
+                        $currentUser['id'],
+                        'record_payment_schedule_local',
+                        'payment_schedule',
+                        $scheduleId,
+                        ['old_status' => $schedule['status']],
+                        [
+                            'new_status' => 'paid',
+                            'amount' => $paymentAmount,
+                            'local_customer' => true,
+                            'note' => 'موعد تذكير فقط - لا تأثير على الحسابات'
+                        ]
+                    );
+                    
+                    $success = 'تم تسجيل الدفعة في موعد التذكير بنجاح. (ملاحظة: هذا مجرد تذكير ولا يؤثر على حسابات العميل)';
+                }
+            } catch (Throwable $e) {
+                error_log('Record payment error: ' . $e->getMessage());
+                $error = 'حدث خطأ أثناء تسجيل الدفعة: ' . $e->getMessage();
             }
+        } else {
+            $error = 'معرف الجدول الزمني غير صحيح.';
         }
     } elseif ($action === 'create_reminder') {
         $scheduleId = intval($_POST['schedule_id'] ?? 0);
@@ -464,11 +507,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         [
                             'status' => 'paid',
                             'payment_date' => date('Y-m-d'),
-                            'local_customer' => true
+                            'local_customer' => true,
+                            'note' => 'موعد تذكير فقط - لا تأثير على الحسابات'
                         ]
                     );
 
-                    $success = 'تم تمييز الجدول كمدفوع بنجاح.';
+                    $success = 'تم تمييز الجدول كمدفوع بنجاح. (ملاحظة: هذا مجرد تذكير ولا يؤثر على حسابات العميل)';
                 }
             } catch (Throwable $markPaidError) {
                 error_log('Mark payment schedule as paid error: ' . $markPaidError->getMessage());
@@ -702,6 +746,13 @@ if (isset($_GET['id'])) {
             <i class="bi bi-plus-circle me-2"></i>إضافة موعد تحصيل
         </button>
     </div>
+</div>
+
+<div class="alert alert-info alert-dismissible fade show mb-4">
+    <i class="bi bi-info-circle-fill me-2"></i>
+    <strong>ملاحظة مهمة:</strong> هذه الصفحة مخصصة لمواعيد التذكير بالمبالغ المستحقة فقط. 
+    تمييز موعد كمدفوع أو تسجيل دفعة هنا <strong>لا يؤثر على حسابات العميل أو خزنة الشركة</strong> - 
+    إنها مجرد أداة تذكير وتتبع للمواعيد المستحقة.
 </div>
 
 <?php if ($error): ?>
