@@ -154,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($dueDateObj < new DateTime('today')) {
                         $error = 'لا يمكن تحديد موعد تحصيل في تاريخ سابق.';
                     } else {
-                        $db->execute(
+                        $result = $db->execute(
                             "INSERT INTO payment_schedules 
                                 (sale_id, customer_id, sales_rep_id, amount, due_date, installment_number, total_installments, status, created_by, created_at) 
                              VALUES (NULL, ?, NULL, ?, ?, 1, 1, 'pending', ?, NOW())",
@@ -166,7 +166,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             ]
                         );
                         
-                        $scheduleId = $db->getLastInsertId();
+                        $scheduleId = isset($result['insert_id']) ? (int)$result['insert_id'] : 0;
+                        
+                        // إذا لم يكن insert_id في النتيجة، جرب getLastInsertId كبديل
+                        if ($scheduleId <= 0) {
+                            $scheduleId = (int)$db->getLastInsertId();
+                        }
                         
                         if ($scheduleId && $scheduleId > 0) {
                             logAudit(
@@ -185,13 +190,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             
                             $success = 'تم إضافة موعد التحصيل بنجاح.';
                         } else {
-                            throw new Exception('فشل الحصول على معرف الجدول الزمني بعد الإدراج');
+                            error_log('Create payment schedule failed - insert_id: ' . ($result['insert_id'] ?? 'null') . ', getLastInsertId: ' . $db->getLastInsertId());
+                            throw new Exception('فشل الحصول على معرف الجدول الزمني بعد الإدراج. affected_rows: ' . ($result['affected_rows'] ?? 0));
                         }
                     }
                 }
             } catch (Throwable $createScheduleError) {
                 error_log('Create payment schedule error: ' . $createScheduleError->getMessage());
-                $error = 'تعذر إنشاء موعد التحصيل، يرجى المحاولة مرة أخرى.';
+                error_log('Create payment schedule stack trace: ' . $createScheduleError->getTraceAsString());
+                error_log('Create payment schedule customer_id: ' . ($customerId ?? 'null'));
+                error_log('Create payment schedule amount: ' . ($amount ?? 'null'));
+                error_log('Create payment schedule due_date: ' . ($dueDate ?? 'null'));
+                
+                // رسالة خطأ أكثر تفصيلاً للمستخدم
+                $errorMessage = 'تعذر إنشاء موعد التحصيل، يرجى المحاولة مرة أخرى.';
+                if (strpos($createScheduleError->getMessage(), 'Duplicate') !== false) {
+                    $errorMessage = 'يوجد موعد تحصيل مكرر لهذا العميل في نفس التاريخ.';
+                } elseif (strpos($createScheduleError->getMessage(), 'foreign key') !== false) {
+                    $errorMessage = 'العميل المحدد غير موجود أو غير نشط.';
+                } elseif (strpos($createScheduleError->getMessage(), 'constraint') !== false) {
+                    $errorMessage = 'البيانات المدخلة غير صحيحة. يرجى التحقق من المبلغ وتاريخ الاستحقاق.';
+                }
+                
+                $error = $errorMessage;
             }
         }
     } elseif ($action === 'update_schedule') {
