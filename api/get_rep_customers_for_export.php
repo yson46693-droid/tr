@@ -123,6 +123,24 @@ try {
         [$repId]
     );
     
+    // التأكد من أن المصفوفة فارغة إذا لم يكن هناك عملاء
+    if (empty($customers) || !is_array($customers)) {
+        $customers = [];
+    }
+    
+    // التحقق من صحة البيانات وإزالة أي بيانات غير صحيحة
+    $validCustomers = [];
+    foreach ($customers as $customer) {
+        $customerId = (int)($customer['id'] ?? 0);
+        $createdBy = (int)($customer['created_by'] ?? 0);
+        
+        // التأكد من أن العميل ينتمي فعلياً للمندوب المطلوب وأن له معرف واسم صالحين
+        if ($customerId > 0 && $createdBy === $repId && !empty(trim($customer['name'] ?? ''))) {
+            $validCustomers[] = $customer;
+        }
+    }
+    $customers = $validCustomers;
+    
     // جلب أرقام الهواتف الإضافية لكل عميل
     $result = [];
     foreach ($customers as $customer) {
@@ -147,17 +165,32 @@ try {
         }
         
         $balance = isset($customer['balance']) ? (float)$customer['balance'] : 0.0;
+        $customerName = trim($customer['name'] ?? '');
         
-        $result[] = [
-            'id' => $customerId,
-            'name' => trim($customer['name'] ?? ''),
-            'phone' => trim($customer['phone'] ?? ''),
-            'alternative_phones' => $additionalPhones,
-            'balance' => $balance,
-            'balance_formatted' => number_format(abs($balance), 2) . ' ج.م',
-            'address' => trim($customer['address'] ?? ''),
-        ];
+        // التأكد من أن البيانات صحيحة قبل الإضافة
+        if (!empty($customerName) && $customerId > 0) {
+            $result[] = [
+                'id' => $customerId,
+                'name' => $customerName,
+                'phone' => trim($customer['phone'] ?? ''),
+                'alternative_phones' => $additionalPhones,
+                'balance' => $balance,
+                'balance_formatted' => number_format(abs($balance), 2) . ' ج.م',
+                'address' => trim($customer['address'] ?? ''),
+            ];
+        }
     }
+    
+    // فلترة النتيجة النهائية للتأكد من عدم وجود بيانات غير صالحة
+    $result = array_filter($result, function($customer) {
+        // التأكد من وجود معرف واسم صالحين
+        return isset($customer['id']) && 
+               (int)$customer['id'] > 0 && 
+               !empty(trim($customer['name'] ?? ''));
+    });
+    
+    // إعادة ترقيم المصفوفة
+    $result = array_values($result);
     
     returnJsonResponse([
         'success' => true,

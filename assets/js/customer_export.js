@@ -334,13 +334,32 @@
                 throw new Error(result.message || 'فشل في جلب عملاء المندوب');
             }
             
+            // التحقق من صحة البيانات القادمة من API
+            const customers = result.customers || [];
+            if (!Array.isArray(customers)) {
+                console.warn('API returned invalid customers data:', customers);
+                displayCustomersList([]);
+                return;
+            }
+            
+            // فلترة إضافية للتأكد من صحة البيانات
+            const validCustomers = customers.filter(function(customer) {
+                return customer && 
+                       typeof customer === 'object' && 
+                       customer.id && 
+                       parseInt(customer.id, 10) > 0 &&
+                       customer.name && 
+                       typeof customer.name === 'string' && 
+                       customer.name.trim() !== '';
+            });
+            
             // إخفاء رسالة التحميل
             if (selectRepMessage) {
                 selectRepMessage.style.display = 'none';
             }
             
-            // عرض قائمة العملاء
-            displayCustomersList(result.customers || []);
+            // عرض قائمة العملاء المفلترة
+            displayCustomersList(validCustomers);
             
             if (customersSection) {
                 customersSection.style.display = 'block';
