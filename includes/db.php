@@ -217,51 +217,129 @@ class Database {
      * تنفيذ استعلام SELECT
      */
     public function query($sql, $params = []) {
-        $stmt = $this->connection->prepare($sql);
-        
-        if (!$stmt) {
-            throw new Exception("Prepare failed: " . $this->connection->error);
-        }
-        
-        if (!empty($params)) {
-            $types = '';
-            $values = [];
-            
-            foreach ($params as $param) {
-                if (is_int($param)) {
-                    $types .= 'i';
-                } elseif (is_float($param)) {
-                    $types .= 'd';
-                } else {
-                    $types .= 's';
-                }
-                $values[] = $param;
+        try {
+            // التحقق من أن الاتصال موجود
+            if (!$this->connection) {
+                error_log("query: Database connection is null");
+                throw new Exception("Database connection is not available");
             }
             
-            $stmt->bind_param($types, ...$values);
+            // التحقق من أن الاتصال لا يزال نشطاً
+            if (!$this->connection->ping()) {
+                error_log("query: Database connection is lost, attempting to reconnect");
+                // محاولة إعادة الاتصال
+                $this->connection->close();
+                $this->connection = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+                if ($this->connection->connect_error) {
+                    throw new Exception("Database reconnection failed: " . $this->connection->connect_error);
+                }
+                $this->connection->set_charset("utf8mb4");
+            }
+            
+            $stmt = $this->connection->prepare($sql);
+            
+            if (!$stmt) {
+                $errorMsg = $this->connection->error ?: "Unknown prepare error";
+                error_log("query prepare failed: " . $errorMsg . " | SQL: " . $sql);
+                throw new Exception("Prepare failed: " . $errorMsg);
+            }
+            
+            if (!empty($params)) {
+                $types = '';
+                $values = [];
+                
+                foreach ($params as $param) {
+                    if (is_int($param)) {
+                        $types .= 'i';
+                    } elseif (is_float($param)) {
+                        $types .= 'd';
+                    } else {
+                        $types .= 's';
+                    }
+                    $values[] = $param;
+                }
+                
+                if (!empty($values)) {
+                    $stmt->bind_param($types, ...$values);
+                }
+            }
+            
+            if (!$stmt->execute()) {
+                $errorMsg = $stmt->error ?: "Unknown execute error";
+                error_log("query execute failed: " . $errorMsg . " | SQL: " . $sql);
+                $stmt->close();
+                throw new Exception("Execute failed: " . $errorMsg);
+            }
+            
+            $result = $stmt->get_result();
+            $data = [];
+            
+            if ($result) {
+                while ($row = $result->fetch_assoc()) {
+                    $data[] = $row;
+                }
+                $result->free();
+            }
+            
+            $stmt->close();
+            return $data;
+            
+        } catch (mysqli_sql_exception $e) {
+            error_log("query mysqli error: " . $e->getMessage());
+            error_log("query SQL: " . $sql);
+            error_log("query params: " . json_encode($params));
+            throw new Exception("Database query error: " . $e->getMessage());
+        } catch (Exception $e) {
+            error_log("query error: " . $e->getMessage());
+            error_log("query SQL: " . $sql);
+            throw $e;
+        } catch (Throwable $e) {
+            error_log("query fatal error: " . $e->getMessage());
+            error_log("query SQL: " . $sql);
+            throw new Exception("Database query fatal error: " . $e->getMessage());
         }
-        
-        if (!$stmt->execute()) {
-            throw new Exception("Execute failed: " . $stmt->error);
-        }
-        
-        $result = $stmt->get_result();
-        $data = [];
-        
-        while ($row = $result->fetch_assoc()) {
-            $data[] = $row;
-        }
-        
-        $stmt->close();
-        return $data;
     }
     
     /**
      * تنفيذ استعلام SELECT واحد
      */
     public function queryOne($sql, $params = []) {
-        $result = $this->query($sql, $params);
-        return !empty($result) ? $result[0] : null;
+        try {
+            // التحقق من أن الاتصال موجود
+            if (!$this->connection) {
+                error_log("queryOne: Database connection is null");
+                throw new Exception("Database connection is not available");
+            }
+            
+            // التحقق من أن الاتصال لا يزال نشطاً
+            if (!$this->connection->ping()) {
+                error_log("queryOne: Database connection is lost, attempting to reconnect");
+                // محاولة إعادة الاتصال
+                $this->connection->close();
+                $this->connection = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+                if ($this->connection->connect_error) {
+                    throw new Exception("Database reconnection failed: " . $this->connection->connect_error);
+                }
+                $this->connection->set_charset("utf8mb4");
+            }
+            
+            $result = $this->query($sql, $params);
+            return !empty($result) ? $result[0] : null;
+            
+        } catch (mysqli_sql_exception $e) {
+            error_log("queryOne mysqli error: " . $e->getMessage());
+            error_log("queryOne SQL: " . $sql);
+            error_log("queryOne params: " . json_encode($params));
+            throw new Exception("Database query error: " . $e->getMessage());
+        } catch (Exception $e) {
+            error_log("queryOne error: " . $e->getMessage());
+            error_log("queryOne SQL: " . $sql);
+            throw $e;
+        } catch (Throwable $e) {
+            error_log("queryOne fatal error: " . $e->getMessage());
+            error_log("queryOne SQL: " . $sql);
+            throw new Exception("Database query fatal error: " . $e->getMessage());
+        }
     }
     
     /**

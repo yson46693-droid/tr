@@ -468,11 +468,49 @@ function getUserById($userId) {
  * الحصول على معلومات المستخدم حسب اسم المستخدم
  */
 function getUserByUsername($username) {
-    $db = db();
-    return $db->queryOne(
-        "SELECT * FROM users WHERE username = ?",
-        [$username]
-    );
+    try {
+        $db = db();
+        
+        // التحقق من أن الاتصال موجود
+        if (!$db) {
+            error_log("getUserByUsername: Database connection is null");
+            throw new Exception("Database connection failed");
+        }
+        
+        // التحقق من وجود جدول users
+        try {
+            $tableCheck = $db->rawQuery("SHOW TABLES LIKE 'users'");
+            if (!$tableCheck || ($tableCheck instanceof mysqli_result && $tableCheck->num_rows === 0)) {
+                error_log("getUserByUsername: Table 'users' does not exist");
+                throw new Exception("Table 'users' does not exist. Please run database installation.");
+            }
+            if ($tableCheck instanceof mysqli_result) {
+                $tableCheck->free();
+            }
+        } catch (Throwable $tableError) {
+            error_log("getUserByUsername: Table check error - " . $tableError->getMessage());
+            // استمر في المحاولة حتى لو فشل فحص الجدول
+        }
+        
+        // تنفيذ الاستعلام
+        $user = $db->queryOne(
+            "SELECT * FROM users WHERE username = ?",
+            [$username]
+        );
+        
+        return $user;
+        
+    } catch (Exception $e) {
+        error_log("getUserByUsername error: " . $e->getMessage());
+        error_log("getUserByUsername error file: " . $e->getFile() . " line: " . $e->getLine());
+        error_log("getUserByUsername stack trace: " . $e->getTraceAsString());
+        throw $e; // إعادة رمي الاستثناء للتعامل معه في دالة login()
+    } catch (Throwable $e) {
+        error_log("getUserByUsername fatal error: " . $e->getMessage());
+        error_log("getUserByUsername error file: " . $e->getFile() . " line: " . $e->getLine());
+        error_log("getUserByUsername stack trace: " . $e->getTraceAsString());
+        throw $e; // إعادة رمي الاستثناء للتعامل معه في دالة login()
+    }
 }
 
 /**
