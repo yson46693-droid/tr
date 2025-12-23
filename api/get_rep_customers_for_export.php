@@ -184,14 +184,14 @@ try {
     }
     
     // فلترة النتيجة النهائية للتأكد من عدم وجود بيانات غير صالحة
-    // فلترة: عرض العملاء أصحاب الرصيد الدائن فقط (balance < 0)
+    // فلترة: عرض العملاء أصحاب الرصيد المدين فقط (balance > 0)
     $result = array_filter($result, function($customer) {
-        // التأكد من وجود معرف واسم صالحين ورصيد دائن
+        // التأكد من وجود معرف واسم صالحين ورصيد مدين
         return isset($customer['id']) && 
                (int)$customer['id'] > 0 && 
                !empty(trim($customer['name'] ?? '')) &&
                isset($customer['balance']) &&
-               (float)$customer['balance'] < 0;
+               (float)$customer['balance'] > 0;
     });
     
     // إعادة ترقيم المصفوفة
