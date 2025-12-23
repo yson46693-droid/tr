@@ -20,8 +20,13 @@ class Database {
     private static $instance = null;
     private $connection;
     private $inTransaction = false;
+    private static $connectionClosed = false;
+    private static $shutdownRegistered = false;
     
     private function __construct() {
+        // إعادة تعيين حالة الإغلاق عند إنشاء اتصال جديد
+        self::$connectionClosed = false;
+        
         try {
             // إعدادات timeout للاتصال بقاعدة البيانات
             // استخدام timeout قصير لمنع تعليق الخادم
@@ -36,24 +41,56 @@ class Database {
             // استخدام mysqli_report لتقليل الأخطاء أثناء الاتصال
             mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
             
-            try {
-                $this->connection = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
-            } catch (mysqli_sql_exception $e) {
-                // إذا فشل الاتصال، حاول بدون قاعدة البيانات أولاً للتحقق من الاتصال
+            // التحقق من حالة "Too many connections" ومحاولة إغلاق اتصالات قديمة
+            $maxAttempts = 3;
+            $attempt = 0;
+            $connected = false;
+            
+            while ($attempt < $maxAttempts && !$connected) {
                 try {
-                    $testConnection = @new mysqli(DB_HOST, DB_USER, DB_PASS, null, DB_PORT);
-                    if ($testConnection->connect_error) {
-                        throw new Exception("Cannot connect to MySQL server: " . $testConnection->connect_error);
+                    $this->connection = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+                    if (!$this->connection->connect_error) {
+                        $connected = true;
+                        break;
                     }
-                    $testConnection->close();
-                    throw new Exception("Database '" . DB_NAME . "' not found or access denied. Please check database name and user permissions.");
-                } catch (mysqli_sql_exception $testError) {
-                    throw new Exception("MySQL connection error: " . $testError->getMessage());
+                } catch (mysqli_sql_exception $e) {
+                    $errorMessage = $e->getMessage();
+                    
+                    // إذا كان الخطأ "Too many connections"، انتظر قليلاً وحاول مرة أخرى
+                    if (stripos($errorMessage, 'Too many connections') !== false && $attempt < $maxAttempts - 1) {
+                        $attempt++;
+                        usleep(500000); // انتظر 0.5 ثانية
+                        continue;
+                    }
+                    
+                    // إذا فشل الاتصال، حاول بدون قاعدة البيانات أولاً للتحقق من الاتصال
+                    try {
+                        $testConnection = @new mysqli(DB_HOST, DB_USER, DB_PASS, null, DB_PORT);
+                        if ($testConnection->connect_error) {
+                            throw new Exception("Cannot connect to MySQL server: " . $testConnection->connect_error);
+                        }
+                        $testConnection->close();
+                        throw new Exception("Database '" . DB_NAME . "' not found or access denied. Please check database name and user permissions.");
+                    } catch (mysqli_sql_exception $testError) {
+                        throw new Exception("MySQL connection error: " . $testError->getMessage());
+                    }
                 }
+                
+                $attempt++;
+            }
+            
+            if (!$connected) {
+                throw new Exception("Failed to connect after {$maxAttempts} attempts. Too many connections to MySQL server.");
             }
             
             if ($this->connection->connect_error) {
                 throw new Exception("Connection failed: " . $this->connection->connect_error);
+            }
+            
+            // تسجيل دالة لإغلاق الاتصال تلقائياً عند انتهاء الطلب (مرة واحدة فقط)
+            if (!self::$shutdownRegistered) {
+                register_shutdown_function([$this, 'autoClose']);
+                self::$shutdownRegistered = true;
             }
             
             // تعيين timeout للاتصال بعد الاتصال الناجح
@@ -85,6 +122,16 @@ class Database {
             
             // تعيين ترميز UTF-8
             $this->connection->set_charset("utf8mb4");
+            
+            // تعيين wait_timeout وinteractive_timeout لتقليل الاتصالات المعلقة
+            // هذا يساعد في تقليل عدد الاتصالات المعلقة التي تستهلك موارد MySQL
+            try {
+                $this->connection->query("SET SESSION wait_timeout = 300"); // 5 دقائق
+                $this->connection->query("SET SESSION interactive_timeout = 300"); // 5 دقائق
+            } catch (Exception $e) {
+                // تجاهل الأخطاء في تعيين timeout
+                error_log("Warning: Could not set connection timeout: " . $e->getMessage());
+            }
             
             // تعيين المنطقة الزمنية لتوقيت القاهرة (UTC+2)
             // مصر تستخدم توقيت UTC+2 بدون توقيت صيفي
@@ -228,6 +275,26 @@ class Database {
     public static function getInstance() {
         if (self::$instance === null) {
             self::$instance = new self();
+        } else {
+            // التحقق من أن الاتصال لا يزال نشطاً
+            if (self::$instance->connection && !self::$connectionClosed) {
+                try {
+                    if (!self::$instance->connection->ping()) {
+                        // الاتصال غير نشط، إعادة إنشاء الاتصال
+                        if (self::$instance->connection) {
+                            @self::$instance->connection->close();
+                        }
+                        self::$instance = new self();
+                    }
+                } catch (Exception $e) {
+                    // في حالة الخطأ، إعادة إنشاء الاتصال
+                    if (self::$instance->connection) {
+                        @self::$instance->connection->close();
+                    }
+                    self::$connectionClosed = false;
+                    self::$instance = new self();
+                }
+            }
         }
         return self::$instance;
     }
@@ -440,8 +507,57 @@ class Database {
      * إغلاق الاتصال
      */
     public function close() {
-        if ($this->connection) {
-            $this->connection->close();
+        if ($this->connection && !self::$connectionClosed) {
+            try {
+                // إغلاق أي معاملة نشطة قبل إغلاق الاتصال
+                if ($this->inTransaction) {
+                    $this->rollback();
+                }
+                $this->connection->close();
+                self::$connectionClosed = true;
+                $this->connection = null;
+            } catch (Exception $e) {
+                error_log("Error closing database connection: " . $e->getMessage());
+            }
+        }
+    }
+    
+    /**
+     * إغلاق الاتصال تلقائياً عند انتهاء الطلب
+     */
+    public function autoClose() {
+        if (!self::$connectionClosed && $this->connection) {
+            try {
+                // التحقق من أن الاتصال لا يزال نشطاً
+                if (method_exists($this->connection, 'ping')) {
+                    if ($this->connection->ping()) {
+                        // إذا كان هناك معاملة نشطة، لا نغلق الاتصال
+                        if (!$this->inTransaction) {
+                            $this->close();
+                        }
+                    } else {
+                        // الاتصال غير نشط، إغلاقه
+                        $this->close();
+                    }
+                } else {
+                    // إذا لم يكن ping متاحاً، أغلق الاتصال مباشرة
+                    if (!$this->inTransaction) {
+                        $this->close();
+                    }
+                }
+            } catch (Exception $e) {
+                // في حالة الخطأ، حاول إغلاق الاتصال مباشرة
+                error_log("Error in autoClose: " . $e->getMessage());
+                try {
+                    if (!$this->inTransaction && $this->connection) {
+                        $this->connection->close();
+                        self::$connectionClosed = true;
+                        $this->connection = null;
+                    }
+                } catch (Exception $closeError) {
+                    error_log("Error closing connection in autoClose: " . $closeError->getMessage());
+                }
+            }
         }
     }
     
