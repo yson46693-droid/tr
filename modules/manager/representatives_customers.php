@@ -3606,6 +3606,13 @@ try {
 </div>
 
 <!-- Customer Export Script -->
+<script>
+// تمرير المسارات الأساسية من PHP إلى JavaScript
+window.CUSTOMER_EXPORT_CONFIG = {
+    basePath: '<?php echo getBasePath(); ?>',
+    apiBasePath: '<?php echo getRelativeUrl("api"); ?>'
+};
+</script>
 <script src="<?php echo ASSETS_URL; ?>js/customer_export.js?v=<?php echo time(); ?>"></script>
 
 <script>

@@ -12,7 +12,69 @@ require_once __DIR__ . '/includes/path_helper.php';
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 
+// التحقق من تسجيل الدخول - يجب أن يكون في البداية قبل أي شيء آخر
+if (!isLoggedIn()) {
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    
+    // إعادة التوجيه إلى صفحة تسجيل الدخول
+    $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+    $loginUrl = preg_replace('/[?&](_nocache|_refresh|_cache_bust|_t|_r|_auto_refresh)=\d+/', '', $loginUrl);
+    $loginUrl = rtrim($loginUrl, '?&');
+    $loginUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $loginUrl);
+    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+    if (strpos($loginUrl, '/') !== 0) {
+        $loginUrl = '/' . $loginUrl;
+    }
+    $loginUrl = preg_replace('/\/+/', '/', $loginUrl);
+    
+    if (!@headers_sent()) {
+        @header('Location: ' . $loginUrl, true, 303);
+        exit;
+    } else {
+        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+        echo '<script>window.location.replace(' . json_encode($loginUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ');</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+        echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
+        exit;
+    }
+}
+
+// التحقق الإضافي باستخدام requireLogin() كحماية ثانوية
 requireLogin();
+
+// التحقق من وجود بيانات المستخدم بعد تسجيل الدخول
+$user = getCurrentUser();
+if (!$user || !isset($user['id']) || empty($user['id'])) {
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    
+    // إعادة التوجيه إلى صفحة تسجيل الدخول
+    $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+    $loginUrl = preg_replace('/[?&](_nocache|_refresh|_cache_bust|_t|_r|_auto_refresh)=\d+/', '', $loginUrl);
+    $loginUrl = rtrim($loginUrl, '?&');
+    $loginUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $loginUrl);
+    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+    if (strpos($loginUrl, '/') !== 0) {
+        $loginUrl = '/' . $loginUrl;
+    }
+    $loginUrl = preg_replace('/\/+/', '/', $loginUrl);
+    
+    if (!@headers_sent()) {
+        @header('Location: ' . $loginUrl, true, 303);
+        exit;
+    } else {
+        echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+        echo '<script>window.location.replace(' . json_encode($loginUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ');</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+        echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
+        exit;
+    }
+}
 
 // تحميل اللغة
 require_once __DIR__ . '/includes/lang/' . getCurrentLanguage() . '.php';
@@ -20,8 +82,7 @@ $lang = $translations;
 $pageTitle = 'تسجيل البصمة';
 include __DIR__ . '/templates/header.php';
 
-// الحصول على بيانات المستخدم
-$user = getCurrentUser();
+// الحصول على بيانات المستخدم (تم التحقق منها أعلاه)
 $userRole = $user['role'] ?? 'accountant';
 $dashboardUrl = getDashboardUrl($userRole);
 ?>

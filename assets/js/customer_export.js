@@ -20,8 +20,24 @@
     
     /**
      * حساب مسار API بناءً على موقع الصفحة الحالية
+     * يستخدم CUSTOMER_EXPORT_CONFIG من PHP إذا كان متاحاً
      */
     function getApiPath(apiFile) {
+        // أولاً: محاولة استخدام المسار من PHP إذا كان متاحاً
+        if (window.CUSTOMER_EXPORT_CONFIG && window.CUSTOMER_EXPORT_CONFIG.apiBasePath) {
+            const apiBase = window.CUSTOMER_EXPORT_CONFIG.apiBasePath;
+            const cleanApiFile = apiFile.replace(/^\/+/, '');
+            return (apiBase + '/' + cleanApiFile).replace(/\/+/g, '/');
+        }
+        
+        // ثانياً: استخدام basePath من PHP إذا كان متاحاً
+        if (window.CUSTOMER_EXPORT_CONFIG && window.CUSTOMER_EXPORT_CONFIG.basePath) {
+            const basePath = window.CUSTOMER_EXPORT_CONFIG.basePath;
+            const cleanApiFile = apiFile.replace(/^\/+/, '');
+            return (basePath + '/api/' + cleanApiFile).replace(/\/+/g, '/');
+        }
+        
+        // ثالثاً: حساب المسار ديناميكياً (fallback)
         const pathname = window.location.pathname;
         let basePath = pathname;
         
@@ -57,7 +73,8 @@
         }
         
         // إرجاع المسار الكامل
-        return basePath + '/api/' + apiFile;
+        const cleanApiFile = apiFile.replace(/^\/+/, '');
+        return (basePath + '/api/' + cleanApiFile).replace(/\/+/g, '/');
     }
     
     /**
