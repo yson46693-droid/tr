@@ -3720,6 +3720,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 }
 </style>
+
+<!-- Customer Export Script -->
+<script src="<?php echo ASSETS_URL; ?>js/customer_export.js?v=<?php echo time(); ?>"></script>
 <?php endif; ?>
 
 <!-- Modal استيراد العملاء المحليين من CSV -->

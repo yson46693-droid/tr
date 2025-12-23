@@ -13,6 +13,48 @@
     let generatedFileUrl = null;
     
     /**
+     * حساب مسار API بناءً على موقع الصفحة الحالية
+     */
+    function getApiPath(apiFile) {
+        const pathname = window.location.pathname;
+        let basePath = pathname;
+        
+        // إزالة /dashboard أو /modules/... من المسار
+        basePath = basePath.replace(/\/dashboard\/?$/, '');
+        basePath = basePath.replace(/\/modules\/[^\/]+\.php$/, '');
+        basePath = basePath.replace(/\/modules\/[^\/]+$/, '');
+        
+        // إزالة أي ملف PHP من نهاية المسار
+        basePath = basePath.replace(/\/[^\/]+\.php$/, '');
+        
+        // إذا كان المسار يحتوي على /dashboard/، أزل /dashboard
+        if (basePath.includes('/dashboard')) {
+            basePath = basePath.replace(/\/dashboard.*$/, '');
+        }
+        
+        // إذا كان المسار يحتوي على /modules/، أزل /modules وكل ما بعده
+        if (basePath.includes('/modules')) {
+            basePath = basePath.replace(/\/modules.*$/, '');
+        }
+        
+        // التأكد من أن المسار يبدأ بـ /
+        if (!basePath.startsWith('/')) {
+            basePath = '/' + basePath;
+        }
+        
+        // إزالة / من النهاية
+        basePath = basePath.replace(/\/+$/, '');
+        
+        // إذا كان المسار فارغاً أو فقط /، استخدم المسار الجذري
+        if (!basePath || basePath === '/') {
+            basePath = '';
+        }
+        
+        // إرجاع المسار الكامل
+        return basePath + '/api/' + apiFile;
+    }
+    
+    /**
      * تهيئة المودال عند تحميل الصفحة
      */
     function initExportModal() {
@@ -214,7 +256,7 @@
         }
         
         try {
-            const response = await fetch('../api/get_local_customers_for_export.php', {
+            const response = await fetch(getApiPath('get_local_customers_for_export.php'), {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -263,7 +305,7 @@
         }
         
         try {
-            const response = await fetch('../api/get_company_customers_for_export.php', {
+            const response = await fetch(getApiPath('get_company_customers_for_export.php'), {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -312,7 +354,7 @@
         }
         
         try {
-            const response = await fetch(`../api/get_rep_customers_for_export.php?rep_id=${repId}`, {
+            const response = await fetch(`${getApiPath('get_rep_customers_for_export.php')}?rep_id=${repId}`, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -722,7 +764,7 @@
             
             let response;
             try {
-                response = await fetch('../api/export_customers_excel.php', {
+                response = await fetch(getApiPath('export_customers_excel.php'), {
                     method: 'POST',
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest'
