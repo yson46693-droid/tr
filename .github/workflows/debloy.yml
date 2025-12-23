@@ -20,8 +20,8 @@ jobs:
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
           server: ftpupload.net
-          username: if0_40723116
-          password: Osama74444
+          username: if0_40744908
+          password: Osama744
 
           protocol: ftp
           port: 21
