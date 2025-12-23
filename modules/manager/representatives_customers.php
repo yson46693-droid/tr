@@ -1224,6 +1224,20 @@ try {
                                         >
                                             <i class="bi bi-arrow-return-left me-1"></i>مرتجع
                                         </button>
+                                        <?php if ($currentRole === 'manager' || $currentRole === 'developer'): ?>
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-primary change-sales-rep-btn"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#changeSalesRepModal"
+                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
+                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
+                                            data-current-rep-id="<?php echo (int)($customer['rep_id'] ?? $customer['created_by'] ?? 0); ?>"
+                                            data-current-rep-name="<?php echo htmlspecialchars($customer['rep_name'] ?? 'غير محدد'); ?>"
+                                        >
+                                            <i class="bi bi-arrow-left-right me-1"></i>نقل لمندوب آخر
+                                        </button>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>
@@ -3706,5 +3720,204 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 });
+</script>
+
+<!-- Modal لتغيير المندوب -->
+<div class="modal fade" id="changeSalesRepModal" tabindex="-1" aria-labelledby="changeSalesRepModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="changeSalesRepModalLabel">
+                    <i class="bi bi-arrow-left-right me-2"></i>نقل العميل لمندوب آخر
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="changeSalesRepForm">
+                <div class="modal-body">
+                    <input type="hidden" id="changeSalesRepCustomerId" name="customer_id">
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>العميل:</strong> <span id="changeSalesRepCustomerName"></span><br>
+                        <strong>المندوب الحالي:</strong> <span id="changeSalesRepCurrentRepName"></span>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="newSalesRepSelect" class="form-label">
+                            <i class="bi bi-person-badge me-2"></i>اختر المندوب الجديد <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="newSalesRepSelect" name="new_sales_rep_id" required>
+                            <option value="">-- اختر المندوب --</option>
+                            <?php
+                            // جلب قائمة المندوبين النشطين
+                            $salesReps = $db->query(
+                                "SELECT id, full_name, username FROM users WHERE role = 'sales' AND status = 'active' ORDER BY full_name ASC, username ASC"
+                            );
+                            foreach ($salesReps as $rep):
+                                $repName = htmlspecialchars($rep['full_name'] ?? $rep['username'] ?? '');
+                                $repId = (int)$rep['id'];
+                            ?>
+                                <option value="<?php echo $repId; ?>"><?php echo $repName; ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">سيتم نقل العميل وجميع بياناته المرتبطة إلى المندوب الجديد</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="transferInvoices" name="transfer_invoices" value="1" checked>
+                            <label class="form-check-label" for="transferInvoices">
+                                نقل الفواتير المرتبطة بهذا العميل
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>ملاحظة مهمة:</strong> التحصيلات <strong>لن يتم نقلها</strong> وستبقى مع المندوب الأصلي للحفاظ على السجلات التاريخية.
+                    </div>
+                    
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>تحذير:</strong> هذه العملية لا يمكن التراجع عنها. سيتم تحديث جميع السجلات المرتبطة بالعميل.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle me-2"></i>إلغاء
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle me-2"></i>نقل العميل
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// معالجة Modal تغيير المندوب
+(function() {
+    const changeSalesRepModal = document.getElementById('changeSalesRepModal');
+    const changeSalesRepForm = document.getElementById('changeSalesRepForm');
+    const changeSalesRepCustomerId = document.getElementById('changeSalesRepCustomerId');
+    const changeSalesRepCustomerName = document.getElementById('changeSalesRepCustomerName');
+    const changeSalesRepCurrentRepName = document.getElementById('changeSalesRepCurrentRepName');
+    const newSalesRepSelect = document.getElementById('newSalesRepSelect');
+    
+    if (changeSalesRepModal) {
+        // عند فتح Modal
+        changeSalesRepModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const customerId = button.getAttribute('data-customer-id');
+            const customerName = button.getAttribute('data-customer-name');
+            const currentRepId = button.getAttribute('data-current-rep-id');
+            const currentRepName = button.getAttribute('data-current-rep-name');
+            
+            // تعيين القيم
+            changeSalesRepCustomerId.value = customerId;
+            changeSalesRepCustomerName.textContent = customerName;
+            changeSalesRepCurrentRepName.textContent = currentRepName;
+            
+            // إزالة التحديد السابق
+            newSalesRepSelect.value = '';
+            
+            // إخفاء المندوب الحالي من القائمة
+            const options = newSalesRepSelect.querySelectorAll('option');
+            options.forEach(option => {
+                if (option.value === currentRepId) {
+                    option.style.display = 'none';
+                } else {
+                    option.style.display = '';
+                }
+            });
+        });
+        
+        // عند إغلاق Modal
+        changeSalesRepModal.addEventListener('hidden.bs.modal', function() {
+            changeSalesRepForm.reset();
+            // إظهار جميع الخيارات مرة أخرى
+            const options = newSalesRepSelect.querySelectorAll('option');
+            options.forEach(option => {
+                option.style.display = '';
+            });
+        });
+    }
+    
+    // معالجة إرسال النموذج
+    if (changeSalesRepForm) {
+        changeSalesRepForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const submitBtn = changeSalesRepForm.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            
+            // تعطيل الزر
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري النقل...';
+            
+            // إعداد FormData
+            const formData = new FormData(changeSalesRepForm);
+            
+            // إرسال طلب AJAX
+            fetch('<?php echo getRelativeUrl("api/change_customer_sales_rep.php"); ?>', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // إغلاق Modal
+                    const modalInstance = bootstrap.Modal.getInstance(changeSalesRepModal);
+                    modalInstance.hide();
+                    
+                    // إظهار رسالة نجاح
+                    showAlert('success', data.message);
+                    
+                    // إعادة تحميل الصفحة بعد ثانيتين
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    showAlert('danger', data.message);
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('danger', 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+            });
+        });
+    }
+    
+    // دالة لإظهار رسائل التنبيه
+    function showAlert(type, message) {
+        const alertContainer = document.querySelector('.container-fluid, .container, main') || document.body;
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.setAttribute('role', 'alert');
+        alertDiv.innerHTML = `
+            <i class="bi bi-${type === 'success' ? 'check-circle-fill' : 'exclamation-triangle-fill'} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        const firstChild = alertContainer.firstElementChild;
+        if (firstChild) {
+            alertContainer.insertBefore(alertDiv, firstChild);
+        } else {
+            alertContainer.appendChild(alertDiv);
+        }
+        
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+})();
 </script>
 

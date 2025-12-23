@@ -1685,25 +1685,11 @@ $salesRepInfo = $db->queryOne(
                 }
                 
                 if (data.success) {
-                    showAlert('success', data.message);
-                    
-                    if (data.newTotalCashAdditions !== undefined) {
-                        updateCashRegisterBalance(data.newTotalCashAdditions);
-                    }
-                    
-                    if (data.lastAddition) {
-                        addCashAdditionToTable(data.lastAddition);
-                    }
-                    
-                    // إعادة تعيين النموذج
-                    addCashBalanceForm.reset();
-                    
-                    // Focus على حقل المبلغ بعد النجاح
-                    if (cashBalanceAmount) {
-                        setTimeout(() => {
-                            cashBalanceAmount.focus();
-                        }, 100);
-                    }
+                    // إعادة تحميل الصفحة بعد النجاح (بدون إعادة إرسال البيانات)
+                    // استخدام setTimeout لإعطاء الوقت لعرض رسالة النجاح إن وجدت
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
                 } else {
                     showAlert('danger', data.message);
                 }
