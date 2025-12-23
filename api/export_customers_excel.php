@@ -322,7 +322,8 @@ try {
             $relativePath = '/' . $relativePath;
         }
         
-        $fileUrl = BASE_URL . ltrim($relativePath, '/');
+        // استخدام getAbsoluteUrl لإنشاء رابط الملف بشكل صحيح
+        $fileUrl = getAbsoluteUrl(ltrim($relativePath, '/'));
         
         returnJsonResponse([
             'success' => true,
@@ -334,6 +335,7 @@ try {
         
     } catch (Exception $e) {
         error_log('Excel export error: ' . $e->getMessage());
+        error_log('Excel export error trace: ' . $e->getTraceAsString());
         returnJsonResponse([
             'success' => false,
             'message' => 'فشل في إنشاء ملف Excel: ' . $e->getMessage()

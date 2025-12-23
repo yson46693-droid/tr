@@ -890,35 +890,60 @@
                 if (fetchError.name === 'AbortError') {
                     throw new Error('انتهت مهلة الطلب. يرجى المحاولة مرة أخرى أو تقليل عدد العملاء المحددين.');
                 }
-                throw new Error('حدث خطأ في الاتصال بالخادم: ' + (fetchError.message || 'خطأ غير معروف'));
+                // تحسين رسالة الخطأ لتشمل تفاصيل أكثر
+                const errorMessage = fetchError.message || 'خطأ غير معروف';
+                console.error('Fetch error details:', {
+                    name: fetchError.name,
+                    message: errorMessage,
+                    stack: fetchError.stack
+                });
+                throw new Error('حدث خطأ في الاتصال بالخادم. يرجى التحقق من الاتصال بالإنترنت والمحاولة مرة أخرى. (' + errorMessage + ')');
             }
             
             // التحقق من نوع الاستجابة
             const contentType = response.headers.get('content-type') || '';
             let result;
+            let responseText = '';
+            
+            try {
+                responseText = await response.text();
+            } catch (textError) {
+                console.error('Error reading response text:', textError);
+                throw new Error('فشل في قراءة استجابة الخادم. يرجى المحاولة مرة أخرى.');
+            }
             
             if (contentType.includes('application/json')) {
-                const text = await response.text();
                 try {
-                    result = JSON.parse(text);
+                    result = JSON.parse(responseText);
                 } catch (parseError) {
                     console.error('JSON parse error:', parseError);
-                    console.error('Response text:', text.substring(0, 500));
-                    throw new Error('استجابة غير صحيحة من الخادم. يرجى المحاولة مرة أخرى.');
+                    console.error('Response status:', response.status);
+                    console.error('Response headers:', Object.fromEntries(response.headers.entries()));
+                    console.error('Response text (first 1000 chars):', responseText.substring(0, 1000));
+                    throw new Error('استجابة غير صحيحة من الخادم. يرجى المحاولة مرة أخرى. (خطأ في تنسيق JSON)');
                 }
             } else {
-                const text = await response.text();
-                console.error('Non-JSON response:', text.substring(0, 500));
-                throw new Error('استجابة غير صحيحة من الخادم. قد تكون الجلسة منتهية أو هناك خطأ في الخادم.');
+                console.error('Non-JSON response. Status:', response.status);
+                console.error('Content-Type:', contentType);
+                console.error('Response text (first 1000 chars):', responseText.substring(0, 1000));
+                throw new Error('استجابة غير صحيحة من الخادم. قد تكون الجلسة منتهية أو هناك خطأ في الخادم. (حالة: ' + response.status + ')');
             }
             
             // التحقق من حالة الاستجابة
             if (!response.ok) {
-                throw new Error(result.message || 'فشل في توليد ملف Excel. حالة الخادم: ' + response.status);
+                const errorMsg = result && result.message ? result.message : 'فشل في توليد ملف Excel';
+                console.error('Server error response:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    result: result
+                });
+                throw new Error(errorMsg + ' (حالة الخادم: ' + response.status + ')');
             }
             
-            if (!result.success) {
-                throw new Error(result.message || 'فشل في توليد ملف Excel');
+            if (!result || !result.success) {
+                const errorMsg = result && result.message ? result.message : 'فشل في توليد ملف Excel';
+                console.error('Unsuccessful response:', result);
+                throw new Error(errorMsg);
             }
             
             // حفظ رابط الملف
