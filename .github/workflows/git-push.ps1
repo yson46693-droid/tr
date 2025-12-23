@@ -75,8 +75,14 @@ while ($retryCount -lt $maxRetries -and -not $pushSuccess) {
             $retryCount++
             if ($retryCount -lt $maxRetries) {
                 Write-Host "Retry attempt $retryCount/$maxRetries..." -ForegroundColor Yellow
+                if ($output) {
+                    Write-Host $output -ForegroundColor Yellow
+                }
                 Start-Sleep -Seconds 2
             } else {
+                if ($output) {
+                    Write-Host $output -ForegroundColor Red
+                }
                 throw "Failed to push after $maxRetries attempts"
             }
         }
