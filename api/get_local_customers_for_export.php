@@ -85,7 +85,7 @@ try {
     
     // معاملات pagination
     $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-    $perPage = 5; // 50 عميل في كل صفحة
+    $perPage = 4; // 5 عميل في كل صفحة
     $offset = ($page - 1) * $perPage;
     
     // جلب إجمالي عدد العملاء المدينين فقط
