@@ -2064,7 +2064,8 @@ function executeWarehouseTransferDirectly($transferId, $executedBy = null) {
             }
             
             // دخول إلى المخزن الوجهة
-            if ($toWarehouse && $toWarehouse['vehicle_id']) {
+            // التحقق من أن المخزن الوجهة هو مخزن سيارة (vehicle)
+            if ($toWarehouse && ($toWarehouse['warehouse_type'] ?? '') === 'vehicle' && !empty($toWarehouse['vehicle_id'])) {
                 $unitPriceOverride = null;
                 if (!empty($finishedMetadata) && isset($finishedMetadata['unit_price']) && $finishedMetadata['unit_price'] !== null) {
                     $unitPriceOverride = (float)$finishedMetadata['unit_price'];
@@ -2737,7 +2738,7 @@ function approveWarehouseTransfer($transferId, $approvedBy = null) {
             
             // دخول إلى المخزن الوجهة
             // إذا كان المخزن الوجهة سيارة، تحديث مخزون السيارة
-            if ($toWarehouse && $toWarehouse['vehicle_id']) {
+            if ($toWarehouse && ($toWarehouse['warehouse_type'] ?? '') === 'vehicle' && !empty($toWarehouse['vehicle_id'])) {
                 $unitPriceOverride = null;
                 if (!empty($finishedMetadata) && isset($finishedMetadata['unit_price']) && $finishedMetadata['unit_price'] !== null) {
                     $unitPriceOverride = (float)$finishedMetadata['unit_price'];
@@ -2835,7 +2836,7 @@ function approveWarehouseTransfer($transferId, $approvedBy = null) {
             
             // تسجيل حركة دخول فقط إذا لم يكن المخزن الوجهة vehicle
             // (لأن المنتج في vehicle_inventory وليس في products)
-            if (!($toWarehouse && $toWarehouse['vehicle_id'])) {
+            if (!($toWarehouse && ($toWarehouse['warehouse_type'] ?? '') === 'vehicle' && !empty($toWarehouse['vehicle_id']))) {
                 // ملاحظة: لا نستدعي recordInventoryMovement مع type='in' إذا كان هناك batchId
                 // لأن تحديث finished_products.quantity_produced تم بالفعل أعلاه في السطر 2733
                 // استدعاء recordInventoryMovement سيؤدي إلى إضافة الكمية مرتين!
