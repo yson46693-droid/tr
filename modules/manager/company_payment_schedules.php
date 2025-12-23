@@ -99,14 +99,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         if ($scheduleId > 0) {
             try {
-                // التحقق من أن الجدول مرتبط بعميل محلي
+                // استعلام مبسط وسريع - التحقق من أن الجدول مرتبط بعميل محلي
                 $schedule = $db->queryOne(
-                    "SELECT ps.* FROM payment_schedules ps
+                    "SELECT ps.*, lc.status as customer_status 
+                     FROM payment_schedules ps
                      INNER JOIN local_customers lc ON ps.customer_id = lc.id
-                     WHERE ps.id = ? AND lc.status = 'active'
-                     AND NOT EXISTS (
-                         SELECT 1 FROM customers c WHERE c.id = ps.customer_id
-                     )",
+                     WHERE ps.id = ? AND lc.status = 'active'",
                     [$scheduleId]
                 );
                 
@@ -117,6 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     // فقط تحديث payment_schedules - لا تأثير على أي حسابات
                     $paymentAmount = $amount ?? (float)$schedule['amount'];
+                    $oldStatus = $schedule['status'];
                     
                     $db->execute(
                         "UPDATE payment_schedules 
@@ -125,19 +124,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         [$paymentDate, $scheduleId]
                     );
                     
-                    logAudit(
-                        $currentUser['id'],
-                        'record_payment_schedule_local',
-                        'payment_schedule',
-                        $scheduleId,
-                        ['old_status' => $schedule['status']],
-                        [
-                            'new_status' => 'paid',
-                            'amount' => $paymentAmount,
-                            'local_customer' => true,
-                            'note' => 'موعد تذكير فقط - لا تأثير على الحسابات'
-                        ]
-                    );
+                    // تسجيل audit log بشكل غير متزامن (لا ينتظر)
+                    try {
+                        logAudit(
+                            $currentUser['id'],
+                            'record_payment_schedule_local',
+                            'payment_schedule',
+                            $scheduleId,
+                            ['old_status' => $oldStatus],
+                            [
+                                'new_status' => 'paid',
+                                'amount' => $paymentAmount,
+                                'local_customer' => true,
+                                'note' => 'موعد تذكير فقط - لا تأثير على الحسابات'
+                            ]
+                        );
+                    } catch (Throwable $auditError) {
+                        // تجاهل أخطاء audit log حتى لا تؤثر على الاستجابة
+                        error_log('Audit log error (non-blocking): ' . $auditError->getMessage());
+                    }
                     
                     $success = 'تم تسجيل الدفعة في موعد التذكير بنجاح. (ملاحظة: هذا مجرد تذكير ولا يؤثر على حسابات العميل)';
                 }
@@ -400,14 +405,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'يرجى إدخال تاريخ استحقاق صحيح.';
         } else {
             try {
-                // التحقق من أن الجدول مرتبط بعميل محلي
+                // استعلام مبسط وسريع - التحقق من أن الجدول مرتبط بعميل محلي
                 $schedule = $db->queryOne(
                     "SELECT ps.* FROM payment_schedules ps
                      INNER JOIN local_customers lc ON ps.customer_id = lc.id
-                     WHERE ps.id = ? AND lc.status = 'active'
-                     AND NOT EXISTS (
-                         SELECT 1 FROM customers c WHERE c.id = ps.customer_id
-                     )",
+                     WHERE ps.id = ? AND lc.status = 'active'",
                     [$scheduleId]
                 );
 
@@ -440,19 +442,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ]
                     );
 
-                    logAudit(
-                        $currentUser['id'],
-                        'update_payment_schedule',
-                        'payment_schedule',
-                        $scheduleId,
-                        $oldData,
-                        [
-                            'amount' => $amount,
-                            'due_date' => $dueDateObj->format('Y-m-d'),
-                            'status' => $newStatus,
-                            'local_customer' => true
-                        ]
-                    );
+                    // تسجيل audit log بشكل غير متزامن
+                    try {
+                        logAudit(
+                            $currentUser['id'],
+                            'update_payment_schedule',
+                            'payment_schedule',
+                            $scheduleId,
+                            $oldData,
+                            [
+                                'amount' => $amount,
+                                'due_date' => $dueDateObj->format('Y-m-d'),
+                                'status' => $newStatus,
+                                'local_customer' => true
+                            ]
+                        );
+                    } catch (Throwable $auditError) {
+                        error_log('Audit log error (non-blocking): ' . $auditError->getMessage());
+                    }
 
                     $success = 'تم تحديث موعد التحصيل بنجاح.';
                 }
@@ -468,14 +475,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'معرف الجدول غير صالح.';
         } else {
             try {
-                // التحقق من أن الجدول مرتبط بعميل محلي
+                // استعلام مبسط وسريع - التحقق من أن الجدول مرتبط بعميل محلي
                 $schedule = $db->queryOne(
                     "SELECT ps.* FROM payment_schedules ps
                      INNER JOIN local_customers lc ON ps.customer_id = lc.id
-                     WHERE ps.id = ? AND lc.status = 'active'
-                     AND NOT EXISTS (
-                         SELECT 1 FROM customers c WHERE c.id = ps.customer_id
-                     )",
+                     WHERE ps.id = ? AND lc.status = 'active'",
                     [$scheduleId]
                 );
 
@@ -498,19 +502,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         [$scheduleId]
                     );
 
-                    logAudit(
-                        $currentUser['id'],
-                        'mark_payment_schedule_paid',
-                        'payment_schedule',
-                        $scheduleId,
-                        $oldData,
-                        [
-                            'status' => 'paid',
-                            'payment_date' => date('Y-m-d'),
-                            'local_customer' => true,
-                            'note' => 'موعد تذكير فقط - لا تأثير على الحسابات'
-                        ]
-                    );
+                    // تسجيل audit log بشكل غير متزامن
+                    try {
+                        logAudit(
+                            $currentUser['id'],
+                            'mark_payment_schedule_paid',
+                            'payment_schedule',
+                            $scheduleId,
+                            $oldData,
+                            [
+                                'status' => 'paid',
+                                'payment_date' => date('Y-m-d'),
+                                'local_customer' => true,
+                                'note' => 'موعد تذكير فقط - لا تأثير على الحسابات'
+                            ]
+                        );
+                    } catch (Throwable $auditError) {
+                        error_log('Audit log error (non-blocking): ' . $auditError->getMessage());
+                    }
 
                     $success = 'تم تمييز الجدول كمدفوع بنجاح. (ملاحظة: هذا مجرد تذكير ولا يؤثر على حسابات العميل)';
                 }
@@ -532,23 +541,11 @@ $sentReminders = sendPaymentReminders($currentUser['id']);
 $saleNumberColumnCheck = $db->queryOne("SHOW COLUMNS FROM sales LIKE 'sale_number'");
 $hasSaleNumberColumn = !empty($saleNumberColumnCheck);
 
-if ($hasSaleNumberColumn) {
-    $countSql = "SELECT COUNT(*) as total 
-                 FROM payment_schedules ps
-                 INNER JOIN local_customers lc ON ps.customer_id = lc.id
-                 WHERE lc.status = 'active'
-                 AND NOT EXISTS (
-                     SELECT 1 FROM customers c WHERE c.id = ps.customer_id
-                 )";
-} else {
-    $countSql = "SELECT COUNT(*) as total 
-                 FROM payment_schedules ps
-                 INNER JOIN local_customers lc ON ps.customer_id = lc.id
-                 WHERE lc.status = 'active'
-                 AND NOT EXISTS (
-                     SELECT 1 FROM customers c WHERE c.id = ps.customer_id
-                 )";
-}
+// استعلام محسّن - العملاء المحليين لديهم sales_rep_id = NULL
+$countSql = "SELECT COUNT(*) as total 
+             FROM payment_schedules ps
+             INNER JOIN local_customers lc ON ps.customer_id = lc.id
+             WHERE lc.status = 'active' AND ps.sales_rep_id IS NULL";
 
 $countParams = [];
 
@@ -581,7 +578,7 @@ $totalSchedules = $db->queryOne($countSql, $countParams);
 $totalSchedules = $totalSchedules['total'] ?? 0;
 $totalPages = ceil($totalSchedules / $perPage);
 
-// جلب الجداول
+// جلب الجداول - استعلام محسّن
 if ($hasSaleNumberColumn) {
     $sql = "SELECT ps.*, s.sale_number, lc.name as customer_name, 
                    u.full_name as sales_rep_name, u.username as sales_rep_username
@@ -589,10 +586,7 @@ if ($hasSaleNumberColumn) {
             INNER JOIN local_customers lc ON ps.customer_id = lc.id
             LEFT JOIN sales s ON ps.sale_id = s.id
             LEFT JOIN users u ON ps.sales_rep_id = u.id
-            WHERE lc.status = 'active'
-            AND NOT EXISTS (
-                SELECT 1 FROM customers c WHERE c.id = ps.customer_id
-            )";
+            WHERE lc.status = 'active' AND ps.sales_rep_id IS NULL";
 } else {
     $sql = "SELECT ps.*, s.id as sale_number, lc.name as customer_name, 
                    u.full_name as sales_rep_name, u.username as sales_rep_username
@@ -600,10 +594,7 @@ if ($hasSaleNumberColumn) {
             INNER JOIN local_customers lc ON ps.customer_id = lc.id
             LEFT JOIN sales s ON ps.sale_id = s.id
             LEFT JOIN users u ON ps.sales_rep_id = u.id
-            WHERE lc.status = 'active'
-            AND NOT EXISTS (
-                SELECT 1 FROM customers c WHERE c.id = ps.customer_id
-            )";
+            WHERE lc.status = 'active' AND ps.sales_rep_id IS NULL";
 }
 
 $params = [];
@@ -679,10 +670,7 @@ $statsSql = "SELECT
         COALESCE(SUM(CASE WHEN ps.status = 'overdue' THEN ps.amount END), 0) as overdue_amount
      FROM payment_schedules ps
      INNER JOIN local_customers lc ON ps.customer_id = lc.id
-     WHERE lc.status = 'active'
-     AND NOT EXISTS (
-         SELECT 1 FROM customers c WHERE c.id = ps.customer_id
-     )";
+     WHERE lc.status = 'active' AND ps.sales_rep_id IS NULL";
 
 $statsParams = [];
 $statsQuery = $db->queryOne($statsSql, $statsParams);
@@ -702,6 +690,7 @@ $selectedSchedule = null;
 if (isset($_GET['id'])) {
     $scheduleId = intval($_GET['id']);
     
+    // استعلام محسّن
     if ($hasSaleNumberColumn) {
         $selectedSchedule = $db->queryOne(
             "SELECT ps.*, s.sale_number, lc.name as customer_name, lc.phone as customer_phone,
@@ -710,10 +699,7 @@ if (isset($_GET['id'])) {
              INNER JOIN local_customers lc ON ps.customer_id = lc.id
              LEFT JOIN sales s ON ps.sale_id = s.id
              LEFT JOIN users u ON ps.sales_rep_id = u.id
-             WHERE ps.id = ? AND lc.status = 'active'
-             AND NOT EXISTS (
-                 SELECT 1 FROM customers c WHERE c.id = ps.customer_id
-             )",
+             WHERE ps.id = ? AND lc.status = 'active' AND ps.sales_rep_id IS NULL",
             [$scheduleId]
         );
     } else {
@@ -724,10 +710,7 @@ if (isset($_GET['id'])) {
              INNER JOIN local_customers lc ON ps.customer_id = lc.id
              LEFT JOIN sales s ON ps.sale_id = s.id
              LEFT JOIN users u ON ps.sales_rep_id = u.id
-             WHERE ps.id = ? AND lc.status = 'active'
-             AND NOT EXISTS (
-                 SELECT 1 FROM customers c WHERE c.id = ps.customer_id
-             )",
+             WHERE ps.id = ? AND lc.status = 'active' AND ps.sales_rep_id IS NULL",
             [$scheduleId]
         );
     }
