@@ -1087,7 +1087,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } elseif ($action === 'use_packaging_material') {
+        // تنظيف أي output سابق
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        
         header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-cache, must-revalidate');
 
         $materialId = intval($_POST['material_id'] ?? 0);
         $useQuantity = 1.0;
@@ -1215,6 +1221,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             error_log('Packaging use error: ' . $e->getMessage());
             $errorMessage = $e->getMessage() ?: 'حدث خطأ غير متوقع.';
+
+            // التأكد من تنظيف output buffer قبل إرسال JSON
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'تعذّر استخدام الأداة: ' . $errorMessage
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            error_log('Packaging use error (Throwable): ' . $e->getMessage());
+            $errorMessage = $e->getMessage() ?: 'حدث خطأ غير متوقع.';
+
+            // التأكد من تنظيف output buffer قبل إرسال JSON
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
 
             echo json_encode([
                 'success' => false,
@@ -3313,11 +3341,27 @@ async function usePackagingMaterial(trigger) {
 
         const contentType = response.headers.get('Content-Type') || '';
         let payload = null;
+        
         if (contentType.includes('application/json')) {
-            payload = await response.json();
+            try {
+                payload = await response.json();
+            } catch (jsonError) {
+                const text = await response.text();
+                console.error('JSON parse error:', jsonError);
+                console.error('Response text:', text.substring(0, 500));
+                throw new Error('فشل تحليل استجابة JSON من الخادم.');
+            }
         } else {
             const text = await response.text();
-            throw new Error(text.substring(0, 200) || 'استجابة غير صالحة من الخادم.');
+            console.error('Non-JSON response. Content-Type:', contentType);
+            console.error('Response text:', text.substring(0, 500));
+            
+            // محاولة التحقق من أن النص هو HTML (صفحة خطأ أو redirect)
+            if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+                throw new Error('الخادم يعيد صفحة HTML بدلاً من JSON. قد تكون الجلسة منتهية أو هناك خطأ في الخادم.');
+            }
+            
+            throw new Error('استجابة غير صالحة من الخادم. يرجى التحقق من أن endpoint يعيد JSON.');
         }
 
         if (response.ok && payload?.success) {

@@ -599,7 +599,14 @@ function formatHoneyVarietyWithCodeLocal(string $variety, array $catalog, $db = 
     return $variety;
 }
 
-$dashboardSlug = $rawMaterialsContext === 'manager' ? 'manager' : 'production';
+// تحديد dashboard slug بناءً على السياق
+if ($rawMaterialsContext === 'manager') {
+    $dashboardSlug = 'manager';
+} elseif ($rawMaterialsContext === 'accountant') {
+    $dashboardSlug = 'accountant';
+} else {
+    $dashboardSlug = 'production';
+}
 $dashboardUrl = getDashboardUrl($dashboardSlug);
 
 // تحويل عمود honey_variety في جدول honey_stock من ENUM إلى VARCHAR لدعم أنواع العسل المخصصة
