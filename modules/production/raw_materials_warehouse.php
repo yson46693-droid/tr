@@ -6249,6 +6249,55 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
     </div>
 </div>
 
+<!-- Modal تسجيل تالف للمكسرات المشكلة -->
+<div class="modal fade" id="damageMixedNutsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-diamond me-2"></i>تسجيل تالف للمكسرات المشكلة</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="record_damage">
+                <input type="hidden" name="material_category" value="nuts">
+                <input type="hidden" name="redirect_section" value="nuts">
+                <input type="hidden" name="stock_id" id="damage_mixed_stock_id">
+                <input type="hidden" name="stock_source" value="mixed">
+                <input type="hidden" name="damage_unit" value="كجم">
+                <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+                <div class="modal-body scrollable-modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">المورد</label>
+                        <input type="text" class="form-control" id="damage_mixed_supplier" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">اسم الخلطة</label>
+                        <input type="text" class="form-control" id="damage_mixed_batch" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الكمية المتاحة</label>
+                        <input type="text" class="form-control" id="damage_mixed_available" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الكمية التالفة (كجم)</label>
+                        <input type="number" class="form-control" name="damage_quantity" id="damage_mixed_quantity" step="0.001" min="0.001" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                        <textarea class="form-control" name="damage_reason" id="damage_mixed_reason" rows="3" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-danger" id="damage_mixed_submit">
+                        <i class="bi bi-check-circle me-1"></i>تسجيل
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
     function openNutsDamageModal(id, supplier, nutType, quantity) {
         const qty = parseFloat(quantity) || 0;

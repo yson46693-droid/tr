@@ -707,17 +707,61 @@
                 rep_id: repId
             };
             
-            // إرسال الطلب
-            const response = await fetch('../api/export_customers_excel.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify(payload)
-            });
+            // إرسال الطلب باستخدام FormData لدعم قوائم كبيرة
+            const formData = new FormData();
+            formData.append('customer_ids', JSON.stringify(selectedCustomers));
+            formData.append('collection_amounts', JSON.stringify(collectionAmounts));
+            formData.append('section', currentSection);
+            if (repId) {
+                formData.append('rep_id', repId.toString());
+            }
             
-            const result = await response.json();
+            // إرسال الطلب مع timeout أطول
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 دقائق
+            
+            let response;
+            try {
+                response = await fetch('../api/export_customers_excel.php', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData,
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                if (fetchError.name === 'AbortError') {
+                    throw new Error('انتهت مهلة الطلب. يرجى المحاولة مرة أخرى أو تقليل عدد العملاء المحددين.');
+                }
+                throw new Error('حدث خطأ في الاتصال بالخادم: ' + (fetchError.message || 'خطأ غير معروف'));
+            }
+            
+            // التحقق من نوع الاستجابة
+            const contentType = response.headers.get('content-type') || '';
+            let result;
+            
+            if (contentType.includes('application/json')) {
+                const text = await response.text();
+                try {
+                    result = JSON.parse(text);
+                } catch (parseError) {
+                    console.error('JSON parse error:', parseError);
+                    console.error('Response text:', text.substring(0, 500));
+                    throw new Error('استجابة غير صحيحة من الخادم. يرجى المحاولة مرة أخرى.');
+                }
+            } else {
+                const text = await response.text();
+                console.error('Non-JSON response:', text.substring(0, 500));
+                throw new Error('استجابة غير صحيحة من الخادم. قد تكون الجلسة منتهية أو هناك خطأ في الخادم.');
+            }
+            
+            // التحقق من حالة الاستجابة
+            if (!response.ok) {
+                throw new Error(result.message || 'فشل في توليد ملف Excel. حالة الخادم: ' + response.status);
+            }
             
             if (!result.success) {
                 throw new Error(result.message || 'فشل في توليد ملف Excel');

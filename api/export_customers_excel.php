@@ -11,6 +11,10 @@
 @ini_set('display_startup_errors', '0');
 error_reporting(0);
 
+// زيادة timeout و memory limit لدعم قوائم كبيرة
+@ini_set('max_execution_time', '300'); // 5 دقائق
+@ini_set('memory_limit', '512M');
+
 // تنظيف أي output موجود
 while (ob_get_level() > 0) {
     @ob_end_clean();
@@ -124,11 +128,26 @@ try {
         ], 405);
     }
     
-    // قراءة البيانات المرسلة
-    $input = file_get_contents('php://input');
-    $data = json_decode($input, true);
+    // قراءة البيانات المرسلة (دعم FormData و JSON)
+    $data = [];
     
-    if (!is_array($data)) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        // محاولة قراءة من FormData أولاً
+        if (isset($_POST['customer_ids']) && isset($_POST['section'])) {
+            $data['customer_ids'] = json_decode($_POST['customer_ids'], true);
+            $data['collection_amounts'] = json_decode($_POST['collection_amounts'] ?? '{}', true);
+            $data['section'] = $_POST['section'] ?? 'company';
+            $data['rep_id'] = isset($_POST['rep_id']) ? (int)$_POST['rep_id'] : null;
+        } else {
+            // محاولة قراءة من JSON
+            $input = file_get_contents('php://input');
+            if (!empty($input)) {
+                $data = json_decode($input, true);
+            }
+        }
+    }
+    
+    if (!is_array($data) || empty($data)) {
         returnJsonResponse([
             'success' => false,
             'message' => 'بيانات غير صحيحة'
@@ -257,6 +276,9 @@ try {
         // العنوان
         $address = trim($customer['address'] ?? '');
         
+        // المنطقة
+        $regionName = trim($customer['region_name'] ?? '');
+        
         // مبلغ التحصيل (إن وُجد)
         $collectionAmount = '';
         if (isset($collectionAmounts[$customerId]) && $collectionAmounts[$customerId] !== '' && $collectionAmounts[$customerId] !== null) {
@@ -270,8 +292,9 @@ try {
             'اسم العميل' => trim($customer['name'] ?? ''),
             'رقم الهاتف' => $primaryPhone,
             'رقم الهاتف الآخر' => $alternativePhone,
+            'العنوان' => $address,
+            'المنطقة' => $regionName,
             'رصيد العميل' => $formattedBalance,
-            'عنوان العميل' => $address,
             'المبلغ المراد تحصيله' => $collectionAmount,
         ];
     }
