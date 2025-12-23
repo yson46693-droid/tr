@@ -249,7 +249,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             ]
                         );
                         
-                        $success = 'تم إضافة موعد التحصيل بنجاح.';
+                        // بعد النجاح، إعادة التوجيه لإظهار الجدول المضاف فوراً (يتجاوز أي فلاتر حالية)
+                        header('Location: ?page=company_payment_schedules&id=' . $scheduleId . '&created=1');
+                        exit;
                     }
                 }
             } catch (Throwable $createScheduleError) {
@@ -582,7 +584,8 @@ if (!empty($filters['overdue_only'])) {
     $sql .= " AND ps.status = 'pending' AND ps.due_date < CURDATE()";
 }
 
-$sql .= " ORDER BY ps.due_date ASC LIMIT ? OFFSET ?";
+// إظهار الأحدث أولاً لضمان ظهور الموعد المضاف مؤخراً في الصفحة الأولى
+$sql .= " ORDER BY ps.created_at DESC, ps.due_date ASC LIMIT ? OFFSET ?";
 $params[] = $perPage;
 $params[] = $offset;
 
