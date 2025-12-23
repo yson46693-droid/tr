@@ -1235,8 +1235,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 
                 $regionId = isset($_POST['region_id']) && $_POST['region_id'] !== '' ? (int)$_POST['region_id'] : null;
                 
-                $customerColumns = ['name', 'phone', 'balance', 'address', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
+                // توليد unique_code فريد للعميل
+                require_once __DIR__ . '/../../includes/customer_code_generator.php';
+                $uniqueCode = generateUniqueCustomerCode('customers');
+                
+                $customerColumns = ['unique_code', 'name', 'phone', 'balance', 'address', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
                 $customerValues = [
+                    $uniqueCode,
                     $name,
                     $phone ?: null,
                     $balance,
@@ -1247,7 +1252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     0,
                     $createdByAdminFlag,
                 ];
-                $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?', '?', '?'];
+                $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?', '?', '?', '?'];
                 
                 // إضافة region_id إذا كان موجوداً
                 $hasRegionIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'region_id'"));

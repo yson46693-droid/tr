@@ -320,9 +320,14 @@ try {
                 continue;
             }
             
+            // توليد unique_code فريد للعميل
+            require_once __DIR__ . '/../includes/customer_code_generator.php';
+            $uniqueCode = generateUniqueCustomerCode('local_customers');
+            
             // إعداد البيانات للإدراج
-            $customerColumns = ['name', 'phone', 'balance', 'address', 'status', 'created_by'];
+            $customerColumns = ['unique_code', 'name', 'phone', 'balance', 'address', 'status', 'created_by'];
             $customerValues = [
+                $uniqueCode,
                 $name,
                 $phone,
                 $balance,
@@ -330,7 +335,7 @@ try {
                 'active',
                 $currentUser['id']
             ];
-            $customerPlaceholders = ['?', '?', '?', '?', '?', '?'];
+            $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?'];
             
             // إضافة region_id إذا كان موجوداً
             if ($hasRegionIdColumn && $regionId !== null) {

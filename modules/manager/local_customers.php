@@ -905,8 +905,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $regionId = isset($_POST['region_id']) && $_POST['region_id'] !== '' ? (int)$_POST['region_id'] : null;
                 
-                $customerColumns = ['name', 'phone', 'balance', 'address', 'status', 'created_by'];
+                // توليد unique_code فريد للعميل
+                require_once __DIR__ . '/../../includes/customer_code_generator.php';
+                $uniqueCode = generateUniqueCustomerCode('local_customers');
+                
+                $customerColumns = ['unique_code', 'name', 'phone', 'balance', 'address', 'status', 'created_by'];
                 $customerValues = [
+                    $uniqueCode,
                     $name,
                     $phone ?: null,
                     $balance,
@@ -914,7 +919,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'active',
                     $currentUser['id'],
                 ];
-                $customerPlaceholders = ['?', '?', '?', '?', '?', '?'];
+                $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?'];
                 
                 // إضافة region_id إذا كان موجوداً
                 $hasRegionIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM local_customers LIKE 'region_id'"));
@@ -1207,6 +1212,11 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
         <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#importLocalCustomersModal">
             <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد من CSV
         </button>
+        <?php if (in_array($currentRole, ['manager', 'developer', 'accountant'], true)): ?>
+        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#customerExportModal" data-section="local">
+            <i class="bi bi-download me-2"></i>تصدير عملاء محددين
+        </button>
+        <?php endif; ?>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addLocalCustomerModal">
             <i class="bi bi-person-plus me-2"></i>إضافة عميل محلي جديد
         </button>
@@ -3606,6 +3616,109 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 </div>
+<?php endif; ?>
+
+<!-- Modal تصدير العملاء المحددين -->
+<?php if (in_array($currentRole, ['manager', 'developer', 'accountant'], true)): ?>
+<div class="modal fade" id="customerExportModal" tabindex="-1" aria-hidden="true" data-section="local">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-download me-2"></i>تصدير عملاء محددين إلى Excel
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="customer-export-alerts mb-3"></div>
+                
+                <!-- قائمة العملاء -->
+                <div class="mb-3" id="customersSection" style="display: none;">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-2 gap-2">
+                        <h6 class="mb-0">حدد العملاء المراد تصديرهم:</h6>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-primary" id="selectAllCustomers">
+                                <i class="bi bi-check-square me-1"></i>تحديد الكل
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="deselectAllCustomers">
+                                <i class="bi bi-square me-1"></i>إلغاء التحديد
+                            </button>
+                        </div>
+                    </div>
+                    <div id="exportCustomersList" class="table-responsive">
+                        <!-- سيتم ملؤه عبر JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- رسالة التحميل -->
+                <div id="selectRepMessage" class="text-center text-muted py-4">
+                    <span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل قائمة العملاء المحليين...
+                </div>
+                
+                <!-- أزرار الإجراءات بعد التوليد -->
+                <div id="exportActionButtons" style="display: none;" class="mt-3 p-3 bg-light rounded">
+                    <h6 class="mb-3">تم توليد ملف Excel بنجاح</h6>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="button" class="btn btn-primary btn-sm" id="printExcelBtn">
+                            <i class="bi bi-printer me-2"></i>طباعة
+                        </button>
+                        <button type="button" class="btn btn-success btn-sm" id="downloadExcelBtn">
+                            <i class="bi bi-download me-2"></i>تحميل الملف
+                        </button>
+                        <button type="button" class="btn btn-info btn-sm" id="shareExcelBtn">
+                            <i class="bi bi-share me-2"></i>مشاركة
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer d-flex flex-column flex-sm-row gap-2">
+                <button type="button" class="btn btn-secondary w-100 w-sm-auto" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-primary w-100 w-sm-auto" id="generateExcelBtn" disabled>
+                    <i class="bi bi-file-earmark-excel me-2"></i>توليد ملف Excel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* تحسينات responsive للمودال */
+@media (max-width: 768px) {
+    #customerExportModal .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+    }
+    
+    #customerExportModal .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    #customerExportModal .btn-group {
+        width: 100%;
+    }
+    
+    #customerExportModal .btn-group .btn {
+        flex: 1;
+    }
+    
+    #customerExportModal .modal-footer {
+        padding: 0.75rem;
+    }
+    
+    #customerExportModal .modal-footer .btn {
+        font-size: 0.875rem;
+    }
+    
+    #customerExportModal table {
+        font-size: 0.8rem;
+    }
+    
+    #customerExportModal .table th,
+    #customerExportModal .table td {
+        padding: 0.5rem 0.25rem;
+    }
+}
+</style>
 <?php endif; ?>
 
 <!-- Modal استيراد العملاء المحليين من CSV -->

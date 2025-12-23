@@ -1163,8 +1163,13 @@ try {
                         $repId = $currentUser['id'];
                     }
                     
-                    $customerColumns = ['name', 'phone', 'balance', 'address', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
+                    // توليد unique_code فريد للعميل
+                    require_once __DIR__ . '/../includes/customer_code_generator.php';
+                    $uniqueCode = generateUniqueCustomerCode('customers');
+                    
+                    $customerColumns = ['unique_code', 'name', 'phone', 'balance', 'address', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
                     $customerValues = [
+                        $uniqueCode,
                         $name,
                         $phone,  // قد يكون null
                         $balance, // قد يكون 0.0
@@ -1175,7 +1180,7 @@ try {
                         0,
                         ($currentUser['role'] === 'sales' ? 0 : 1) // created_by_admin = 0 للمندوبين، 1 للمدير/المحاسب
                     ];
-                    $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?', '?', '?'];
+                    $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?', '?', '?', '?'];
                     
                     // تسجيل SQL Query
                     logImport("Row $i - SQL: INSERT INTO customers (" . implode(', ', $customerColumns) . ") VALUES (" . implode(', ', $customerPlaceholders) . ")");

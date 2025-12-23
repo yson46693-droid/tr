@@ -176,6 +176,15 @@ class Database {
                 error_log('Customer integrity constraints migration error (non-critical): ' . $e->getMessage());
             }
             
+            // إضافة عمود unique_code للعملاء
+            try {
+                require_once __DIR__ . '/customer_code_generator.php';
+                ensureCustomerUniqueCodeColumn('customers');
+                ensureCustomerUniqueCodeColumn('local_customers');
+            } catch (Throwable $e) {
+                error_log('Customer unique_code migration error (non-critical): ' . $e->getMessage());
+            }
+            
         } catch (Exception $e) {
             // تسجيل الخطأ في ملف السجل
             error_log("Database connection error: " . $e->getMessage());

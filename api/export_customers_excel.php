@@ -259,10 +259,14 @@ try {
     
     // تحديد العنوان بناءً على نوع العملاء
     $title = 'تصدير_العملاء_المحددين';
-    if (isset($data['section']) && $data['section'] === 'delegates') {
-        $title = 'تصدير_عملاء_المندوبين';
-    } elseif (isset($data['section']) && $data['section'] === 'company') {
-        $title = 'تصدير_عملاء_الشركة';
+    if (isset($data['section'])) {
+        if ($data['section'] === 'delegates') {
+            $title = 'تصدير_عملاء_المندوبين';
+        } elseif ($data['section'] === 'company') {
+            $title = 'تصدير_عملاء_الشركة';
+        } elseif ($data['section'] === 'local') {
+            $title = 'تصدير_العملاء_المحليين';
+        }
     }
     
     // إنشاء ملف Excel/CSV

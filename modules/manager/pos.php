@@ -312,9 +312,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             if ($existingLocalCustomer) {
                 $error = 'يوجد عميل محلي مسجل مسبقاً بنفس الاسم.';
             } else {
+                // توليد unique_code فريد للعميل
+                require_once __DIR__ . '/../../includes/customer_code_generator.php';
+                $uniqueCode = generateUniqueCustomerCode('local_customers');
+                
                 $result = $db->execute(
-                    "INSERT INTO local_customers (name, phone, address, balance, status, created_by) VALUES (?, ?, ?, ?, 'active', ?)",
+                    "INSERT INTO local_customers (unique_code, name, phone, address, balance, status, created_by) VALUES (?, ?, ?, ?, ?, 'active', ?)",
                     [
+                        $uniqueCode,
                         $name,
                         $phone !== '' ? $phone : null,
                         $address !== '' ? $address : null,
@@ -748,11 +753,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($customerMode === 'new') {
                     $dueAmount = $baseDueAmount;
                     $creditUsed = 0.0;
+                    // توليد unique_code فريد للعميل
+                    require_once __DIR__ . '/../../includes/customer_code_generator.php';
+                    $uniqueCode = generateUniqueCustomerCode('local_customers');
+                    
                     // إنشاء العميل في جدول local_customers
                     $db->execute(
-                        "INSERT INTO local_customers (name, phone, address, balance, status, created_by) 
-                         VALUES (?, ?, ?, ?, 'active', ?)",
+                        "INSERT INTO local_customers (unique_code, name, phone, address, balance, status, created_by) 
+                         VALUES (?, ?, ?, ?, ?, 'active', ?)",
                         [
+                            $uniqueCode,
                             $newCustomerName,
                             $newCustomerPhone !== '' ? $newCustomerPhone : null,
                             $newCustomerAddress !== '' ? $newCustomerAddress : null,
@@ -816,10 +826,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $customerPhone = $customer['phone'] ?? ($customerMode === 'new' ? ($newCustomerPhone !== '' ? $newCustomerPhone : null) : null);
                     $customerAddress = $customer['address'] ?? ($customerMode === 'new' ? ($newCustomerAddress !== '' ? $newCustomerAddress : null) : null);
                     
+                    // توليد unique_code فريد للعميل
+                    require_once __DIR__ . '/../../includes/customer_code_generator.php';
+                    $uniqueCode = generateUniqueCustomerCode('customers');
+                    
                     $db->execute(
-                        "INSERT INTO customers (name, phone, address, balance, status, created_by, rep_id, created_from_pos, created_by_admin) 
-                         VALUES (?, ?, ?, 0, 'active', ?, NULL, 1, 1)",
+                        "INSERT INTO customers (unique_code, name, phone, address, balance, status, created_by, rep_id, created_from_pos, created_by_admin) 
+                         VALUES (?, ?, ?, ?, 0, 'active', ?, NULL, 1, 1)",
                         [
+                            $uniqueCode,
                             $customerName,
                             $customerPhone,
                             $customerAddress,

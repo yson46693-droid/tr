@@ -199,8 +199,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $hasLongitudeColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'longitude'"));
                     $hasLocationCapturedAtColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'location_captured_at'"));
                     
-                    $customerColumns = ['name', 'phone', 'address', 'balance', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
+                    // توليد unique_code فريد للعميل
+                    require_once __DIR__ . '/../../includes/customer_code_generator.php';
+                    $uniqueCode = generateUniqueCustomerCode('customers');
+                    
+                    $customerColumns = ['unique_code', 'name', 'phone', 'address', 'balance', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
                     $customerValues = [
+                        $uniqueCode,
                         $newCustomerName,
                         $newCustomerPhone !== '' ? $newCustomerPhone : null,
                         $newCustomerAddress !== '' ? $newCustomerAddress : null,
@@ -211,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         0,
                         $createdByAdminFlag,
                     ];
-                    $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?', '?', '?'];
+                    $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?', '?', '?', '?'];
                     
                     if ($hasLatitudeColumn && $newCustomerLatitude !== null) {
                         $customerColumns[] = 'latitude';
@@ -606,17 +611,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $hasLongitudeColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'longitude'"));
                         $hasLocationCapturedAtColumn = !empty($db->queryOne("SHOW COLUMNS FROM customers LIKE 'location_captured_at'"));
                         
-                        $customerColumns = ['name', 'phone', 'address', 'balance', 'status', 'created_by', 'created_by_admin'];
+                        // توليد unique_code فريد للعميل
+                        require_once __DIR__ . '/../../includes/customer_code_generator.php';
+                        $uniqueCode = generateUniqueCustomerCode('customers');
+                        
+                        $customerColumns = ['unique_code', 'name', 'phone', 'address', 'balance', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
                         $customerValues = [
+                            $uniqueCode,
                             $newCustomerName,
                             $newCustomerPhone !== '' ? $newCustomerPhone : null,
                             $newCustomerAddress !== '' ? $newCustomerAddress : null,
                             0,
                             'active',
                             $currentUser['id'],
+                            null,
+                            0,
                             1
                         ];
-                        $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?'];
+                        $customerPlaceholders = ['?', '?', '?', '?', '?', '?', '?', '?', '?', '?'];
                         
                         if ($hasLatitudeColumn && $newCustomerLatitude !== null) {
                             $customerColumns[] = 'latitude';

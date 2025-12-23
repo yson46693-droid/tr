@@ -34,6 +34,12 @@
                 return;
             }
             
+            // إذا كان قسم العملاء المحليين، جلب العملاء المحليين مباشرة
+            if (currentSection === 'local') {
+                loadLocalCustomers();
+                return;
+            }
+            
             // إذا كان هناك اختيار مندوب، انتظر اختياره
             const repSelect = document.getElementById('exportRepSelect');
             if (repSelect && repSelect.tagName === 'SELECT') {
@@ -160,6 +166,64 @@
         const generateBtn = document.getElementById('generateExcelBtn');
         if (generateBtn) {
             generateBtn.disabled = true;
+        }
+    }
+    
+    /**
+     * جلب العملاء المحليين عبر API
+     */
+    async function loadLocalCustomers() {
+        const customersList = document.getElementById('exportCustomersList');
+        const customersSection = document.getElementById('customersSection');
+        const selectRepMessage = document.getElementById('selectRepMessage');
+        
+        if (!customersList) {
+            return;
+        }
+        
+        // إظهار رسالة التحميل
+        if (selectRepMessage) {
+            selectRepMessage.style.display = 'block';
+            selectRepMessage.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل العملاء المحليين...';
+        }
+        
+        if (customersSection) {
+            customersSection.style.display = 'none';
+        }
+        
+        try {
+            const response = await fetch('../api/get_local_customers_for_export.php', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.message || 'فشل في جلب العملاء المحليين');
+            }
+            
+            // إخفاء رسالة التحميل
+            if (selectRepMessage) {
+                selectRepMessage.style.display = 'none';
+            }
+            
+            // عرض قائمة العملاء
+            displayCustomersList(result.customers || []);
+            
+            if (customersSection) {
+                customersSection.style.display = 'block';
+            }
+            
+        } catch (error) {
+            console.error('Load local customers error:', error);
+            if (selectRepMessage) {
+                selectRepMessage.style.display = 'block';
+                selectRepMessage.innerHTML = '<div class="alert alert-danger">حدث خطأ أثناء جلب العملاء المحليين: ' + escapeHtml(error.message) + '</div>';
+            }
         }
     }
     
@@ -559,6 +623,11 @@
             // جلب معرف المندوب (فقط إذا كان قسم عملاء المندوبين)
             const repSelect = document.getElementById('exportRepSelect');
             const repId = (currentSection === 'delegates' && repSelect) ? parseInt(repSelect.value, 10) : null;
+            
+            // إذا كان قسم العملاء المحليين، لا حاجة لمعرف مندوب
+            if (currentSection === 'local') {
+                // العملاء المحليين لا يحتاجون مندوب
+            }
             
             // تحضير البيانات
             const payload = {
