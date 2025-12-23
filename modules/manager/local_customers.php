@@ -947,7 +947,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $customerValues
                 );
 
-                $customerId = (int)$result['insert_id'];
+                // الحصول على ID العميل المدرج
+                $customerId = isset($result['insert_id']) && $result['insert_id'] > 0
+                    ? (int)$result['insert_id']
+                    : (int)$db->getLastInsertId();
+                
+                // التحقق من أن customerId صحيح
+                if ($customerId <= 0) {
+                    throw new Exception('فشل الحصول على معرف العميل بعد الإدراج');
+                }
                 
                 // حفظ أرقام الهواتف المتعددة
                 $phones = $_POST['phones'] ?? [];

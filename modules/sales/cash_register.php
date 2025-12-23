@@ -31,6 +31,9 @@ $salesRepId = $isSalesUser ? $currentUser['id'] : (isset($_GET['sales_rep_id']) 
 
 // معالجة إضافة رصيد مباشر للخزنة
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_cash_balance') {
+    // التحقق من طلب AJAX
+    $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+    
     // التأكد من أن المستخدم مندوب مبيعات فقط
     if (!$isSalesUser) {
         $error = 'غير مصرح لك بإضافة رصيد للخزنة';
@@ -86,7 +89,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
     }
     
-    // إعادة التوجيه لتجنب إعادة إرسال النموذج
+    // إذا كان طلب AJAX، إرجاع JSON
+    if ($isAjax) {
+        header('Content-Type: application/json; charset=utf-8');
+        if (!empty($success)) {
+            echo json_encode(['success' => true, 'message' => $success], JSON_UNESCAPED_UNICODE);
+        } else {
+            echo json_encode(['success' => false, 'message' => $error], JSON_UNESCAPED_UNICODE);
+        }
+        exit;
+    }
+    
+    // إعادة التوجيه لتجنب إعادة إرسال النموذج (للطلبات العادية)
     if (!empty($success)) {
         $_SESSION['success'] = $success;
     }
@@ -1560,15 +1574,150 @@ $salesRepInfo = $db->queryOne(
     }
 })();
 
-// إعادة تعيين نموذج إضافة الرصيد عند إغلاق الـ modal
+// معالجة نموذج إضافة الرصيد عبر AJAX
 (function() {
     const addCashBalanceModal = document.getElementById('addCashBalanceModal');
     const addCashBalanceForm = document.getElementById('addCashBalanceForm');
+    const cashBalanceAmount = document.getElementById('cashBalanceAmount');
     
+    if (addCashBalanceForm) {
+        addCashBalanceForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const amount = parseFloat(cashBalanceAmount.value) || 0;
+            const submitBtn = addCashBalanceForm.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            
+            // التحقق من المبلغ
+            if (isNaN(amount) || amount <= 0) {
+                // إضافة رسالة خطأ مرئية
+                let errorDiv = cashBalanceAmount.parentElement.querySelector('.invalid-feedback');
+                if (!errorDiv) {
+                    errorDiv = document.createElement('div');
+                    errorDiv.className = 'invalid-feedback';
+                    cashBalanceAmount.parentElement.appendChild(errorDiv);
+                }
+                errorDiv.textContent = 'يجب أن يكون المبلغ أكبر من الصفر';
+                cashBalanceAmount.classList.add('is-invalid');
+                cashBalanceAmount.focus();
+                return false;
+            } else {
+                // إزالة رسالة الخطأ إذا كانت موجودة
+                cashBalanceAmount.classList.remove('is-invalid');
+            }
+            
+            // تعطيل الزر وإظهار loading
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري الإضافة...';
+            
+            // إعداد FormData
+            const formData = new FormData(addCashBalanceForm);
+            
+            // إرسال طلب AJAX
+            fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // إعادة تفعيل الزر
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+                
+                if (data.success) {
+                    // إظهار رسالة نجاح
+                    showAlert('success', data.message);
+                    
+                    // إغلاق الـ modal
+                    const modalInstance = bootstrap.Modal.getInstance(addCashBalanceModal);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                        
+                        // إعادة تحميل الصفحة بعد إغلاق الـ modal بالكامل لتحديث البيانات
+                        addCashBalanceModal.addEventListener('hidden.bs.modal', function reloadAfterClose() {
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 300);
+                            addCashBalanceModal.removeEventListener('hidden.bs.modal', reloadAfterClose);
+                        }, { once: true });
+                    } else {
+                        // إذا لم يكن هناك modal instance، إعادة تحميل مباشرة
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    }
+                } else {
+                    // إظهار رسالة خطأ
+                    showAlert('danger', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+                showAlert('danger', 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+            });
+        });
+    }
+    
+    // إزالة رسالة الخطأ عند البدء بالكتابة
+    if (cashBalanceAmount) {
+        cashBalanceAmount.addEventListener('input', function() {
+            if (this.classList.contains('is-invalid')) {
+                this.classList.remove('is-invalid');
+            }
+        });
+    }
+    
+    // إعادة تعيين النموذج عند إغلاق الـ modal
     if (addCashBalanceModal && addCashBalanceForm) {
         addCashBalanceModal.addEventListener('hidden.bs.modal', function() {
             addCashBalanceForm.reset();
+            // إزالة رسائل الخطأ
+            if (cashBalanceAmount) {
+                cashBalanceAmount.classList.remove('is-invalid');
+            }
         });
+    }
+    
+    // دالة لإظهار رسائل التنبيه
+    function showAlert(type, message) {
+        // البحث عن container الرسائل
+        const alertContainer = document.querySelector('.container-fluid, .container, main') || document.body;
+        
+        // إنشاء عنصر التنبيه
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.setAttribute('role', 'alert');
+        alertDiv.innerHTML = `
+            <i class="bi bi-${type === 'success' ? 'check-circle-fill' : 'exclamation-triangle-fill'} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        // إدراج التنبيه في بداية الصفحة
+        const firstChild = alertContainer.firstElementChild;
+        if (firstChild) {
+            alertContainer.insertBefore(alertDiv, firstChild);
+        } else {
+            alertContainer.appendChild(alertDiv);
+        }
+        
+        // إزالة التنبيه تلقائياً بعد 5 ثوانٍ
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
     }
 })();
 </script>
