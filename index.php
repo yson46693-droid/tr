@@ -503,7 +503,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if (empty($error)) {
                 $rememberMe = isset($_POST['remember_me']) && $_POST['remember_me'] == '1';
-                $result = login($username, $password, $rememberMe);
+                
+                try {
+                    $result = login($username, $password, $rememberMe);
+                } catch (Throwable $loginError) {
+                    error_log("Login error in index.php: " . $loginError->getMessage());
+                    error_log("Login error file: " . $loginError->getFile() . " line: " . $loginError->getLine());
+                    error_log("Login error stack trace: " . $loginError->getTraceAsString());
+                    
+                    $result = [
+                        'success' => false,
+                        'message' => 'حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى أو الاتصال بالدعم الفني.'
+                    ];
+                }
+                
+                // التأكد من أن $result هو array
+                if (!is_array($result)) {
+                    error_log("Login function returned non-array result: " . gettype($result));
+                    $result = [
+                        'success' => false,
+                        'message' => 'حدث خطأ غير متوقع أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.'
+                    ];
+                }
                 
                 // إرجاع نتيجة JSON للتعامل معها في JavaScript
                 if (isset($_POST['ajax_login']) && $_POST['ajax_login'] == '1') {

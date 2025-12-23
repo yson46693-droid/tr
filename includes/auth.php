@@ -3,7 +3,9 @@
  * نظام المصادقة والتحقق من الأدوار
  * نظام إدارة الشركات المتكامل
  */
-
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 // منع الوصول المباشر
 if (!defined('ACCESS_ALLOWED')) {
     die('Direct access not allowed');
@@ -537,68 +539,148 @@ function checkMaintenanceMode() {
  * @return array نتيجة تسجيل الدخول
  */
 function login($username, $password, $rememberMe = true) {
-    // التحقق من حظر IP
-    require_once __DIR__ . '/security.php';
-    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-    if (isIPBlocked($ipAddress)) {
-        logLoginAttempt($username, false, 'IP محظور');
-        return ['success' => false, 'message' => 'عنوان IP محظور. يرجى الاتصال بالإدارة.'];
+    try {
+        // التحقق من حظر IP
+        if (file_exists(__DIR__ . '/security.php')) {
+            require_once __DIR__ . '/security.php';
+        }
+        
+        $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        
+        // التحقق من حظر IP (مع معالجة الأخطاء)
+        try {
+            if (function_exists('isIPBlocked') && isIPBlocked($ipAddress)) {
+                if (function_exists('logLoginAttempt')) {
+                    logLoginAttempt($username, false, 'IP محظور');
+                }
+                return ['success' => false, 'message' => 'عنوان IP محظور. يرجى الاتصال بالإدارة.'];
+            }
+        } catch (Throwable $e) {
+            error_log("Login IP check error: " . $e->getMessage());
+            // استمر في العملية حتى لو فشل فحص IP
+        }
+        
+        // الحصول على معلومات المستخدم
+        try {
+            $user = getUserByUsername($username);
+        } catch (Throwable $e) {
+            error_log("Login getUserByUsername error: " . $e->getMessage());
+            return ['success' => false, 'message' => 'حدث خطأ في الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.'];
+        }
+        
+        if (!$user) {
+            try {
+                if (function_exists('logLoginAttempt')) {
+                    logLoginAttempt($username, false, 'مستخدم غير موجود');
+                }
+            } catch (Throwable $e) {
+                error_log("Login attempt log error: " . $e->getMessage());
+            }
+            return ['success' => false, 'message' => 'اسم المستخدم أو كلمة المرور غير صحيحة'];
+        }
+        
+        if ($user['status'] !== 'active') {
+            try {
+                if (function_exists('logLoginAttempt')) {
+                    logLoginAttempt($username, false, 'حساب غير مفعّل');
+                }
+            } catch (Throwable $e) {
+                error_log("Login attempt log error: " . $e->getMessage());
+            }
+            return ['success' => false, 'message' => 'الحساب غير مفعّل'];
+        }
+        
+        if (!verifyPassword($password, $user['password_hash'])) {
+            try {
+                if (function_exists('logLoginAttempt')) {
+                    logLoginAttempt($username, false, 'كلمة مرور خاطئة');
+                }
+            } catch (Throwable $e) {
+                error_log("Login attempt log error: " . $e->getMessage());
+            }
+            return ['success' => false, 'message' => 'اسم المستخدم أو كلمة المرور غير صحيحة'];
+        }
+        
+        // التحقق من وضع الصيانة قبل السماح بتسجيل الدخول
+        // المطورون يستطيعون تسجيل الدخول دائماً حتى في وضع الصيانة
+        try {
+            if (isMaintenanceMode() && strtolower($user['role']) !== 'developer') {
+                if (function_exists('logLoginAttempt')) {
+                    logLoginAttempt($username, false, 'وضع الصيانة مفعّل');
+                }
+                return ['success' => false, 'message' => 'التطبيق تحت الصيانة في الوقت الحالي برجاء إعادة المحاولة في وقت لاحق'];
+            }
+        } catch (Throwable $e) {
+            error_log("Maintenance mode check error: " . $e->getMessage());
+            // استمر في العملية حتى لو فشل فحص وضع الصيانة
+        }
+        
+        // === إنشاء الجلسة ===
+        // التأكد من بدء الجلسة
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        
+        // تنظيف أي جلسة قديمة
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            try {
+                session_regenerate_id(true);
+            } catch (Throwable $e) {
+                error_log("Session regenerate error: " . $e->getMessage());
+                // استمر في العملية حتى لو فشل تجديد الجلسة
+            }
+        }
+        
+        // حفظ بيانات المستخدم في الجلسة
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+        $_SESSION['role'] = $user['role'];
+        $_SESSION['login_time'] = time();
+        
+        // إذا كان rememberMe مفعّل، نمدد مدة الجلسة
+        if ($rememberMe) {
+            ini_set('session.gc_maxlifetime', 2592000); // 30 يوم
+        } else {
+            ini_set('session.gc_maxlifetime', 86400); // يوم واحد
+        }
+        
+        // تسجيل محاولة ناجحة (مع معالجة الأخطاء)
+        try {
+            if (function_exists('logLoginAttempt')) {
+                logLoginAttempt($username, true);
+            }
+        } catch (Throwable $e) {
+            error_log("Login attempt log error: " . $e->getMessage());
+            // لا نوقف العملية إذا فشل تسجيل محاولة الدخول
+        }
+        
+        // تسجيل سجل التدقيق (مع معالجة الأخطاء)
+        try {
+            if (file_exists(__DIR__ . '/audit_log.php')) {
+                require_once __DIR__ . '/audit_log.php';
+                if (function_exists('logAudit')) {
+                    logAudit($user['id'], 'login', 'user', $user['id'], null, [
+                        'method' => 'password',
+                        'remember_me' => $rememberMe ? 'yes' : 'no'
+                    ]);
+                }
+            }
+        } catch (Throwable $e) {
+            error_log("Audit log error: " . $e->getMessage());
+            // لا نوقف العملية إذا فشل تسجيل سجل التدقيق
+        }
+        
+        return ['success' => true, 'user' => $user];
+        
+    } catch (Throwable $e) {
+        // تسجيل الخطأ في error_log
+        error_log("Login function fatal error: " . $e->getMessage());
+        error_log("Login function error file: " . $e->getFile() . " line: " . $e->getLine());
+        error_log("Login function stack trace: " . $e->getTraceAsString());
+        
+        // إرجاع رسالة خطأ آمنة للمستخدم
+        return ['success' => false, 'message' => 'حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى أو الاتصال بالدعم الفني.'];
     }
-    
-    $user = getUserByUsername($username);
-    
-    if (!$user) {
-        logLoginAttempt($username, false, 'مستخدم غير موجود');
-        return ['success' => false, 'message' => 'اسم المستخدم أو كلمة المرور غير صحيحة'];
-    }
-    
-    if ($user['status'] !== 'active') {
-        logLoginAttempt($username, false, 'حساب غير مفعّل');
-        return ['success' => false, 'message' => 'الحساب غير مفعّل'];
-    }
-    
-    if (!verifyPassword($password, $user['password_hash'])) {
-        logLoginAttempt($username, false, 'كلمة مرور خاطئة');
-        return ['success' => false, 'message' => 'اسم المستخدم أو كلمة المرور غير صحيحة'];
-    }
-    
-    // التحقق من وضع الصيانة قبل السماح بتسجيل الدخول
-    // المطورون يستطيعون تسجيل الدخول دائماً حتى في وضع الصيانة
-    if (isMaintenanceMode() && strtolower($user['role']) !== 'developer') {
-        logLoginAttempt($username, false, 'وضع الصيانة مفعّل');
-        return ['success' => false, 'message' => 'التطبيق تحت الصيانة في الوقت الحالي برجاء إعادة المحاولة في وقت لاحق'];
-    }
-    
-    // === إنشاء الجلسة ===
-    // تنظيف أي جلسة قديمة
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        session_regenerate_id(true);
-    }
-    
-    // حفظ بيانات المستخدم في الجلسة
-    $_SESSION['user_id'] = $user['id'];
-    $_SESSION['username'] = $user['username'];
-    $_SESSION['role'] = $user['role'];
-    $_SESSION['login_time'] = time();
-    
-    // إذا كان rememberMe مفعّل، نمدد مدة الجلسة
-    if ($rememberMe) {
-        ini_set('session.gc_maxlifetime', 2592000); // 30 يوم
-    } else {
-        ini_set('session.gc_maxlifetime', 86400); // يوم واحد
-    }
-    
-    // تسجيل محاولة ناجحة
-    logLoginAttempt($username, true);
-    
-    // تسجيل سجل التدقيق
-    require_once __DIR__ . '/audit_log.php';
-    logAudit($user['id'], 'login', 'user', $user['id'], null, [
-        'method' => 'password',
-        'remember_me' => $rememberMe ? 'yes' : 'no'
-    ]);
-    
-    return ['success' => true, 'user' => $user];
 }
 
 /**
