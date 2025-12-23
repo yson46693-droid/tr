@@ -3771,10 +3771,13 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     logAudit($currentUser['id'], 'create_mixed_nuts', 'mixed_nuts', $mixedNutsId, null, ['name' => $batchName, 'quantity' => $totalQuantity]);
                     
+                    // بناء URL مباشر مع section لضمان البقاء في نفس الصفحة
+                    $redirectUrl = $dashboardUrl . '?page=raw_materials_warehouse&section=nuts&success=' . urlencode('تم إنشاء المكسرات المشكلة بنجاح') . '&_t=' . time();
+                    
                     preventDuplicateSubmission(
                         'تم إنشاء المكسرات المشكلة بنجاح',
                         ['page' => 'raw_materials_warehouse', 'section' => 'nuts'],
-                        null,
+                        $redirectUrl,
                         $dashboardSlug
                     );
                     
