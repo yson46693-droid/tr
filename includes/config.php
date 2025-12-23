@@ -941,4 +941,79 @@ if (function_exists('isLoggedIn') && isLoggedIn()) {
     }
 }
 
+/**
+ * تنظيف تلقائي للاتصالات المعلقة في قاعدة البيانات
+ * يتم تشغيله كل 5 دقائق لتقليل عدد الاتصالات المعلقة
+ */
+if (!defined('DB_CONNECTION_CLEANUP_ENABLED')) {
+    define('DB_CONNECTION_CLEANUP_ENABLED', true);
+}
+
+if (DB_CONNECTION_CLEANUP_ENABLED) {
+    try {
+        $cleanupFlagFile = PRIVATE_STORAGE_PATH . '/logs/db_cleanup_last_run.txt';
+        $now = time();
+        $shouldRun = false;
+        
+        // التحقق من آخر مرة تم فيها التنظيف (كل 5 دقائق)
+        if (file_exists($cleanupFlagFile)) {
+            $lastRunTime = (int)@file_get_contents($cleanupFlagFile);
+            if (($now - $lastRunTime) > 300) { // 5 دقائق
+                $shouldRun = true;
+            }
+        } else {
+            $shouldRun = true;
+        }
+        
+        if ($shouldRun) {
+            // حفظ وقت التنظيف أولاً لمنع التشغيل المتكرر
+            $logsDir = dirname($cleanupFlagFile);
+            if (!is_dir($logsDir)) {
+                @mkdir($logsDir, 0755, true);
+            }
+            @file_put_contents($cleanupFlagFile, $now, LOCK_EX);
+            
+            // تشغيل تنظيف الاتصالات في الخلفية (non-blocking)
+            // استخدام curl أو file_get_contents مع timeout قصير
+            $cleanupUrl = null;
+            if (function_exists('getRelativeUrl')) {
+                $cleanupUrl = getRelativeUrl('api/cleanup_db_connections.php?token=1');
+            } else {
+                // بناء URL يدوياً
+                $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+                $pathParts = explode('/', trim(parse_url($requestUri, PHP_URL_PATH), '/'));
+                $basePath = '';
+                foreach ($pathParts as $part) {
+                    if (in_array($part, ['dashboard', 'modules', 'api', 'assets', 'includes']) || strpos($part, '.php') !== false) {
+                        break;
+                    }
+                    if (!empty($part)) {
+                        $basePath .= '/' . $part;
+                    }
+                }
+                if (!empty($basePath)) {
+                    $cleanupUrl = $basePath . '/api/cleanup_db_connections.php?token=1';
+                } else {
+                    $cleanupUrl = '/api/cleanup_db_connections.php?token=1';
+                }
+            }
+            
+            if ($cleanupUrl) {
+                // استخدام file_get_contents مع timeout قصير (non-blocking)
+                $context = stream_context_create([
+                    'http' => [
+                        'timeout' => 1, // timeout 1 ثانية فقط
+                        'ignore_errors' => true,
+                    ]
+                ]);
+                @file_get_contents($cleanupUrl, false, $context);
+            }
+        }
+    } catch (Exception $e) {
+        error_log('DB connection cleanup error: ' . $e->getMessage());
+    } catch (Throwable $e) {
+        error_log('DB connection cleanup error: ' . $e->getMessage());
+    }
+}
+
 

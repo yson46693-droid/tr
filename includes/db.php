@@ -22,6 +22,7 @@ class Database {
     private $inTransaction = false;
     private static $connectionClosed = false;
     private static $shutdownRegistered = false;
+    private static $migrationsRun = false; // إضافة flag لتشغيل الـ migrations مرة واحدة فقط
     
     private function __construct() {
         // إعادة تعيين حالة الإغلاق عند إنشاء اتصال جديد
@@ -135,10 +136,10 @@ class Database {
             $this->connection->set_charset("utf8mb4");
             
             // تعيين wait_timeout وinteractive_timeout لتقليل الاتصالات المعلقة
-            // هذا يساعد في تقليل عدد الاتصالات المعلقة التي تستهلك موارد MySQL
+            // تقليل الوقت إلى 60 ثانية (1 دقيقة) بدلاً من 300 (5 دقائق) لتقليل الاتصالات المعلقة
             try {
-                $this->connection->query("SET SESSION wait_timeout = 300"); // 5 دقائق
-                $this->connection->query("SET SESSION interactive_timeout = 300"); // 5 دقائق
+                $this->connection->query("SET SESSION wait_timeout = 60"); // 1 دقيقة
+                $this->connection->query("SET SESSION interactive_timeout = 60"); // 1 دقيقة
             } catch (Exception $e) {
                 // تجاهل الأخطاء في تعيين timeout
                 error_log("Warning: Could not set connection timeout: " . $e->getMessage());
@@ -148,99 +149,105 @@ class Database {
             // مصر تستخدم توقيت UTC+2 بدون توقيت صيفي
             $this->connection->query("SET time_zone = '+02:00'");
             
-            try {
-                $columnCheck = $this->connection->query("SHOW COLUMNS FROM `users` LIKE 'profile_photo'");
-                if ($columnCheck instanceof mysqli_result) {
-                    if ($columnCheck->num_rows === 0) {
-                        $this->connection->query("ALTER TABLE `users` ADD COLUMN `profile_photo` LONGTEXT NULL AFTER `phone`");
-                        // مسح الكاش بعد تعديل الجدول
-                        $this->clearCache();
+            // تشغيل الـ migrations مرة واحدة فقط باستخدام static flag لتقليل الضغط على قاعدة البيانات
+            if (!self::$migrationsRun) {
+                try {
+                    $columnCheck = $this->connection->query("SHOW COLUMNS FROM `users` LIKE 'profile_photo'");
+                    if ($columnCheck instanceof mysqli_result) {
+                        if ($columnCheck->num_rows === 0) {
+                            $this->connection->query("ALTER TABLE `users` ADD COLUMN `profile_photo` LONGTEXT NULL AFTER `phone`");
+                            // مسح الكاش بعد تعديل الجدول
+                            $this->clearCache();
+                        }
+                        $columnCheck->free();
                     }
-                    $columnCheck->free();
+                } catch (Throwable $migrationError) {
+                    error_log('Profile photo column migration error: ' . $migrationError->getMessage());
                 }
-            } catch (Throwable $migrationError) {
-                error_log('Profile photo column migration error: ' . $migrationError->getMessage());
-            }
 
-            // إنشاء جدول جلسات PWA Splash Screen تلقائياً من ملف SQL
-            try {
-                $tableCheck = $this->connection->query("SHOW TABLES LIKE 'pwa_splash_sessions'");
-                if ($tableCheck instanceof mysqli_result && $tableCheck->num_rows === 0) {
-                    // قراءة ملف SQL وتنفيذه
-                    $migrationFile = __DIR__ . '/../database/migrations/add_pwa_splash_sessions.sql';
-                    if (file_exists($migrationFile)) {
-                        $sql = file_get_contents($migrationFile);
-                        
-                        // إزالة التعليقات والمسافات الزائدة
-                        $sql = preg_replace('/--.*$/m', '', $sql);
-                        $sql = trim($sql);
-                        
-                        // تنفيذ الاستعلامات
-                        if (!empty($sql)) {
-                            // تقسيم الاستعلامات إذا كان هناك أكثر من واحد
-                            $queries = array_filter(array_map('trim', explode(';', $sql)));
-                            foreach ($queries as $query) {
-                                if (!empty($query) && !preg_match('/^--/', $query)) {
-                                    $this->connection->query($query);
-                                    // مسح الكاش بعد تنفيذ الاستعلام
-                                    $this->clearCache();
+                // إنشاء جدول جلسات PWA Splash Screen تلقائياً من ملف SQL
+                try {
+                    $tableCheck = $this->connection->query("SHOW TABLES LIKE 'pwa_splash_sessions'");
+                    if ($tableCheck instanceof mysqli_result && $tableCheck->num_rows === 0) {
+                        // قراءة ملف SQL وتنفيذه
+                        $migrationFile = __DIR__ . '/../database/migrations/add_pwa_splash_sessions.sql';
+                        if (file_exists($migrationFile)) {
+                            $sql = file_get_contents($migrationFile);
+                            
+                            // إزالة التعليقات والمسافات الزائدة
+                            $sql = preg_replace('/--.*$/m', '', $sql);
+                            $sql = trim($sql);
+                            
+                            // تنفيذ الاستعلامات
+                            if (!empty($sql)) {
+                                // تقسيم الاستعلامات إذا كان هناك أكثر من واحد
+                                $queries = array_filter(array_map('trim', explode(';', $sql)));
+                                foreach ($queries as $query) {
+                                    if (!empty($query) && !preg_match('/^--/', $query)) {
+                                        $this->connection->query($query);
+                                        // مسح الكاش بعد تنفيذ الاستعلام
+                                        $this->clearCache();
+                                    }
                                 }
                             }
+                        } else {
+                            // إذا لم يوجد الملف، استخدم الكود المباشر كبديل
+                            $this->connection->query("
+                                CREATE TABLE IF NOT EXISTS `pwa_splash_sessions` (
+                                  `id` int(11) NOT NULL AUTO_INCREMENT,
+                                  `user_id` int(11) DEFAULT NULL,
+                                  `session_token` varchar(64) NOT NULL,
+                                  `ip_address` varchar(45) DEFAULT NULL,
+                                  `user_agent` text DEFAULT NULL,
+                                  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                  `expires_at` timestamp NOT NULL,
+                                  PRIMARY KEY (`id`),
+                                  UNIQUE KEY `session_token` (`session_token`),
+                                  KEY `user_id` (`user_id`),
+                                  KEY `expires_at` (`expires_at`),
+                                  CONSTRAINT `pwa_splash_sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+                                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                            ");
+                            // مسح الكاش بعد إنشاء الجدول
+                            $this->clearCache();
                         }
-                    } else {
-                        // إذا لم يوجد الملف، استخدم الكود المباشر كبديل
-                        $this->connection->query("
-                            CREATE TABLE IF NOT EXISTS `pwa_splash_sessions` (
-                              `id` int(11) NOT NULL AUTO_INCREMENT,
-                              `user_id` int(11) DEFAULT NULL,
-                              `session_token` varchar(64) NOT NULL,
-                              `ip_address` varchar(45) DEFAULT NULL,
-                              `user_agent` text DEFAULT NULL,
-                              `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                              `expires_at` timestamp NOT NULL,
-                              PRIMARY KEY (`id`),
-                              UNIQUE KEY `session_token` (`session_token`),
-                              KEY `user_id` (`user_id`),
-                              KEY `expires_at` (`expires_at`),
-                              CONSTRAINT `pwa_splash_sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-                        ");
-                        // مسح الكاش بعد إنشاء الجدول
-                        $this->clearCache();
                     }
+                    if ($tableCheck instanceof mysqli_result) {
+                        $tableCheck->free();
+                    }
+                } catch (Throwable $migrationError) {
+                    error_log('PWA splash sessions table migration error: ' . $migrationError->getMessage());
                 }
-                if ($tableCheck instanceof mysqli_result) {
-                    $tableCheck->free();
+
+                // التحقق من وجود أعمدة created_from_pos و created_by_admin في جدول customers
+                // تم تعطيله مؤقتاً لتجنب timeout - يمكن تفعيله لاحقاً بعد إصلاح المشكلة
+                // try {
+                //     $this->ensureCustomerFlagsMigration();
+                // } catch (Throwable $e) {
+                //     error_log('Customer flags migration error (non-critical): ' . $e->getMessage());
+                // }
+
+                // تم تعطيله مؤقتاً لتجنب timeout
+                // $this->ensureVehicleInventoryAutoUpgrade();
+                
+                // تشغيل migration لإضافة Foreign Key Constraints
+                try {
+                    $this->ensureCustomerIntegrityConstraints();
+                } catch (Throwable $e) {
+                    error_log('Customer integrity constraints migration error (non-critical): ' . $e->getMessage());
                 }
-            } catch (Throwable $migrationError) {
-                error_log('PWA splash sessions table migration error: ' . $migrationError->getMessage());
-            }
-
-            // التحقق من وجود أعمدة created_from_pos و created_by_admin في جدول customers
-            // تم تعطيله مؤقتاً لتجنب timeout - يمكن تفعيله لاحقاً بعد إصلاح المشكلة
-            // try {
-            //     $this->ensureCustomerFlagsMigration();
-            // } catch (Throwable $e) {
-            //     error_log('Customer flags migration error (non-critical): ' . $e->getMessage());
-            // }
-
-            // تم تعطيله مؤقتاً لتجنب timeout
-            // $this->ensureVehicleInventoryAutoUpgrade();
-            
-            // تشغيل migration لإضافة Foreign Key Constraints
-            try {
-                $this->ensureCustomerIntegrityConstraints();
-            } catch (Throwable $e) {
-                error_log('Customer integrity constraints migration error (non-critical): ' . $e->getMessage());
-            }
-            
-            // إضافة عمود unique_code للعملاء
-            try {
-                require_once __DIR__ . '/customer_code_generator.php';
-                ensureCustomerUniqueCodeColumn('customers');
-                ensureCustomerUniqueCodeColumn('local_customers');
-            } catch (Throwable $e) {
-                error_log('Customer unique_code migration error (non-critical): ' . $e->getMessage());
+                
+                // إضافة عمود unique_code للعملاء
+                try {
+                    require_once __DIR__ . '/customer_code_generator.php';
+                    ensureCustomerUniqueCodeColumn('customers');
+                    ensureCustomerUniqueCodeColumn('local_customers');
+                } catch (Throwable $e) {
+                    error_log('Customer unique_code migration error (non-critical): ' . $e->getMessage());
+                }
+                
+                // تعيين flag بعد تشغيل الـ migrations
+                self::$migrationsRun = true;
             }
             
         } catch (Exception $e) {
@@ -317,24 +324,24 @@ class Database {
         if (self::$instance === null) {
             self::$instance = new self();
         } else {
-            // التحقق من أن الاتصال لا يزال نشطاً
+            // تحسين فحص الاتصال - تجنب ping() لتقليل فتح اتصالات جديدة
             if (self::$instance->connection && !self::$connectionClosed) {
                 try {
-                    if (!self::$instance->connection->ping()) {
-                        // الاتصال غير نشط، إعادة إنشاء الاتصال
-                        if (self::$instance->connection) {
-                            @self::$instance->connection->close();
-                        }
-                        self::$instance = new self();
-                    }
+                    // استخدام query بسيط بدلاً من ping() لتجنب فتح اتصالات جديدة
+                    @self::$instance->connection->query("SELECT 1");
+                    // إذا نجح الاستعلام، الاتصال نشط
                 } catch (Exception $e) {
-                    // في حالة الخطأ، إعادة إنشاء الاتصال
+                    // الاتصال غير نشط، إعادة إنشاء الاتصال
                     if (self::$instance->connection) {
                         @self::$instance->connection->close();
                     }
                     self::$connectionClosed = false;
                     self::$instance = new self();
                 }
+            } else if (self::$connectionClosed) {
+                // إذا كان الاتصال مغلق، إعادة إنشاء
+                self::$connectionClosed = false;
+                self::$instance = new self();
             }
         }
         return self::$instance;
@@ -565,33 +572,30 @@ class Database {
     
     /**
      * إغلاق الاتصال تلقائياً عند انتهاء الطلب
+     * يتم إغلاق الاتصال دائماً حتى لو كان في معاملة (سيتم rollback تلقائياً)
      */
     public function autoClose() {
         if (!self::$connectionClosed && $this->connection) {
             try {
-                // التحقق من أن الاتصال لا يزال نشطاً
-                if (method_exists($this->connection, 'ping')) {
-                    if ($this->connection->ping()) {
-                        // إذا كان هناك معاملة نشطة، لا نغلق الاتصال
-                        if (!$this->inTransaction) {
-                            $this->close();
+                // إغلاق الاتصال دائماً حتى لو كان في معاملة (سيتم rollback تلقائياً)
+                if ($this->inTransaction) {
+                    // محاولة commit أولاً، وإذا فشل rollback
+                    try {
+                        $this->commit();
+                    } catch (Exception $e) {
+                        try {
+                            $this->rollback();
+                        } catch (Exception $rollbackError) {
+                            error_log("Error rolling back transaction in autoClose: " . $rollbackError->getMessage());
                         }
-                    } else {
-                        // الاتصال غير نشط، إغلاقه
-                        $this->close();
-                    }
-                } else {
-                    // إذا لم يكن ping متاحاً، أغلق الاتصال مباشرة
-                    if (!$this->inTransaction) {
-                        $this->close();
                     }
                 }
+                $this->close();
             } catch (Exception $e) {
-                // في حالة الخطأ، حاول إغلاق الاتصال مباشرة
                 error_log("Error in autoClose: " . $e->getMessage());
                 try {
-                    if (!$this->inTransaction && $this->connection) {
-                        $this->connection->close();
+                    if ($this->connection) {
+                        @$this->connection->close();
                         self::$connectionClosed = true;
                         $this->connection = null;
                     }

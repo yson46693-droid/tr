@@ -42,13 +42,13 @@ try {
     $db = db();
     $connection = $db->getConnection();
     
-    // جلب الاتصالات المعلقة (Sleep) التي تستغرق أكثر من 5 دقائق (300 ثانية)
+    // جلب الاتصالات المعلقة (Sleep) التي تستغرق أكثر من 60 ثانية (1 دقيقة) بدلاً من 300
     $connections = $connection->query("
         SELECT Id as connection_id, User as username, Time as time_seconds
         FROM information_schema.PROCESSLIST
         WHERE User = '" . $connection->real_escape_string(DB_USER) . "'
         AND Command = 'Sleep'
-        AND Time > 300
+        AND Time > 60
         AND Id != CONNECTION_ID()
     ");
     

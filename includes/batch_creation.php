@@ -35,6 +35,8 @@ function batchCreationGetPdo()
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES   => false,
+                PDO::ATTR_PERSISTENT         => false, // تعطيل الاتصالات المستمرة
+                PDO::ATTR_TIMEOUT            => 5, // timeout 5 ثواني
             ]);
             
             // تسجيل دالة لإغلاق الاتصال تلقائياً عند انتهاء الطلب
@@ -66,16 +68,12 @@ function batchCreationGetPdo()
         }
     }
 
-    // Fallback: استخدام mysqli إذا كان PDO غير متاح
+    // Fallback: استخدام Database Singleton بدلاً من إنشاء اتصال جديد
     if (extension_loaded('mysqli')) {
         try {
-            $mysqli = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, (int)DB_PORT);
-            
-            if ($mysqli->connect_error) {
-                throw new RuntimeException('تعذر الاتصال بقاعدة البيانات: ' . $mysqli->connect_error);
-            }
-            
-            $mysqli->set_charset('utf8mb4');
+            // استخدام Database Singleton بدلاً من إنشاء اتصال جديد لتقليل عدد الاتصالات
+            $db = Database::getInstance();
+            $mysqli = $db->getConnection();
             
             // إنشاء wrapper object لمحاكاة PDO
             $pdo = new class($mysqli) {
@@ -240,28 +238,17 @@ function batchCreationGetPdo()
                 public function getMysqli() {
                     return $this->mysqli;
                 }
+                
+                // إضافة destructor - لا نغلق الاتصال هنا لأننا نستخدم Singleton
+                // سيتم إغلاقه تلقائياً من Database class
+                public function __destruct() {
+                    // لا نغلق الاتصال هنا لأننا نستخدم Singleton
+                    // سيتم إغلاقه تلقائياً من Database class
+                }
             };
             
-            // تسجيل دالة لإغلاق الاتصال تلقائياً عند انتهاء الطلب
-            if (!$shutdownRegistered) {
-                register_shutdown_function(function() use (&$pdo) {
-                    if ($pdo !== null) {
-                        try {
-                            // إذا كان mysqli wrapper، أغلق الاتصال
-                            if (method_exists($pdo, 'getMysqli')) {
-                                $mysqli = $pdo->getMysqli();
-                                if ($mysqli instanceof mysqli) {
-                                    $mysqli->close();
-                                }
-                            }
-                            $pdo = null;
-                        } catch (Exception $e) {
-                            error_log("Error closing batch creation mysqli connection: " . $e->getMessage());
-                        }
-                    }
-                });
-                $shutdownRegistered = true;
-            }
+            // لا حاجة لتسجيل shutdown function لأننا نستخدم Singleton
+            // سيتم إغلاق الاتصال تلقائياً من Database class
             
             return $pdo;
         } catch (Exception $e) {
