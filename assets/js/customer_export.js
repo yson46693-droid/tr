@@ -19,6 +19,13 @@
     let localCustomersTotal = 0;
     let allLocalCustomers = []; // لتخزين جميع العملاء المحددين عبر الصفحات
     
+    // متغيرات pagination لعملاء المندوبين
+    let repCustomersPage = 1;
+    let repCustomersTotalPages = 1;
+    let repCustomersTotal = 0;
+    let allRepCustomers = []; // لتخزين جميع العملاء المحددين عبر الصفحات
+    let currentRepId = null; // لتخزين معرف المندوب الحالي
+    
     /**
      * حساب مسار API بناءً على موقع الصفحة الحالية
      * يستخدم CUSTOMER_EXPORT_CONFIG من PHP إذا كان متاحاً
@@ -207,6 +214,13 @@
         localCustomersTotal = 0;
         allLocalCustomers = [];
         
+        // إعادة تعيين pagination لعملاء المندوبين
+        repCustomersPage = 1;
+        repCustomersTotalPages = 1;
+        repCustomersTotal = 0;
+        allRepCustomers = [];
+        currentRepId = null;
+        
         const customersList = document.getElementById('exportCustomersList');
         if (customersList) {
             customersList.innerHTML = '';
@@ -374,15 +388,25 @@
     }
     
     /**
-     * جلب عملاء المندوب عبر API
+     * جلب عملاء المندوب عبر API مع pagination
      */
-    async function loadCustomersByRep(repId) {
+    async function loadCustomersByRep(repId, page = 1) {
         const customersList = document.getElementById('exportCustomersList');
         const customersSection = document.getElementById('customersSection');
         const selectRepMessage = document.getElementById('selectRepMessage');
         
         if (!customersList || !repId || repId <= 0) {
             return;
+        }
+        
+        // حفظ معرف المندوب الحالي
+        if (currentRepId !== repId) {
+            // إذا تغير المندوب، إعادة تعيين pagination
+            repCustomersPage = 1;
+            repCustomersTotalPages = 1;
+            repCustomersTotal = 0;
+            allRepCustomers = [];
+            currentRepId = repId;
         }
         
         // إظهار رسالة التحميل
@@ -396,7 +420,7 @@
         }
         
         try {
-            const response = await fetch(`${getApiPath('get_rep_customers_for_export.php')}?rep_id=${repId}`, {
+            const response = await fetch(`${getApiPath('get_rep_customers_for_export.php')}?rep_id=${repId}&page=${page}`, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -410,11 +434,24 @@
                 throw new Error(result.message || 'فشل في جلب عملاء المندوب');
             }
             
+            // تحديث معلومات pagination
+            repCustomersPage = result.page || page;
+            repCustomersTotalPages = result.total_pages || 1;
+            repCustomersTotal = result.total || 0;
+            
             // التحقق من صحة البيانات القادمة من API
             const customers = result.customers || [];
             if (!Array.isArray(customers)) {
                 console.warn('API returned invalid customers data:', customers);
-                displayCustomersList([]);
+                displayCustomersList([], {
+                    hasPagination: true,
+                    currentPage: repCustomersPage,
+                    totalPages: repCustomersTotalPages,
+                    total: repCustomersTotal,
+                    onPageChange: function(newPage) {
+                        loadCustomersByRep(repId, newPage);
+                    }
+                });
                 return;
             }
             
@@ -429,8 +466,16 @@
                        customer.name.trim() !== '';
             });
             
-            // عرض قائمة العملاء المفلترة (ستقوم الدالة بإخفاء/إظهار الأقسام حسب الحاجة)
-            displayCustomersList(validCustomers);
+            // عرض قائمة العملاء مع pagination
+            displayCustomersList(validCustomers, {
+                hasPagination: true,
+                currentPage: repCustomersPage,
+                totalPages: repCustomersTotalPages,
+                total: repCustomersTotal,
+                onPageChange: function(newPage) {
+                    loadCustomersByRep(repId, newPage);
+                }
+            });
             
         } catch (error) {
             console.error('Load customers error:', error);

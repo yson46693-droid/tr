@@ -111,7 +111,22 @@ try {
         ], 404);
     }
     
-    // جلب عملاء المندوب
+    // معاملات pagination
+    $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+    $perPage = 50; // 50 عميل في كل صفحة
+    $offset = ($page - 1) * $perPage;
+    
+    // جلب إجمالي عدد عملاء المندوب المدينين فقط
+    $totalCountResult = $db->queryOne(
+        "SELECT COUNT(*) as total
+         FROM customers c
+         WHERE c.created_by = ? AND c.status = 'active' AND (c.balance IS NOT NULL AND c.balance > 0)",
+        [$repId]
+    );
+    $totalCount = (int)($totalCountResult['total'] ?? 0);
+    $totalPages = ceil($totalCount / $perPage);
+    
+    // جلب عملاء المندوب مع pagination
     // فحص أمني: العملاء يظهرون فقط للمندوب الذي أنشأهم (created_by)
     // وليس بناءً على rep_id - هذا يضمن عدم ظهور عملاء المندوب القديم للمندوب الجديد
     // فلترة: عرض العملاء أصحاب الرصيد المدين فقط (balance > 0)
@@ -120,8 +135,9 @@ try {
          FROM customers c
          LEFT JOIN regions r ON c.region_id = r.id
          WHERE c.created_by = ? AND c.status = 'active' AND (c.balance IS NOT NULL AND c.balance > 0)
-         ORDER BY c.name ASC",
-        [$repId]
+         ORDER BY c.name ASC
+         LIMIT ? OFFSET ?",
+        [$repId, $perPage, $offset]
     );
     
     // التأكد من أن المصفوفة فارغة إذا لم يكن هناك عملاء
@@ -205,7 +221,11 @@ try {
             'name' => $rep['full_name'] ?? $rep['username'] ?? '',
         ],
         'customers' => $result,
-        'total' => count($result)
+        'total' => $totalCount,
+        'page' => $page,
+        'per_page' => $perPage,
+        'total_pages' => $totalPages,
+        'has_more' => $page < $totalPages
     ]);
     
 } catch (Exception $e) {
