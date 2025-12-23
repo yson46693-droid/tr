@@ -1942,12 +1942,46 @@ if (empty($mixedNutsCheck)) {
               PRIMARY KEY (`id`),
               KEY `supplier_id` (`supplier_id`),
               KEY `created_by` (`created_by`),
+              UNIQUE KEY `unique_batch_supplier` (`batch_name`, `supplier_id`),
               CONSTRAINT `mixed_nuts_ibfk_1` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`) ON DELETE CASCADE,
               CONSTRAINT `mixed_nuts_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
     } catch (Exception $e) {
         error_log("Error creating mixed_nuts table: " . $e->getMessage());
+    }
+} else {
+    // التحقق من وجود UNIQUE constraint وإضافتها إذا لم تكن موجودة
+    try {
+        $constraintCheck = $db->queryOne("
+            SELECT CONSTRAINT_NAME 
+            FROM information_schema.TABLE_CONSTRAINTS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'mixed_nuts' 
+            AND CONSTRAINT_NAME = 'unique_batch_supplier'
+        ");
+        
+        if (empty($constraintCheck)) {
+            // التحقق من عدم وجود بيانات مكررة قبل إضافة constraint
+            $duplicates = $db->query("
+                SELECT batch_name, supplier_id, COUNT(*) as cnt 
+                FROM mixed_nuts 
+                GROUP BY batch_name, supplier_id 
+                HAVING cnt > 1
+            ");
+            
+            if (empty($duplicates)) {
+                $db->execute("
+                    ALTER TABLE `mixed_nuts` 
+                    ADD UNIQUE KEY `unique_batch_supplier` (`batch_name`, `supplier_id`)
+                ");
+                error_log("Added UNIQUE constraint unique_batch_supplier to mixed_nuts table");
+            } else {
+                error_log("Cannot add UNIQUE constraint: duplicate batch_name+supplier_id combinations exist");
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Error checking/adding UNIQUE constraint to mixed_nuts: " . $e->getMessage());
     }
 }
 
@@ -3661,6 +3695,16 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 try {
                     $db->beginTransaction();
+                    
+                    // التحقق من عدم وجود خلطة بنفس الاسم لنفس المورد
+                    $existingMix = $db->queryOne(
+                        "SELECT id, batch_name FROM mixed_nuts WHERE batch_name = ? AND supplier_id = ?",
+                        [$batchName, $supplierId]
+                    );
+                    
+                    if ($existingMix) {
+                        throw new Exception('يوجد خلطة أخرى بنفس الاسم "' . htmlspecialchars($batchName) . '" للمورد المحدد. يرجى استخدام اسم مختلف.');
+                    }
                     
                     $totalQuantity = 0;
                     $validIngredients = [];

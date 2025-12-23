@@ -735,9 +735,9 @@ function batchCreationDeductTypedStock($pdo, array $material, float $unitsMultip
                         $checkParams[] = $attempt['name'];
                         $checkParams[] = '%' . addcslashes($attempt['name'], '%_') . '%';
                     } else {
-                        // partial search
-                        $checkSql .= " AND (batch_name LIKE ? OR ? LIKE CONCAT('%', batch_name, '%'))";
-                        $checkParams[] = '%' . addcslashes($attempt['name'], '%_') . '%';
+                        // partial search - استخدام البحث المطابق فقط لتجنب الخلط بين الخلطات
+                        // تم إزالة البحث الجزئي لأنه قد يسبب خلط بين الخلطات المختلفة
+                        $checkSql .= " AND batch_name = ?";
                         $checkParams[] = $attempt['name'];
                     }
                     
@@ -763,12 +763,12 @@ function batchCreationDeductTypedStock($pdo, array $material, float $unitsMultip
                     }
                 }
                 
-                // محاولة أخيرة بدون فلتر المورد
+                // محاولة أخيرة بدون فلتر المورد - استخدام البحث المطابق فقط
                 if (!$isMixedNuts) {
-                    $checkSql3 = "SELECT id, batch_name, total_quantity FROM mixed_nuts WHERE total_quantity > 0 AND (batch_name LIKE ? OR ? LIKE CONCAT('%', batch_name, '%')) LIMIT 1";
+                    $checkSql3 = "SELECT id, batch_name, total_quantity FROM mixed_nuts WHERE total_quantity > 0 AND batch_name = ? LIMIT 1";
                     try {
                         $checkStmt3 = $pdo->prepare($checkSql3);
-                        $checkStmt3->execute(['%' . addcslashes($cleanName, '%_') . '%', $cleanName]);
+                        $checkStmt3->execute([$cleanName]);
                         $checkResult3 = $checkStmt3->fetch(PDO::FETCH_ASSOC);
                         
                         if ($checkResult3 && !empty($checkResult3['batch_name'])) {
@@ -893,9 +893,9 @@ function batchCreationDeductTypedStock($pdo, array $material, float $unitsMultip
                             $checkParams[] = $attempt['name'];
                             $checkParams[] = '%' . addcslashes($attempt['name'], '%_') . '%';
                         } else {
-                            // partial search
-                            $checkSql .= " AND (batch_name LIKE ? OR ? LIKE CONCAT('%', batch_name, '%'))";
-                            $checkParams[] = '%' . addcslashes($attempt['name'], '%_') . '%';
+                            // partial search - استخدام البحث المطابق فقط لتجنب الخلط بين الخلطات
+                            // تم إزالة البحث الجزئي لأنه قد يسبب خلط بين الخلطات المختلفة
+                            $checkSql .= " AND batch_name = ?";
                             $checkParams[] = $attempt['name'];
                         }
                         
