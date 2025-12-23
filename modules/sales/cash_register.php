@@ -1338,11 +1338,6 @@ $salesRepInfo = $db->queryOne(
                 <div class="glass-card-header">
                     <i class="bi bi-bank glass-card-blue"></i>
                     <h6 class="mb-0 fw-semibold">رصيد الخزنة الإجمالي</h6>
-                    <?php if ($isSalesUser): ?>
-                    <button type="button" class="btn btn-sm btn-light ms-auto" data-bs-toggle="modal" data-bs-target="#addCashBalanceModal" title="إضافة رصيد">
-                        <i class="bi bi-plus-circle"></i>
-                    </button>
-                    <?php endif; ?>
                 </div>
                 <div class="glass-card-body">
                     <p class="glass-card-value glass-card-blue mb-0"><?php echo formatCurrency($cashRegisterBalance); ?></p>
@@ -1356,6 +1351,53 @@ $salesRepInfo = $db->queryOne(
         </div>
     </div>
 </div>
+
+<!-- نموذج إضافة رصيد للخزنة (ثابت) -->
+<?php if ($isSalesUser): ?>
+<div class="glass-card mb-4">
+    <div class="glass-card-header">
+        <i class="bi bi-plus-circle-fill glass-card-green"></i>
+        <h6 class="mb-0 fw-semibold">إضافة رصيد للخزنة</h6>
+    </div>
+    <div class="glass-card-body">
+        <form method="POST" action="javascript:void(0);" id="addCashBalanceForm" onsubmit="return false;">
+            <input type="hidden" name="action" value="add_cash_balance">
+            <div class="row g-3">
+                <div class="col-12 col-md-4">
+                    <label for="cashBalanceAmount" class="form-label">
+                        <i class="bi bi-cash-coin me-2"></i>المبلغ <span class="text-danger">*</span>
+                    </label>
+                    <input type="number" 
+                           class="form-control" 
+                           id="cashBalanceAmount" 
+                           name="amount" 
+                           step="0.01" 
+                           min="0.01" 
+                           required 
+                           placeholder="أدخل المبلغ">
+                    <div class="form-text">يجب أن يكون المبلغ أكبر من الصفر</div>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label for="cashBalanceDescription" class="form-label">
+                        <i class="bi bi-card-text me-2"></i>الوصف
+                    </label>
+                    <input type="text" 
+                           class="form-control" 
+                           id="cashBalanceDescription" 
+                           name="description" 
+                           placeholder="اكتب وصفاً للمبلغ (اختياري)">
+                    <div class="form-text">مثال: إضافة رصيد نقدي، إيداع من حساب شخصي، إلخ</div>
+                </div>
+                <div class="col-12 col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-check-circle me-2"></i>إضافة
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- جدول الديون القديمة -->
 <div class="glass-card glass-card-red-bg mb-4">
@@ -1558,53 +1600,6 @@ $salesRepInfo = $db->queryOne(
     </div>
 </div>
 
-<!-- Modal إضافة رصيد للخزنة -->
-<?php if ($isSalesUser): ?>
-<div class="modal fade" id="addCashBalanceModal" tabindex="-1" aria-labelledby="addCashBalanceModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="addCashBalanceModalLabel">
-                    <i class="bi bi-plus-circle me-2"></i>إضافة رصيد للخزنة
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form method="POST" action="javascript:void(0);" id="addCashBalanceForm" onsubmit="return false;">
-                <input type="hidden" name="action" value="add_cash_balance">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="cashBalanceAmount" class="form-label">المبلغ <span class="text-danger">*</span></label>
-                        <input type="number" 
-                               class="form-control" 
-                               id="cashBalanceAmount" 
-                               name="amount" 
-                               step="0.01" 
-                               min="0.01" 
-                               required 
-                               placeholder="أدخل المبلغ">
-                        <div class="form-text">يجب أن يكون المبلغ أكبر من الصفر</div>
-                    </div>
-                    <div class="mb-3">
-                        <label for="cashBalanceDescription" class="form-label">الوصف</label>
-                        <textarea class="form-control" 
-                                  id="cashBalanceDescription" 
-                                  name="description" 
-                                  rows="3" 
-                                  placeholder="اكتب وصفاً للمبلغ (اختياري)"></textarea>
-                        <div class="form-text">مثال: إضافة رصيد نقدي، إيداع من حساب شخصي، إلخ</div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check-circle me-2"></i>إضافة الرصيد
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
 
 <!-- معالجة نموذج إضافة الرصيد عبر AJAX -->
 <script>
@@ -1614,56 +1609,17 @@ $salesRepInfo = $db->queryOne(
 // معالجة نموذج إضافة الرصيد عبر AJAX
 (function() {
     // الانتظار حتى يتم تحميل DOM بالكامل
-    function initCashBalanceModal() {
-        const addCashBalanceModal = document.getElementById('addCashBalanceModal');
+    function initCashBalanceForm() {
         const addCashBalanceForm = document.getElementById('addCashBalanceForm');
         const cashBalanceAmount = document.getElementById('cashBalanceAmount');
         const cashBalanceDescription = document.getElementById('cashBalanceDescription');
         
         // التحقق من وجود العناصر
-        if (!addCashBalanceModal || !addCashBalanceForm) {
+        if (!addCashBalanceForm) {
             // إعادة المحاولة بعد 100ms إذا لم تكن العناصر جاهزة
-            setTimeout(initCashBalanceModal, 100);
+            setTimeout(initCashBalanceForm, 100);
             return;
         }
-        
-        // تحسينات الأداء على الهاتف المحمول
-        function optimizeForMobile() {
-            if (!addCashBalanceModal) return;
-            
-            const inputs = addCashBalanceModal.querySelectorAll('input, textarea, select');
-            inputs.forEach(input => {
-                input.style.touchAction = 'manipulation';
-                input.style.webkitTapHighlightColor = 'transparent';
-                
-                input.addEventListener('input', function() {
-                    void this.offsetHeight;
-                }, { passive: true });
-                
-                if (input.type !== 'submit' && input.type !== 'button') {
-                    input.addEventListener('touchstart', function(e) {
-                        if (document.activeElement !== this) {
-                            this.focus();
-                        }
-                    }, { passive: true });
-                }
-            });
-            
-            if (addCashBalanceModal) {
-                addCashBalanceModal.style.transform = 'translateZ(0)';
-                addCashBalanceModal.style.webkitTransform = 'translateZ(0)';
-            }
-        }
-        
-        // تطبيق التحسينات عند فتح الـ modal
-        addCashBalanceModal.addEventListener('shown.bs.modal', function() {
-            optimizeForMobile();
-            if (cashBalanceAmount) {
-                setTimeout(() => {
-                    cashBalanceAmount.focus();
-                }, 100);
-            }
-        }, { once: false });
         
         // معالجة إرسال النموذج
         addCashBalanceForm.addEventListener('submit', function(e) {
@@ -1680,7 +1636,10 @@ $salesRepInfo = $db->queryOne(
                 let errorDiv = cashBalanceAmount.parentElement.querySelector('.invalid-feedback');
                 if (!errorDiv) {
                     errorDiv = document.createElement('div');
-                    errorDiv.className = 'invalid-feedback';
+                    errorDiv.className = 'invalid-feedback d-block';
+                    errorDiv.style.color = '#dc3545';
+                    errorDiv.style.fontSize = '0.875em';
+                    errorDiv.style.marginTop = '0.25rem';
                     cashBalanceAmount.parentElement.appendChild(errorDiv);
                 }
                 errorDiv.textContent = 'يجب أن يكون المبلغ أكبر من الصفر';
@@ -1736,16 +1695,15 @@ $salesRepInfo = $db->queryOne(
                         addCashAdditionToTable(data.lastAddition);
                     }
                     
-                    // إغلاق الـ modal
-                    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                        const modalInstance = bootstrap.Modal.getInstance(addCashBalanceModal);
-                        if (modalInstance) {
-                            modalInstance.hide();
-                        }
-                    }
-                    
                     // إعادة تعيين النموذج
                     addCashBalanceForm.reset();
+                    
+                    // Focus على حقل المبلغ بعد النجاح
+                    if (cashBalanceAmount) {
+                        setTimeout(() => {
+                            cashBalanceAmount.focus();
+                        }, 100);
+                    }
                 } else {
                     showAlert('danger', data.message);
                 }
@@ -1774,26 +1732,14 @@ $salesRepInfo = $db->queryOne(
                 }
             }, { passive: true });
         }
-        
-        // إعادة تعيين النموذج عند إغلاق الـ modal
-        addCashBalanceModal.addEventListener('hidden.bs.modal', function() {
-            addCashBalanceForm.reset();
-            if (cashBalanceAmount) {
-                cashBalanceAmount.classList.remove('is-invalid');
-                const errorDiv = cashBalanceAmount.parentElement.querySelector('.invalid-feedback');
-                if (errorDiv) {
-                    errorDiv.remove();
-                }
-            }
-        });
     }
     
     // تهيئة عند تحميل الصفحة
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initCashBalanceModal);
+        document.addEventListener('DOMContentLoaded', initCashBalanceForm);
     } else {
         // DOM محمل بالفعل
-        initCashBalanceModal();
+        initCashBalanceForm();
     }
     
     
