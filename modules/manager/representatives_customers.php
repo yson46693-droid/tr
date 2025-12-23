@@ -482,27 +482,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_P
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_POST['action']) === 'set_credit_limit') {
     // التحقق من أن المستخدم هو مدير فقط
     if ($currentRole !== 'manager') {
-        $_SESSION['error_message'] = 'غير مصرح لك بتحديد الحد الائتماني. هذه الصلاحية متاحة للمدير فقط.';
-        redirectAfterPost(
-            'representatives_customers',
-            [],
-            [],
-            $currentRole
+        $errorMessage = 'غير مصرح لك بتحديد الحد الائتماني. هذه الصلاحية متاحة للمدير فقط.';
+        preventDuplicateSubmission(
+            null,
+            ['page' => 'representatives_customers'],
+            null,
+            $currentRole,
+            $errorMessage
         );
     } else {
         $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
         $creditLimit = isset($_POST['credit_limit']) ? cleanFinancialValue($_POST['credit_limit']) : 0;
         
         if ($customerId <= 0) {
-            $_SESSION['error_message'] = 'معرف العميل غير صحيح';
+            $errorMessage = 'معرف العميل غير صحيح';
+            preventDuplicateSubmission(
+                null,
+                ['page' => 'representatives_customers'],
+                null,
+                $currentRole,
+                $errorMessage
+            );
         } elseif ($creditLimit < 0) {
-            $_SESSION['error_message'] = 'الحد الائتماني يجب أن يكون أكبر من أو يساوي صفر.';
+            $errorMessage = 'الحد الائتماني يجب أن يكون أكبر من أو يساوي صفر.';
+            preventDuplicateSubmission(
+                null,
+                ['page' => 'representatives_customers'],
+                null,
+                $currentRole,
+                $errorMessage
+            );
         } else {
             try {
                 // التحقق من وجود العميل
                 $customer = $db->queryOne("SELECT id, name, balance FROM customers WHERE id = ?", [$customerId]);
                 if (!$customer) {
-                    $_SESSION['error_message'] = 'العميل غير موجود';
+                    $errorMessage = 'العميل غير موجود';
+                    preventDuplicateSubmission(
+                        null,
+                        ['page' => 'representatives_customers'],
+                        null,
+                        $currentRole,
+                        $errorMessage
+                    );
                 } else {
                     // تحديث الحد الائتماني
                     $db->execute(
@@ -517,18 +539,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_P
                         'current_balance' => $customer['balance'] ?? 0
                     ]);
                     
-                    $_SESSION['success_message'] = 'تم تحديد الحد الائتماني للعميل ' . htmlspecialchars($customer['name']) . ' بنجاح.';
+                    $successMessage = 'تم تحديد الحد الائتماني للعميل ' . htmlspecialchars($customer['name']) . ' بنجاح.';
                     
-                    redirectAfterPost(
-                        'representatives_customers',
-                        [],
-                        [],
+                    preventDuplicateSubmission(
+                        $successMessage,
+                        ['page' => 'representatives_customers'],
+                        null,
                         $currentRole
                     );
                 }
             } catch (Throwable $e) {
                 error_log('Set credit limit error: ' . $e->getMessage());
-                $_SESSION['error_message'] = 'حدث خطأ أثناء تحديد الحد الائتماني';
+                $errorMessage = 'حدث خطأ أثناء تحديد الحد الائتماني';
+                preventDuplicateSubmission(
+                    null,
+                    ['page' => 'representatives_customers'],
+                    null,
+                    $currentRole,
+                    $errorMessage
+                );
             }
         }
     }

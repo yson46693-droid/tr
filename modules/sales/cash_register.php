@@ -34,6 +34,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     // التحقق من طلب AJAX
     $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
     
+    // تهيئة المتغيرات
+    $newTotalCashAdditions = 0.0;
+    $lastAddition = null;
+    
     // التأكد من أن المستخدم مندوب مبيعات فقط
     if (!$isSalesUser) {
         $error = 'غير مصرح لك بإضافة رصيد للخزنة';
@@ -45,41 +49,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $error = 'يجب إدخال مبلغ صحيح أكبر من الصفر';
         } else {
             try {
-                // التأكد من وجود جدول cash_register_additions
-                $tableExists = $db->queryOne("SHOW TABLES LIKE 'cash_register_additions'");
-                if (empty($tableExists)) {
-                    $db->execute("
-                        CREATE TABLE IF NOT EXISTS `cash_register_additions` (
-                          `id` int(11) NOT NULL AUTO_INCREMENT,
-                          `sales_rep_id` int(11) NOT NULL,
-                          `amount` decimal(15,2) NOT NULL,
-                          `description` text DEFAULT NULL,
-                          `created_by` int(11) NOT NULL,
-                          `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                          PRIMARY KEY (`id`),
-                          KEY `sales_rep_id` (`sales_rep_id`),
-                          KEY `created_at` (`created_at`),
-                          CONSTRAINT `cash_register_additions_ibfk_1` FOREIGN KEY (`sales_rep_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-                          CONSTRAINT `cash_register_additions_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
-                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-                    ");
+                // التحقق من وجود الجدول مرة واحدة فقط باستخدام cache في session
+                // لتجنب فحص الجدول في كل طلب POST
+                if (!isset($_SESSION['cash_register_table_checked'])) {
+                    $tableExists = $db->queryOne("SHOW TABLES LIKE 'cash_register_additions'");
+                    if (empty($tableExists)) {
+                        $db->execute("
+                            CREATE TABLE IF NOT EXISTS `cash_register_additions` (
+                              `id` int(11) NOT NULL AUTO_INCREMENT,
+                              `sales_rep_id` int(11) NOT NULL,
+                              `amount` decimal(15,2) NOT NULL,
+                              `description` text DEFAULT NULL,
+                              `created_by` int(11) NOT NULL,
+                              `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                              PRIMARY KEY (`id`),
+                              KEY `sales_rep_id` (`sales_rep_id`),
+                              KEY `created_at` (`created_at`),
+                              CONSTRAINT `cash_register_additions_ibfk_1` FOREIGN KEY (`sales_rep_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+                              CONSTRAINT `cash_register_additions_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
+                            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                        ");
+                    }
+                    $_SESSION['cash_register_table_checked'] = true;
                 }
                 
-                // إضافة الرصيد
+                // إضافة الرصيد مباشرة بدون فحص الجدول
                 $db->execute(
                     "INSERT INTO cash_register_additions (sales_rep_id, amount, description, created_by) VALUES (?, ?, ?, ?)",
                     [$currentUser['id'], $amount, $description ?: null, $currentUser['id']]
                 );
                 
-                // تسجيل في سجل التدقيق
+                $insertId = $db->getLastInsertId();
+                
+                // تسجيل في سجل التدقيق (غير متزامن لتسريع الاستجابة)
                 try {
-                    logAudit($currentUser['id'], 'add_cash_balance', 'cash_register_addition', $db->getLastInsertId(), null, [
+                    logAudit($currentUser['id'], 'add_cash_balance', 'cash_register_addition', $insertId, null, [
                         'amount' => $amount,
                         'description' => $description
                     ]);
                 } catch (Throwable $auditError) {
                     error_log('Error logging audit for cash addition: ' . $auditError->getMessage());
                 }
+                
+                // حساب الرصيد الجديد مباشرة بدون إعادة تحميل الصفحة
+                $cashAdditionsTableExists = $db->queryOne("SHOW TABLES LIKE 'cash_register_additions'");
+                if (!empty($cashAdditionsTableExists)) {
+                    $additionsResult = $db->queryOne(
+                        "SELECT COALESCE(SUM(amount), 0) as total_additions
+                         FROM cash_register_additions
+                         WHERE sales_rep_id = ?",
+                        [$currentUser['id']]
+                    );
+                    $newTotalCashAdditions = (float)($additionsResult['total_additions'] ?? 0);
+                }
+                
+                // جلب آخر إضافة للعرض في الجدول
+                $lastAddition = $db->queryOne(
+                    "SELECT 
+                        cra.id,
+                        cra.amount,
+                        cra.description,
+                        cra.created_at,
+                        cra.created_by,
+                        u.username as created_by_username,
+                        u.full_name as created_by_name
+                     FROM cash_register_additions cra
+                     LEFT JOIN users u ON cra.created_by = u.id
+                     WHERE cra.id = ?",
+                    [$insertId]
+                );
                 
                 $success = 'تم إضافة الرصيد إلى الخزنة بنجاح';
             } catch (Throwable $e) {
@@ -89,11 +127,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
     }
     
-    // إذا كان طلب AJAX، إرجاع JSON
+    // إذا كان طلب AJAX، إرجاع JSON مع البيانات المحدثة
     if ($isAjax) {
         header('Content-Type: application/json; charset=utf-8');
         if (!empty($success)) {
-            echo json_encode(['success' => true, 'message' => $success], JSON_UNESCAPED_UNICODE);
+            $response = [
+                'success' => true, 
+                'message' => $success,
+                'newTotalCashAdditions' => $newTotalCashAdditions,
+                'lastAddition' => $lastAddition
+            ];
+            echo json_encode($response, JSON_UNESCAPED_UNICODE);
         } else {
             echo json_encode(['success' => false, 'message' => $error], JSON_UNESCAPED_UNICODE);
         }
@@ -148,118 +192,129 @@ if (!empty($invoicesTableExists)) {
     }
     
     // التحقق بأثر رجعي من الفواتير المدفوعة بالكامل وتحديثها إذا كانت مدفوعة من رصيد دائن
+    // تحسين الأداء: تنفيذ هذا التحقق مرة واحدة فقط لكل مندوب باستخدام flag في session
+    // لتجنب إعادة تشغيل هذا المنطق الثقيل في كل تحميل للصفحة
     if ($hasPaidFromCreditColumn) {
-        try {
-            // جلب الفواتير المدفوعة بالكامل التي لم يتم تحديدها كمدفوعة من رصيد دائن
-            $invoicesToCheck = $db->query(
-                "SELECT i.id, i.customer_id, i.date, i.total_amount, i.paid_amount, i.status, i.paid_from_credit
-                 FROM invoices i
-                 WHERE i.sales_rep_id = ?
-                 AND i.status = 'paid'
-                 AND i.paid_amount >= i.total_amount
-                 AND i.status != 'cancelled'
-                 AND (i.paid_from_credit IS NULL OR i.paid_from_credit = 0)
-                 ORDER BY i.date ASC, i.id ASC",
-                [$salesRepId]
-            );
-            
-            $updatedCount = 0;
-            foreach ($invoicesToCheck as $invoice) {
-                $customerId = (int)$invoice['customer_id'];
-                $invoiceDate = $invoice['date'];
-                $invoiceId = (int)$invoice['id'];
-                $invoiceTotal = (float)$invoice['total_amount'];
-                
-                // حساب الرصيد التراكمي للعميل قبل هذه الفاتورة
-                // نحسب الرصيد من جميع الفواتير السابقة لهذا العميل (بترتيب زمني)
-                $previousInvoices = $db->query(
-                    "SELECT id, date, total_amount, paid_amount, status, paid_from_credit
-                     FROM invoices
-                     WHERE customer_id = ?
-                     AND (date < ? OR (date = ? AND id < ?))
-                     AND status != 'cancelled'
-                     ORDER BY date ASC, id ASC",
-                    [$customerId, $invoiceDate, $invoiceDate, $invoiceId]
+        $retroCheckKey = 'retro_credit_check_' . $salesRepId;
+        // التحقق من أن هذا التحقق لم يتم تنفيذه من قبل في هذه الجلسة
+        if (!isset($_SESSION[$retroCheckKey])) {
+            try {
+                // جلب الفواتير المدفوعة بالكامل التي لم يتم تحديدها كمدفوعة من رصيد دائن
+                // تحديد حد أقصى للفواتير للتحقق منها لتسريع العملية
+                $invoicesToCheck = $db->query(
+                    "SELECT i.id, i.customer_id, i.date, i.total_amount, i.paid_amount, i.status, i.paid_from_credit
+                     FROM invoices i
+                     WHERE i.sales_rep_id = ?
+                     AND i.status = 'paid'
+                     AND i.paid_amount >= i.total_amount
+                     AND i.status != 'cancelled'
+                     AND (i.paid_from_credit IS NULL OR i.paid_from_credit = 0)
+                     ORDER BY i.date ASC, i.id ASC
+                     LIMIT 100",
+                    [$salesRepId]
                 );
                 
-                // حساب الرصيد التراكمي قبل هذه الفاتورة
-                // نبدأ من رصيد العميل الحالي ونرجع للخلف
-                $currentCustomer = $db->queryOne(
-                    "SELECT balance FROM customers WHERE id = ?",
-                    [$customerId]
-                );
-                $currentBalance = (float)($currentCustomer['balance'] ?? 0);
-                
-                // حساب الرصيد قبل هذه الفاتورة عن طريق طرح تأثير الفواتير اللاحقة
-                $balanceBeforeInvoice = $currentBalance;
-                
-                // جلب جميع الفواتير بعد هذه الفاتورة (بترتيب زمني عكسي)
-                $laterInvoices = $db->query(
-                    "SELECT id, date, total_amount, paid_amount, status, paid_from_credit
-                     FROM invoices
-                     WHERE customer_id = ?
-                     AND (date > ? OR (date = ? AND id > ?))
-                     AND status != 'cancelled'
-                     ORDER BY date ASC, id ASC",
-                    [$customerId, $invoiceDate, $invoiceDate, $invoiceId]
-                );
-                
-                // طرح تأثير الفواتير اللاحقة من الرصيد الحالي
-                foreach ($laterInvoices as $laterInv) {
-                    $laterTotal = (float)($laterInv['total_amount'] ?? 0);
-                    $laterPaid = (float)($laterInv['paid_amount'] ?? 0);
-                    $laterCreditUsed = (int)($laterInv['paid_from_credit'] ?? 0);
+                $updatedCount = 0;
+                foreach ($invoicesToCheck as $invoice) {
+                    $customerId = (int)$invoice['customer_id'];
+                    $invoiceDate = $invoice['date'];
+                    $invoiceId = (int)$invoice['id'];
+                    $invoiceTotal = (float)$invoice['total_amount'];
                     
-                    if ($laterCreditUsed) {
-                        // إذا كانت الفاتورة اللاحقة مدفوعة من رصيد دائن، لا نطرحها
-                        continue;
-                    }
+                    // حساب الرصيد التراكمي للعميل قبل هذه الفاتورة
+                    // نحسب الرصيد من جميع الفواتير السابقة لهذا العميل (بترتيب زمني)
+                    $previousInvoices = $db->query(
+                        "SELECT id, date, total_amount, paid_amount, status, paid_from_credit
+                         FROM invoices
+                         WHERE customer_id = ?
+                         AND (date < ? OR (date = ? AND id < ?))
+                         AND status != 'cancelled'
+                         ORDER BY date ASC, id ASC",
+                        [$customerId, $invoiceDate, $invoiceDate, $invoiceId]
+                    );
                     
-                    // طرح الفرق بين المبلغ الإجمالي والمبلغ المدفوع من الرصيد
-                    $balanceBeforeInvoice -= ($laterTotal - $laterPaid);
-                }
-                
-                // طرح تأثير هذه الفاتورة نفسها
-                $balanceBeforeInvoice -= ($invoiceTotal - (float)($invoice['paid_amount'] ?? 0));
-                
-                // إذا كان الرصيد قبل الفاتورة سالب (رصيد دائن) وكانت الفاتورة مدفوعة بالكامل
-                // فهذا يعني أنها دفعت من الرصيد الدائن
-                if ($balanceBeforeInvoice < -0.01 && $invoiceTotal > 0.01) {
-                    // التحقق من أن الفاتورة استهلكت الرصيد الدائن
-                    // الرصيد المتوقع بعد الفاتورة = الرصيد قبل + قيمة الفاتورة
-                    $expectedBalanceAfter = $balanceBeforeInvoice + $invoiceTotal;
+                    // حساب الرصيد التراكمي قبل هذه الفاتورة
+                    // نبدأ من رصيد العميل الحالي ونرجع للخلف
+                    $currentCustomer = $db->queryOne(
+                        "SELECT balance FROM customers WHERE id = ?",
+                        [$customerId]
+                    );
+                    $currentBalance = (float)($currentCustomer['balance'] ?? 0);
                     
-                    // إذا كان الرصيد المتوقع قريب من الرصيد الفعلي (مع هامش خطأ صغير)
-                    // فهذا يعني أن الفاتورة دفعت من رصيد دائن
-                    if (abs($expectedBalanceAfter - $currentBalance) < 0.02) {
-                        // التحقق من عدم تحديث فواتير نقطة البيع
-                        $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
-                        $canUpdate = true;
-                        if ($hasCreatedFromPosColumn) {
-                            $invoiceCheck = $db->queryOne("SELECT created_from_pos FROM invoices WHERE id = ?", [$invoiceId]);
-                            if (!empty($invoiceCheck) && !empty($invoiceCheck['created_from_pos'])) {
-                                // هذه فاتورة من نقطة البيع، لا يمكن تحديثها
-                                $canUpdate = false;
-                            }
+                    // حساب الرصيد قبل هذه الفاتورة عن طريق طرح تأثير الفواتير اللاحقة
+                    $balanceBeforeInvoice = $currentBalance;
+                    
+                    // جلب جميع الفواتير بعد هذه الفاتورة (بترتيب زمني عكسي)
+                    $laterInvoices = $db->query(
+                        "SELECT id, date, total_amount, paid_amount, status, paid_from_credit
+                         FROM invoices
+                         WHERE customer_id = ?
+                         AND (date > ? OR (date = ? AND id > ?))
+                         AND status != 'cancelled'
+                         ORDER BY date ASC, id ASC",
+                        [$customerId, $invoiceDate, $invoiceDate, $invoiceId]
+                    );
+                    
+                    // طرح تأثير الفواتير اللاحقة من الرصيد الحالي
+                    foreach ($laterInvoices as $laterInv) {
+                        $laterTotal = (float)($laterInv['total_amount'] ?? 0);
+                        $laterPaid = (float)($laterInv['paid_amount'] ?? 0);
+                        $laterCreditUsed = (int)($laterInv['paid_from_credit'] ?? 0);
+                        
+                        if ($laterCreditUsed) {
+                            // إذا كانت الفاتورة اللاحقة مدفوعة من رصيد دائن، لا نطرحها
+                            continue;
                         }
                         
-                        if ($canUpdate) {
-                            // تحديث الفاتورة لتحديدها كمدفوعة من رصيد دائن
-                            $db->execute(
-                                "UPDATE invoices SET paid_from_credit = 1 WHERE id = ?",
-                                [$invoiceId]
-                            );
-                            $updatedCount++;
+                        // طرح الفرق بين المبلغ الإجمالي والمبلغ المدفوع من الرصيد
+                        $balanceBeforeInvoice -= ($laterTotal - $laterPaid);
+                    }
+                    
+                    // طرح تأثير هذه الفاتورة نفسها
+                    $balanceBeforeInvoice -= ($invoiceTotal - (float)($invoice['paid_amount'] ?? 0));
+                    
+                    // إذا كان الرصيد قبل الفاتورة سالب (رصيد دائن) وكانت الفاتورة مدفوعة بالكامل
+                    // فهذا يعني أنها دفعت من الرصيد الدائن
+                    if ($balanceBeforeInvoice < -0.01 && $invoiceTotal > 0.01) {
+                        // التحقق من أن الفاتورة استهلكت الرصيد الدائن
+                        // الرصيد المتوقع بعد الفاتورة = الرصيد قبل + قيمة الفاتورة
+                        $expectedBalanceAfter = $balanceBeforeInvoice + $invoiceTotal;
+                        
+                        // إذا كان الرصيد المتوقع قريب من الرصيد الفعلي (مع هامش خطأ صغير)
+                        // فهذا يعني أن الفاتورة دفعت من رصيد دائن
+                        if (abs($expectedBalanceAfter - $currentBalance) < 0.02) {
+                            // التحقق من عدم تحديث فواتير نقطة البيع
+                            $hasCreatedFromPosColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'created_from_pos'"));
+                            $canUpdate = true;
+                            if ($hasCreatedFromPosColumn) {
+                                $invoiceCheck = $db->queryOne("SELECT created_from_pos FROM invoices WHERE id = ?", [$invoiceId]);
+                                if (!empty($invoiceCheck) && !empty($invoiceCheck['created_from_pos'])) {
+                                    // هذه فاتورة من نقطة البيع، لا يمكن تحديثها
+                                    $canUpdate = false;
+                                }
+                            }
+                            
+                            if ($canUpdate) {
+                                // تحديث الفاتورة لتحديدها كمدفوعة من رصيد دائن
+                                $db->execute(
+                                    "UPDATE invoices SET paid_from_credit = 1 WHERE id = ?",
+                                    [$invoiceId]
+                                );
+                                $updatedCount++;
+                            }
                         }
                     }
                 }
+                
+                if ($updatedCount > 0) {
+                    error_log("Retroactively updated $updatedCount invoices as paid_from_credit for sales rep $salesRepId");
+                }
+                
+                // تعيين flag لتجنب إعادة تشغيل هذا التحقق في نفس الجلسة
+                $_SESSION[$retroCheckKey] = true;
+            } catch (Throwable $retroCheckError) {
+                error_log('Error in retroactive credit check: ' . $retroCheckError->getMessage());
             }
-            
-            if ($updatedCount > 0) {
-                error_log("Retroactively updated $updatedCount invoices as paid_from_credit for sales rep $salesRepId");
-            }
-        } catch (Throwable $retroCheckError) {
-            error_log('Error in retroactive credit check: ' . $retroCheckError->getMessage());
         }
     }
 }
@@ -1705,23 +1760,21 @@ $salesRepInfo = $db->queryOne(
                     // إظهار رسالة نجاح
                     showAlert('success', data.message);
                     
+                    // تحديث البيانات مباشرة بدون إعادة تحميل الصفحة
+                    if (data.newTotalCashAdditions !== undefined) {
+                        // تحديث رصيد الخزنة الإجمالي
+                        updateCashRegisterBalance(data.newTotalCashAdditions);
+                    }
+                    
+                    // إضافة السجل الجديد إلى الجدول
+                    if (data.lastAddition) {
+                        addCashAdditionToTable(data.lastAddition);
+                    }
+                    
                     // إغلاق الـ modal
                     const modalInstance = bootstrap.Modal.getInstance(addCashBalanceModal);
                     if (modalInstance) {
                         modalInstance.hide();
-                        
-                        // إعادة تحميل الصفحة بعد إغلاق الـ modal بالكامل لتحديث البيانات
-                        addCashBalanceModal.addEventListener('hidden.bs.modal', function reloadAfterClose() {
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 300);
-                            addCashBalanceModal.removeEventListener('hidden.bs.modal', reloadAfterClose);
-                        }, { once: true });
-                    } else {
-                        // إذا لم يكن هناك modal instance، إعادة تحميل مباشرة
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
                     }
                 } else {
                     // إظهار رسالة خطأ
@@ -1737,36 +1790,13 @@ $salesRepInfo = $db->queryOne(
         });
     }
     
-    // إزالة رسالة الخطأ عند البدء بالكتابة (استخدام passive listener للأداء الأفضل)
+    // إزالة رسالة الخطأ عند البدء بالكتابة (مبسط للأداء الأفضل)
     if (cashBalanceAmount) {
         // استخدام input event للأداء الأفضل على الهاتف
         cashBalanceAmount.addEventListener('input', function() {
-            // استخدام requestAnimationFrame لضمان استجابة فورية
-            requestAnimationFrame(() => {
-                if (this.classList.contains('is-invalid')) {
-                    this.classList.remove('is-invalid');
-                }
-            });
-        }, { passive: true });
-        
-        // إزالة أي delays في الكتابة
-        cashBalanceAmount.addEventListener('compositionstart', function() {
-            // السماح بالكتابة فوراً
-        }, { passive: true });
-        
-        cashBalanceAmount.addEventListener('compositionend', function() {
-            // Force reflow لضمان عرض النص
-            void this.offsetHeight;
-        }, { passive: true });
-    }
-    
-    // نفس التحسينات لحقل الوصف
-    if (cashBalanceDescription) {
-        cashBalanceDescription.addEventListener('input', function() {
-            requestAnimationFrame(() => {
-                // Force reflow لضمان عرض النص فوراً
-                void this.offsetHeight;
-            });
+            if (this.classList.contains('is-invalid')) {
+                this.classList.remove('is-invalid');
+            }
         }, { passive: true });
     }
     
@@ -1810,6 +1840,133 @@ $salesRepInfo = $db->queryOne(
                 alertDiv.remove();
             }
         }, 5000);
+    }
+    
+    // دالة لتحديث رصيد الخزنة الإجمالي
+    function updateCashRegisterBalance(newTotal) {
+        // البحث عن عنصر رصيد الخزنة الإجمالي
+        const balanceCard = document.querySelector('.glass-card:has(.glass-card-blue)');
+        if (balanceCard) {
+            const balanceValue = balanceCard.querySelector('.glass-card-value');
+            if (balanceValue) {
+                // تحديث القيمة (نحتاج إلى حساب الرصيد الكامل من البيانات الأخرى)
+                // لكن على الأقل نحدث الإضافات المباشرة
+                const additionsText = balanceCard.querySelector('.glass-card-title');
+                if (additionsText) {
+                    additionsText.textContent = `إضافات مباشرة: ${formatCurrency(newTotal)}`;
+                }
+            }
+        }
+        
+        // تحديث رصيد الخزنة في بطاقة الإحصائيات (إذا كان موجوداً)
+        const cashRegisterCards = document.querySelectorAll('.glass-card');
+        cashRegisterCards.forEach(card => {
+            const header = card.querySelector('.glass-card-header');
+            if (header && header.textContent.includes('رصيد الخزنة الإجمالي')) {
+                const body = card.querySelector('.glass-card-body');
+                if (body) {
+                    const valueElement = body.querySelector('.glass-card-value');
+                    const additionsElement = body.querySelector('.glass-card-title');
+                    if (additionsElement) {
+                        additionsElement.textContent = `إضافات مباشرة: ${formatCurrency(newTotal)}`;
+                    }
+                }
+            }
+        });
+    }
+    
+    // دالة لإضافة سجل جديد إلى جدول الإضافات
+    function addCashAdditionToTable(addition) {
+        const additionsTable = document.querySelector('.glass-debts-table table tbody');
+        if (!additionsTable) return;
+        
+        // حساب رقم السجل الجديد
+        const existingRows = additionsTable.querySelectorAll('tr');
+        const newCounter = existingRows.length + 1;
+        
+        // تنسيق التاريخ والوقت
+        const dateTime = new Date(addition.created_at);
+        const formattedDate = dateTime.toLocaleDateString('ar-EG', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        // إنشاء صف جديد
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `
+            <td><strong>${newCounter}</strong></td>
+            <td><small>${formattedDate}</small></td>
+            <td class="text-end">
+                <strong class="text-success">+ ${formatCurrency(parseFloat(addition.amount))}</strong>
+            </td>
+            <td>
+                ${addition.description ? 
+                    `<span class="text-muted">${escapeHtml(addition.description)}</span>` : 
+                    '<span class="text-muted fst-italic">-</span>'}
+            </td>
+            <td>
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-person-circle me-2 text-muted"></i>
+                    <span>${escapeHtml(addition.created_by_name || addition.created_by_username || 'غير معروف')}</span>
+                </div>
+            </td>
+        `;
+        
+        // إدراج الصف في بداية الجدول
+        if (additionsTable.firstChild) {
+            additionsTable.insertBefore(newRow, additionsTable.firstChild);
+        } else {
+            additionsTable.appendChild(newRow);
+        }
+        
+        // تحديث الأرقام التسلسلية للصفوف الموجودة
+        const allRows = additionsTable.querySelectorAll('tr');
+        allRows.forEach((row, index) => {
+            const counterCell = row.querySelector('td:first-child strong');
+            if (counterCell) {
+                counterCell.textContent = index + 1;
+            }
+        });
+        
+        // تحديث إجمالي الإضافات في التذييل
+        const footer = additionsTable.closest('table').querySelector('tfoot tr');
+        if (footer) {
+            const totalCell = footer.querySelector('th.text-success');
+            if (totalCell) {
+                const currentTotal = parseFloat(totalCell.textContent.replace(/[^\d.]/g, '')) || 0;
+                const newTotal = currentTotal + parseFloat(addition.amount);
+                totalCell.innerHTML = `<strong>+ ${formatCurrency(newTotal)}</strong>`;
+            }
+        }
+        
+        // إزالة رسالة "لا توجد إضافات" إذا كانت موجودة
+        const noDataAlert = additionsTable.closest('.glass-card-body').querySelector('.alert-info');
+        if (noDataAlert && noDataAlert.textContent.includes('لا توجد إضافات')) {
+            noDataAlert.remove();
+        }
+    }
+    
+    // دالة مساعدة لتنسيق العملة (متوافقة مع PHP formatCurrency)
+    function formatCurrency(amount) {
+        // استخدام نفس التنسيق المستخدم في PHP
+        const formatted = new Intl.NumberFormat('ar-EG', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(Math.abs(amount));
+        
+        // إضافة رمز العملة
+        const symbol = '<?php echo getCurrencySymbol(); ?>';
+        return formatted + ' ' + symbol;
+    }
+    
+    // دالة مساعدة لتهريب HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 })();
 </script>
