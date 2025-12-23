@@ -112,13 +112,15 @@ try {
     }
     
     // جلب عملاء المندوب
+    // فحص أمني: العملاء يظهرون فقط للمندوب الذي أنشأهم (created_by)
+    // وليس بناءً على rep_id - هذا يضمن عدم ظهور عملاء المندوب القديم للمندوب الجديد
     $customers = $db->query(
         "SELECT c.*, r.name as region_name
          FROM customers c
          LEFT JOIN regions r ON c.region_id = r.id
-         WHERE (c.created_by = ? OR c.rep_id = ?) AND c.status = 'active'
+         WHERE c.created_by = ? AND c.status = 'active'
          ORDER BY c.name ASC",
-        [$repId, $repId]
+        [$repId]
     );
     
     // جلب أرقام الهواتف الإضافية لكل عميل
