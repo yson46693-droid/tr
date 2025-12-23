@@ -165,13 +165,32 @@ try {
     
     $db = db();
     
+    // تحديد نوع العملاء (company/delegates/local)
+    $section = $data['section'] ?? 'company';
+    $isLocalCustomers = ($section === 'local');
+    
     // بناء استعلام SQL لجلب بيانات العملاء
     $placeholders = str_repeat('?,', count($customerIds) - 1) . '?';
-    $sql = "SELECT c.*, r.name as region_name
-            FROM customers c
-            LEFT JOIN regions r ON c.region_id = r.id
-            WHERE c.id IN ($placeholders)
-            ORDER BY c.name ASC";
+    
+    if ($isLocalCustomers) {
+        // جلب العملاء المحليين
+        $sql = "SELECT c.*, r.name as region_name
+                FROM local_customers c
+                LEFT JOIN regions r ON c.region_id = r.id
+                WHERE c.id IN ($placeholders)
+                ORDER BY c.name ASC";
+        $phonesTable = 'local_customer_phones';
+        $customerIdColumn = 'customer_id';
+    } else {
+        // جلب عملاء الشركة أو المندوبين
+        $sql = "SELECT c.*, r.name as region_name
+                FROM customers c
+                LEFT JOIN regions r ON c.region_id = r.id
+                WHERE c.id IN ($placeholders)
+                ORDER BY c.name ASC";
+        $phonesTable = 'customer_phones';
+        $customerIdColumn = 'customer_id';
+    }
     
     $customers = $db->query($sql, $customerIds);
     
@@ -211,7 +230,7 @@ try {
         $additionalPhones = [];
         try {
             $phones = $db->query(
-                "SELECT phone FROM customer_phones WHERE customer_id = ? AND is_primary = 0 ORDER BY id ASC",
+                "SELECT phone FROM {$phonesTable} WHERE {$customerIdColumn} = ? AND is_primary = 0 ORDER BY id ASC",
                 [$customerId]
             );
             
