@@ -134,5 +134,31 @@ WHERE VARIABLE_NAME = 'max_connections';
 1. عدد المستخدمين المتزامنين
 2. وجود scripts طويلة المدى تعمل
 3. وجود cron jobs تفتح اتصالات ولا تغلقها
-4. إعدادات MySQL (max_connections, wait_timeout, interactive_timeout)
+4. إعدادات MySQL (max_connections, max_user_connections, wait_timeout, interactive_timeout)
+
+## Scripts للمراقبة والتنظيف
+
+تم إنشاء scripts جديدة للمساعدة في مراقبة وإصلاح مشاكل الاتصالات:
+
+### 1. التحقق من الاتصالات الحالية
+```
+api/check_db_connections.php
+```
+يعرض معلومات عن الاتصالات الحالية، عددها، ونسبة الاستخدام.
+
+### 2. تنظيف الاتصالات المعلقة
+```
+api/cleanup_db_connections.php?token=cleanup_db_connections_2024
+```
+يغلق الاتصالات المعلقة (Sleep) التي تستغرق أكثر من 5 دقائق.
+
+**تحذير:** استخدم هذا script بحذر، خاصة في بيئة الإنتاج.
+
+## إصلاحات حديثة
+
+### تحديثات في `includes/db.php`:
+1. ✅ تحسين معالجة خطأ `max_user_connections` - يتم الكشف عنه بشكل صحيح الآن
+2. ✅ رسائل خطأ أفضل تشرح المشكلة والحلول المقترحة
+3. ✅ تحسين منطق المحاولات عند الوصول لحد الاتصالات
+4. ✅ تجنب إنشاء اتصالات اختبار غير ضرورية عند حد الاتصالات
 

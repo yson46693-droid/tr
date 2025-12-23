@@ -56,17 +56,28 @@ class Database {
                 } catch (mysqli_sql_exception $e) {
                     $errorMessage = $e->getMessage();
                     
-                    // إذا كان الخطأ "Too many connections"، انتظر قليلاً وحاول مرة أخرى
-                    if (stripos($errorMessage, 'Too many connections') !== false && $attempt < $maxAttempts - 1) {
+                    // التحقق من أخطاء حد الاتصالات (max_user_connections أو Too many connections)
+                    $isConnectionLimitError = stripos($errorMessage, 'Too many connections') !== false || 
+                                            stripos($errorMessage, 'max_user_connections') !== false;
+                    
+                    // إذا كان الخطأ متعلق بحد الاتصالات، انتظر قليلاً وحاول مرة أخرى
+                    if ($isConnectionLimitError && $attempt < $maxAttempts - 1) {
                         $attempt++;
                         usleep(500000); // انتظر 0.5 ثانية
                         continue;
                     }
                     
-                    // إذا فشل الاتصال، حاول بدون قاعدة البيانات أولاً للتحقق من الاتصال
+                    // إذا كان الخطأ متعلق بحد الاتصالات بعد استنفاد المحاولات
+                    if ($isConnectionLimitError) {
+                        throw new Exception("MySQL connection error: User " . DB_USER . " already has more than 'max_user_connections' active connections. Please wait a moment and try again, or contact your database administrator to increase the limit.");
+                    }
+                    
+                    // إذا فشل الاتصال لأسباب أخرى (وليس حد الاتصالات)، حاول بدون قاعدة البيانات للتحقق
+                    // لا نقوم بإنشاء اتصال اختبار إذا كان الخطأ متعلق بحد الاتصالات
                     try {
                         $testConnection = @new mysqli(DB_HOST, DB_USER, DB_PASS, null, DB_PORT);
                         if ($testConnection->connect_error) {
+                            $testConnection->close();
                             throw new Exception("Cannot connect to MySQL server: " . $testConnection->connect_error);
                         }
                         $testConnection->close();
@@ -80,7 +91,7 @@ class Database {
             }
             
             if (!$connected) {
-                throw new Exception("Failed to connect after {$maxAttempts} attempts. Too many connections to MySQL server.");
+                throw new Exception("Failed to connect after {$maxAttempts} attempts. The database user has reached the maximum number of allowed connections (max_user_connections). Please wait a moment and try again, or contact your database administrator.");
             }
             
             if ($this->connection->connect_error) {
@@ -237,14 +248,29 @@ class Database {
             error_log("Database connection error: " . $e->getMessage());
             error_log("Connection details - Host: " . DB_HOST . ", Port: " . DB_PORT . ", Database: " . DB_NAME . ", User: " . DB_USER);
             
+            $errorMsg = $e->getMessage();
+            $isMaxConnectionsError = stripos($errorMsg, 'max_user_connections') !== false || 
+                                     stripos($errorMsg, 'Too many connections') !== false;
+            
             // رسالة خطأ واضحة للمستخدم
             $errorMessage = "خطأ في الاتصال بقاعدة البيانات.\n\n";
-            $errorMessage .= "الرجاء التحقق من:\n";
-            $errorMessage .= "1. أن خادم MySQL (XAMPP) يعمل\n";
-            $errorMessage .= "2. إعدادات الاتصال في ملف config.php صحيحة\n";
-            $errorMessage .= "3. اسم قاعدة البيانات موجود\n";
-            $errorMessage .= "4. المستخدم لديه صلاحيات الوصول\n\n";
-            $errorMessage .= "تفاصيل الخطأ: " . htmlspecialchars($e->getMessage());
+            
+            if ($isMaxConnectionsError) {
+                $errorMessage .= "⚠️ تم الوصول إلى الحد الأقصى لعدد الاتصالات المسموح بها للمستخدم.\n\n";
+                $errorMessage .= "الحلول المقترحة:\n";
+                $errorMessage .= "1. انتظر قليلاً (30-60 ثانية) ثم أعد المحاولة\n";
+                $errorMessage .= "2. أغلق الصفحات المفتوحة الأخرى التي تستخدم نفس قاعدة البيانات\n";
+                $errorMessage .= "3. إذا استمرت المشكلة، اتصل بمسؤول قاعدة البيانات لزيادة حد الاتصالات\n";
+                $errorMessage .= "4. يمكن تشغيل script التنظيف: api/cleanup_db_connections.php?token=cleanup_db_connections_2024\n\n";
+            } else {
+                $errorMessage .= "الرجاء التحقق من:\n";
+                $errorMessage .= "1. أن خادم MySQL (XAMPP) يعمل\n";
+                $errorMessage .= "2. إعدادات الاتصال في ملف config.php صحيحة\n";
+                $errorMessage .= "3. اسم قاعدة البيانات موجود\n";
+                $errorMessage .= "4. المستخدم لديه صلاحيات الوصول\n\n";
+            }
+            
+            $errorMessage .= "تفاصيل الخطأ: " . htmlspecialchars($errorMsg);
             
             die("<div style='font-family: Arial, sans-serif; padding: 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; color: #721c24; direction: rtl; text-align: right;'>" . 
                 "<h3 style='margin-top: 0;'>⚠️ خطأ في الاتصال بقاعدة البيانات</h3>" . 
@@ -256,13 +282,28 @@ class Database {
             error_log("Database connection error (Throwable): " . $e->getMessage());
             error_log("Connection details - Host: " . DB_HOST . ", Port: " . DB_PORT . ", Database: " . DB_NAME . ", User: " . DB_USER);
             
+            $errorMsg = $e->getMessage();
+            $isMaxConnectionsError = stripos($errorMsg, 'max_user_connections') !== false || 
+                                     stripos($errorMsg, 'Too many connections') !== false;
+            
             $errorMessage = "خطأ في الاتصال بقاعدة البيانات.\n\n";
-            $errorMessage .= "الرجاء التحقق من:\n";
-            $errorMessage .= "1. أن خادم MySQL (XAMPP) يعمل\n";
-            $errorMessage .= "2. إعدادات الاتصال في ملف config.php صحيحة\n";
-            $errorMessage .= "3. اسم قاعدة البيانات موجود\n";
-            $errorMessage .= "4. المستخدم لديه صلاحيات الوصول\n\n";
-            $errorMessage .= "تفاصيل الخطأ: " . htmlspecialchars($e->getMessage());
+            
+            if ($isMaxConnectionsError) {
+                $errorMessage .= "⚠️ تم الوصول إلى الحد الأقصى لعدد الاتصالات المسموح بها للمستخدم.\n\n";
+                $errorMessage .= "الحلول المقترحة:\n";
+                $errorMessage .= "1. انتظر قليلاً (30-60 ثانية) ثم أعد المحاولة\n";
+                $errorMessage .= "2. أغلق الصفحات المفتوحة الأخرى التي تستخدم نفس قاعدة البيانات\n";
+                $errorMessage .= "3. إذا استمرت المشكلة، اتصل بمسؤول قاعدة البيانات لزيادة حد الاتصالات\n";
+                $errorMessage .= "4. يمكن تشغيل script التنظيف: api/cleanup_db_connections.php?token=cleanup_db_connections_2024\n\n";
+            } else {
+                $errorMessage .= "الرجاء التحقق من:\n";
+                $errorMessage .= "1. أن خادم MySQL (XAMPP) يعمل\n";
+                $errorMessage .= "2. إعدادات الاتصال في ملف config.php صحيحة\n";
+                $errorMessage .= "3. اسم قاعدة البيانات موجود\n";
+                $errorMessage .= "4. المستخدم لديه صلاحيات الوصول\n\n";
+            }
+            
+            $errorMessage .= "تفاصيل الخطأ: " . htmlspecialchars($errorMsg);
             
             die("<div style='font-family: Arial, sans-serif; padding: 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; color: #721c24; direction: rtl; text-align: right;'>" . 
                 "<h3 style='margin-top: 0;'>⚠️ خطأ في الاتصال بقاعدة البيانات</h3>" . 
