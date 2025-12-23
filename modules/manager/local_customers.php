@@ -901,6 +901,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // توليد unique_code فريد للعميل
                 require_once __DIR__ . '/../../includes/customer_code_generator.php';
+                ensureCustomerUniqueCodeColumn('local_customers');
                 $uniqueCode = generateUniqueCustomerCode('local_customers');
                 
                 $customerColumns = ['unique_code', 'name', 'phone', 'balance', 'address', 'status', 'created_by'];

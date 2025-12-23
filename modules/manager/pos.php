@@ -314,6 +314,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             } else {
                 // توليد unique_code فريد للعميل
                 require_once __DIR__ . '/../../includes/customer_code_generator.php';
+                ensureCustomerUniqueCodeColumn('local_customers');
                 $uniqueCode = generateUniqueCustomerCode('local_customers');
                 
                 $result = $db->execute(
@@ -755,6 +756,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $creditUsed = 0.0;
                     // توليد unique_code فريد للعميل
                     require_once __DIR__ . '/../../includes/customer_code_generator.php';
+                    ensureCustomerUniqueCodeColumn('local_customers');
                     $uniqueCode = generateUniqueCustomerCode('local_customers');
                     
                     // إنشاء العميل في جدول local_customers
@@ -828,6 +830,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     // توليد unique_code فريد للعميل
                     require_once __DIR__ . '/../../includes/customer_code_generator.php';
+                    ensureCustomerUniqueCodeColumn('customers');
                     $uniqueCode = generateUniqueCustomerCode('customers');
                     
                     $db->execute(

@@ -1165,6 +1165,7 @@ try {
                     
                     // توليد unique_code فريد للعميل
                     require_once __DIR__ . '/../includes/customer_code_generator.php';
+                    ensureCustomerUniqueCodeColumn('customers');
                     $uniqueCode = generateUniqueCustomerCode('customers');
                     
                     $customerColumns = ['unique_code', 'name', 'phone', 'balance', 'address', 'status', 'created_by', 'rep_id', 'created_from_pos', 'created_by_admin'];
