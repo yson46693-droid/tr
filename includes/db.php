@@ -423,6 +423,20 @@ class Database {
     }
     
     /**
+     * الحصول على آخر رسالة خطأ من قاعدة البيانات
+     */
+    public function getLastError() {
+        return $this->connection->error ?? null;
+    }
+    
+    /**
+     * الحصول على رقم آخر خطأ من قاعدة البيانات
+     */
+    public function getLastErrno() {
+        return $this->connection->errno ?? 0;
+    }
+    
+    /**
      * إغلاق الاتصال
      */
     public function close() {

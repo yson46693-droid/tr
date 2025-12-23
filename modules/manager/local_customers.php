@@ -72,8 +72,7 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='جدول المناطق'";
         
         try {
-            $connection = $db->getConnection();
-            $connection->query($createRegionsTableSql);
+            $db->rawQuery($createRegionsTableSql);
             error_log('Table regions created successfully');
         } catch (Throwable $e) {
             error_log('Error creating regions table: ' . $e->getMessage());
@@ -84,12 +83,11 @@ try {
     $regionIdColumn = $db->queryOne("SHOW COLUMNS FROM local_customers LIKE 'region_id'");
     if (empty($regionIdColumn)) {
         try {
-            $connection = $db->getConnection();
-            $connection->query("ALTER TABLE `local_customers` ADD COLUMN `region_id` int(11) DEFAULT NULL AFTER `address`, ADD KEY `region_id` (`region_id`)");
+            $db->rawQuery("ALTER TABLE `local_customers` ADD COLUMN `region_id` int(11) DEFAULT NULL AFTER `address`, ADD KEY `region_id` (`region_id`)");
             // إضافة foreign key constraint
             $fkCheck = $db->queryOne("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'local_customers' AND CONSTRAINT_NAME = 'local_customers_ibfk_region'");
             if (empty($fkCheck)) {
-                $connection->query("ALTER TABLE `local_customers` ADD CONSTRAINT `local_customers_ibfk_region` FOREIGN KEY (`region_id`) REFERENCES `regions` (`id`) ON DELETE SET NULL");
+                $db->rawQuery("ALTER TABLE `local_customers` ADD CONSTRAINT `local_customers_ibfk_region` FOREIGN KEY (`region_id`) REFERENCES `regions` (`id`) ON DELETE SET NULL");
             }
             error_log('Column region_id added to local_customers');
         } catch (Throwable $e) {
@@ -101,12 +99,11 @@ try {
     $customersRegionIdColumn = $db->queryOne("SHOW COLUMNS FROM customers LIKE 'region_id'");
     if (empty($customersRegionIdColumn)) {
         try {
-            $connection = $db->getConnection();
-            $connection->query("ALTER TABLE `customers` ADD COLUMN `region_id` int(11) DEFAULT NULL AFTER `address`, ADD KEY `region_id` (`region_id`)");
+            $db->rawQuery("ALTER TABLE `customers` ADD COLUMN `region_id` int(11) DEFAULT NULL AFTER `address`, ADD KEY `region_id` (`region_id`)");
             // إضافة foreign key constraint
             $fkCheck = $db->queryOne("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'customers' AND CONSTRAINT_NAME = 'customers_ibfk_region'");
             if (empty($fkCheck)) {
-                $connection->query("ALTER TABLE `customers` ADD CONSTRAINT `customers_ibfk_region` FOREIGN KEY (`region_id`) REFERENCES `regions` (`id`) ON DELETE SET NULL");
+                $db->rawQuery("ALTER TABLE `customers` ADD CONSTRAINT `customers_ibfk_region` FOREIGN KEY (`region_id`) REFERENCES `regions` (`id`) ON DELETE SET NULL");
             }
             error_log('Column region_id added to customers');
         } catch (Throwable $e) {
@@ -138,12 +135,11 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='جدول العملاء المحليين (منفصل عن عملاء المندوبين)'";
         
         try {
-            // استخدام execute بدلاً من query مباشرة لمعالجة أفضل للأخطاء
-            $connection = $db->getConnection();
-            $result = $connection->query($createTableSql);
+            // استخدام rawQuery للاستعلامات DDL
+            $result = $db->rawQuery($createTableSql);
             
             if ($result === false) {
-                $errorMsg = $connection->error ?: 'Unknown error';
+                $errorMsg = $db->getLastError() ?: 'Unknown error';
                 throw new Exception('Table creation query failed: ' . $errorMsg);
             }
             
@@ -156,7 +152,7 @@ try {
                 usleep(100000); // 0.1 ثانية
                 $verifyTable = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
                 if (empty($verifyTable)) {
-                    throw new Exception('Table creation failed - table not found after creation. Database error: ' . ($connection->error ?: 'Unknown'));
+                    throw new Exception('Table creation failed - table not found after creation. Database error: ' . ($db->getLastError() ?: 'Unknown'));
                 }
             }
             
@@ -170,11 +166,11 @@ try {
                     try {
                         $fkCheck = $db->queryOne("SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'local_customers' AND CONSTRAINT_NAME = 'local_customers_ibfk_1'");
                         if (empty($fkCheck)) {
-                            $fkResult = $connection->query("ALTER TABLE `local_customers` ADD CONSTRAINT `local_customers_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE");
+                            $fkResult = $db->rawQuery("ALTER TABLE `local_customers` ADD CONSTRAINT `local_customers_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE");
                             if ($fkResult) {
                                 error_log('Foreign key constraint added to local_customers');
                             } else {
-                                error_log('Failed to add foreign key constraint: ' . $connection->error);
+                                error_log('Failed to add foreign key constraint: ' . ($db->getLastError() ?: 'Unknown error'));
                             }
                         }
                     } catch (Throwable $fkError) {
@@ -187,10 +183,9 @@ try {
                 // لا نوقف العملية
             }
         } catch (Throwable $e) {
-            $connection = $db->getConnection();
             error_log('Error creating local_customers table: ' . $e->getMessage());
-            error_log('SQL Error: ' . ($connection->error ?? 'No error message'));
-            error_log('SQL Error Number: ' . ($connection->errno ?? 'Unknown'));
+            error_log('SQL Error: ' . ($db->getLastError() ?? 'No error message'));
+            error_log('SQL Error Number: ' . $db->getLastErrno());
             // إظهار رسالة خطأ واضحة للمستخدم
             die('<div class="alert alert-danger">
                 <h5>خطأ في إنشاء جدول العملاء المحليين</h5>
@@ -241,8 +236,7 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='جدول التحصيلات للعملاء المحليين'";
         
         try {
-            $connection = $db->getConnection();
-            $connection->query($createCollectionsTableSql);
+            $db->rawQuery($createCollectionsTableSql);
             error_log('Table local_collections created successfully');
         } catch (Throwable $e) {
             error_log('Error creating local_collections table: ' . $e->getMessage());
@@ -1105,8 +1099,7 @@ try {
             KEY `name` (`name`),
             KEY `status` (`status`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='جدول العملاء المحليين (منفصل عن عملاء المندوبين)'";
-        $connection = $db->getConnection();
-        $connection->query($createTableSql);
+        $db->rawQuery($createTableSql);
         // إعادة المحاولة
         $totalResult = $db->queryOne($countSql, $countParams);
         $totalCustomers = $totalResult['total'] ?? 0;
