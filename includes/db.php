@@ -489,6 +489,20 @@ class Database {
     }
     
     /**
+     * الحصول على آخر خطأ من قاعدة البيانات
+     */
+    public function getLastError() {
+        if ($this->connection) {
+            $error = $this->connection->error;
+            $errno = $this->connection->errno;
+            if ($error) {
+                return "Error #{$errno}: {$error}";
+            }
+        }
+        return '';
+    }
+    
+    /**
      * إغلاق الاتصال
      */
     public function close() {

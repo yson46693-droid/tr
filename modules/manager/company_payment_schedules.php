@@ -166,50 +166,159 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             ]
                         );
                         
-                        $scheduleId = isset($result['insert_id']) ? (int)$result['insert_id'] : 0;
+                        // التحقق من نجاح الإدراج أولاً
+                        $affectedRows = $result['affected_rows'] ?? 0;
+                        $insertIdFromResult = $result['insert_id'] ?? null;
+                        $lastInsertId = $db->getLastInsertId();
                         
-                        // إذا لم يكن insert_id في النتيجة، جرب getLastInsertId كبديل
-                        if ($scheduleId <= 0) {
-                            $scheduleId = (int)$db->getLastInsertId();
-                        }
+                        // تسجيل معلومات تفصيلية
+                        error_log('Payment schedule insert result - affected_rows: ' . $affectedRows . ', insert_id: ' . ($insertIdFromResult ?? 'null') . ', getLastInsertId: ' . $lastInsertId);
                         
-                        if ($scheduleId && $scheduleId > 0) {
-                            logAudit(
-                                $currentUser['id'],
-                                'create_payment_schedule_manual',
-                                'payment_schedule',
-                                $scheduleId,
-                                null,
-                                [
-                                    'customer_id' => $customerId,
-                                    'amount' => $amount,
-                                    'due_date' => $dueDate,
-                                    'local_customer' => true
-                                ]
-                            );
+                        if ($affectedRows <= 0) {
+                            $dbError = $db->getLastError();
+                            $errorDetails = [
+                                'affected_rows' => $affectedRows,
+                                'insert_id' => $insertIdFromResult,
+                                'getLastInsertId' => $lastInsertId,
+                                'db_error' => $dbError,
+                                'customer_id' => $customerId,
+                                'amount' => $amount,
+                                'due_date' => $dueDate
+                            ];
+                            error_log('Create payment schedule failed - No rows affected. Details: ' . json_encode($errorDetails, JSON_UNESCAPED_UNICODE));
                             
-                            $success = 'تم إضافة موعد التحصيل بنجاح.';
-                        } else {
-                            error_log('Create payment schedule failed - insert_id: ' . ($result['insert_id'] ?? 'null') . ', getLastInsertId: ' . $db->getLastInsertId());
-                            throw new Exception('فشل الحصول على معرف الجدول الزمني بعد الإدراج. affected_rows: ' . ($result['affected_rows'] ?? 0));
+                            $errorMsg = 'فشل إدراج موعد التحصيل. لم يتم إدراج أي صف في قاعدة البيانات.';
+                            if ($dbError) {
+                                $errorMsg .= '<br><strong>تفاصيل الخطأ من قاعدة البيانات:</strong><br>' . htmlspecialchars($dbError);
+                            }
+                            $errorMsg .= '<br><strong>المعلومات التقنية:</strong><br>';
+                            $errorMsg .= 'affected_rows: ' . $affectedRows . '<br>';
+                            $errorMsg .= 'insert_id: ' . ($insertIdFromResult ?? 'null') . '<br>';
+                            $errorMsg .= 'getLastInsertId: ' . $lastInsertId;
+                            
+                            throw new Exception($errorMsg);
                         }
+                        
+                        // الحصول على insert_id
+                        $scheduleId = null;
+                        if ($insertIdFromResult && $insertIdFromResult > 0) {
+                            $scheduleId = (int)$insertIdFromResult;
+                        } elseif ($lastInsertId && $lastInsertId > 0) {
+                            $scheduleId = (int)$lastInsertId;
+                        }
+                        
+                        // التحقق النهائي من scheduleId
+                        if (!$scheduleId || $scheduleId <= 0) {
+                            $dbError = $db->getLastError();
+                            $errorDetails = [
+                                'affected_rows' => $affectedRows,
+                                'insert_id_from_result' => $insertIdFromResult,
+                                'getLastInsertId' => $lastInsertId,
+                                'db_error' => $dbError,
+                                'customer_id' => $customerId,
+                                'amount' => $amount,
+                                'due_date' => $dueDate
+                            ];
+                            error_log('Create payment schedule failed - Invalid insert_id. Details: ' . json_encode($errorDetails, JSON_UNESCAPED_UNICODE));
+                            
+                            $errorMsg = 'فشل الحصول على معرف الجدول الزمني بعد الإدراج.';
+                            $errorMsg .= '<br><strong>المعلومات التقنية:</strong><br>';
+                            $errorMsg .= 'affected_rows: ' . $affectedRows . '<br>';
+                            $errorMsg .= 'insert_id من النتيجة: ' . ($insertIdFromResult ?? 'null') . '<br>';
+                            $errorMsg .= 'getLastInsertId: ' . ($lastInsertId ?? 'null');
+                            if ($dbError) {
+                                $errorMsg .= '<br><strong>خطأ قاعدة البيانات:</strong><br>' . htmlspecialchars($dbError);
+                            }
+                            
+                            throw new Exception($errorMsg);
+                        }
+                        
+                        logAudit(
+                            $currentUser['id'],
+                            'create_payment_schedule_manual',
+                            'payment_schedule',
+                            $scheduleId,
+                            null,
+                            [
+                                'customer_id' => $customerId,
+                                'amount' => $amount,
+                                'due_date' => $dueDate,
+                                'local_customer' => true
+                            ]
+                        );
+                        
+                        $success = 'تم إضافة موعد التحصيل بنجاح.';
                     }
                 }
             } catch (Throwable $createScheduleError) {
-                error_log('Create payment schedule error: ' . $createScheduleError->getMessage());
-                error_log('Create payment schedule stack trace: ' . $createScheduleError->getTraceAsString());
-                error_log('Create payment schedule customer_id: ' . ($customerId ?? 'null'));
-                error_log('Create payment schedule amount: ' . ($amount ?? 'null'));
-                error_log('Create payment schedule due_date: ' . ($dueDate ?? 'null'));
+                // تسجيل تفصيلي للخطأ
+                $errorDetails = [
+                    'message' => $createScheduleError->getMessage(),
+                    'file' => $createScheduleError->getFile(),
+                    'line' => $createScheduleError->getLine(),
+                    'customer_id' => $customerId ?? 'null',
+                    'amount' => $amount ?? 'null',
+                    'due_date' => $dueDate ?? 'null',
+                    'trace' => $createScheduleError->getTraceAsString()
+                ];
+                error_log('Create payment schedule error: ' . json_encode($errorDetails, JSON_UNESCAPED_UNICODE));
                 
-                // رسالة خطأ أكثر تفصيلاً للمستخدم
-                $errorMessage = 'تعذر إنشاء موعد التحصيل، يرجى المحاولة مرة أخرى.';
-                if (strpos($createScheduleError->getMessage(), 'Duplicate') !== false) {
-                    $errorMessage = 'يوجد موعد تحصيل مكرر لهذا العميل في نفس التاريخ.';
-                } elseif (strpos($createScheduleError->getMessage(), 'foreign key') !== false) {
-                    $errorMessage = 'العميل المحدد غير موجود أو غير نشط.';
-                } elseif (strpos($createScheduleError->getMessage(), 'constraint') !== false) {
-                    $errorMessage = 'البيانات المدخلة غير صحيحة. يرجى التحقق من المبلغ وتاريخ الاستحقاق.';
+                // الحصول على خطأ قاعدة البيانات إن وجد
+                $dbError = '';
+                try {
+                    $dbError = $db->getLastError();
+                } catch (Exception $e) {
+                    // تجاهل خطأ الحصول على خطأ قاعدة البيانات
+                }
+                
+                // بناء رسالة خطأ تفصيلية
+                $errorMessage = '<strong>خطأ في إنشاء موعد التحصيل:</strong><br><br>';
+                
+                // رسالة الخطأ الأساسية
+                $errorMessage .= '<div style="background: #fee; padding: 10px; border-left: 4px solid #f00; margin: 10px 0;">';
+                $errorMessage .= '<strong>الرسالة:</strong> ' . htmlspecialchars($createScheduleError->getMessage()) . '<br>';
+                $errorMessage .= '</div>';
+                
+                // معلومات الخطأ التقنية
+                $errorMessage .= '<div style="background: #f9f9f9; padding: 10px; border-left: 4px solid #999; margin: 10px 0; font-family: monospace; font-size: 12px;">';
+                $errorMessage .= '<strong>المعلومات التقنية:</strong><br>';
+                $errorMessage .= 'الملف: ' . htmlspecialchars(basename($createScheduleError->getFile())) . '<br>';
+                $errorMessage .= 'السطر: ' . $createScheduleError->getLine() . '<br>';
+                
+                if ($dbError) {
+                    $errorMessage .= '<br><strong>خطأ قاعدة البيانات:</strong><br>';
+                    $errorMessage .= htmlspecialchars($dbError) . '<br>';
+                }
+                
+                $errorMessage .= '<br><strong>البيانات المدخلة:</strong><br>';
+                $errorMessage .= 'معرف العميل: ' . ($customerId ?? 'غير محدد') . '<br>';
+                $errorMessage .= 'المبلغ: ' . ($amount ?? 'غير محدد') . '<br>';
+                $errorMessage .= 'تاريخ الاستحقاق: ' . ($dueDate ?? 'غير محدد') . '<br>';
+                $errorMessage .= '</div>';
+                
+                // رسائل خطأ محددة حسب نوع الخطأ
+                $errorType = '';
+                $errorMsgLower = strtolower($createScheduleError->getMessage());
+                if (strpos($errorMsgLower, 'duplicate') !== false || strpos($errorMsgLower, 'مكرر') !== false) {
+                    $errorType = '<div style="background: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; margin: 10px 0;">';
+                    $errorType .= '<strong>⚠️ خطأ التكرار:</strong> يوجد موعد تحصيل مكرر لهذا العميل في نفس التاريخ.';
+                    $errorType .= '</div>';
+                } elseif (strpos($errorMsgLower, 'foreign key') !== false || strpos($errorMsgLower, 'foreign_key') !== false) {
+                    $errorType = '<div style="background: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; margin: 10px 0;">';
+                    $errorType .= '<strong>⚠️ خطأ المفتاح الخارجي:</strong> العميل المحدد غير موجود أو غير نشط في قاعدة البيانات.';
+                    $errorType .= '</div>';
+                } elseif (strpos($errorMsgLower, 'constraint') !== false) {
+                    $errorType = '<div style="background: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; margin: 10px 0;">';
+                    $errorType .= '<strong>⚠️ خطأ القيد:</strong> البيانات المدخلة لا تتوافق مع قيود قاعدة البيانات. يرجى التحقق من المبلغ وتاريخ الاستحقاق.';
+                    $errorType .= '</div>';
+                } elseif (strpos($errorMsgLower, 'affected_rows') !== false || strpos($errorMsgLower, 'insert_id') !== false) {
+                    $errorType = '<div style="background: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; margin: 10px 0;">';
+                    $errorType .= '<strong>⚠️ خطأ في الإدراج:</strong> فشل إدراج البيانات في قاعدة البيانات. يرجى التحقق من اتصال قاعدة البيانات.';
+                    $errorType .= '</div>';
+                }
+                
+                if ($errorType) {
+                    $errorMessage = $errorType . '<br>' . $errorMessage;
                 }
                 
                 $error = $errorMessage;
@@ -577,9 +686,11 @@ if (isset($_GET['id'])) {
 </div>
 
 <?php if ($error): ?>
-    <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" data-auto-refresh="true">
+    <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" data-auto-refresh="true" style="white-space: pre-wrap;">
         <i class="bi bi-exclamation-triangle-fill me-2"></i>
-        <?php echo htmlspecialchars($error); ?>
+        <div style="margin-top: 10px;">
+            <?php echo $error; ?>
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 <?php endif; ?>

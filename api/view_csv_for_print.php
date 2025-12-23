@@ -268,25 +268,43 @@ try {
     $html .= '<meta charset="utf-8">';
     $html .= '<meta name="viewport" content="width=device-width, initial-scale=1">';
     $html .= '<title>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</title>';
+    $html .= '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">';
     $html .= '<style>
-        @page { margin: 16mm 12mm; }
-        *, *::before, *::after { box-sizing: border-box; }
+        @page { 
+            margin: 15mm 10mm; 
+            size: A4;
+        }
+        *, *::before, *::after { 
+            box-sizing: border-box; 
+        }
         body { 
-            font-family: "Cairo", "Amiri", "Segoe UI", sans-serif; 
+            font-family: "Cairo", "Tajawal", "Segoe UI", sans-serif; 
             direction: rtl; 
             text-align: right; 
             color: #0f172a; 
             margin: 0; 
-            background: #f8fafc; 
+            background: #f5f7fa; 
             padding: 20px;
+            line-height: 1.6;
         }
         .report-wrapper { 
-            max-width: 1024px; 
+            max-width: 1000px; 
             margin: 0 auto; 
-            padding: 32px; 
+            padding: 0; 
             background: #ffffff; 
-            border-radius: 18px; 
-            box-shadow: 0 20px 60px rgba(15,23,42,0.12); 
+            border-radius: 0; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08); 
+            overflow: hidden;
+            position: relative;
+        }
+        .report-wrapper::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #0f4c81 0%, #3b82f6 50%, #60a5fa 100%);
         }
         .actions { 
             display: flex; 
@@ -294,87 +312,140 @@ try {
             gap: 8px; 
             align-items: flex-start; 
             margin-bottom: 24px; 
+            padding: 20px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
         }
         .actions button { 
-            background: #1d4ed8; 
+            background: linear-gradient(135deg, #0f4c81 0%, #3b82f6 100%); 
             color: #ffffff; 
             border: none; 
-            padding: 11px 20px; 
-            border-radius: 12px; 
+            padding: 12px 24px; 
+            border-radius: 8px; 
             font-size: 15px; 
+            font-weight: 600;
             cursor: pointer; 
-            transition: opacity 0.2s ease; 
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(15, 76, 129, 0.2);
         }
         .actions button:hover { 
-            opacity: 0.92; 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(15, 76, 129, 0.3);
         }
         .actions .hint { 
             font-size: 13px; 
-            color: #475569; 
+            color: #64748b; 
+            margin-top: 4px;
         }
         .report-header { 
-            margin-bottom: 24px; 
-            text-align: center; 
+            margin-bottom: 30px; 
+            padding: 30px;
+            background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+            border-bottom: 2px solid #e2e8f0;
         }
         .report-header h1 { 
-            margin: 0 0 12px; 
-            font-size: 26px; 
+            margin: 0 0 16px; 
+            font-size: 32px; 
             font-weight: 700; 
-            color: #0f172a; 
+            color: #0f4c81;
+            text-align: center;
+            letter-spacing: -0.5px;
         }
         .report-header .meta { 
             display: flex; 
-            gap: 14px; 
+            gap: 16px; 
             justify-content: center; 
             flex-wrap: wrap; 
+            margin-top: 20px;
         }
         .report-header .meta span { 
-            background: #e2e8f0; 
-            padding: 7px 16px; 
-            border-radius: 999px; 
-            font-size: 13px; 
-            color: #334155; 
+            background: linear-gradient(135deg, #0f4c81 0%, #3b82f6 100%); 
+            color: #ffffff;
+            padding: 10px 20px; 
+            border-radius: 8px; 
+            font-size: 14px; 
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(15, 76, 129, 0.15);
         }
         .table-wrapper { 
             overflow-x: auto; 
-            border-radius: 14px; 
+            margin: 0 30px 30px;
+            border-radius: 12px; 
             border: 1px solid #e2e8f0; 
-            background: #ffffff; 
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
         }
         .report-table { 
             width: 100%; 
             border-collapse: collapse; 
-            min-width: 720px; 
+            min-width: 800px; 
         }
         .report-table thead th { 
-            background: #1d4ed8; 
+            background: linear-gradient(135deg, #0f4c81 0%, #3b82f6 100%); 
             color: #ffffff; 
-            padding: 12px 14px; 
-            font-size: 14px; 
-            font-weight: 600; 
-            border-bottom: 1px solid rgba(255,255,255,0.2); 
+            padding: 16px 18px; 
+            font-size: 15px; 
+            font-weight: 700; 
             text-align: right;
+            border-bottom: 2px solid rgba(255,255,255,0.2);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 13px;
+        }
+        .report-table thead th:first-child {
+            border-top-right-radius: 12px;
+        }
+        .report-table thead th:last-child {
+            border-top-left-radius: 12px;
         }
         .report-table tbody td { 
-            padding: 12px 14px; 
-            border-bottom: 1px solid #e2e8f0; 
-            font-size: 13px; 
-            color: #1f2937; 
+            padding: 14px 18px; 
+            border-bottom: 1px solid #f1f5f9; 
+            font-size: 14px; 
+            color: #1e293b; 
             text-align: right;
+            font-weight: 500;
         }
-        .report-table tbody tr:nth-child(even) td { 
-            background: #f8fafc; 
+        .report-table tbody tr {
+            transition: background-color 0.2s ease;
+        }
+        .report-table tbody tr:hover {
+            background-color: #f8fafc;
+        }
+        .report-table tbody tr:nth-child(even) { 
+            background: #fafbfc; 
+        }
+        .report-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+        .report-table tbody tr:last-child td:first-child {
+            border-bottom-right-radius: 12px;
+        }
+        .report-table tbody tr:last-child td:last-child {
+            border-bottom-left-radius: 12px;
         }
         .empty { 
-            padding: 32px; 
-            background: #f1f5f9; 
-            border: 2px dashed #cbd5f5; 
-            border-radius: 16px; 
+            padding: 60px 32px; 
+            background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%); 
+            border: 2px dashed #cbd5e1; 
+            border-radius: 12px; 
             text-align: center; 
-            font-size: 15px; 
-            color: #64748b; 
+            font-size: 16px; 
+            color: #64748b;
+            margin: 30px;
+        }
+        .footer-info {
+            padding: 20px 30px;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            text-align: center;
+            color: #64748b;
+            font-size: 13px;
         }
         @media print { 
+            @page {
+                margin: 10mm;
+            }
             body { 
                 background: #ffffff; 
                 padding: 0; 
@@ -382,17 +453,63 @@ try {
             .report-wrapper { 
                 box-shadow: none; 
                 border-radius: 0; 
-                padding: 0; 
-            } 
+                padding: 0;
+                max-width: 100%;
+            }
+            .report-wrapper::before {
+                display: none;
+            }
             .actions { 
                 display: none !important; 
-            } 
+            }
+            .report-header {
+                padding: 20px;
+                border-bottom: 3px solid #0f4c81;
+            }
+            .report-header h1 {
+                font-size: 28px;
+            }
             .table-wrapper { 
-                overflow: visible; 
-            } 
-            table { 
-                min-width: auto; 
-            } 
+                overflow: visible;
+                margin: 0 20px 20px;
+                border: 1px solid #e2e8f0;
+                page-break-inside: avoid;
+            }
+            .report-table {
+                min-width: auto;
+            }
+            .report-table thead th {
+                background: #0f4c81 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .report-table tbody tr {
+                page-break-inside: avoid;
+            }
+            .footer-info {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: #f8fafc;
+            }
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            .report-header {
+                padding: 20px;
+            }
+            .report-header h1 {
+                font-size: 24px;
+            }
+            .table-wrapper {
+                margin: 0 10px 20px;
+            }
+            .report-table {
+                min-width: 600px;
+            }
         }
     </style>';
     $html .= '</head><body>';
@@ -456,6 +573,14 @@ try {
     
     $html .= '</div>';
     
+    // إضافة معلومات التذييل
+    $html .= '<div class="footer-info">';
+    $html .= '<div>' . htmlspecialchars($companyName, ENT_QUOTES, 'UTF-8') . ' - ' . htmlspecialchars($date, ENT_QUOTES, 'UTF-8') . '</div>';
+    $html .= '<div style="margin-top: 8px; font-size: 12px; opacity: 0.8;">تم إنشاء هذا التقرير تلقائياً من النظام</div>';
+    $html .= '</div>';
+    
+    $html .= '</div>'; // إغلاق report-wrapper
+    
     // إضافة سكريبت الطباعة
     $shouldPrint = isset($_GET['print']) && $_GET['print'] === '1';
     $printScript = '<script>
@@ -473,7 +598,7 @@ try {
                 }
                 var params = new URLSearchParams(window.location.search);
                 if (params.get("print") === "1") {
-                    setTimeout(triggerPrint, 600);
+                    setTimeout(triggerPrint, 800);
                 }
             });
         })();
