@@ -2482,3 +2482,80 @@ function checkAndNotifyIncompleteAttendance($userId) {
     }
 }
 
+/**
+ * الحصول على تفاصيل حضور جميع الموظفين لليوم
+ * Returns array of employees with their attendance details for today
+ */
+function getAllEmployeesAttendanceToday($date = null) {
+    $db = db();
+    $date = $date ?? date('Y-m-d');
+    
+    // التحقق من وجود الجدول
+    $tableCheck = $db->queryOne("SHOW TABLES LIKE 'attendance_records'");
+    if (empty($tableCheck)) {
+        return [];
+    }
+    
+    // جلب جميع المستخدمين (ما عدا المديرين)
+    $employees = $db->query(
+        "SELECT id, full_name, username, role, status 
+         FROM users 
+         WHERE role != 'manager' AND status = 'active'
+         ORDER BY full_name ASC, username ASC"
+    );
+    
+    $result = [];
+    
+    foreach ($employees as $employee) {
+        $userId = (int)$employee['id'];
+        
+        // الحصول على موعد العمل الرسمي
+        $workTime = getOfficialWorkTime($userId);
+        $officialStartTime = $workTime ? $workTime['start'] : null;
+        
+        // الحصول على أول سجل حضور لليوم
+        $todayRecord = $db->queryOne(
+            "SELECT id, check_in_time, delay_minutes, check_out_time, work_hours
+             FROM attendance_records 
+             WHERE user_id = ? AND date = ? AND check_in_time IS NOT NULL
+             ORDER BY check_in_time ASC LIMIT 1",
+            [$userId, $date]
+        );
+        
+        $checkInTime = null;
+        $delayMinutes = 0;
+        $hasCheckedIn = false;
+        
+        if ($todayRecord) {
+            $hasCheckedIn = true;
+            $checkInTime = $todayRecord['check_in_time'];
+            $delayMinutes = (int)($todayRecord['delay_minutes'] ?? 0);
+            
+            // إذا لم يكن هناك delay_minutes محسوب، احسبه
+            if ($delayMinutes <= 0 && $officialStartTime && $checkInTime) {
+                $checkInTimestamp = strtotime($checkInTime);
+                $officialTimestamp = strtotime($date . ' ' . $officialStartTime);
+                
+                if ($checkInTimestamp !== false && $officialTimestamp !== false && $checkInTimestamp > $officialTimestamp) {
+                    $delayMinutes = round(($checkInTimestamp - $officialTimestamp) / 60);
+                }
+            }
+        }
+        
+        $result[] = [
+            'user_id' => $userId,
+            'full_name' => $employee['full_name'] ?? $employee['username'] ?? '',
+            'username' => $employee['username'] ?? '',
+            'role' => $employee['role'] ?? '',
+            'official_start_time' => $officialStartTime,
+            'has_checked_in' => $hasCheckedIn,
+            'check_in_time' => $checkInTime,
+            'delay_minutes' => $delayMinutes,
+            'check_out_time' => $todayRecord['check_out_time'] ?? null,
+            'work_hours' => $todayRecord['work_hours'] ?? null
+        ];
+    }
+    
+    return $result;
+}
+

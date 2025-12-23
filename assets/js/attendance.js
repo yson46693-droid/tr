@@ -511,6 +511,121 @@ let workTimeData = null;
 let timeSummaryInterval = null;
 let visibilityHandlerAdded = false;
 
+// دالة لتحميل تفاصيل حضور جميع الموظفين
+async function loadAllEmployeesAttendance() {
+    const container = document.getElementById('allEmployeesAttendanceContainer');
+    const loading = document.getElementById('allEmployeesAttendanceLoading');
+    const list = document.getElementById('allEmployeesAttendanceList');
+    const error = document.getElementById('allEmployeesAttendanceError');
+    const tableBody = document.getElementById('allEmployeesAttendanceTableBody');
+    
+    if (!container || !loading || !list || !error || !tableBody) {
+        return;
+    }
+    
+    // إظهار الحاوية وإخفاء القائمة وإظهار التحميل
+    container.style.display = 'block';
+    list.style.display = 'none';
+    error.style.display = 'none';
+    loading.style.display = 'block';
+    
+    try {
+        const apiPath = getAttendanceApiPath();
+        const today = new Date().toISOString().split('T')[0];
+        const response = await fetch(apiPath + '?action=get_all_employees_today&date=' + today, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json; charset=utf-8'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('فشل تحميل البيانات');
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.employees && Array.isArray(data.employees)) {
+            // مسح الجدول
+            tableBody.innerHTML = '';
+            
+            if (data.employees.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="font-size: 0.75rem;">لا يوجد موظفين</td></tr>';
+            } else {
+                data.employees.forEach(employee => {
+                    const row = document.createElement('tr');
+                    
+                    // الاسم
+                    const nameCell = document.createElement('td');
+                    nameCell.style.fontSize = '0.75rem';
+                    nameCell.style.padding = '0.25rem';
+                    nameCell.textContent = employee.full_name || employee.username || '-';
+                    row.appendChild(nameCell);
+                    
+                    // الموعد الرسمي
+                    const officialTimeCell = document.createElement('td');
+                    officialTimeCell.style.fontSize = '0.75rem';
+                    officialTimeCell.style.padding = '0.25rem';
+                    if (employee.official_start_time) {
+                        const timeParts = employee.official_start_time.split(':');
+                        const hours = parseInt(timeParts[0]);
+                        const minutes = timeParts[1];
+                        officialTimeCell.textContent = String(hours).padStart(2, '0') + ':' + minutes;
+                    } else {
+                        officialTimeCell.textContent = '-';
+                    }
+                    row.appendChild(officialTimeCell);
+                    
+                    // وقت الحضور الفعلي
+                    const checkInTimeCell = document.createElement('td');
+                    checkInTimeCell.style.fontSize = '0.75rem';
+                    checkInTimeCell.style.padding = '0.25rem';
+                    if (employee.has_checked_in && employee.check_in_time) {
+                        const checkInDate = new Date(employee.check_in_time);
+                        const hours = String(checkInDate.getHours()).padStart(2, '0');
+                        const minutes = String(checkInDate.getMinutes()).padStart(2, '0');
+                        checkInTimeCell.innerHTML = '<strong>' + hours + ':' + minutes + '</strong>';
+                    } else {
+                        checkInTimeCell.innerHTML = '<span class="text-muted">لم يسجل</span>';
+                    }
+                    row.appendChild(checkInTimeCell);
+                    
+                    // التأخير
+                    const delayCell = document.createElement('td');
+                    delayCell.style.fontSize = '0.75rem';
+                    delayCell.style.padding = '0.25rem';
+                    if (employee.has_checked_in) {
+                        if (employee.delay_minutes > 0) {
+                            delayCell.innerHTML = '<span class="badge bg-warning" style="font-size: 0.7rem;">' + employee.delay_minutes + ' دقيقة</span>';
+                        } else {
+                            delayCell.innerHTML = '<span class="badge bg-success" style="font-size: 0.7rem;">في الوقت</span>';
+                        }
+                    } else {
+                        delayCell.innerHTML = '<span class="text-muted">-</span>';
+                    }
+                    row.appendChild(delayCell);
+                    
+                    tableBody.appendChild(row);
+                });
+            }
+            
+            // إخفاء التحميل وإظهار القائمة
+            loading.style.display = 'none';
+            list.style.display = 'block';
+        } else {
+            throw new Error('بيانات غير صحيحة');
+        }
+    } catch (err) {
+        console.error('Error loading all employees attendance:', err);
+        loading.style.display = 'none';
+        error.style.display = 'block';
+        const errorSmall = error.querySelector('small');
+        if (errorSmall) {
+            errorSmall.textContent = 'حدث خطأ أثناء تحميل البيانات: ' + (err.message || 'خطأ غير معروف');
+        }
+    }
+}
+
 // عرض ملخص الوقت
 async function updateTimeSummary() {
     if (currentAction !== 'check_in') {
@@ -661,6 +776,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 title.textContent = 'تسجيل الانصراف - التقاط صورة';
             }
         }
+        
+        // تحميل تفاصيل حضور جميع الموظفين
+        loadAllEmployeesAttendance();
         
         // إعادة تعيين الحالة
         capturedPhoto = null;

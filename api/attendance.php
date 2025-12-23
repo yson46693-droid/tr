@@ -186,6 +186,16 @@ try {
             'checked_out' => $checkedOut
         ], JSON_UNESCAPED_UNICODE);
         
+    } elseif ($action === 'get_all_employees_today') {
+        // الحصول على تفاصيل حضور جميع الموظفين لليوم
+        $date = $_GET['date'] ?? date('Y-m-d');
+        $employeesAttendance = getAllEmployeesAttendanceToday($date);
+        echo json_encode([
+            'success' => true,
+            'date' => $date,
+            'employees' => $employeesAttendance
+        ], JSON_UNESCAPED_UNICODE);
+        
     } else {
         echo json_encode(['success' => false, 'message' => 'عملية غير صحيحة'], JSON_UNESCAPED_UNICODE);
     }
