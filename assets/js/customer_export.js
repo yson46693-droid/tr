@@ -11,6 +11,7 @@
     let collectionAmounts = {};
     let currentSection = 'company'; // 'company' or 'delegates'
     let generatedFileUrl = null;
+    let generatedFilePath = null;
     
     // متغيرات pagination للعملاء المحليين
     let localCustomersPage = 1;
@@ -198,6 +199,7 @@
         selectedCustomers = [];
         collectionAmounts = {};
         generatedFileUrl = null;
+        generatedFilePath = null;
         
         // إعادة تعيين pagination
         localCustomersPage = 1;
@@ -946,8 +948,9 @@
                 throw new Error(errorMsg);
             }
             
-            // حفظ رابط الملف
+            // حفظ رابط الملف ومسار الملف
             generatedFileUrl = result.file_url;
+            generatedFilePath = result.file_path || result.relative_path || null;
             
             // إظهار أزرار الإجراءات
             const actionButtons = document.getElementById('exportActionButtons');
@@ -981,21 +984,44 @@
      * معالجة طباعة الملف
      */
     function handlePrintExcel() {
-        if (!generatedFileUrl) {
+        if (!generatedFileUrl || !generatedFilePath) {
             alert('لم يتم توليد ملف Excel بعد');
             return;
         }
         
-        // فتح الملف في نافذة جديدة للطباعة
-        const printWindow = window.open(generatedFileUrl, '_blank');
-        if (printWindow) {
-            printWindow.onload = function() {
+        try {
+            // استخدام مسار الملف المباشر من الاستجابة
+            let filePath = generatedFilePath;
+            
+            // التأكد من أن المسار يبدأ بـ reports/
+            if (filePath.indexOf('reports/') !== 0) {
+                filePath = 'reports/' + filePath.replace(/^\/+/, '');
+            }
+            
+            // إزالة البداية / إذا كانت موجودة
+            filePath = filePath.replace(/^\/+/, '');
+            
+            // بناء URL لعرض CSV كـ HTML
+            const printUrl = getApiPath('view_csv_for_print.php') + '?file=' + encodeURIComponent(filePath) + '&print=1';
+            
+            // فتح الملف في نافذة جديدة للطباعة
+            const printWindow = window.open(printUrl, '_blank');
+            if (printWindow) {
+                // الانتظار قليلاً ثم محاولة الطباعة
                 setTimeout(function() {
-                    printWindow.print();
-                }, 500);
-            };
-        } else {
-            alert('تعذر فتح نافذة الطباعة. يرجى التحقق من إعدادات المتصفح');
+                    try {
+                        printWindow.print();
+                    } catch (e) {
+                        console.error('Print error:', e);
+                        // إذا فشلت الطباعة التلقائية، المستخدم يمكنه استخدام زر الطباعة في الصفحة
+                    }
+                }, 1000);
+            } else {
+                alert('تعذر فتح نافذة الطباعة. يرجى التحقق من إعدادات المتصفح (حظر النوافذ المنبثقة)');
+            }
+        } catch (error) {
+            console.error('Print error:', error);
+            alert('حدث خطأ أثناء محاولة الطباعة: ' + error.message);
         }
     }
     
@@ -1030,15 +1056,38 @@
         if (navigator.share) {
             try {
                 // تحميل الملف كـ blob
-                const response = await fetch(generatedFileUrl);
-                const blob = await response.blob();
-                const file = new File([blob], 'customers_export.csv', { type: 'text/csv' });
-                
-                await navigator.share({
-                    title: 'تصدير العملاء',
-                    text: 'ملف تصدير العملاء المحددين',
-                    files: [file]
-                });
+                let response;
+                try {
+                    response = await fetch(generatedFileUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'text/csv, application/csv, */*'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('فشل في تحميل الملف: ' + response.status);
+                    }
+                    
+                    const blob = await response.blob();
+                    const file = new File([blob], 'customers_export_' + new Date().getTime() + '.csv', { 
+                        type: 'text/csv;charset=utf-8' 
+                    });
+                    
+                    await navigator.share({
+                        title: 'تصدير العملاء',
+                        text: 'ملف تصدير العملاء المحددين',
+                        files: [file]
+                    });
+                    
+                    showAlert('success', 'تم مشاركة الملف بنجاح');
+                    return;
+                } catch (fetchError) {
+                    console.error('Error fetching file for share:', fetchError);
+                    // Fallback: نسخ الرابط
+                    copyLinkToClipboard();
+                    return;
+                }
             } catch (error) {
                 if (error.name !== 'AbortError') {
                     console.error('Share error:', error);

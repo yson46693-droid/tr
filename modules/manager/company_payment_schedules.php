@@ -211,7 +211,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $schedule = $db->queryOne(
                     "SELECT ps.* FROM payment_schedules ps
                      INNER JOIN local_customers lc ON ps.customer_id = lc.id
-                     WHERE ps.id = ? AND lc.status = 'active'",
+                     WHERE ps.id = ? AND lc.status = 'active'
+                     AND NOT EXISTS (
+                         SELECT 1 FROM customers c WHERE c.id = ps.customer_id
+                     )",
                     [$scheduleId]
                 );
 
@@ -276,7 +279,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $schedule = $db->queryOne(
                     "SELECT ps.* FROM payment_schedules ps
                      INNER JOIN local_customers lc ON ps.customer_id = lc.id
-                     WHERE ps.id = ? AND lc.status = 'active'",
+                     WHERE ps.id = ? AND lc.status = 'active'
+                     AND NOT EXISTS (
+                         SELECT 1 FROM customers c WHERE c.id = ps.customer_id
+                     )",
                     [$scheduleId]
                 );
 
@@ -336,12 +342,18 @@ if ($hasSaleNumberColumn) {
     $countSql = "SELECT COUNT(*) as total 
                  FROM payment_schedules ps
                  INNER JOIN local_customers lc ON ps.customer_id = lc.id
-                 WHERE lc.status = 'active'";
+                 WHERE lc.status = 'active'
+                 AND NOT EXISTS (
+                     SELECT 1 FROM customers c WHERE c.id = ps.customer_id
+                 )";
 } else {
     $countSql = "SELECT COUNT(*) as total 
                  FROM payment_schedules ps
                  INNER JOIN local_customers lc ON ps.customer_id = lc.id
-                 WHERE lc.status = 'active'";
+                 WHERE lc.status = 'active'
+                 AND NOT EXISTS (
+                     SELECT 1 FROM customers c WHERE c.id = ps.customer_id
+                 )";
 }
 
 $countParams = [];
@@ -383,7 +395,10 @@ if ($hasSaleNumberColumn) {
             INNER JOIN local_customers lc ON ps.customer_id = lc.id
             LEFT JOIN sales s ON ps.sale_id = s.id
             LEFT JOIN users u ON ps.sales_rep_id = u.id
-            WHERE lc.status = 'active'";
+            WHERE lc.status = 'active'
+            AND NOT EXISTS (
+                SELECT 1 FROM customers c WHERE c.id = ps.customer_id
+            )";
 } else {
     $sql = "SELECT ps.*, s.id as sale_number, lc.name as customer_name, 
                    u.full_name as sales_rep_name, u.username as sales_rep_username
@@ -391,7 +406,10 @@ if ($hasSaleNumberColumn) {
             INNER JOIN local_customers lc ON ps.customer_id = lc.id
             LEFT JOIN sales s ON ps.sale_id = s.id
             LEFT JOIN users u ON ps.sales_rep_id = u.id
-            WHERE lc.status = 'active'";
+            WHERE lc.status = 'active'
+            AND NOT EXISTS (
+                SELECT 1 FROM customers c WHERE c.id = ps.customer_id
+            )";
 }
 
 $params = [];
@@ -466,7 +484,10 @@ $statsSql = "SELECT
         COALESCE(SUM(CASE WHEN ps.status = 'overdue' THEN ps.amount END), 0) as overdue_amount
      FROM payment_schedules ps
      INNER JOIN local_customers lc ON ps.customer_id = lc.id
-     WHERE lc.status = 'active'";
+     WHERE lc.status = 'active'
+     AND NOT EXISTS (
+         SELECT 1 FROM customers c WHERE c.id = ps.customer_id
+     )";
 
 $statsParams = [];
 $statsQuery = $db->queryOne($statsSql, $statsParams);
@@ -494,7 +515,10 @@ if (isset($_GET['id'])) {
              INNER JOIN local_customers lc ON ps.customer_id = lc.id
              LEFT JOIN sales s ON ps.sale_id = s.id
              LEFT JOIN users u ON ps.sales_rep_id = u.id
-             WHERE ps.id = ? AND lc.status = 'active'",
+             WHERE ps.id = ? AND lc.status = 'active'
+             AND NOT EXISTS (
+                 SELECT 1 FROM customers c WHERE c.id = ps.customer_id
+             )",
             [$scheduleId]
         );
     } else {
@@ -505,7 +529,10 @@ if (isset($_GET['id'])) {
              INNER JOIN local_customers lc ON ps.customer_id = lc.id
              LEFT JOIN sales s ON ps.sale_id = s.id
              LEFT JOIN users u ON ps.sales_rep_id = u.id
-             WHERE ps.id = ? AND lc.status = 'active'",
+             WHERE ps.id = ? AND lc.status = 'active'
+             AND NOT EXISTS (
+                 SELECT 1 FROM customers c WHERE c.id = ps.customer_id
+             )",
             [$scheduleId]
         );
     }

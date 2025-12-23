@@ -318,18 +318,25 @@ try {
         // إنشاء رابط الملف
         $relativePath = str_replace(BASE_PATH, '', $filePath);
         $relativePath = str_replace('\\', '/', $relativePath);
-        if (strpos($relativePath, '/') !== 0) {
-            $relativePath = '/' . $relativePath;
+        $relativePath = ltrim($relativePath, '/');
+        
+        // التأكد من أن المسار يبدأ بـ reports/
+        if (strpos($relativePath, 'reports/') !== 0) {
+            $relativePath = 'reports/' . ltrim($relativePath, '/');
         }
         
         // استخدام getAbsoluteUrl لإنشاء رابط الملف بشكل صحيح
-        $fileUrl = getAbsoluteUrl(ltrim($relativePath, '/'));
+        $fileUrl = getAbsoluteUrl($relativePath);
+        
+        // مسار نسبي للاستخدام في view_csv_for_print.php
+        $filePathForView = $relativePath;
         
         returnJsonResponse([
             'success' => true,
             'message' => 'تم إنشاء ملف Excel بنجاح',
             'file_url' => $fileUrl,
-            'file_path' => $relativePath,
+            'file_path' => $filePathForView,
+            'relative_path' => $filePathForView,
             'total_customers' => count($exportData)
         ]);
         
