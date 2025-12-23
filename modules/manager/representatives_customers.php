@@ -48,6 +48,17 @@ try {
     error_log('Error creating customer_phones table: ' . $e->getMessage());
 }
 
+// التحقق من وجود عمود credit_limit في جدول customers وإنشاؤه إذا لم يكن موجوداً
+try {
+    $creditLimitColumn = $db->queryOne("SHOW COLUMNS FROM customers LIKE 'credit_limit'");
+    if (empty($creditLimitColumn)) {
+        $db->execute("ALTER TABLE customers ADD COLUMN credit_limit DECIMAL(15,2) DEFAULT 0.00 AFTER balance");
+        error_log('Column credit_limit added to customers table successfully');
+    }
+} catch (Exception $e) {
+    error_log('Error adding credit_limit column: ' . $e->getMessage());
+}
+
 // معالجة get_customer_phones AJAX
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && trim($_GET['action']) === 'get_customer_phones') {
     while (ob_get_level() > 0) {
@@ -467,6 +478,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_P
     }
 }
 
+// معالجة تحديد الحد الائتماني (للمدير فقط)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && trim($_POST['action']) === 'set_credit_limit') {
+    // التحقق من أن المستخدم هو مدير فقط
+    if ($currentRole !== 'manager') {
+        $_SESSION['error_message'] = 'غير مصرح لك بتحديد الحد الائتماني. هذه الصلاحية متاحة للمدير فقط.';
+        redirectAfterPost(
+            'representatives_customers',
+            [],
+            [],
+            $currentRole
+        );
+    } else {
+        $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
+        $creditLimit = isset($_POST['credit_limit']) ? cleanFinancialValue($_POST['credit_limit']) : 0;
+        
+        if ($customerId <= 0) {
+            $_SESSION['error_message'] = 'معرف العميل غير صحيح';
+        } elseif ($creditLimit < 0) {
+            $_SESSION['error_message'] = 'الحد الائتماني يجب أن يكون أكبر من أو يساوي صفر.';
+        } else {
+            try {
+                // التحقق من وجود العميل
+                $customer = $db->queryOne("SELECT id, name, balance FROM customers WHERE id = ?", [$customerId]);
+                if (!$customer) {
+                    $_SESSION['error_message'] = 'العميل غير موجود';
+                } else {
+                    // تحديث الحد الائتماني
+                    $db->execute(
+                        "UPDATE customers SET credit_limit = ? WHERE id = ?",
+                        [$creditLimit, $customerId]
+                    );
+                    
+                    // تسجيل في audit log
+                    logAudit($currentUser['id'], 'set_customer_credit_limit', 'customer', $customerId, null, [
+                        'customer_name' => $customer['name'],
+                        'credit_limit' => $creditLimit,
+                        'current_balance' => $customer['balance'] ?? 0
+                    ]);
+                    
+                    $_SESSION['success_message'] = 'تم تحديد الحد الائتماني للعميل ' . htmlspecialchars($customer['name']) . ' بنجاح.';
+                    
+                    redirectAfterPost(
+                        'representatives_customers',
+                        [],
+                        [],
+                        $currentRole
+                    );
+                }
+            } catch (Throwable $e) {
+                error_log('Set credit limit error: ' . $e->getMessage());
+                $_SESSION['error_message'] = 'حدث خطأ أثناء تحديد الحد الائتماني';
+            }
+        }
+    }
+}
+
 // قراءة الرسائل من session بعد معالجة POST
 $error = '';
 $success = '';
@@ -850,7 +917,8 @@ if (!in_array($allCustomersDebtStatus, $allowedDebtStatuses, true)) {
 // بناء استعلام SQL لعملاء المندوبين
 $allCustomersSql = "SELECT c.*, 
         COALESCE(rep1.full_name, rep2.full_name) as rep_name, 
-        r.name as region_name
+        r.name as region_name,
+        COALESCE(c.credit_limit, 0) as credit_limit
         FROM customers c
         LEFT JOIN users rep1 ON c.rep_id = rep1.id AND rep1.role = 'sales'
         LEFT JOIN users rep2 ON c.created_by = rep2.id AND rep2.role = 'sales'
@@ -1080,6 +1148,20 @@ try {
                                             data-customer-balance="<?php echo $rawBalance; ?>"
                                         >
                                             <i class="bi bi-pencil me-1"></i>تعديل
+                                        </button>
+                                        <?php endif; ?>
+                                        <?php if ($currentRole === 'manager'): ?>
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-outline-info set-credit-limit-btn"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#setCreditLimitModal"
+                                            data-customer-id="<?php echo (int)$customer['id']; ?>"
+                                            data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
+                                            data-customer-balance="<?php echo $rawBalance; ?>"
+                                            data-credit-limit="<?php echo htmlspecialchars(number_format((float)($customer['credit_limit'] ?? 0), 2, '.', '')); ?>"
+                                        >
+                                            <i class="bi bi-credit-card me-1"></i>الحد الائتماني
                                         </button>
                                         <?php endif; ?>
                                         <button
@@ -3474,6 +3556,119 @@ try {
 }
 </style>
 
+<!-- Modal تحديد الحد الائتماني -->
+<div class="modal fade" id="setCreditLimitModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-credit-card me-2"></i>تحديد الحد الائتماني</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>" id="setCreditLimitForm">
+                <input type="hidden" name="action" value="set_credit_limit">
+                <input type="hidden" name="customer_id" id="creditLimitCustomerId" value="">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <div class="fw-semibold text-muted">العميل</div>
+                        <div class="fs-5 credit-limit-customer-name">-</div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="fw-semibold text-muted">الرصيد المدين الحالي</div>
+                        <div class="fs-5 text-warning credit-limit-current-balance">-</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="creditLimitAmount">الحد الائتماني <span class="text-danger">*</span></label>
+                        <input
+                            type="number"
+                            class="form-control"
+                            id="creditLimitAmount"
+                            name="credit_limit"
+                            step="0.01"
+                            min="0"
+                            required
+                            placeholder="0.00"
+                        >
+                        <div class="form-text">
+                            <strong>ملاحظة:</strong> إذا كان رصيد العميل المدين أكبر من أو يساوي الحد الائتماني، لن يتمكن المندوب من البيع بالأجل أو بتحصيل جزئي لهذا العميل.
+                            <br>ضع <strong>0</strong> لإلغاء الحد الائتماني (السماح بالبيع بالأجل بدون قيود).
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle me-1"></i>حفظ
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Customer Export Script -->
 <script src="<?php echo ASSETS_URL; ?>js/customer_export.js?v=<?php echo time(); ?>"></script>
+
+<script>
+// معالج Modal تحديد الحد الائتماني
+document.addEventListener('DOMContentLoaded', function() {
+    var creditLimitModal = document.getElementById('setCreditLimitModal');
+    if (creditLimitModal) {
+        var nameElement = creditLimitModal.querySelector('.credit-limit-customer-name');
+        var balanceElement = creditLimitModal.querySelector('.credit-limit-current-balance');
+        var customerIdInput = creditLimitModal.querySelector('#creditLimitCustomerId');
+        var creditLimitInput = creditLimitModal.querySelector('#creditLimitAmount');
+        var creditLimitForm = creditLimitModal.querySelector('#setCreditLimitForm');
+
+        if (nameElement && balanceElement && customerIdInput && creditLimitInput) {
+            creditLimitModal.addEventListener('show.bs.modal', function (event) {
+                var triggerButton = event.relatedTarget;
+                if (!triggerButton) {
+                    return;
+                }
+
+                var customerName = triggerButton.getAttribute('data-customer-name') || '-';
+                var balanceRaw = triggerButton.getAttribute('data-customer-balance') || '0';
+                var creditLimitRaw = triggerButton.getAttribute('data-credit-limit') || '0';
+                
+                var numericBalance = parseFloat(balanceRaw);
+                if (!Number.isFinite(numericBalance)) {
+                    numericBalance = 0;
+                }
+                var displayBalance = numericBalance > 0 ? numericBalance : 0;
+                
+                var numericCreditLimit = parseFloat(creditLimitRaw);
+                if (!Number.isFinite(numericCreditLimit)) {
+                    numericCreditLimit = 0;
+                }
+
+                nameElement.textContent = customerName;
+                balanceElement.textContent = formatCurrency(displayBalance);
+                customerIdInput.value = triggerButton.getAttribute('data-customer-id') || '';
+                creditLimitInput.value = numericCreditLimit.toFixed(2);
+            });
+
+            creditLimitModal.addEventListener('hidden.bs.modal', function () {
+                nameElement.textContent = '-';
+                balanceElement.textContent = '-';
+                customerIdInput.value = '';
+                creditLimitInput.value = '';
+            });
+        }
+    }
+    
+    // دالة formatCurrency (إذا لم تكن موجودة)
+    if (typeof formatCurrency === 'undefined') {
+        function formatCurrency(amount) {
+            if (typeof amount === 'string') {
+                amount = parseFloat(amount) || 0;
+            }
+            return new Intl.NumberFormat('ar-EG', {
+                style: 'currency',
+                currency: 'EGP',
+                minimumFractionDigits: 2
+            }).format(amount || 0);
+        }
+    }
+});
+</script>
 

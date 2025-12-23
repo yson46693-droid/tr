@@ -218,17 +218,8 @@
                 throw new Error(result.message || 'فشل في جلب العملاء المحليين');
             }
             
-            // إخفاء رسالة التحميل
-            if (selectRepMessage) {
-                selectRepMessage.style.display = 'none';
-            }
-            
-            // عرض قائمة العملاء
+            // عرض قائمة العملاء (ستقوم الدالة بإخفاء/إظهار الأقسام حسب الحاجة)
             displayCustomersList(result.customers || []);
-            
-            if (customersSection) {
-                customersSection.style.display = 'block';
-            }
             
         } catch (error) {
             console.error('Load local customers error:', error);
@@ -276,17 +267,8 @@
                 throw new Error(result.message || 'فشل في جلب عملاء الشركة');
             }
             
-            // إخفاء رسالة التحميل
-            if (selectRepMessage) {
-                selectRepMessage.style.display = 'none';
-            }
-            
-            // عرض قائمة العملاء
+            // عرض قائمة العملاء (ستقوم الدالة بإخفاء/إظهار الأقسام حسب الحاجة)
             displayCustomersList(result.customers || []);
-            
-            if (customersSection) {
-                customersSection.style.display = 'block';
-            }
             
         } catch (error) {
             console.error('Load company customers error:', error);
@@ -353,17 +335,8 @@
                        customer.name.trim() !== '';
             });
             
-            // إخفاء رسالة التحميل
-            if (selectRepMessage) {
-                selectRepMessage.style.display = 'none';
-            }
-            
-            // عرض قائمة العملاء المفلترة
+            // عرض قائمة العملاء المفلترة (ستقوم الدالة بإخفاء/إظهار الأقسام حسب الحاجة)
             displayCustomersList(validCustomers);
-            
-            if (customersSection) {
-                customersSection.style.display = 'block';
-            }
             
         } catch (error) {
             console.error('Load customers error:', error);
@@ -379,18 +352,60 @@
      */
     function displayCustomersList(customers) {
         const customersList = document.getElementById('exportCustomersList');
+        const customersSection = document.getElementById('customersSection');
+        const selectRepMessage = document.getElementById('selectRepMessage');
+        const generateBtn = document.getElementById('generateExcelBtn');
+        
         if (!customersList) {
             return;
         }
         
-        if (!customers || customers.length === 0) {
-            customersList.innerHTML = '<div class="alert alert-warning">لا توجد عملاء متاحة للتصدير</div>';
+        // فلترة العملاء للتأكد من صحة البيانات
+        const validCustomers = [];
+        if (customers && Array.isArray(customers)) {
+            customers.forEach(function(customer) {
+                if (customer && 
+                    typeof customer === 'object' && 
+                    customer.id && 
+                    parseInt(customer.id, 10) > 0 &&
+                    customer.name && 
+                    typeof customer.name === 'string' && 
+                    customer.name.trim() !== '') {
+                    validCustomers.push(customer);
+                }
+            });
+        }
+        
+        // إذا لم يكن هناك عملاء صالحين
+        if (validCustomers.length === 0) {
+            // إخفاء قسم العملاء
+            if (customersSection) {
+                customersSection.style.display = 'none';
+            }
             
-            const generateBtn = document.getElementById('generateExcelBtn');
+            // إظهار رسالة في المكان المناسب
+            if (selectRepMessage) {
+                selectRepMessage.style.display = 'block';
+                selectRepMessage.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>لا توجد عملاء متاحة للتصدير</div>';
+            } else {
+                customersList.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>لا توجد عملاء متاحة للتصدير</div>';
+            }
+            
+            // تعطيل زر التوليد
             if (generateBtn) {
                 generateBtn.disabled = true;
             }
             return;
+        }
+        
+        // إظهار قسم العملاء
+        if (customersSection) {
+            customersSection.style.display = 'block';
+        }
+        
+        // إخفاء رسالة اختيار المندوب
+        if (selectRepMessage) {
+            selectRepMessage.style.display = 'none';
         }
         
         // إنشاء جدول العملاء
@@ -404,23 +419,31 @@
         html += '</tr></thead>';
         html += '<tbody>';
         
-        customers.forEach(function(customer) {
-            const customerId = customer.id;
-            const customerName = escapeHtml(customer.name || '');
-            const phone = escapeHtml(customer.phone || '-');
+        validCustomers.forEach(function(customer) {
+            const customerId = parseInt(customer.id, 10);
+            const customerName = escapeHtml(customer.name.trim());
+            const phone = escapeHtml((customer.phone || '').trim() || '-');
             const balance = customer.balance_formatted || '0.00 ج.م';
             
-            html += '<tr data-customer-id="' + customerId + '">';
-            html += '<td><input type="checkbox" class="form-check-input customer-export-checkbox" value="' + customerId + '"></td>';
-            html += '<td><strong>' + customerName + '</strong></td>';
-            html += '<td>' + phone + '</td>';
-            html += '<td>' + balance + '</td>';
-            html += '<td><input type="number" step="0.01" min="0" class="form-control form-control-sm collection-amount-input" data-customer-id="' + customerId + '" placeholder="مبلغ اختياري"></td>';
-            html += '</tr>';
+            // التأكد مرة أخرى من صحة البيانات قبل إضافتها
+            if (customerId > 0 && customerName !== '') {
+                html += '<tr data-customer-id="' + customerId + '">';
+                html += '<td><input type="checkbox" class="form-check-input customer-export-checkbox" value="' + customerId + '"></td>';
+                html += '<td><strong>' + customerName + '</strong></td>';
+                html += '<td>' + phone + '</td>';
+                html += '<td>' + balance + '</td>';
+                html += '<td><input type="number" step="0.01" min="0" class="form-control form-control-sm collection-amount-input" data-customer-id="' + customerId + '" placeholder="مبلغ اختياري"></td>';
+                html += '</tr>';
+            }
         });
         
         html += '</tbody></table>';
         customersList.innerHTML = html;
+        
+        // تفعيل زر التوليد إذا كان هناك عملاء
+        if (generateBtn) {
+            generateBtn.disabled = false;
+        }
         
         // ربط أحداث checkbox
         const checkboxes = customersList.querySelectorAll('.customer-export-checkbox');

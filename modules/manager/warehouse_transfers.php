@@ -522,7 +522,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($warehouseTransfersSectionParam)) {
             $redirectFilters['section'] = $warehouseTransfersSectionParam;
         }
-        $dashboardSlug = $isManager ? 'manager' : 'sales';
+        $dashboardSlug = $isManager ? 'manager' : ($isAccountant ? 'accountant' : 'sales');
         redirectAfterPost($warehouseTransfersParentPage, $redirectFilters, ['id'], $dashboardSlug, $pageNum);
     } elseif ($action === 'create_transfer_from_sales_rep') {
         // الحصول على المخزن الرئيسي (الهدف)
@@ -631,7 +631,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($warehouseTransfersSectionParam)) {
             $redirectFilters['section'] = $warehouseTransfersSectionParam;
         }
-        $dashboardSlug = $isManager ? 'manager' : 'sales';
+        $dashboardSlug = $isManager ? 'manager' : ($isAccountant ? 'accountant' : 'sales');
         redirectAfterPost($warehouseTransfersParentPage, $redirectFilters, ['id'], $dashboardSlug, $pageNum);
     }
     
@@ -1198,7 +1198,7 @@ if (isset($_GET['id'])) {
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="bi bi-arrow-left-right me-2"></i>طلبات النقل بين المخازن</h2>
     <div class="d-flex gap-2">
-        <?php if ($isManager): ?>
+        <?php if ($isManager || $isAccountant): ?>
             <button type="button" class="btn btn-primary rounded-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#transferFromCompanyModal">
                 <i class="bi bi-box-arrow-right me-2"></i>نقل من منتجات الشركة
             </button>
@@ -1210,7 +1210,7 @@ if (isset($_GET['id'])) {
 </div>
 <?php else: ?>
 <div class="d-flex justify-content-end mb-3 gap-2">
-    <?php if ($isManager): ?>
+    <?php if ($isManager || $isAccountant): ?>
         <button type="button" class="btn btn-primary rounded-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#transferFromCompanyModal">
             <i class="bi bi-box-arrow-right me-2"></i>نقل من منتجات الشركة
         </button>

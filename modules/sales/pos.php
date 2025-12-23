@@ -197,7 +197,7 @@ if (!$error && !empty($customersTableExists)) {
     $statusColumnExists = $db->queryOne("SHOW COLUMNS FROM customers LIKE 'status'");
     $createdByColumnExists = $db->queryOne("SHOW COLUMNS FROM customers LIKE 'created_by'");
 
-    $customerSql = "SELECT id, name, balance FROM customers WHERE 1=1";
+    $customerSql = "SELECT id, name, balance, COALESCE(credit_limit, 0) as credit_limit FROM customers WHERE 1=1";
     $customerParams = [];
 
     if (!empty($statusColumnExists)) {
@@ -392,11 +392,20 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($customerId <= 0) {
                 $validationErrors[] = 'يجب اختيار عميل من القائمة.';
             } else {
-                $customer = $db->queryOne("SELECT id, name, balance, created_by FROM customers WHERE id = ?", [$customerId]);
+                $customer = $db->queryOne("SELECT id, name, balance, credit_limit, created_by FROM customers WHERE id = ?", [$customerId]);
                 if (!$customer) {
                     $validationErrors[] = 'العميل المحدد غير موجود.';
                 } elseif (($currentUser['role'] ?? '') === 'sales' && isset($customer['created_by']) && (int) $customer['created_by'] !== (int) $currentUser['id']) {
                     $validationErrors[] = 'غير مصرح لك بإتمام البيع لهذا العميل.';
+                } else {
+                    // التحقق من الحد الائتماني
+                    $customerBalance = (float)($customer['balance'] ?? 0);
+                    $creditLimit = (float)($customer['credit_limit'] ?? 0);
+                    
+                    // إذا كان payment_type هو partial أو credit وتجاوز الرصيد المدين الحد الائتماني
+                    if (($paymentType === 'partial' || $paymentType === 'credit') && $customerBalance >= $creditLimit && $creditLimit > 0) {
+                        $validationErrors[] = 'لا يمكنك البيع بالأجل أو بتحصيل جزئي للعميل الحالي. الرصيد المدين (' . formatCurrency($customerBalance) . ') يتجاوز أو يساوي الحد الائتماني (' . formatCurrency($creditLimit) . '). يرجى التحصيل أولاً لتخفيف ديون العميل المستحقة للشركة.';
+                    }
                 }
             }
         } else {
@@ -3237,7 +3246,7 @@ if (!$error) {
                                 <select class="form-select" id="posCustomerSelect" name="customer_id" required>
                                     <option value="">اختر العميل</option>
                                     <?php foreach ($customers as $customer): ?>
-                                        <option value="<?php echo (int) $customer['id']; ?>" data-balance="<?php echo htmlspecialchars((string)($customer['balance'] ?? 0)); ?>"><?php echo htmlspecialchars($customer['name']); ?></option>
+                                        <option value="<?php echo (int) $customer['id']; ?>" data-balance="<?php echo htmlspecialchars((string)($customer['balance'] ?? 0)); ?>" data-credit-limit="<?php echo htmlspecialchars((string)($customer['credit_limit'] ?? 0)); ?>"><?php echo htmlspecialchars($customer['name']); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
@@ -3359,6 +3368,10 @@ if (!$error) {
                                         <span class="pos-payment-option-desc">تمويل كامل للعميل دون تحصيل فوري، مع متابعة الدفعات لاحقاً.</span>
                                     </div>
                                 </label>
+                                </div>
+                                <div id="posCreditLimitWarning" class="alert alert-warning d-none mt-3" role="alert">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                    <strong>تحذير:</strong> لا يمكنك البيع بالأجل أو بتحصيل جزئي للعميل الحالي، قم بالتحصيل أولاً لتخفيف ديون العميل المستحقة للشركة لتتمكن من البيع له، متاح البيع بدفع كامل فقط.
                                 </div>
                                 <div class="mt-3 d-none" id="posPartialWrapper">
                                     <label class="form-label">مبلغ التحصيل الجزئي</label>
@@ -4130,7 +4143,20 @@ if (!$error) {
     }
 
     elements.paymentRadios.forEach((radio) => {
-        radio.addEventListener('change', updateSummary);
+        radio.addEventListener('change', function() {
+            // التحقق من الحد الائتماني قبل السماح بتغيير طريقة الدفع
+            const creditLimitExceeded = checkCreditLimit();
+            if (creditLimitExceeded && (this.value === 'partial' || this.value === 'credit')) {
+                // منع اختيار partial أو credit إذا تم تجاوز الحد
+                const paymentFullRadio = document.getElementById('posPaymentFull');
+                if (paymentFullRadio) {
+                    paymentFullRadio.checked = true;
+                }
+                alert('لا يمكنك البيع بالأجل أو بتحصيل جزئي للعميل الحالي. يرجى التحصيل أولاً لتخفيف ديون العميل.');
+                return;
+            }
+            updateSummary();
+        });
     });
 
     elements.customerModeRadios.forEach((radio) => {
@@ -4151,7 +4177,29 @@ if (!$error) {
         });
     });
 
-    // دالة تحديث حالة رصيد العميل
+    // دالة التحقق من الحد الائتماني
+    function checkCreditLimit() {
+        if (!elements.customerSelect) {
+            return false;
+        }
+        
+        const selectedOption = elements.customerSelect.options[elements.customerSelect.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+            return false;
+        }
+        
+        const balance = parseFloat(selectedOption.getAttribute('data-balance') || '0');
+        const creditLimit = parseFloat(selectedOption.getAttribute('data-credit-limit') || '0');
+        
+        // إذا كان الرصيد المدين >= الحد الائتماني والحد الائتماني > 0، تم تجاوز الحد
+        if (balance >= creditLimit && creditLimit > 0) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    // دالة تحديث حالة رصيد العميل والتحقق من الحد الائتماني
     function updateCustomerBalance() {
         const balanceText = document.getElementById('posCustomerBalanceText');
         
@@ -4166,6 +4214,13 @@ if (!$error) {
             balanceText.className = 'form-control';
             balanceText.style.backgroundColor = '#f8f9fa';
             balanceText.style.borderColor = '#dee2e6';
+            // إخفاء رسالة التحذير
+            const warningDiv = document.getElementById('posCreditLimitWarning');
+            if (warningDiv) {
+                warningDiv.classList.add('d-none');
+            }
+            // تفعيل أزرار الدفع
+            refreshPaymentOptionStates();
             return;
         }
         
@@ -4187,17 +4242,84 @@ if (!$error) {
             balanceText.style.backgroundColor = '#cff4fc';
             balanceText.style.borderColor = '#0dcaf0';
         }
+        
+        // التحقق من الحد الائتماني
+        const creditLimitExceeded = checkCreditLimit();
+        const warningDiv = document.getElementById('posCreditLimitWarning');
+        const paymentFullRadio = document.getElementById('posPaymentFull');
+        const paymentPartialRadio = document.getElementById('posPaymentPartial');
+        const paymentCreditRadio = document.getElementById('posPaymentCredit');
+        const paymentPartialLabel = paymentPartialRadio ? paymentPartialRadio.closest('label') : null;
+        const paymentCreditLabel = paymentCreditRadio ? paymentCreditRadio.closest('label') : null;
+        
+        if (creditLimitExceeded) {
+            // إظهار رسالة التحذير
+            if (warningDiv) {
+                warningDiv.classList.remove('d-none');
+            }
+            
+            // تعطيل أزرار البيع بالأجل والتحصيل الجزئي
+            if (paymentPartialRadio) {
+                paymentPartialRadio.disabled = true;
+            }
+            if (paymentCreditRadio) {
+                paymentCreditRadio.disabled = true;
+            }
+            
+            // إضافة opacity على labels
+            if (paymentPartialLabel) {
+                paymentPartialLabel.classList.add('opacity-50');
+                paymentPartialLabel.style.pointerEvents = 'none';
+            }
+            if (paymentCreditLabel) {
+                paymentCreditLabel.classList.add('opacity-50');
+                paymentCreditLabel.style.pointerEvents = 'none';
+            }
+            
+            // اختيار الدفع الكامل تلقائياً إذا كان محدداً خيار آخر
+            if (paymentFullRadio && (!paymentFullRadio.checked)) {
+                paymentFullRadio.checked = true;
+                // تحديث الملخص
+                updateSummary();
+            }
+        } else {
+            // إخفاء رسالة التحذير
+            if (warningDiv) {
+                warningDiv.classList.add('d-none');
+            }
+            
+            // تفعيل أزرار الدفع
+            if (paymentPartialRadio) {
+                paymentPartialRadio.disabled = false;
+            }
+            if (paymentCreditRadio) {
+                paymentCreditRadio.disabled = false;
+            }
+            
+            // إزالة opacity من labels
+            if (paymentPartialLabel) {
+                paymentPartialLabel.classList.remove('opacity-50');
+                paymentPartialLabel.style.pointerEvents = '';
+            }
+            if (paymentCreditLabel) {
+                paymentCreditLabel.classList.remove('opacity-50');
+                paymentCreditLabel.style.pointerEvents = '';
+            }
+        }
+        
+        // تحديث حالة أزرار الدفع
+        refreshPaymentOptionStates();
     }
     
     // إضافة مستمعين لحقول العميل لتحديث حالة الزر
     if (elements.customerSelect) {
         elements.customerSelect.addEventListener('change', function() {
+            updateCustomerBalance(); // هذا يستدعي checkCreditLimit داخلياً
             updateSummary();
-            updateCustomerBalance();
         });
         elements.customerSelect.addEventListener('input', function() {
+            updateCustomerBalance(); // هذا يستدعي checkCreditLimit داخلياً
             updateSummary();
-            updateCustomerBalance();
         });
     }
     if (elements.newCustomerName) {
