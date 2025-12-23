@@ -24,8 +24,42 @@
         // إعادة تعيين عند فتح المودال
         exportModal.addEventListener('show.bs.modal', function() {
             resetExportModal();
-            loadCustomersList();
+            
+            // تحديد القسم الحالي من data attribute
+            const currentSection = exportModal.getAttribute('data-section') || '';
+            
+            // إذا كان قسم عملاء الشركة، جلب عملاء الشركة مباشرة
+            if (currentSection === 'company') {
+                loadCompanyCustomers();
+                return;
+            }
+            
+            // إذا كان هناك اختيار مندوب، انتظر اختياره
+            const repSelect = document.getElementById('exportRepSelect');
+            if (repSelect && repSelect.tagName === 'SELECT') {
+                // إظهار رسالة اختيار المندوب
+                showSelectRepMessage();
+            } else {
+                // إذا كان المستخدم مندوب، جلب عملائه مباشرة
+                const repId = repSelect ? repSelect.value : null;
+                if (repId) {
+                    loadCustomersByRep(parseInt(repId, 10));
+                }
+            }
         });
+        
+        // ربط حدث اختيار المندوب
+        const repSelect = document.getElementById('exportRepSelect');
+        if (repSelect && repSelect.tagName === 'SELECT') {
+            repSelect.addEventListener('change', function() {
+                const repId = parseInt(this.value, 10);
+                if (repId > 0) {
+                    loadCustomersByRep(repId);
+                } else {
+                    showSelectRepMessage();
+                }
+            });
+        }
         
         // ربط أحداث الأزرار
         const generateBtn = document.getElementById('generateExcelBtn');
@@ -77,6 +111,16 @@
             customersList.innerHTML = '';
         }
         
+        const customersSection = document.getElementById('customersSection');
+        if (customersSection) {
+            customersSection.style.display = 'none';
+        }
+        
+        const selectRepMessage = document.getElementById('selectRepMessage');
+        if (selectRepMessage) {
+            selectRepMessage.style.display = 'block';
+        }
+        
         // إخفاء أزرار الطباعة والتحميل والمشاركة
         const actionButtons = document.getElementById('exportActionButtons');
         if (actionButtons) {
@@ -86,13 +130,240 @@
         // إظهار زر التوليد
         const generateBtn = document.getElementById('generateExcelBtn');
         if (generateBtn) {
-            generateBtn.disabled = false;
+            generateBtn.disabled = true;
             generateBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-2"></i>توليد ملف Excel';
+        }
+        
+        // إعادة تعيين اختيار المندوب
+        const repSelect = document.getElementById('exportRepSelect');
+        if (repSelect && repSelect.tagName === 'SELECT') {
+            repSelect.value = '';
         }
     }
     
     /**
-     * جلب قائمة العملاء من الجدول الحالي
+     * إظهار رسالة اختيار المندوب
+     */
+    function showSelectRepMessage() {
+        const customersSection = document.getElementById('customersSection');
+        const selectRepMessage = document.getElementById('selectRepMessage');
+        
+        if (customersSection) {
+            customersSection.style.display = 'none';
+        }
+        
+        if (selectRepMessage) {
+            selectRepMessage.style.display = 'block';
+            selectRepMessage.innerHTML = '<i class="bi bi-info-circle me-2"></i>يرجى اختيار المندوب أولاً لعرض عملائه';
+        }
+        
+        const generateBtn = document.getElementById('generateExcelBtn');
+        if (generateBtn) {
+            generateBtn.disabled = true;
+        }
+    }
+    
+    /**
+     * جلب عملاء الشركة عبر API
+     */
+    async function loadCompanyCustomers() {
+        const customersList = document.getElementById('exportCustomersList');
+        const customersSection = document.getElementById('customersSection');
+        const selectRepMessage = document.getElementById('selectRepMessage');
+        
+        if (!customersList) {
+            return;
+        }
+        
+        // إظهار رسالة التحميل
+        if (selectRepMessage) {
+            selectRepMessage.style.display = 'block';
+            selectRepMessage.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل عملاء الشركة...';
+        }
+        
+        if (customersSection) {
+            customersSection.style.display = 'none';
+        }
+        
+        try {
+            const response = await fetch('../api/get_company_customers_for_export.php', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.message || 'فشل في جلب عملاء الشركة');
+            }
+            
+            // إخفاء رسالة التحميل
+            if (selectRepMessage) {
+                selectRepMessage.style.display = 'none';
+            }
+            
+            // عرض قائمة العملاء
+            displayCustomersList(result.customers || []);
+            
+            if (customersSection) {
+                customersSection.style.display = 'block';
+            }
+            
+        } catch (error) {
+            console.error('Load company customers error:', error);
+            if (selectRepMessage) {
+                selectRepMessage.style.display = 'block';
+                selectRepMessage.innerHTML = '<div class="alert alert-danger">حدث خطأ أثناء جلب عملاء الشركة: ' + escapeHtml(error.message) + '</div>';
+            }
+        }
+    }
+    
+    /**
+     * جلب عملاء المندوب عبر API
+     */
+    async function loadCustomersByRep(repId) {
+        const customersList = document.getElementById('exportCustomersList');
+        const customersSection = document.getElementById('customersSection');
+        const selectRepMessage = document.getElementById('selectRepMessage');
+        
+        if (!customersList || !repId || repId <= 0) {
+            return;
+        }
+        
+        // إظهار رسالة التحميل
+        if (selectRepMessage) {
+            selectRepMessage.style.display = 'block';
+            selectRepMessage.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل عملاء المندوب...';
+        }
+        
+        if (customersSection) {
+            customersSection.style.display = 'none';
+        }
+        
+        try {
+            const response = await fetch(`../api/get_rep_customers_for_export.php?rep_id=${repId}`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.message || 'فشل في جلب عملاء المندوب');
+            }
+            
+            // إخفاء رسالة التحميل
+            if (selectRepMessage) {
+                selectRepMessage.style.display = 'none';
+            }
+            
+            // عرض قائمة العملاء
+            displayCustomersList(result.customers || []);
+            
+            if (customersSection) {
+                customersSection.style.display = 'block';
+            }
+            
+        } catch (error) {
+            console.error('Load customers error:', error);
+            if (selectRepMessage) {
+                selectRepMessage.style.display = 'block';
+                selectRepMessage.innerHTML = '<div class="alert alert-danger">حدث خطأ أثناء جلب عملاء المندوب: ' + escapeHtml(error.message) + '</div>';
+            }
+        }
+    }
+    
+    /**
+     * عرض قائمة العملاء في الجدول
+     */
+    function displayCustomersList(customers) {
+        const customersList = document.getElementById('exportCustomersList');
+        if (!customersList) {
+            return;
+        }
+        
+        if (!customers || customers.length === 0) {
+            customersList.innerHTML = '<div class="alert alert-warning">لا توجد عملاء متاحة للتصدير</div>';
+            
+            const generateBtn = document.getElementById('generateExcelBtn');
+            if (generateBtn) {
+                generateBtn.disabled = true;
+            }
+            return;
+        }
+        
+        // إنشاء جدول العملاء
+        let html = '<table class="table table-sm table-hover mb-0">';
+        html += '<thead class="table-light"><tr>';
+        html += '<th style="width: 40px;"><input type="checkbox" id="exportSelectAllCheckbox" class="form-check-input"></th>';
+        html += '<th>اسم العميل</th>';
+        html += '<th>رقم الهاتف</th>';
+        html += '<th>الرصيد</th>';
+        html += '<th>المبلغ المراد تحصيله</th>';
+        html += '</tr></thead>';
+        html += '<tbody>';
+        
+        customers.forEach(function(customer) {
+            const customerId = customer.id;
+            const customerName = escapeHtml(customer.name || '');
+            const phone = escapeHtml(customer.phone || '-');
+            const balance = customer.balance_formatted || '0.00 ج.م';
+            
+            html += '<tr data-customer-id="' + customerId + '">';
+            html += '<td><input type="checkbox" class="form-check-input customer-export-checkbox" value="' + customerId + '"></td>';
+            html += '<td><strong>' + customerName + '</strong></td>';
+            html += '<td>' + phone + '</td>';
+            html += '<td>' + balance + '</td>';
+            html += '<td><input type="number" step="0.01" min="0" class="form-control form-control-sm collection-amount-input" data-customer-id="' + customerId + '" placeholder="مبلغ اختياري"></td>';
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        customersList.innerHTML = html;
+        
+        // ربط أحداث checkbox
+        const checkboxes = customersList.querySelectorAll('.customer-export-checkbox');
+        checkboxes.forEach(function(checkbox) {
+            checkbox.addEventListener('change', function() {
+                updateSelectedCustomers();
+            });
+        });
+        
+        // ربط حدث select all
+        const selectAllCheckbox = document.getElementById('exportSelectAllCheckbox');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', function() {
+                const checked = this.checked;
+                checkboxes.forEach(function(cb) {
+                    cb.checked = checked;
+                });
+                updateSelectedCustomers();
+            });
+        }
+        
+        // ربط أحداث مبالغ التحصيل
+        const amountInputs = customersList.querySelectorAll('.collection-amount-input');
+        amountInputs.forEach(function(input) {
+            input.addEventListener('input', function() {
+                const customerId = parseInt(this.getAttribute('data-customer-id'), 10);
+                const value = parseFloat(this.value);
+                if (value > 0) {
+                    collectionAmounts[customerId] = value;
+                } else {
+                    delete collectionAmounts[customerId];
+                }
+            });
+        });
+    }
+    
+    /**
+     * جلب قائمة العملاء من الجدول الحالي (legacy - للاستخدام مع العملاء المباشرين)
      */
     function loadCustomersList() {
         const customersList = document.getElementById('exportCustomersList');
@@ -281,15 +552,20 @@
         }
         
         try {
-            // تحديد القسم الحالي
-            const urlParams = new URLSearchParams(window.location.search);
-            currentSection = urlParams.get('section') || 'company';
+            // تحديد القسم الحالي من المودال
+            const exportModal = document.getElementById('customerExportModal');
+            currentSection = exportModal ? (exportModal.getAttribute('data-section') || 'company') : 'company';
+            
+            // جلب معرف المندوب (فقط إذا كان قسم عملاء المندوبين)
+            const repSelect = document.getElementById('exportRepSelect');
+            const repId = (currentSection === 'delegates' && repSelect) ? parseInt(repSelect.value, 10) : null;
             
             // تحضير البيانات
             const payload = {
                 customer_ids: selectedCustomers,
                 collection_amounts: collectionAmounts,
-                section: currentSection
+                section: currentSection,
+                rep_id: repId
             };
             
             // إرسال الطلب

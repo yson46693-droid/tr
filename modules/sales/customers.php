@@ -5532,7 +5532,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <!-- Modal تصدير العملاء المحددين -->
 <?php if (in_array($currentRole, ['manager', 'developer', 'accountant', 'sales'], true)): ?>
-<div class="modal fade" id="customerExportModal" tabindex="-1" aria-hidden="true">
+<?php
+// جلب قائمة المندوبين (فقط للمدراء والمحاسبين والمطورين - فقط في قسم عملاء المندوبين)
+$salesRepsList = [];
+$isCompanySection = ($section === 'company');
+if (!$isSalesUser && !$isCompanySection && in_array($currentRole, ['manager', 'developer', 'accountant'], true)) {
+    try {
+        $salesRepsList = $db->query(
+            "SELECT id, full_name, username FROM users WHERE role = 'sales' AND status = 'active' ORDER BY full_name ASC"
+        );
+    } catch (Exception $e) {
+        error_log('Error fetching sales reps: ' . $e->getMessage());
+        $salesRepsList = [];
+    }
+}
+?>
+<div class="modal fade" id="customerExportModal" tabindex="-1" aria-hidden="true" data-section="<?php echo htmlspecialchars($section); ?>">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
@@ -5544,8 +5559,29 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="modal-body">
                 <div class="customer-export-alerts mb-3"></div>
                 
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
+                <!-- اختيار المندوب (فقط في قسم عملاء المندوبين) -->
+                <?php if (!$isSalesUser && !$isCompanySection && !empty($salesRepsList)): ?>
+                <div class="mb-4">
+                    <label class="form-label fw-semibold">اختر المندوب:</label>
+                    <select class="form-select" id="exportRepSelect" required>
+                        <option value="">-- اختر المندوب --</option>
+                        <?php foreach ($salesRepsList as $rep): ?>
+                            <option value="<?php echo (int)$rep['id']; ?>">
+                                <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username'] ?? ''); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php elseif ($isSalesUser && !$isCompanySection): ?>
+                    <input type="hidden" id="exportRepSelect" value="<?php echo (int)($currentUser['id'] ?? 0); ?>">
+                <?php else: ?>
+                    <!-- قسم عملاء الشركة - لا يوجد اختيار مندوب -->
+                    <input type="hidden" id="exportRepSelect" value="">
+                <?php endif; ?>
+                
+                <!-- قائمة العملاء -->
+                <div class="mb-3" id="customersSection" style="display: none;">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-2 gap-2">
                         <h6 class="mb-0">حدد العملاء المراد تصديرهم:</h6>
                         <div class="btn-group btn-group-sm">
                             <button type="button" class="btn btn-outline-primary" id="selectAllCustomers">
@@ -5556,37 +5592,86 @@ document.addEventListener('DOMContentLoaded', function () {
                             </button>
                         </div>
                     </div>
-                    <div id="exportCustomersList">
-                        <div class="text-center text-muted py-4">
-                            <span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل قائمة العملاء...
-                        </div>
+                    <div id="exportCustomersList" class="table-responsive">
+                        <!-- سيتم ملؤه عبر JavaScript -->
                     </div>
                 </div>
                 
+                <!-- رسالة اختيار المندوب أو التحميل -->
+                <div id="selectRepMessage" class="text-center text-muted py-4">
+                    <?php if (!$isSalesUser && !$isCompanySection && !empty($salesRepsList)): ?>
+                        <i class="bi bi-info-circle me-2"></i>يرجى اختيار المندوب أولاً لعرض عملائه
+                    <?php elseif ($isCompanySection): ?>
+                        <span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل قائمة عملاء الشركة...
+                    <?php else: ?>
+                        <span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل قائمة العملاء...
+                    <?php endif; ?>
+                </div>
+                
+                <!-- أزرار الإجراءات بعد التوليد -->
                 <div id="exportActionButtons" style="display: none;" class="mt-3 p-3 bg-light rounded">
                     <h6 class="mb-3">تم توليد ملف Excel بنجاح</h6>
                     <div class="d-flex gap-2 flex-wrap">
-                        <button type="button" class="btn btn-primary" id="printExcelBtn">
+                        <button type="button" class="btn btn-primary btn-sm" id="printExcelBtn">
                             <i class="bi bi-printer me-2"></i>طباعة
                         </button>
-                        <button type="button" class="btn btn-success" id="downloadExcelBtn">
+                        <button type="button" class="btn btn-success btn-sm" id="downloadExcelBtn">
                             <i class="bi bi-download me-2"></i>تحميل الملف
                         </button>
-                        <button type="button" class="btn btn-info" id="shareExcelBtn">
+                        <button type="button" class="btn btn-info btn-sm" id="shareExcelBtn">
                             <i class="bi bi-share me-2"></i>مشاركة
                         </button>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
-                <button type="button" class="btn btn-primary" id="generateExcelBtn" disabled>
+            <div class="modal-footer d-flex flex-column flex-sm-row gap-2">
+                <button type="button" class="btn btn-secondary w-100 w-sm-auto" data-bs-dismiss="modal">إغلاق</button>
+                <button type="button" class="btn btn-primary w-100 w-sm-auto" id="generateExcelBtn" disabled>
                     <i class="bi bi-file-earmark-excel me-2"></i>توليد ملف Excel
                 </button>
             </div>
         </div>
     </div>
 </div>
+
+<style>
+/* تحسينات responsive للمودال */
+@media (max-width: 768px) {
+    #customerExportModal .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+    }
+    
+    #customerExportModal .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    #customerExportModal .btn-group {
+        width: 100%;
+    }
+    
+    #customerExportModal .btn-group .btn {
+        flex: 1;
+    }
+    
+    #customerExportModal .modal-footer {
+        padding: 0.75rem;
+    }
+    
+    #customerExportModal .modal-footer .btn {
+        font-size: 0.875rem;
+    }
+    
+    #customerExportModal table {
+        font-size: 0.8rem;
+    }
+    
+    #customerExportModal .table th,
+    #customerExportModal .table td {
+        padding: 0.5rem 0.25rem;
+    }
+}
+</style>
 <?php endif; ?>
 
 <?php endif; // end if ($section === 'company') ?>
