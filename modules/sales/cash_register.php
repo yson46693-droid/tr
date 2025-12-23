@@ -1026,7 +1026,7 @@ $salesRepInfo = $db->queryOne(
 ?>
 
 <?php if ($error): ?>
-    <div class="alert alert-danger alert-dismissible fade show" id="errorAlert" data-auto-refresh="true">
+    <div class="alert alert-danger alert-dismissible fade show" id="errorAlert">
         <i class="bi bi-exclamation-triangle-fill me-2"></i>
         <?php echo htmlspecialchars($error); ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -1034,7 +1034,7 @@ $salesRepInfo = $db->queryOne(
 <?php endif; ?>
 
 <?php if ($success): ?>
-    <div class="alert alert-success alert-dismissible fade show" id="successAlert" data-auto-refresh="true">
+    <div class="alert alert-success alert-dismissible fade show" id="successAlert">
         <i class="bi bi-check-circle-fill me-2"></i>
         <?php echo htmlspecialchars($success); ?>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -1607,45 +1607,8 @@ $salesRepInfo = $db->queryOne(
 
 <!-- إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات -->
 <script>
-// إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات
-(function() {
-    const successAlert = document.getElementById('successAlert');
-    const errorAlert = document.getElementById('errorAlert');
-    
-    // التحقق من وجود رسالة نجاح أو خطأ
-    const alertElement = successAlert || errorAlert;
-    
-    if (alertElement && alertElement.dataset.autoRefresh === 'true') {
-        // انتظار 3 ثوانٍ لإعطاء المستخدم وقتاً لرؤية الرسالة
-        const reloadTimeout = setTimeout(function() {
-            // التحقق من أن الـ modal غير مفتوح قبل إعادة التحميل
-            const addCashBalanceModal = document.getElementById('addCashBalanceModal');
-            const isModalOpen = addCashBalanceModal && addCashBalanceModal.classList.contains('show');
-            
-            // إذا كان الـ modal مفتوح، لا تقم بإعادة التحميل
-            if (isModalOpen) {
-                // إلغاء إعادة التحميل التلقائية
-                return;
-            }
-            
-            // إعادة تحميل الصفحة بدون معاملات GET لمنع تكرار الطلبات
-            const currentUrl = new URL(window.location.href);
-            // إزالة معاملات success و error من URL
-            currentUrl.searchParams.delete('success');
-            currentUrl.searchParams.delete('error');
-            // إعادة تحميل الصفحة
-            window.location.href = currentUrl.toString();
-        }, 3000);
-        
-        // إلغاء إعادة التحميل التلقائية عند فتح الـ modal
-        const addCashBalanceModal = document.getElementById('addCashBalanceModal');
-        if (addCashBalanceModal) {
-            addCashBalanceModal.addEventListener('show.bs.modal', function() {
-                clearTimeout(reloadTimeout);
-            });
-        }
-    }
-})();
+// تم إزالة كود إعادة التحميل التلقائي لأننا الآن نحدث البيانات مباشرة عبر AJAX
+// لا حاجة لإعادة تحميل الصفحة بعد إضافة الرصيد
 
 // معالجة نموذج إضافة الرصيد عبر AJAX
 (function() {
