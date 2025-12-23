@@ -246,6 +246,35 @@
     #addCustomerModal.modal-fullscreen-md-down .modal-footer .btn {
         min-height: 44px !important; /* الحد الأدنى للمساحة القابلة للنقر على الهاتف */
     }
+    
+    /* ===== إصلاح المساحة البيضاء الفارغة في نموذج إضافة رصيد للخزنة ===== */
+    /* نماذج صغيرة لا تحتاج scrollable - مثل إضافة رصيد للخزنة */
+    #addCashBalanceModal .modal-dialog {
+        margin: 0.5rem !important;
+        max-width: calc(100% - 1rem) !important;
+        max-height: auto !important;
+        height: auto !important;
+    }
+    
+    #addCashBalanceModal .modal-content {
+        max-height: none !important;
+        height: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    
+    #addCashBalanceModal .modal-body {
+        flex: 0 1 auto !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow: visible !important;
+        padding-bottom: 1rem !important;
+    }
+    
+    #addCashBalanceModal .modal-header,
+    #addCashBalanceModal .modal-footer {
+        flex-shrink: 0 !important;
+    }
 }
 
 /* ===== Landscape Orientation Fix ===== */
