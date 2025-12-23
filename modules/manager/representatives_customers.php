@@ -3466,9 +3466,6 @@ try {
                             </option>
                         <?php endforeach; ?>
                     </select>
-                    <div class="form-text text-info">
-                        <i class="bi bi-info-circle me-1"></i>سيتم عرض العملاء أصحاب الرصيد الدائن فقط (الذين لديهم رصيد سالب)
-                    </div>
                 </div>
                 
                 <!-- قائمة العملاء -->
