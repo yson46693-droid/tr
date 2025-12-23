@@ -248,7 +248,8 @@ define('BASE_PATH', dirname(__DIR__));
 define('UPLOAD_PATH', BASE_PATH . '/uploads/');
 define('REPORTS_PATH', BASE_PATH . '/reports/');
 
-$privateStorageBase = dirname(BASE_PATH) . '/storage';
+// استخدام مسار داخل BASE_PATH لتجنب مشاكل open_basedir
+$privateStorageBase = BASE_PATH . '/storage';
 if (!defined('PRIVATE_STORAGE_PATH')) {
     define('PRIVATE_STORAGE_PATH', $privateStorageBase);
 }
@@ -258,22 +259,42 @@ if (!defined('REPORTS_PRIVATE_PATH')) {
 
 /**
  * ضمان وجود مجلد خاص للتخزين وإنشائه تلقائياً إذا لم يكن موجوداً.
+ * يتعامل مع قيود open_basedir بشكل آمن.
  *
  * @param string $directory
  * @return void
  */
 function ensurePrivateDirectory(string $directory): void
 {
-    if (is_dir($directory)) {
+    // قمع تحذيرات open_basedir والتحقق من وجود المجلد
+    $error = null;
+    set_error_handler(function($errno, $errstr) use (&$error) {
+        if (strpos($errstr, 'open_basedir') !== false) {
+            $error = $errstr;
+            return true; // قمع الخطأ
+        }
+        return false;
+    }, E_WARNING);
+    
+    $dirExists = @is_dir($directory);
+    restore_error_handler();
+    
+    if ($dirExists) {
+        return;
+    }
+    
+    // إذا كان هناك خطأ open_basedir، تجاهل محاولة إنشاء المجلد
+    if ($error !== null) {
+        error_log('Cannot access directory due to open_basedir restriction: ' . $directory);
         return;
     }
 
     $parent = dirname($directory);
-    if (!is_dir($parent) && $parent !== $directory) {
+    if (!@is_dir($parent) && $parent !== $directory) {
         ensurePrivateDirectory($parent);
     }
 
-    if (!@mkdir($directory, 0755, true) && !is_dir($directory)) {
+    if (!@mkdir($directory, 0755, true) && !@is_dir($directory)) {
         error_log('Failed to create directory: ' . $directory);
     }
 }
