@@ -424,6 +424,8 @@
         html += '<th style="width: 40px;"><input type="checkbox" id="exportSelectAllCheckbox" class="form-check-input"></th>';
         html += '<th>اسم العميل</th>';
         html += '<th>رقم الهاتف</th>';
+        html += '<th>العنوان</th>';
+        html += '<th>المنطقة</th>';
         html += '<th>الرصيد</th>';
         html += '<th>المبلغ المراد تحصيله</th>';
         html += '</tr></thead>';
@@ -433,6 +435,8 @@
             const customerId = parseInt(customer.id, 10);
             const customerName = escapeHtml(customer.name.trim());
             const phone = escapeHtml((customer.phone || '').trim() || '-');
+            const address = escapeHtml((customer.address || '').trim() || '-');
+            const regionName = escapeHtml((customer.region_name || '').trim() || '-');
             const balance = customer.balance_formatted || '0.00 ج.م';
             
             // التأكد مرة أخرى من صحة البيانات قبل إضافتها
@@ -441,6 +445,8 @@
                 html += '<td><input type="checkbox" class="form-check-input customer-export-checkbox" value="' + customerId + '"></td>';
                 html += '<td><strong>' + customerName + '</strong></td>';
                 html += '<td>' + phone + '</td>';
+                html += '<td>' + address + '</td>';
+                html += '<td>' + regionName + '</td>';
                 html += '<td>' + balance + '</td>';
                 html += '<td><input type="number" step="0.01" min="0" class="form-control form-control-sm collection-amount-input" data-customer-id="' + customerId + '" placeholder="مبلغ اختياري"></td>';
                 html += '</tr>';

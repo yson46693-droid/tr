@@ -179,6 +179,7 @@ try {
                 'balance' => $balance,
                 'balance_formatted' => number_format(abs($balance), 2) . ' ج.م',
                 'address' => trim($customer['address'] ?? ''),
+                'region_name' => trim($customer['region_name'] ?? ''),
             ];
         }
     }
