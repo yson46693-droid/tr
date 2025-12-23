@@ -307,15 +307,31 @@ class Database {
         try {
             // التحقق من أن الاتصال موجود
             if (!$this->connection) {
-                error_log("queryOne: Database connection is null");
+                $errorMsg = "queryOne: Database connection is null";
+                error_log($errorMsg);
                 throw new Exception("Database connection is not available");
             }
             
             // التحقق من أن الاتصال لا يزال نشطاً
-            if (!$this->connection->ping()) {
-                error_log("queryOne: Database connection is lost, attempting to reconnect");
-                // محاولة إعادة الاتصال
-                $this->connection->close();
+            try {
+                if (!$this->connection->ping()) {
+                    error_log("queryOne: Database connection is lost, attempting to reconnect");
+                    // محاولة إعادة الاتصال
+                    $this->connection->close();
+                    $this->connection = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+                    if ($this->connection->connect_error) {
+                        throw new Exception("Database reconnection failed: " . $this->connection->connect_error);
+                    }
+                    $this->connection->set_charset("utf8mb4");
+                }
+            } catch (Throwable $pingError) {
+                error_log("queryOne ping error: " . $pingError->getMessage());
+                // محاولة إعادة الاتصال حتى لو فشل ping
+                try {
+                    $this->connection->close();
+                } catch (Throwable $closeError) {
+                    // تجاهل خطأ الإغلاق
+                }
                 $this->connection = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
                 if ($this->connection->connect_error) {
                     throw new Exception("Database reconnection failed: " . $this->connection->connect_error);
@@ -327,17 +343,20 @@ class Database {
             return !empty($result) ? $result[0] : null;
             
         } catch (mysqli_sql_exception $e) {
-            error_log("queryOne mysqli error: " . $e->getMessage());
+            $errorMsg = "queryOne mysqli error: " . $e->getMessage() . " (Error code: " . $e->getCode() . ")";
+            error_log($errorMsg);
             error_log("queryOne SQL: " . $sql);
             error_log("queryOne params: " . json_encode($params));
-            throw new Exception("Database query error: " . $e->getMessage());
+            throw new Exception("Database query error: " . $e->getMessage() . " (Error code: " . $e->getCode() . ")");
         } catch (Exception $e) {
             error_log("queryOne error: " . $e->getMessage());
             error_log("queryOne SQL: " . $sql);
+            error_log("queryOne params: " . json_encode($params));
             throw $e;
         } catch (Throwable $e) {
             error_log("queryOne fatal error: " . $e->getMessage());
             error_log("queryOne SQL: " . $sql);
+            error_log("queryOne params: " . json_encode($params));
             throw new Exception("Database query fatal error: " . $e->getMessage());
         }
     }

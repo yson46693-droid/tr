@@ -469,45 +469,75 @@ function getUserById($userId) {
  */
 function getUserByUsername($username) {
     try {
-        $db = db();
+        // محاولة الحصول على اتصال قاعدة البيانات
+        $db = null;
+        try {
+            $db = db();
+        } catch (Throwable $dbError) {
+            error_log("getUserByUsername: Failed to get database connection - " . $dbError->getMessage());
+            throw new Exception("Database connection failed: " . $dbError->getMessage());
+        }
         
         // التحقق من أن الاتصال موجود
         if (!$db) {
             error_log("getUserByUsername: Database connection is null");
-            throw new Exception("Database connection failed");
+            throw new Exception("Database connection is null");
         }
         
-        // التحقق من وجود جدول users
+        // التحقق من أن الاتصال نشط
+        $connection = $db->getConnection();
+        if (!$connection) {
+            error_log("getUserByUsername: Database connection object is null");
+            throw new Exception("Database connection object is null");
+        }
+        
+        // التحقق من وجود جدول users (مع معالجة الأخطاء)
+        $tableExists = false;
         try {
             $tableCheck = $db->rawQuery("SHOW TABLES LIKE 'users'");
-            if (!$tableCheck || ($tableCheck instanceof mysqli_result && $tableCheck->num_rows === 0)) {
-                error_log("getUserByUsername: Table 'users' does not exist");
-                throw new Exception("Table 'users' does not exist. Please run database installation.");
-            }
             if ($tableCheck instanceof mysqli_result) {
+                $tableExists = $tableCheck->num_rows > 0;
                 $tableCheck->free();
+            } elseif ($tableCheck) {
+                $tableExists = true;
             }
         } catch (Throwable $tableError) {
             error_log("getUserByUsername: Table check error - " . $tableError->getMessage());
-            // استمر في المحاولة حتى لو فشل فحص الجدول
+            // نستمر في المحاولة حتى لو فشل فحص الجدول
+            $tableExists = true; // نفترض أن الجدول موجود
+        }
+        
+        if (!$tableExists) {
+            error_log("getUserByUsername: Table 'users' does not exist");
+            throw new Exception("Table 'users' does not exist. Please run database installation.");
         }
         
         // تنفيذ الاستعلام
-        $user = $db->queryOne(
-            "SELECT * FROM users WHERE username = ?",
-            [$username]
-        );
-        
-        return $user;
+        try {
+            $user = $db->queryOne(
+                "SELECT * FROM users WHERE username = ?",
+                [$username]
+            );
+            return $user;
+        } catch (mysqli_sql_exception $sqlError) {
+            error_log("getUserByUsername SQL error: " . $sqlError->getMessage());
+            error_log("getUserByUsername SQL error code: " . $sqlError->getCode());
+            throw new Exception("Database query failed: " . $sqlError->getMessage() . " (Error code: " . $sqlError->getCode() . ")");
+        } catch (Exception $queryError) {
+            error_log("getUserByUsername query error: " . $queryError->getMessage());
+            throw $queryError;
+        }
         
     } catch (Exception $e) {
-        error_log("getUserByUsername error: " . $e->getMessage());
-        error_log("getUserByUsername error file: " . $e->getFile() . " line: " . $e->getLine());
+        $errorDetails = "getUserByUsername error: " . $e->getMessage();
+        $errorDetails .= " | File: " . $e->getFile() . " | Line: " . $e->getLine();
+        error_log($errorDetails);
         error_log("getUserByUsername stack trace: " . $e->getTraceAsString());
         throw $e; // إعادة رمي الاستثناء للتعامل معه في دالة login()
     } catch (Throwable $e) {
-        error_log("getUserByUsername fatal error: " . $e->getMessage());
-        error_log("getUserByUsername error file: " . $e->getFile() . " line: " . $e->getLine());
+        $errorDetails = "getUserByUsername fatal error: " . $e->getMessage();
+        $errorDetails .= " | File: " . $e->getFile() . " | Line: " . $e->getLine();
+        error_log($errorDetails);
         error_log("getUserByUsername stack trace: " . $e->getTraceAsString());
         throw $e; // إعادة رمي الاستثناء للتعامل معه في دالة login()
     }
@@ -602,8 +632,25 @@ function login($username, $password, $rememberMe = true) {
         try {
             $user = getUserByUsername($username);
         } catch (Throwable $e) {
-            error_log("Login getUserByUsername error: " . $e->getMessage());
-            return ['success' => false, 'message' => 'حدث خطأ في الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.'];
+            $errorMessage = $e->getMessage();
+            $errorDetails = "Login getUserByUsername error: " . $errorMessage;
+            $errorDetails .= " | File: " . $e->getFile() . " | Line: " . $e->getLine();
+            
+            error_log($errorDetails);
+            error_log("Login getUserByUsername stack trace: " . $e->getTraceAsString());
+            
+            // إرجاع رسالة خطأ أكثر تفصيلاً في وضع التطوير
+            $isDevelopment = (defined('DEBUG_MODE') && DEBUG_MODE) || 
+                             (isset($_SERVER['SERVER_NAME']) && 
+                              (strpos($_SERVER['SERVER_NAME'], 'localhost') !== false || 
+                               strpos($_SERVER['SERVER_NAME'], '127.0.0.1') !== false));
+            
+            $userMessage = 'حدث خطأ في الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.';
+            if ($isDevelopment) {
+                $userMessage .= ' (تفاصيل: ' . htmlspecialchars($errorMessage) . ')';
+            }
+            
+            return ['success' => false, 'message' => $userMessage, 'error_details' => $isDevelopment ? $errorDetails : null];
         }
         
         if (!$user) {
