@@ -154,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($dueDateObj < new DateTime('today')) {
                         $error = 'لا يمكن تحديد موعد تحصيل في تاريخ سابق.';
                     } else {
-                        $insertResult = $db->execute(
+                        $db->execute(
                             "INSERT INTO payment_schedules 
                                 (sale_id, customer_id, sales_rep_id, amount, due_date, installment_number, total_installments, status, created_by, created_at) 
                              VALUES (NULL, ?, NULL, ?, ?, 1, 1, 'pending', ?, NOW())",
@@ -166,9 +166,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             ]
                         );
                         
-                        $scheduleId = $insertResult['insert_id'] ?? null;
+                        $scheduleId = $db->getLastInsertId();
                         
-                        if ($scheduleId) {
+                        if ($scheduleId && $scheduleId > 0) {
                             logAudit(
                                 $currentUser['id'],
                                 'create_payment_schedule_manual',
@@ -182,9 +182,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     'local_customer' => true
                                 ]
                             );
+                            
+                            $success = 'تم إضافة موعد التحصيل بنجاح.';
+                        } else {
+                            throw new Exception('فشل الحصول على معرف الجدول الزمني بعد الإدراج');
                         }
-                        
-                        $success = 'تم إضافة موعد التحصيل بنجاح.';
                     }
                 }
             } catch (Throwable $createScheduleError) {

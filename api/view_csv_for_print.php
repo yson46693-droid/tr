@@ -105,25 +105,52 @@ try {
         exit;
     }
     
-    // تحويل CSV إلى HTML
-    $lines = explode("\n", $csvContent);
+    // إزالة BOM UTF-8 إذا كان موجوداً
+    if (substr($csvContent, 0, 3) === chr(0xEF).chr(0xBB).chr(0xBF)) {
+        $csvContent = substr($csvContent, 3);
+    }
+    
+    // قراءة CSV باستخدام fopen لضمان قراءة صحيحة
+    $handle = @fopen($fullPath, 'r');
+    if ($handle === false) {
+        http_response_code(500);
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!DOCTYPE html><html lang="ar"><head><meta charset="utf-8"><title>خطأ</title></head><body><h1>فشل في فتح الملف</h1></body></html>';
+        exit;
+    }
+    
+    // إزالة BOM إذا كان موجوداً
+    $firstBytes = fread($handle, 3);
+    if ($firstBytes !== chr(0xEF).chr(0xBB).chr(0xBF)) {
+        rewind($handle);
+    }
+    
     $rows = [];
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if (empty($line)) {
+    $lineNumber = 0;
+    
+    // قراءة الملف سطراً بسطر
+    while (($row = fgetcsv($handle, 1000, ',')) !== false) {
+        // تجاهل الصفوف الفارغة تماماً
+        if (count($row) === 1 && trim($row[0]) === '') {
             continue;
         }
-        // استخدام str_getcsv للتعامل مع CSV بشكل صحيح (يدعم الاقتباسات)
-        $row = str_getcsv($line);
-        if (!empty($row)) {
+        
+        // تنظيف القيم من المسافات الزائدة
+        $row = array_map('trim', $row);
+        
+        // إضافة الصف إذا كان يحتوي على بيانات
+        if (!empty($row) && !(count($row) === 1 && $row[0] === '')) {
             $rows[] = $row;
+            $lineNumber++;
         }
     }
+    
+    fclose($handle);
     
     if (empty($rows)) {
         http_response_code(400);
         header('Content-Type: text/html; charset=utf-8');
-        echo '<!DOCTYPE html><html lang="ar"><head><meta charset="utf-8"><title>خطأ</title></head><body><h1>الملف فارغ</h1></body></html>';
+        echo '<!DOCTYPE html><html lang="ar"><head><meta charset="utf-8"><title>خطأ</title></head><body><h1>الملف فارغ أو لا يحتوي على بيانات</h1></body></html>';
         exit;
     }
     
@@ -139,19 +166,102 @@ try {
     header('Pragma: no-cache');
     
     // إنشاء HTML للطباعة
-    $title = isset($rows[0][0]) ? htmlspecialchars($rows[0][0], ENT_QUOTES, 'UTF-8') : 'تصدير العملاء';
-    $companyName = isset($rows[1][0]) ? htmlspecialchars($rows[1][0], ENT_QUOTES, 'UTF-8') : COMPANY_NAME;
-    $date = isset($rows[2][0]) ? htmlspecialchars($rows[2][0], ENT_QUOTES, 'UTF-8') : date('Y-m-d H:i:s');
+    // البحث عن العنوان (عادة في السطر الأول)
+    $title = 'تصدير العملاء';
+    $companyName = COMPANY_NAME;
+    $date = date('Y-m-d H:i:s');
+    $dataStartIndex = 0;
     
-    // تخطي أول 4 صفوف (العنوان، اسم الشركة، التاريخ، سطر فارغ)
-    $dataRows = array_slice($rows, 4);
+    // البحث عن بداية البيانات بشكل ذكي
+    // عادة الملف يحتوي على:
+    // السطر 0: العنوان
+    // السطر 1: اسم الشركة
+    // السطر 2: تاريخ التقرير
+    // السطر 3: سطر فارغ
+    // السطر 4: العناوين (headers)
+    // السطر 5+: البيانات
     
-    // استخراج العناوين من أول صف بيانات
-    $headers = [];
-    if (!empty($dataRows)) {
-        $headers = $dataRows[0];
-        $dataRows = array_slice($dataRows, 1);
+    // التحقق من السطر الأول (العنوان)
+    if (isset($rows[0][0]) && !empty(trim($rows[0][0]))) {
+        $firstRow = trim($rows[0][0]);
+        // إذا كان السطر الأول لا يحتوي على كلمات مثل "اسم العميل" أو "رقم الهاتف"، فهو عنوان
+        if (strpos($firstRow, 'اسم العميل') === false && 
+            strpos($firstRow, 'رقم الهاتف') === false &&
+            strpos($firstRow, 'العنوان') === false) {
+            $title = $firstRow;
+            $dataStartIndex = 1;
+        }
     }
+    
+    // التحقق من السطر الثاني (اسم الشركة)
+    if ($dataStartIndex > 0 && isset($rows[1][0]) && !empty(trim($rows[1][0]))) {
+        $secondRow = trim($rows[1][0]);
+        if (strpos($secondRow, 'اسم العميل') === false && 
+            strpos($secondRow, 'رقم الهاتف') === false) {
+            $companyName = $secondRow;
+            $dataStartIndex = 2;
+        }
+    }
+    
+    // التحقق من السطر الثالث (التاريخ)
+    if ($dataStartIndex > 1 && isset($rows[2][0]) && !empty(trim($rows[2][0]))) {
+        $thirdRow = trim($rows[2][0]);
+        if (strpos($thirdRow, 'تاريخ') !== false || 
+            preg_match('/\d{4}-\d{2}-\d{2}/', $thirdRow)) {
+            $date = $thirdRow;
+            $dataStartIndex = 3;
+        }
+    }
+    
+    // البحث عن السطر الفارغ بعد العنوان
+    if (isset($rows[$dataStartIndex])) {
+        $rowStr = implode('', $rows[$dataStartIndex]);
+        if (empty(trim($rowStr))) {
+            $dataStartIndex++;
+        }
+    }
+    
+    // استخراج العناوين من أول صف بيانات (بعد العنوان والشركة والتاريخ)
+    $headers = [];
+    $dataRows = [];
+    
+    // البحث عن صف العناوين (عادة يحتوي على "اسم العميل" أو "رقم الهاتف")
+    $headerRowIndex = $dataStartIndex;
+    for ($i = $dataStartIndex; $i < min($dataStartIndex + 5, count($rows)); $i++) {
+        if (isset($rows[$i]) && is_array($rows[$i])) {
+            $rowStr = implode(' ', $rows[$i]);
+            // إذا كان الصف يحتوي على كلمات مثل "اسم العميل" أو "رقم الهاتف"، فهو صف العناوين
+            if (strpos($rowStr, 'اسم العميل') !== false || 
+                strpos($rowStr, 'رقم الهاتف') !== false ||
+                strpos($rowStr, 'العنوان') !== false ||
+                strpos($rowStr, 'المنطقة') !== false ||
+                strpos($rowStr, 'رصيد') !== false) {
+                $headerRowIndex = $i;
+                break;
+            }
+        }
+    }
+    
+    if (isset($rows[$headerRowIndex])) {
+        $headers = $rows[$headerRowIndex];
+        $headers = array_map('trim', $headers);
+        $headers = array_filter($headers, function($h) { return !empty($h); });
+        $headers = array_values($headers);
+        
+        // باقي الصفوف هي البيانات
+        $dataRows = array_slice($rows, $headerRowIndex + 1);
+    }
+    
+    // تنظيف صفوف البيانات من الصفوف الفارغة
+    $dataRows = array_filter($dataRows, function($row) {
+        if (empty($row) || !is_array($row)) return false;
+        $rowStr = implode('', $row);
+        return !empty(trim($rowStr));
+    });
+    $dataRows = array_values($dataRows);
+    
+    // تسجيل معلومات للتشخيص
+    error_log("CSV View Debug - Total rows: " . count($rows) . ", Headers count: " . count($headers) . ", Data rows count: " . count($dataRows) . ", Data start index: " . $dataStartIndex);
     
     // إنشاء HTML
     $html = '<!DOCTYPE html><html lang="ar" dir="rtl"><head>';
@@ -305,14 +415,25 @@ try {
         $html .= '<table class="report-table">';
         $html .= '<thead><tr>';
         foreach ($headers as $header) {
-            $html .= '<th>' . htmlspecialchars(trim($header), ENT_QUOTES, 'UTF-8') . '</th>';
+            $header = trim($header);
+            if (!empty($header)) {
+                $html .= '<th>' . htmlspecialchars($header, ENT_QUOTES, 'UTF-8') . '</th>';
+            }
         }
         $html .= '</tr></thead>';
         $html .= '<tbody>';
+        
+        $headerCount = count($headers);
         foreach ($dataRows as $row) {
+            // التأكد من أن الصف يحتوي على بيانات
+            $rowStr = is_array($row) ? implode('', $row) : (string)$row;
+            if (empty(trim($rowStr))) {
+                continue;
+            }
+            
             $html .= '<tr>';
-            foreach ($headers as $index => $header) {
-                $value = isset($row[$index]) ? trim($row[$index]) : '';
+            for ($i = 0; $i < $headerCount; $i++) {
+                $value = isset($row[$i]) ? trim($row[$i]) : '';
                 $html .= '<td>' . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . '</td>';
             }
             $html .= '</tr>';
@@ -321,6 +442,16 @@ try {
         $html .= '</div>';
     } else {
         $html .= '<div class="empty">لا توجد بيانات متاحة لعرضها.</div>';
+        // إضافة معلومات للتشخيص في وضع التطوير
+        if (defined('DEBUG') && DEBUG) {
+            $html .= '<div style="padding: 20px; background: #f1f5f9; margin-top: 20px; border-radius: 8px;">';
+            $html .= '<strong>معلومات التشخيص:</strong><br>';
+            $html .= 'عدد العناوين: ' . count($headers) . '<br>';
+            $html .= 'عدد صفوف البيانات: ' . count($dataRows) . '<br>';
+            $html .= 'مؤشر بداية البيانات: ' . $dataStartIndex . '<br>';
+            $html .= 'إجمالي الصفوف في الملف: ' . count($rows) . '<br>';
+            $html .= '</div>';
+        }
     }
     
     $html .= '</div>';

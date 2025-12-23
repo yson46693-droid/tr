@@ -1562,7 +1562,17 @@ $salesRepInfo = $db->queryOne(
     
     if (alertElement && alertElement.dataset.autoRefresh === 'true') {
         // انتظار 3 ثوانٍ لإعطاء المستخدم وقتاً لرؤية الرسالة
-        setTimeout(function() {
+        const reloadTimeout = setTimeout(function() {
+            // التحقق من أن الـ modal غير مفتوح قبل إعادة التحميل
+            const addCashBalanceModal = document.getElementById('addCashBalanceModal');
+            const isModalOpen = addCashBalanceModal && addCashBalanceModal.classList.contains('show');
+            
+            // إذا كان الـ modal مفتوح، لا تقم بإعادة التحميل
+            if (isModalOpen) {
+                // إلغاء إعادة التحميل التلقائية
+                return;
+            }
+            
             // إعادة تحميل الصفحة بدون معاملات GET لمنع تكرار الطلبات
             const currentUrl = new URL(window.location.href);
             // إزالة معاملات success و error من URL
@@ -1571,6 +1581,14 @@ $salesRepInfo = $db->queryOne(
             // إعادة تحميل الصفحة
             window.location.href = currentUrl.toString();
         }, 3000);
+        
+        // إلغاء إعادة التحميل التلقائية عند فتح الـ modal
+        const addCashBalanceModal = document.getElementById('addCashBalanceModal');
+        if (addCashBalanceModal) {
+            addCashBalanceModal.addEventListener('show.bs.modal', function() {
+                clearTimeout(reloadTimeout);
+            });
+        }
     }
 })();
 
