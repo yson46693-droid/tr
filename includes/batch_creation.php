@@ -15,6 +15,7 @@ require_once __DIR__ . '/db.php';
 function batchCreationGetPdo()
 {
     static $pdo = null;
+    static $shutdownRegistered = false;
 
     if ($pdo !== null) {
         return $pdo;
@@ -35,6 +36,22 @@ function batchCreationGetPdo()
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES   => false,
             ]);
+            
+            // تسجيل دالة لإغلاق الاتصال تلقائياً عند انتهاء الطلب
+            if (!$shutdownRegistered) {
+                register_shutdown_function(function() use (&$pdo) {
+                    if ($pdo !== null) {
+                        try {
+                            // PDO يتم إغلاقه تلقائياً عند null، لكن يمكن إغلاقه صراحة
+                            $pdo = null;
+                        } catch (Exception $e) {
+                            error_log("Error closing batch creation PDO connection: " . $e->getMessage());
+                        }
+                    }
+                });
+                $shutdownRegistered = true;
+            }
+            
             return $pdo;
         } catch (PDOException $e) {
             $errorMessage = $e->getMessage();
@@ -224,6 +241,27 @@ function batchCreationGetPdo()
                     return $this->mysqli;
                 }
             };
+            
+            // تسجيل دالة لإغلاق الاتصال تلقائياً عند انتهاء الطلب
+            if (!$shutdownRegistered) {
+                register_shutdown_function(function() use (&$pdo) {
+                    if ($pdo !== null) {
+                        try {
+                            // إذا كان mysqli wrapper، أغلق الاتصال
+                            if (method_exists($pdo, 'getMysqli')) {
+                                $mysqli = $pdo->getMysqli();
+                                if ($mysqli instanceof mysqli) {
+                                    $mysqli->close();
+                                }
+                            }
+                            $pdo = null;
+                        } catch (Exception $e) {
+                            error_log("Error closing batch creation mysqli connection: " . $e->getMessage());
+                        }
+                    }
+                });
+                $shutdownRegistered = true;
+            }
             
             return $pdo;
         } catch (Exception $e) {

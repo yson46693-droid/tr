@@ -263,15 +263,24 @@ if (!function_exists('createBackupUsingBkScript')) {
         $tmpSql = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $filenameSql;
         $fh = fopen($tmpSql, 'w');
         if (!$fh) {
+            // إغلاق الاتصال قبل إرجاع الخطأ
+            if ($pdo) {
+                $pdo = null;
+            }
+            if ($mysqli) {
+                $mysqli->close();
+            }
             return ['success' => false, 'message' => "فشل في إنشاء الملف المؤقت: $tmpSql"];
         }
         
-        // رأس الملف
-        fwrite($fh, "-- Backup created by db_backup.php\n");
-        fwrite($fh, "-- Database: {$dbName}\n");
-        fwrite($fh, "-- Generated: " . date('Y-m-d H:i:s') . " (Africa/Cairo)\n\n");
-        fwrite($fh, "SET NAMES utf8mb4;\n");
-        fwrite($fh, "SET FOREIGN_KEY_CHECKS=0;\n\n");
+        // استخدام try-finally لضمان إغلاق الاتصال في جميع الحالات
+        try {
+            // رأس الملف
+            fwrite($fh, "-- Backup created by db_backup.php\n");
+            fwrite($fh, "-- Database: {$dbName}\n");
+            fwrite($fh, "-- Generated: " . date('Y-m-d H:i:s') . " (Africa/Cairo)\n\n");
+            fwrite($fh, "SET NAMES utf8mb4;\n");
+            fwrite($fh, "SET FOREIGN_KEY_CHECKS=0;\n\n");
         
         // جلب قائمة الجداول
         $tables = [];
@@ -517,41 +526,50 @@ if (!function_exists('createBackupUsingBkScript')) {
             fwrite($fh, "-- Error exporting events: " . $e->getMessage() . "\n\n");
         }
         
-        fwrite($fh, "SET FOREIGN_KEY_CHECKS=1;\n");
-        fclose($fh);
-        
-        // حفظ نوع الاتصال قبل إغلاقه
-        $connectionMethod = $pdo ? 'pdo' : 'mysqli';
-        
-        // إغلاق الاتصال
-        if ($pdo) {
-            $pdo = null;
-        }
-        if ($mysqli) {
-            $mysqli->close();
-        }
-        
-        // ضغط الملف المؤقت إلى gzip النهائي
-        $fpIn = fopen($tmpSql, 'rb');
-        $fpOut = gzopen($fullPathGz, 'wb9');
-        if ($fpIn && $fpOut) {
-            while (!feof($fpIn)) {
-                gzwrite($fpOut, fread($fpIn, 1024 * 512));
-            }
-            fclose($fpIn);
-            gzclose($fpOut);
-            @unlink($tmpSql);
+            fwrite($fh, "SET FOREIGN_KEY_CHECKS=1;\n");
+            fclose($fh);
             
-            return [
-                'success' => true,
-                'file_path' => $fullPathGz,
-                'filename' => $filenameGz,
-                'method' => $connectionMethod
-            ];
-        } else {
-            if ($fpIn) fclose($fpIn);
-            if ($fpOut) gzclose($fpOut);
-            return ['success' => false, 'message' => "فشل أثناء ضغط الملف إلى gzip."];
+            // حفظ نوع الاتصال قبل إغلاقه
+            $connectionMethod = $pdo ? 'pdo' : 'mysqli';
+            
+            // ضغط الملف المؤقت إلى gzip النهائي
+            $fpIn = fopen($tmpSql, 'rb');
+            $fpOut = gzopen($fullPathGz, 'wb9');
+            if ($fpIn && $fpOut) {
+                while (!feof($fpIn)) {
+                    gzwrite($fpOut, fread($fpIn, 1024 * 512));
+                }
+                fclose($fpIn);
+                gzclose($fpOut);
+                @unlink($tmpSql);
+                
+                return [
+                    'success' => true,
+                    'file_path' => $fullPathGz,
+                    'filename' => $filenameGz,
+                    'method' => $connectionMethod
+                ];
+            } else {
+                if ($fpIn) fclose($fpIn);
+                if ($fpOut) gzclose($fpOut);
+                return ['success' => false, 'message' => "فشل أثناء ضغط الملف إلى gzip."];
+            }
+        } finally {
+            // إغلاق الاتصال في جميع الحالات (نجاح أو فشل)
+            if ($pdo) {
+                $pdo = null;
+            }
+            if ($mysqli) {
+                try {
+                    $mysqli->close();
+                } catch (Exception $e) {
+                    error_log("Error closing mysqli connection in bk.php: " . $e->getMessage());
+                }
+            }
+            // إغلاق ملف SQL إذا كان لا يزال مفتوحاً
+            if (isset($fh) && is_resource($fh)) {
+                @fclose($fh);
+            }
         }
     }
 }

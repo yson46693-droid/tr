@@ -60,7 +60,6 @@ try {
     }
 
     $db = db();
-    $connection = getDB();
 
     // Check if message exists
     $message = $db->queryOne(

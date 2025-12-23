@@ -108,7 +108,6 @@ try {
 
     // Send message with audio attachment
     $db = db();
-    $connection = getDB();
 
     $db->beginTransaction();
 

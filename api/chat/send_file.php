@@ -120,7 +120,6 @@ try {
 
     // Send message with file attachment
     $db = db();
-    $connection = getDB();
 
     $db->beginTransaction();
 
