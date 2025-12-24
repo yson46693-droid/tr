@@ -247,13 +247,31 @@ function calculateSalesCollections($userId, $month, $year) {
         $collectionsTableCheck = $db->queryOne("SHOW TABLES LIKE 'collections'");
         $hasCollectionsTable = !empty($collectionsTableCheck);
         
+        // التحقق من وجود عمود original_sales_rep_id
+        $hasOriginalSalesRepIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'original_sales_rep_id'"));
+        
         $fullPaymentSalesSql = "SELECT COALESCE(SUM(inv.total_amount), 0) as total 
              FROM invoices inv
-             WHERE inv.sales_rep_id = ? 
+             WHERE (inv.sales_rep_id = ?";
+        
+        // إذا كان هناك عمود original_sales_rep_id، نحسب أيضاً الفواتير المنقولة للمندوب الأصلي
+        // (الفواتير التي original_sales_rep_id = userId لكن sales_rep_id != userId)
+        if ($hasOriginalSalesRepIdColumn) {
+            $fullPaymentSalesSql .= " OR (inv.original_sales_rep_id = ? AND inv.original_sales_rep_id != inv.sales_rep_id)";
+        }
+        
+        $fullPaymentSalesSql .= ")
              AND MONTH(inv.date) = ? 
              AND YEAR(inv.date) = ?
              AND inv.status = 'paid'
              AND ABS(inv.paid_amount - inv.total_amount) < 0.01";
+        
+        // استبعاد الفواتير المنقولة للمندوب الجديد فقط
+        // إذا كان original_sales_rep_id موجوداً ومختلفاً عن sales_rep_id الحالي، فهذا يعني أن الفاتورة تم نقلها
+        // ولا تُحسب للمندوب الجديد (تُحسب للمندوب الأصلي فقط)
+        if ($hasOriginalSalesRepIdColumn) {
+            $fullPaymentSalesSql .= " AND (inv.original_sales_rep_id IS NULL OR inv.original_sales_rep_id = inv.sales_rep_id OR inv.original_sales_rep_id = ?)";
+        }
         
         // استبعاد الفواتير المدفوعة من رصيد دائن
         // هذه الفواتير لها معاملة خاصة: تُحسب النسبة مباشرة كـ bonus في pos.php
@@ -290,7 +308,13 @@ function calculateSalesCollections($userId, $month, $year) {
                     $fullPaymentSalesSql .= " AND c.status IN ('pending', 'approved')";
                 }
                 $fullPaymentSalesSql .= ")";
-                $fullPaymentSales = $db->queryOne($fullPaymentSalesSql, [$userId, $month, $year, $month, $year]);
+                // إعداد المعاملات: userId, month, year, month, year
+                // إذا كان hasOriginalSalesRepIdColumn موجوداً، نضيف userId مرة أخرى
+                $params = [$userId, $month, $year, $month, $year];
+                if ($hasOriginalSalesRepIdColumn) {
+                    $params = [$userId, $userId, $month, $year, $month, $year, $userId];
+                }
+                $fullPaymentSales = $db->queryOne($fullPaymentSalesSql, $params);
             } else {
                 // إذا لم يكن هناك عمود invoice_id، استبعاد الفواتير التي أصبحت paid في نفس الشهر
                 // إذا كان للعميل تحصيلات في نفس الشهر (لتجنب العد المزدوج)
@@ -321,7 +345,13 @@ function calculateSalesCollections($userId, $month, $year) {
                             OR TIMESTAMPDIFF(HOUR, inv.date, inv.updated_at) > 1
                         )
                     )";
-                    $fullPaymentSales = $db->queryOne($fullPaymentSalesSql, [$userId, $month, $year, $month, $year, $month, $year]);
+                    // إعداد المعاملات: userId, month, year, month, year, month, year
+                    // إذا كان hasOriginalSalesRepIdColumn موجوداً، نضيف userId مرتين في البداية
+                    $params = [$userId, $month, $year, $month, $year, $month, $year];
+                    if ($hasOriginalSalesRepIdColumn) {
+                        $params = [$userId, $userId, $month, $year, $month, $year, $month, $year, $userId];
+                    }
+                    $fullPaymentSales = $db->queryOne($fullPaymentSalesSql, $params);
                 } else {
                     // إذا لم يكن هناك عمود updated_at، نستخدم notes للبحث عن رقم الفاتورة
                     $fullPaymentSalesSql .= " AND NOT EXISTS (
@@ -333,11 +363,23 @@ function calculateSalesCollections($userId, $month, $year) {
                         $fullPaymentSalesSql .= " AND c.status IN ('pending', 'approved')";
                     }
                     $fullPaymentSalesSql .= ")";
-                    $fullPaymentSales = $db->queryOne($fullPaymentSalesSql, [$userId, $month, $year, $month, $year]);
+                    // إعداد المعاملات: userId, month, year, month, year
+                    // إذا كان hasOriginalSalesRepIdColumn موجوداً، نضيف userId مرة أخرى
+                    $params = [$userId, $month, $year, $month, $year];
+                    if ($hasOriginalSalesRepIdColumn) {
+                        $params = [$userId, $userId, $month, $year, $month, $year, $userId];
+                    }
+                    $fullPaymentSales = $db->queryOne($fullPaymentSalesSql, $params);
                 }
             }
         } else {
-            $fullPaymentSales = $db->queryOne($fullPaymentSalesSql, [$userId, $month, $year]);
+            // إعداد المعاملات: userId, month, year
+            // إذا كان hasOriginalSalesRepIdColumn موجوداً، نضيف userId مرة أخرى
+            $params = [$userId, $month, $year];
+            if ($hasOriginalSalesRepIdColumn) {
+                $params = [$userId, $userId, $month, $year, $userId];
+            }
+            $fullPaymentSales = $db->queryOne($fullPaymentSalesSql, $params);
         }
         
         $totalCommissionBase += floatval($fullPaymentSales['total'] ?? 0);
@@ -363,6 +405,9 @@ function calculateSalesCollections($userId, $month, $year) {
             // ملاحظة: التحصيلات الجزئية تُحتسب فقط على المبلغ المحصل (وليس على الرصيد الدائن)
             $hasPaidFromCreditColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'paid_from_credit'"));
             
+            // التحقق من وجود عمود original_sales_rep_id
+            $hasOriginalSalesRepIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'original_sales_rep_id'"));
+            
             $partialCollectionsSql = "SELECT COALESCE(SUM(c.amount), 0) as total 
                  FROM collections c
                  WHERE c.customer_id IN (
@@ -370,6 +415,11 @@ function calculateSalesCollections($userId, $month, $year) {
                      FROM invoices inv
                      WHERE inv.sales_rep_id = ?
                      AND inv.status = 'partial'";
+            
+            // استبعاد الفواتير المنقولة (التي تم نقلها من مندوب آخر)
+            if ($hasOriginalSalesRepIdColumn) {
+                $partialCollectionsSql .= " AND (inv.original_sales_rep_id IS NULL OR inv.original_sales_rep_id = inv.sales_rep_id)";
+            }
             
             // استبعاد الفواتير المدفوعة من رصيد دائن
             if ($hasPaidFromCreditColumn) {
@@ -382,7 +432,13 @@ function calculateSalesCollections($userId, $month, $year) {
                  AND YEAR(c.date) = ?" . 
                  ($hasStatus ? " AND c.status IN ('pending','approved')" : "");
             
-            $partialCollections = $db->queryOne($partialCollectionsSql, [$userId, $month, $year]);
+            // إعداد المعاملات: userId, month, year, userId, month, year
+            // إذا كان hasOriginalSalesRepIdColumn موجوداً، نضيف userId مرة أخرى في البداية
+            $partialParams = [$userId, $month, $year, $userId, $month, $year];
+            if ($hasOriginalSalesRepIdColumn) {
+                $partialParams = [$userId, $userId, $month, $year, $userId, $month, $year];
+            }
+            $partialCollections = $db->queryOne($partialCollectionsSql, $partialParams);
             $partialAmount = floatval($partialCollections['total'] ?? 0);
             
             // الحالة 3: التحصيلات من عملاء المندوب (من صفحة العملاء)
@@ -1073,28 +1129,42 @@ function createOrUpdateSalary($userId, $month, $year, $bonus = 0, $deductions = 
                 $hasCreditUsedColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'credit_used'"));
                 
                 if ($hasPaidFromCreditColumn) {
+                    // التحقق من وجود عمود original_sales_rep_id
+                    $hasOriginalSalesRepIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'original_sales_rep_id'"));
+                    
                     // حساب إجمالي المبالغ المدفوعة من الرصيد الدائن (paid_from_credit > 0)
-                    $creditUsedResult = $db->queryOne(
-                        "SELECT COALESCE(SUM(paid_from_credit), 0) as total_credit_used
+                    $creditUsedSql = "SELECT COALESCE(SUM(paid_from_credit), 0) as total_credit_used
                          FROM invoices
                          WHERE sales_rep_id = ?
                          AND MONTH(date) = ?
                          AND YEAR(date) = ?
-                         AND (paid_from_credit IS NOT NULL AND paid_from_credit > 0)",
-                        [$userId, $month, $year]
-                    );
+                         AND (paid_from_credit IS NOT NULL AND paid_from_credit > 0)";
+                    
+                    // استبعاد الفواتير المنقولة
+                    if ($hasOriginalSalesRepIdColumn) {
+                        $creditUsedSql .= " AND (original_sales_rep_id IS NULL OR original_sales_rep_id = sales_rep_id)";
+                    }
+                    
+                    $creditUsedResult = $db->queryOne($creditUsedSql, [$userId, $month, $year]);
                     $totalCreditUsed = floatval($creditUsedResult['total_credit_used'] ?? 0);
                 } elseif ($hasCreditUsedColumn) {
+                    // التحقق من وجود عمود original_sales_rep_id
+                    $hasOriginalSalesRepIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'original_sales_rep_id'"));
+                    
                     // استخدام credit_used كبديل إذا لم يكن paid_from_credit موجوداً
-                    $creditUsedResult = $db->queryOne(
-                        "SELECT COALESCE(SUM(credit_used), 0) as total_credit_used
+                    $creditUsedSql = "SELECT COALESCE(SUM(credit_used), 0) as total_credit_used
                          FROM invoices
                          WHERE sales_rep_id = ?
                          AND MONTH(date) = ?
                          AND YEAR(date) = ?
-                         AND (credit_used IS NOT NULL AND credit_used > 0)",
-                        [$userId, $month, $year]
-                    );
+                         AND (credit_used IS NOT NULL AND credit_used > 0)";
+                    
+                    // استبعاد الفواتير المنقولة
+                    if ($hasOriginalSalesRepIdColumn) {
+                        $creditUsedSql .= " AND (original_sales_rep_id IS NULL OR original_sales_rep_id = sales_rep_id)";
+                    }
+                    
+                    $creditUsedResult = $db->queryOne($creditUsedSql, [$userId, $month, $year]);
                     $totalCreditUsed = floatval($creditUsedResult['total_credit_used'] ?? 0);
                 } else {
                     $totalCreditUsed = 0;

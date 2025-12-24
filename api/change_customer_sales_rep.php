@@ -116,9 +116,27 @@ try {
     if ($transferInvoices) {
         $invoicesTableExists = $db->queryOne("SHOW TABLES LIKE 'invoices'");
         if (!empty($invoicesTableExists)) {
+            // التحقق من وجود عمود original_sales_rep_id وإنشاؤه إذا لم يكن موجوداً
+            $hasOriginalSalesRepIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'original_sales_rep_id'"));
+            if (!$hasOriginalSalesRepIdColumn) {
+                try {
+                    $db->execute("ALTER TABLE invoices ADD COLUMN original_sales_rep_id INT(11) DEFAULT NULL AFTER sales_rep_id");
+                    $db->execute("ALTER TABLE invoices ADD KEY idx_original_sales_rep_id (original_sales_rep_id)");
+                    error_log('Added original_sales_rep_id column to invoices table');
+                } catch (Throwable $e) {
+                    error_log('Error adding original_sales_rep_id column: ' . $e->getMessage());
+                }
+            }
+            
+            // تحديث الفواتير مع حفظ المندوب الأصلي
+            // إذا كان original_sales_rep_id NULL، نضعه كـ oldSalesRepId (أول نقل)
+            // إذا كان موجوداً، نتركه كما هو (لنقل متعدد)
             $db->execute(
-                "UPDATE invoices SET sales_rep_id = ? WHERE customer_id = ? AND sales_rep_id = ?",
-                [$newSalesRepId, $customerId, $oldSalesRepId]
+                "UPDATE invoices 
+                 SET sales_rep_id = ?,
+                     original_sales_rep_id = COALESCE(original_sales_rep_id, ?)
+                 WHERE customer_id = ? AND sales_rep_id = ?",
+                [$newSalesRepId, $oldSalesRepId, $customerId, $oldSalesRepId]
             );
         }
     }
