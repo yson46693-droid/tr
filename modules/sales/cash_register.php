@@ -34,6 +34,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     // التحقق من طلب AJAX
     $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
     
+    // إذا كان طلب AJAX، ابدأ output buffering فوراً لالتقاط أي output غير مرغوب فيه
+    if ($isAjax) {
+        // تنظيف أي buffers موجودة وبدء buffer جديد
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+        ob_start();
+    }
+    
     // تهيئة المتغيرات
     $newTotalCashAdditions = 0.0;
     $lastAddition = null;
@@ -129,17 +138,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     // إذا كان طلب AJAX، إرجاع JSON مع البيانات المحدثة
     if ($isAjax) {
-        // تنظيف جميع output buffers بشكل آمن
+        // بدء output buffering لالتقاط أي output غير مرغوب فيه
+        if (ob_get_level() == 0) {
+            ob_start();
+        }
+        
+        // تنظيف جميع output buffers الموجودة بشكل آمن
         $safetyCounter = 0;
-        while (ob_get_level() > 0 && $safetyCounter < 10) {
+        while (ob_get_level() > 0 && $safetyCounter < 20) {
+            $level = ob_get_level();
             if (@ob_end_clean() === false) {
+                break;
+            }
+            // التحقق من أن المستوى انخفض فعلاً
+            if (ob_get_level() >= $level) {
                 break;
             }
             $safetyCounter++;
         }
         
+        // بدء buffer جديد نظيف
+        ob_start();
+        
         // التأكد من عدم إرسال headers مسبقاً
         if (!headers_sent()) {
+            // إلغاء أي headers تم إرسالها مسبقاً
+            if (function_exists('header_remove')) {
+                @header_remove();
+            }
+            
             http_response_code(!empty($success) ? 200 : 400);
             header('Content-Type: application/json; charset=utf-8');
             header('X-Content-Type-Options: nosniff');
@@ -149,6 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             header('Expires: 0');
         }
         
+        // إعداد الاستجابة JSON
         if (!empty($success)) {
             $response = [
                 'success' => true, 
@@ -156,10 +184,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 'newTotalCashAdditions' => $newTotalCashAdditions,
                 'lastAddition' => $lastAddition
             ];
-            echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         } else {
-            echo json_encode(['success' => false, 'message' => $error ?: 'حدث خطأ غير معروف'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $response = [
+                'success' => false, 
+                'message' => $error ?: 'حدث خطأ غير معروف'
+            ];
         }
+        
+        // تنظيف أي output غير مرغوب فيه
+        ob_clean();
+        
+        // إرسال JSON فقط
+        echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        
+        // إرسال output وإيقاف buffering
+        ob_end_flush();
         
         // إنهاء التنفيذ فوراً
         if (function_exists('fastcgi_finish_request')) {
@@ -1696,26 +1735,45 @@ $salesRepInfo = $db->queryOne(
                 body: formData
             })
             .then(async response => {
-                // التحقق من نوع المحتوى
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    // إذا لم يكن JSON، حاول قراءة النص أولاً للتحقق
-                    const text = await response.text();
-                    console.error('Non-JSON response:', text.substring(0, 200));
-                    throw new Error('الخادم لم يعد استجابة JSON صحيحة');
+                // قراءة النص أولاً للتحقق من المحتوى
+                const text = await response.text();
+                
+                // محاولة تنظيف النص من أي whitespace أو محتوى غير مرغوب فيه
+                const cleanedText = text.trim();
+                
+                // البحث عن JSON في النص (في حالة وجود محتوى إضافي)
+                let jsonStart = cleanedText.indexOf('{');
+                let jsonEnd = cleanedText.lastIndexOf('}');
+                
+                let jsonText = cleanedText;
+                if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+                    // استخراج JSON فقط
+                    jsonText = cleanedText.substring(jsonStart, jsonEnd + 1);
                 }
                 
-                if (!response.ok) {
-                    // محاولة قراءة رسالة الخطأ من JSON
-                    try {
-                        const errorData = await response.json();
-                        throw new Error(errorData.message || 'Network response was not ok');
-                    } catch (e) {
-                        throw new Error('Network response was not ok');
+                // محاولة تحليل JSON
+                let data;
+                try {
+                    data = JSON.parse(jsonText);
+                } catch (parseError) {
+                    // إذا فشل التحليل، تحقق من نوع المحتوى
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.includes('application/json')) {
+                        console.error('JSON parse error:', parseError);
+                        console.error('Response text:', text.substring(0, 500));
+                        throw new Error('فشل في تحليل استجابة الخادم');
+                    } else {
+                        // إذا لم يكن JSON، قد يكون هناك خطأ في الخادم
+                        console.error('Non-JSON response:', text.substring(0, 500));
+                        throw new Error('الخادم لم يعد استجابة JSON صحيحة');
                     }
                 }
                 
-                return response.json();
+                if (!response.ok) {
+                    throw new Error(data.message || 'حدث خطأ في الخادم');
+                }
+                
+                return data;
             })
             .then(data => {
                 // إعادة تفعيل الزر
