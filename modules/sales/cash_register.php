@@ -129,7 +129,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     // إذا كان طلب AJAX، إرجاع JSON مع البيانات المحدثة
     if ($isAjax) {
-        header('Content-Type: application/json; charset=utf-8');
+        // تنظيف جميع output buffers بشكل آمن
+        $safetyCounter = 0;
+        while (ob_get_level() > 0 && $safetyCounter < 10) {
+            if (@ob_end_clean() === false) {
+                break;
+            }
+            $safetyCounter++;
+        }
+        
+        // التأكد من عدم إرسال headers مسبقاً
+        if (!headers_sent()) {
+            http_response_code(!empty($success) ? 200 : 400);
+            header('Content-Type: application/json; charset=utf-8');
+            header('X-Content-Type-Options: nosniff');
+            // منع التخزين المؤقت للاستجابة
+            header('Cache-Control: no-cache, no-store, must-revalidate');
+            header('Pragma: no-cache');
+            header('Expires: 0');
+        }
+        
         if (!empty($success)) {
             $response = [
                 'success' => true, 
@@ -137,9 +156,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 'newTotalCashAdditions' => $newTotalCashAdditions,
                 'lastAddition' => $lastAddition
             ];
-            echo json_encode($response, JSON_UNESCAPED_UNICODE);
+            echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         } else {
-            echo json_encode(['success' => false, 'message' => $error], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['success' => false, 'message' => $error ?: 'حدث خطأ غير معروف'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+        
+        // إنهاء التنفيذ فوراً
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
         }
         exit; // إيقاف تنفيذ الكود تماماً للطلبات AJAX
     }
@@ -1671,10 +1695,26 @@ $salesRepInfo = $db->queryOne(
                 },
                 body: formData
             })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
+            .then(async response => {
+                // التحقق من نوع المحتوى
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    // إذا لم يكن JSON، حاول قراءة النص أولاً للتحقق
+                    const text = await response.text();
+                    console.error('Non-JSON response:', text.substring(0, 200));
+                    throw new Error('الخادم لم يعد استجابة JSON صحيحة');
                 }
+                
+                if (!response.ok) {
+                    // محاولة قراءة رسالة الخطأ من JSON
+                    try {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || 'Network response was not ok');
+                    } catch (e) {
+                        throw new Error('Network response was not ok');
+                    }
+                }
+                
                 return response.json();
             })
             .then(data => {
@@ -1684,14 +1724,27 @@ $salesRepInfo = $db->queryOne(
                     submitBtn.innerHTML = originalBtnText;
                 }
                 
+                // التحقق من أن البيانات صحيحة
+                if (!data || typeof data !== 'object') {
+                    console.error('Invalid response data:', data);
+                    showAlert('danger', 'استجابة غير صحيحة من الخادم');
+                    return;
+                }
+                
                 if (data.success) {
+                    // إظهار رسالة النجاح
+                    showAlert('success', data.message || 'تم إضافة الرصيد بنجاح');
+                    
+                    // إعادة تعيين النموذج
+                    addCashBalanceForm.reset();
+                    
                     // إعادة تحميل الصفحة بعد النجاح (بدون إعادة إرسال البيانات)
-                    // استخدام setTimeout لإعطاء الوقت لعرض رسالة النجاح إن وجدت
+                    // استخدام setTimeout لإعطاء الوقت لعرض رسالة النجاح
                     setTimeout(() => {
                         window.location.reload();
-                    }, 500);
+                    }, 1000);
                 } else {
-                    showAlert('danger', data.message);
+                    showAlert('danger', data.message || 'حدث خطأ أثناء إضافة الرصيد');
                 }
             })
             .catch(error => {
@@ -1700,7 +1753,10 @@ $salesRepInfo = $db->queryOne(
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = originalBtnText;
                 }
-                showAlert('danger', 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+                
+                // عرض رسالة خطأ واضحة
+                const errorMessage = error.message || 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.';
+                showAlert('danger', errorMessage);
             });
             
             return false; // منع إرسال النموذج بشكل افتراضي
