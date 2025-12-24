@@ -1875,8 +1875,8 @@ $salesRepInfo = $db->queryOne(
             maximumFractionDigits: 2
         }).format(Math.abs(amount));
         
-        // إضافة رمز العملة
-        const symbol = '<?php echo getCurrencySymbol(); ?>';
+        // إضافة رمز العملة - تنظيف القيمة لتجنب مشاكل JavaScript
+        const symbol = <?php echo json_encode(getCurrencySymbol(), JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?>;
         return formatted + ' ' + symbol;
     }
     

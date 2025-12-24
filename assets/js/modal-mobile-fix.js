@@ -226,7 +226,29 @@
         
         // إعادة ضبط عند scroll - للتأكد من أن التمرير يعمل
         document.addEventListener('scroll', function(e) {
-            if (isMobile() && e.target.closest('.modal-body')) {
+            if (!isMobile()) return;
+            
+            // التحقق من أن e.target هو عنصر DOM وله دالة closest
+            if (!e.target || typeof e.target.closest !== 'function') {
+                // البحث عن modal-body من العنصر الذي تم التمرير عليه
+                const scrollableElement = document.elementFromPoint(0, window.scrollY);
+                if (!scrollableElement || typeof scrollableElement.closest !== 'function') return;
+                
+                const modalBody = scrollableElement.closest('.modal-body');
+                if (!modalBody) return;
+                
+                const modal = modalBody.closest('.modal');
+                if (modal && (modal.classList.contains('show') || modal.classList.contains('showing'))) {
+                    const modalFooter = modal.querySelector('.modal-footer');
+                    if (modalFooter) {
+                        modalFooter.style.position = 'relative';
+                        modalFooter.style.zIndex = '10';
+                    }
+                }
+                return;
+            }
+            
+            if (e.target.closest('.modal-body')) {
                 const modal = e.target.closest('.modal');
                 if (modal && (modal.classList.contains('show') || modal.classList.contains('showing'))) {
                     // التأكد من أن التذييل مرئي
