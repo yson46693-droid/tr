@@ -122,6 +122,18 @@ body.attendance-page.modal-open .dashboard-main {
         overflow-y: visible;
     }
     
+    /* إزالة padding الأفقي من modal-body للصور */
+    #cameraModal .modal-body img,
+    #cameraModal .modal-body #capturedImage,
+    #cameraModal .modal-body #video,
+    #cameraModal .modal-body #capturedImageContainer,
+    #cameraModal .modal-body #cameraContainer {
+        margin-left: calc(-1 * 0.75rem) !important;
+        margin-right: calc(-1 * 0.75rem) !important;
+        width: calc(100% + 2 * 0.75rem) !important;
+        max-width: calc(100% + 2 * 0.75rem) !important;
+    }
+    
     #cameraModal .modal-footer {
         padding: 0.5rem 0.75rem;
         border-top: 1px solid #dee2e6;
@@ -180,12 +192,28 @@ body.attendance-page.modal-open .dashboard-main {
         aspect-ratio: 1 / 1;
         object-fit: cover;
         border-radius: 8px;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: block !important;
     }
     
     /* تقليل حجم container الكاميرا */
     #cameraModal #cameraContainer {
         margin: 0;
         padding: 0;
+        width: 100%;
+        min-height: 0;
+        height: auto;
+    }
+    
+    /* إزالة padding من container الصورة الملتقطة */
+    #cameraModal #capturedImageContainer {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        min-height: 0 !important;
+        height: auto !important;
+        display: block !important;
     }
     
     #cameraModal #cameraLoading {
@@ -293,6 +321,18 @@ body.attendance-page.modal-open .dashboard-main {
         padding: 0.5rem;
     }
     
+    /* إزالة padding الأفقي من modal-body للصور على الشاشات الصغيرة جداً */
+    #cameraModal .modal-body img,
+    #cameraModal .modal-body #capturedImage,
+    #cameraModal .modal-body #video,
+    #cameraModal .modal-body #capturedImageContainer,
+    #cameraModal .modal-body #cameraContainer {
+        margin-left: calc(-1 * 0.5rem) !important;
+        margin-right: calc(-1 * 0.5rem) !important;
+        width: calc(100% + 2 * 0.5rem) !important;
+        max-width: calc(100% + 2 * 0.5rem) !important;
+    }
+    
     #cameraModal .modal-footer {
         padding: 0.4rem 0.5rem;
         gap: 0.4rem;
@@ -326,6 +366,18 @@ body.attendance-page.modal-open .dashboard-main {
     
     #cameraModal .modal-body {
         padding: 0.5rem;
+    }
+    
+    /* إزالة padding الأفقي من modal-body للصور في الوضع الأفقي */
+    #cameraModal .modal-body img,
+    #cameraModal .modal-body #capturedImage,
+    #cameraModal .modal-body #video,
+    #cameraModal .modal-body #capturedImageContainer,
+    #cameraModal .modal-body #cameraContainer {
+        margin-left: calc(-1 * 0.5rem) !important;
+        margin-right: calc(-1 * 0.5rem) !important;
+        width: calc(100% + 2 * 0.5rem) !important;
+        max-width: calc(100% + 2 * 0.5rem) !important;
     }
     
     #cameraModal .modal-header,
@@ -498,6 +550,18 @@ body.attendance-page.modal-open .modal-backdrop {
         padding: 0.75rem !important;
     }
     
+    /* إزالة padding الأفقي من modal-body للصور في cameraModal */
+    .attendance-page #cameraModal .modal-body img,
+    .attendance-page #cameraModal .modal-body #capturedImage,
+    .attendance-page #cameraModal .modal-body #video,
+    .attendance-page #cameraModal .modal-body #capturedImageContainer,
+    .attendance-page #cameraModal .modal-body #cameraContainer {
+        margin-left: calc(-1 * 0.75rem) !important;
+        margin-right: calc(-1 * 0.75rem) !important;
+        width: calc(100% + 2 * 0.75rem) !important;
+        max-width: calc(100% + 2 * 0.75rem) !important;
+    }
+    
     .attendance-page #cameraModal .modal-footer {
         padding: 0.5rem 0.75rem !important;
     }
@@ -522,6 +586,31 @@ body.attendance-page.modal-open .modal-backdrop {
         max-width: 100% !important;
         height: auto !important;
         object-fit: cover !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: block !important;
+    }
+    
+    /* إزالة padding من container الصورة الملتقطة */
+    .attendance-page #cameraModal #capturedImageContainer {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        min-height: 0 !important;
+        height: auto !important;
+        display: block !important;
+    }
+    
+    /* إزالة padding من modal-body عند وجود صور */
+    .attendance-page #cameraModal .modal-body {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+    
+    /* إضافة padding فقط للعناصر الأخرى */
+    .attendance-page #cameraModal .modal-body > *:not(#capturedImage):not(#video):not(#capturedImageContainer):not(#cameraContainer) {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
     }
 }
 
