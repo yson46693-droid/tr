@@ -591,16 +591,11 @@ $lang = isset($translations) ? $translations : [];
                         </div>
                         <p class="mt-2 text-muted">جاري تحميل الكاميرا...</p>
                     </div>
-                    <video id="video" autoplay playsinline muted style="width: 100%; border-radius: 8px; background: #000; display: none; visibility: hidden;" onclick="if(this.paused) this.play().catch(e => console.log('Play failed:', e));"></video>
+                    <video id="video" autoplay playsinline muted style="width: 100%; border-radius: 8px; background: #000;"></video>
                     <canvas id="canvas" style="display: none;"></canvas>
                     <div id="cameraError" class="alert alert-danger" style="display: none;">
                         <i class="bi bi-exclamation-triangle me-2"></i>
                         <span id="cameraErrorText">خطأ في الكاميرا</span>
-                        <div class="mt-2">
-                            <button type="button" class="btn btn-sm btn-outline-danger" id="retryCameraBtn">
-                                <i class="bi bi-arrow-clockwise me-1"></i>إعادة المحاولة
-                            </button>
-                        </div>
                     </div>
                 </div>
                 <div id="capturedImageContainer" style="display: none; text-align: center;">
@@ -614,7 +609,7 @@ $lang = isset($translations) ? $translations : [];
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="cancelBtn">إلغاء</button>
-                <button type="button" class="btn btn-primary" id="captureBtn" style="display: none; visibility: hidden;">
+                <button type="button" class="btn btn-primary" id="captureBtn" style="display: none;">
                     <i class="bi bi-camera me-2"></i>التقاط
                 </button>
                 <button type="button" class="btn btn-success" id="retakeBtn" style="display: none;">
