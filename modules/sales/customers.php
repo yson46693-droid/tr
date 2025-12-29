@@ -1804,7 +1804,8 @@ $collectionsLabel = $isSalesUser ? 'تحصيلاتي' : 'إجمالي التحص
 
 <?php if (in_array($currentRole, ['manager', 'sales'], true)): ?>
 <!-- Modal سجل مشتريات العميل -->
-<div class="modal fade" id="customerHistoryModal" tabindex="-1" aria-hidden="true">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="customerHistoryModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-dark text-white">
@@ -2465,7 +2466,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <!-- Modal سجل مشتريات العميل - إنشاء مرتجع -->
 <?php if (in_array($currentRole, ['manager', 'sales'], true)): ?>
-<div class="modal fade" id="customerPurchaseHistoryModal" tabindex="-1" aria-hidden="true">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="customerPurchaseHistoryModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -2571,7 +2573,8 @@ document.addEventListener('DOMContentLoaded', function () {
 </div>
 
 <!-- Create Return Modal -->
-<div class="modal fade" id="createReturnModal" tabindex="-1" aria-hidden="true">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="createReturnModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-fullscreen-md-down">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
@@ -3552,7 +3555,8 @@ $delegateCards = [
     </div>
 </div>
 
-<div class="modal fade" id="delegateCustomersModal" tabindex="-1" aria-hidden="true">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="delegateCustomersModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -4030,7 +4034,8 @@ document.addEventListener('DOMContentLoaded', function () {
 <?php endif; ?>
 
 <!-- Modal إضافة عميل جديد - يجب أن يكون خارج أي شرط ليعمل مع جميع الأقسام -->
-<div class="modal fade" id="addCustomerModal" tabindex="-1">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="addCustomerModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down">
         <div class="modal-content">
             <div class="modal-header">
@@ -4115,6 +4120,91 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
             </form>
         </div>
+    </div>
+</div>
+
+<!-- Card إضافة عميل جديد - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="addCustomerCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-person-plus me-2"></i>إضافة عميل جديد
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+            <input type="hidden" name="action" value="add_customer">
+            <input type="hidden" name="section" value="<?php echo htmlspecialchars($section); ?>">
+            <div class="mb-3">
+                <label class="form-label">اسم العميل <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="name" id="addCustomerCardName" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">أرقام الهاتف</label>
+                <div id="addCustomerCardPhoneNumbersContainer">
+                    <div class="input-group mb-2">
+                        <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                        <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="addCustomerCardPhoneBtn">
+                    <i class="bi bi-plus-circle"></i> إضافة رقم آخر
+                </button>
+                <input type="hidden" name="phone" value="">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ديون العميل / رصيد العميل</label>
+                <input type="number" class="form-control" name="balance" id="addCustomerCardBalance" step="0.01" value="0" placeholder="مثال: 0 أو -500">
+                <small class="text-muted">
+                    <strong>إدخال قيمة سالبة:</strong> يتم اعتبارها رصيد دائن للعميل (مبلغ متاح للعميل).
+                </small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">العنوان</label>
+                <textarea class="form-control" name="address" id="addCustomerCardAddress" rows="2"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">المنطقة</label>
+                <div class="input-group">
+                    <select class="form-select" name="region_id" id="addCustomerCardRegionId">
+                        <option value="">اختر المنطقة</option>
+                        <?php
+                        $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                        foreach ($regions as $region):
+                        ?>
+                            <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
+                    <button type="button" class="btn btn-outline-primary" onclick="showAddRegionFromCustomerCard()">
+                        <i class="bi bi-plus-circle"></i>
+                    </button>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الموقع الجغرافي</label>
+                <div class="d-flex gap-2 mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="addCustomerCardGetLocationBtn">
+                        <i class="bi bi-geo-alt"></i> الحصول على الموقع الحالي
+                    </button>
+                </div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <input type="text" class="form-control" name="latitude" id="addCustomerCardLatitude" placeholder="خط العرض" readonly>
+                    </div>
+                    <div class="col-6">
+                        <input type="text" class="form-control" name="longitude" id="addCustomerCardLongitude" placeholder="خط الطول" readonly>
+                    </div>
+                </div>
+                <small class="text-muted">يمكنك الحصول على الموقع تلقائياً أو إدخاله يدوياً</small>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">إضافة</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddCustomerCard()">إلغاء</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -5412,7 +5502,8 @@ document.addEventListener('DOMContentLoaded', function () {
 </div>
 
 <!-- Modal تحصيل ديون العميل -->
-<div class="modal fade" id="collectPaymentModal" tabindex="-1" aria-hidden="true">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="collectPaymentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -5455,8 +5546,43 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
 </div>
 
+<!-- Card تحصيل ديون العميل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="collectPaymentCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-cash-coin me-2"></i>تحصيل ديون العميل
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+            <input type="hidden" name="action" value="collect_debt">
+            <input type="hidden" name="section" value="<?php echo htmlspecialchars($section); ?>">
+            <input type="hidden" name="customer_id" id="collectPaymentCardCustomerId">
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">العميل</div>
+                <div class="fs-5" id="collectPaymentCardCustomerName">-</div>
+            </div>
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">الديون الحالية</div>
+                <div class="fs-5 text-warning" id="collectPaymentCardCurrentDebt">-</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
+                <input type="number" class="form-control" id="collectPaymentCardAmount" 
+                       name="amount" step="0.01" min="0.01" required>
+                <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">تحصيل المبلغ</button>
+                <button type="button" class="btn btn-secondary" onclick="closeCollectPaymentCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Modal عرض موقع العميل -->
-<div class="modal fade" id="viewLocationModal" tabindex="-1" aria-hidden="true">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="viewLocationModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -5493,7 +5619,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <!-- Modal استيراد العملاء من Excel -->
 <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
-<div class="modal fade" id="importCustomersModal" tabindex="-1">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="importCustomersModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -5556,7 +5683,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <!-- Modal تعديل عميل -->
 <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
-<div class="modal fade" id="editCustomerModal" tabindex="-1">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="editCustomerModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -5631,9 +5759,82 @@ document.addEventListener('DOMContentLoaded', function () {
 </div>
 <?php endif; ?>
 
+<!-- Card تعديل عميل - للموبايل فقط -->
+<?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
+<div class="card shadow-sm mb-4 d-md-none" id="editCustomerCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">تعديل بيانات العميل</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+            <input type="hidden" name="action" value="edit_customer">
+            <input type="hidden" name="customer_id" id="editCustomerCardId">
+            <input type="hidden" name="section" value="<?php echo htmlspecialchars($section); ?>">
+            <div class="mb-3">
+                <label class="form-label">اسم العميل</label>
+                <input type="text" class="form-control" id="editCustomerCardName" disabled>
+                <small class="text-muted">لا يمكن تعديل اسم العميل</small>
+            </div>
+            <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
+            <div class="mb-3">
+                <label class="form-label">ديون العميل / رصيد العميل</label>
+                <input type="number" class="form-control" name="balance" id="editCustomerCardBalance" step="0.01" placeholder="مثال: 0 أو -500">
+                <small class="text-muted">
+                    <strong>إدخال قيمة سالبة:</strong> يتم اعتبارها رصيد دائن للعميل (مبلغ متاح للعميل).
+                </small>
+            </div>
+            <?php endif; ?>
+            <div class="mb-3">
+                <label class="form-label">أرقام الهاتف</label>
+                <div id="editCustomerCardPhoneNumbersContainer">
+                    <div class="input-group mb-2">
+                        <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                        <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="addEditCustomerCardPhoneBtn">
+                    <i class="bi bi-plus-circle"></i> إضافة رقم آخر
+                </button>
+                <input type="hidden" name="phone" id="editCustomerCardPhone" value="">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">العنوان</label>
+                <textarea class="form-control" name="address" id="editCustomerCardAddress" rows="2"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">المنطقة</label>
+                <div class="input-group">
+                    <select class="form-select" name="region_id" id="editCustomerCardRegionId">
+                        <option value="">اختر المنطقة</option>
+                        <?php
+                        $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                        foreach ($regions as $region):
+                        ?>
+                            <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
+                    <button type="button" class="btn btn-outline-primary" onclick="showAddRegionFromCustomerCard()">
+                        <i class="bi bi-plus-circle"></i>
+                    </button>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditCustomerCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Modal إضافة منطقة جديدة (من نموذج العميل) -->
 <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
-<div class="modal fade" id="addRegionFromCustomerModal" tabindex="-1">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="addRegionFromCustomerModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -5678,7 +5879,8 @@ if (!$isSalesUser && !$isCompanySection && in_array($currentRole, ['manager', 'd
     }
 }
 ?>
-<div class="modal fade" id="customerExportModal" tabindex="-1" aria-hidden="true" data-section="<?php echo htmlspecialchars($section); ?>">
+<!-- للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="customerExportModal" tabindex="-1" aria-hidden="true" data-section="<?php echo htmlspecialchars($section); ?>">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
@@ -6062,6 +6264,393 @@ if (!$isSalesUser && !$isCompanySection && in_array($currentRole, ['manager', 'd
         updateRemoveButtons(phoneContainer);
     }
 })();
+
+// ========== دوال Modal/Card Dual System ==========
+// دالة التحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// دالة Scroll تلقائي
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80; // مساحة للـ header
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// دالة إغلاق جميع النماذج
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const cards = ['collectPaymentCard', 'addCustomerCard', 'editCustomerCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = ['collectPaymentModal', 'addCustomerModal', 'editCustomerModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// دالة فتح نموذج إضافة عميل
+function showAddCustomerModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addCustomerCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addCustomerModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة إغلاق Card إضافة عميل
+function closeAddCustomerCard() {
+    const card = document.getElementById('addCustomerCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+// دالة فتح نموذج تحصيل الديون
+function showCollectPaymentModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const customerId = button.getAttribute('data-customer-id') || '';
+    const customerName = button.getAttribute('data-customer-name') || '-';
+    const balance = button.getAttribute('data-customer-balance') || '0';
+    const balanceFormatted = button.getAttribute('data-customer-balance-formatted') || balance;
+    const numericBalance = parseFloat(balance);
+    const debtAmount = numericBalance > 0 ? numericBalance : 0;
+    
+    if (isMobile()) {
+        const card = document.getElementById('collectPaymentCard');
+        if (card) {
+            const customerIdInput = card.querySelector('#collectPaymentCardCustomerId');
+            const customerNameEl = card.querySelector('#collectPaymentCardCustomerName');
+            const currentDebtEl = card.querySelector('#collectPaymentCardCurrentDebt');
+            const amountInput = card.querySelector('#collectPaymentCardAmount');
+            
+            if (customerIdInput) customerIdInput.value = customerId;
+            if (customerNameEl) customerNameEl.textContent = customerName;
+            if (currentDebtEl) currentDebtEl.textContent = balanceFormatted;
+            if (amountInput) {
+                amountInput.value = debtAmount.toFixed(2);
+                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.setAttribute('min', '0');
+                amountInput.readOnly = debtAmount <= 0;
+            }
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('collectPaymentModal');
+        if (modal) {
+            const customerIdInput = modal.querySelector('input[name="customer_id"]');
+            const customerNameEl = modal.querySelector('.collection-customer-name');
+            const currentDebtEl = modal.querySelector('.collection-current-debt');
+            const amountInput = modal.querySelector('#collectionAmount');
+            
+            if (customerIdInput) customerIdInput.value = customerId;
+            if (customerNameEl) customerNameEl.textContent = customerName;
+            if (currentDebtEl) currentDebtEl.textContent = balanceFormatted;
+            if (amountInput) {
+                amountInput.value = debtAmount.toFixed(2);
+                amountInput.setAttribute('max', debtAmount.toFixed(2));
+                amountInput.setAttribute('min', '0');
+                amountInput.readOnly = debtAmount <= 0;
+            }
+            
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة إغلاق Card تحصيل الديون
+function closeCollectPaymentCard() {
+    const card = document.getElementById('collectPaymentCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+// دالة فتح نموذج تعديل عميل
+function showEditCustomerModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const customerId = button.getAttribute('data-customer-id');
+    const customerName = button.getAttribute('data-customer-name');
+    const customerPhone = button.getAttribute('data-customer-phone') || '';
+    const customerAddress = button.getAttribute('data-customer-address') || '';
+    const customerRegionId = button.getAttribute('data-customer-region-id') || '';
+    const customerBalance = button.getAttribute('data-customer-balance') || '0';
+    
+    if (!customerId) {
+        console.error('Customer ID not found');
+        return;
+    }
+    
+    if (isMobile()) {
+        const card = document.getElementById('editCustomerCard');
+        if (card) {
+            const idInput = card.querySelector('#editCustomerCardId');
+            const nameInput = card.querySelector('#editCustomerCardName');
+            const addressInput = card.querySelector('#editCustomerCardAddress');
+            const regionInput = card.querySelector('#editCustomerCardRegionId');
+            const balanceInput = card.querySelector('#editCustomerCardBalance');
+            const phoneContainer = card.querySelector('#editCustomerCardPhoneNumbersContainer');
+            
+            if (idInput) idInput.value = customerId;
+            if (nameInput) nameInput.value = customerName || '';
+            if (addressInput) addressInput.value = customerAddress;
+            if (regionInput) regionInput.value = customerRegionId;
+            if (balanceInput) balanceInput.value = customerBalance;
+            
+            // تحميل أرقام الهواتف المتعددة
+            if (phoneContainer) {
+                phoneContainer.innerHTML = '';
+                fetch('?action=get_customer_phones&customer_id=' + customerId)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.phones && data.phones.length > 0) {
+                            data.phones.forEach(function(phone) {
+                                const phoneGroup = document.createElement('div');
+                                phoneGroup.className = 'input-group mb-2';
+                                phoneGroup.innerHTML = `
+                                    <input type="text" class="form-control phone-input" name="phones[]" value="${phone}" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                `;
+                                phoneContainer.appendChild(phoneGroup);
+                            });
+                        } else if (customerPhone) {
+                            const phoneGroup = document.createElement('div');
+                            phoneGroup.className = 'input-group mb-2';
+                            phoneGroup.innerHTML = `
+                                <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            `;
+                            phoneContainer.appendChild(phoneGroup);
+                        } else {
+                            const phoneGroup = document.createElement('div');
+                            phoneGroup.className = 'input-group mb-2';
+                            phoneGroup.innerHTML = `
+                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            `;
+                            phoneContainer.appendChild(phoneGroup);
+                        }
+                        if (typeof updateEditRemoveButtons === 'function') {
+                            updateEditRemoveButtons();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading phones:', error);
+                        if (customerPhone) {
+                            const phoneGroup = document.createElement('div');
+                            phoneGroup.className = 'input-group mb-2';
+                            phoneGroup.innerHTML = `
+                                <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            `;
+                            phoneContainer.appendChild(phoneGroup);
+                        }
+                    });
+            }
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // استخدام الكود الموجود بالفعل
+        const editCustomerModal = document.getElementById('editCustomerModal');
+        if (editCustomerModal) {
+            const idInput = document.getElementById('editCustomerId');
+            const nameInput = document.getElementById('editCustomerName');
+            const addressInput = document.getElementById('editCustomerAddress');
+            const regionInput = document.getElementById('editCustomerRegionId');
+            const balanceInput = document.getElementById('editCustomerBalance');
+            const phoneContainer = document.getElementById('editPhoneNumbersContainer');
+            
+            if (idInput) idInput.value = customerId;
+            if (nameInput) nameInput.value = customerName || '';
+            if (addressInput) addressInput.value = customerAddress;
+            if (regionInput) regionInput.value = customerRegionId;
+            if (balanceInput) balanceInput.value = customerBalance;
+            
+            // تحميل أرقام الهواتف (الكود الموجود بالفعل)
+            if (phoneContainer) {
+                phoneContainer.innerHTML = '';
+                fetch('?action=get_customer_phones&customer_id=' + customerId)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.phones && data.phones.length > 0) {
+                            data.phones.forEach(function(phone, index) {
+                                const phoneGroup = document.createElement('div');
+                                phoneGroup.className = 'input-group mb-2';
+                                phoneGroup.innerHTML = `
+                                    <input type="text" class="form-control phone-input" name="phones[]" value="${phone}" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                `;
+                                phoneContainer.appendChild(phoneGroup);
+                            });
+                        } else if (customerPhone) {
+                            const phoneGroup = document.createElement('div');
+                            phoneGroup.className = 'input-group mb-2';
+                            phoneGroup.innerHTML = `
+                                <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            `;
+                            phoneContainer.appendChild(phoneGroup);
+                        } else {
+                            const phoneGroup = document.createElement('div');
+                            phoneGroup.className = 'input-group mb-2';
+                            phoneGroup.innerHTML = `
+                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            `;
+                            phoneContainer.appendChild(phoneGroup);
+                        }
+                        if (typeof updateEditRemoveButtons === 'function') {
+                            updateEditRemoveButtons();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading phones:', error);
+                        if (customerPhone) {
+                            const phoneGroup = document.createElement('div');
+                            phoneGroup.className = 'input-group mb-2';
+                            phoneGroup.innerHTML = `
+                                <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            `;
+                            phoneContainer.appendChild(phoneGroup);
+                        }
+                        if (typeof updateEditRemoveButtons === 'function') {
+                            updateEditRemoveButtons();
+                        }
+                    });
+            }
+            
+            try {
+                const modal = bootstrap.Modal.getOrCreateInstance(editCustomerModal);
+                modal.show();
+            } catch (err) {
+                console.error('Error showing modal:', err);
+                const modal = new bootstrap.Modal(editCustomerModal);
+                modal.show();
+            }
+        }
+    }
+}
+
+// دالة إغلاق Card تعديل عميل
+function closeEditCustomerCard() {
+    const card = document.getElementById('editCustomerCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+// دالة إضافة منطقة من Card (للموبايل)
+function showAddRegionFromCustomerCard() {
+    if (isMobile()) {
+        // على الموبايل، يمكن فتح Modal صغير أو استخدام prompt
+        const regionName = prompt('أدخل اسم المنطقة:');
+        if (regionName && regionName.trim()) {
+            const formData = new FormData();
+            formData.append('action', 'add_region_ajax');
+            formData.append('name', regionName.trim());
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.success) {
+                    alert('تم إضافة المنطقة بنجاح');
+                    location.reload();
+                } else {
+                    alert(data && data.message ? data.message : 'حدث خطأ أثناء إضافة المنطقة');
+                }
+            })
+            .catch(error => {
+                console.error('Error adding region:', error);
+                alert('حدث خطأ أثناء الاتصال بالخادم');
+            });
+        }
+    } else {
+        const modal = document.getElementById('addRegionFromCustomerModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+// ========== نهاية دوال Modal/Card Dual System ==========
 </script>
 
 <!-- Customer Export Script -->
