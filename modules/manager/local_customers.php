@@ -1781,7 +1781,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 
 <!-- Modal إضافة عميل محلي جديد -->
 <div class="modal fade" id="addLocalCustomerModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">إضافة عميل محلي جديد</h5>
@@ -1869,7 +1869,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 
 <!-- Modal سجل مشتريات العميل المحلي -->
 <div class="modal fade" id="localCustomerPurchaseHistoryModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title">
@@ -1975,7 +1975,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 
 <!-- Modal إرجاع منتجات العميل المحلي -->
 <div class="modal fade" id="localCustomerReturnModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content shadow-lg">
             <div class="modal-header bg-warning text-dark border-bottom border-warning">
                 <h5 class="modal-title d-flex align-items-center">
@@ -3711,7 +3711,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Modal تعديل عميل محلي -->
 <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
 <div class="modal fade" id="editLocalCustomerModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">تعديل بيانات العميل المحلي</h5>
@@ -3787,7 +3787,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Modal إضافة منطقة جديدة (من نموذج العميل المحلي) -->
 <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
 <div class="modal fade" id="addRegionFromLocalCustomerModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">إضافة منطقة جديدة</h5>
@@ -3817,7 +3817,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Modal تصدير العملاء المحددين -->
 <?php if (in_array($currentRole, ['manager', 'developer', 'accountant'], true)): ?>
 <div class="modal fade" id="customerExportModal" tabindex="-1" aria-hidden="true" data-section="local">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
                 <h5 class="modal-title">
@@ -3964,7 +3964,7 @@ window.CUSTOMER_EXPORT_CONFIG = {
 
 <!-- Modal استيراد العملاء المحليين من CSV -->
 <div class="modal fade" id="importLocalCustomersModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -4331,6 +4331,241 @@ window.CUSTOMER_EXPORT_CONFIG = {
     }
     
     #collectPaymentModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body {
+        overflow-y: visible !important;
+        max-height: none !important;
+    }
+}
+
+/* ===== تنسيقات جميع النماذج الأخرى - نفس أبعاد نموذج تحصيل من مندوب ===== */
+/* قائمة النماذج: addLocalCustomerModal, localCustomerPurchaseHistoryModal, localCustomerReturnModal, 
+   editLocalCustomerModal, addRegionFromLocalCustomerModal, customerExportModal, importLocalCustomersModal, 
+   viewLocationModal, deleteLocalCustomerModal */
+
+@media (min-width: 769px) {
+    #addLocalCustomerModal .modal-dialog.modal-dialog-centered,
+    #localCustomerPurchaseHistoryModal .modal-dialog.modal-dialog-centered,
+    #localCustomerReturnModal .modal-dialog.modal-dialog-centered,
+    #editLocalCustomerModal .modal-dialog.modal-dialog-centered,
+    #addRegionFromLocalCustomerModal .modal-dialog.modal-dialog-centered,
+    #customerExportModal .modal-dialog.modal-dialog-centered,
+    #importLocalCustomersModal .modal-dialog.modal-dialog-centered,
+    #viewLocationModal .modal-dialog.modal-dialog-centered,
+    #deleteLocalCustomerModal .modal-dialog.modal-dialog-centered {
+        margin: 0.5rem auto;
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 1rem);
+    }
+
+    #addLocalCustomerModal .modal-content,
+    #localCustomerPurchaseHistoryModal .modal-content,
+    #localCustomerReturnModal .modal-content,
+    #editLocalCustomerModal .modal-content,
+    #addRegionFromLocalCustomerModal .modal-content,
+    #customerExportModal .modal-content,
+    #importLocalCustomersModal .modal-content,
+    #viewLocationModal .modal-content,
+    #deleteLocalCustomerModal .modal-content {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    /* إصلاح المساحة البيضاء - منع modal-body من التمدد */
+    #addLocalCustomerModal .modal-body,
+    #localCustomerPurchaseHistoryModal .modal-body,
+    #localCustomerReturnModal .modal-body,
+    #editLocalCustomerModal .modal-body,
+    #addRegionFromLocalCustomerModal .modal-body,
+    #customerExportModal .modal-body,
+    #importLocalCustomersModal .modal-body,
+    #viewLocationModal .modal-body,
+    #deleteLocalCustomerModal .modal-body {
+        flex: 0 1 auto !important;
+        flex-grow: 0 !important;
+        flex-shrink: 1 !important;
+        flex-basis: auto !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding-bottom: 1rem !important;
+        margin-bottom: 0 !important;
+    }
+}
+
+/* قواعد عامة للـ header والـ footer */
+#addLocalCustomerModal .modal-header,
+#localCustomerPurchaseHistoryModal .modal-header,
+#localCustomerReturnModal .modal-header,
+#editLocalCustomerModal .modal-header,
+#addRegionFromLocalCustomerModal .modal-header,
+#customerExportModal .modal-header,
+#importLocalCustomersModal .modal-header,
+#viewLocationModal .modal-header,
+#deleteLocalCustomerModal .modal-header {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+}
+
+#addLocalCustomerModal .modal-footer,
+#localCustomerPurchaseHistoryModal .modal-footer,
+#localCustomerReturnModal .modal-footer,
+#editLocalCustomerModal .modal-footer,
+#addRegionFromLocalCustomerModal .modal-footer,
+#customerExportModal .modal-footer,
+#importLocalCustomersModal .modal-footer,
+#viewLocationModal .modal-footer,
+#deleteLocalCustomerModal .modal-footer {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-top: 1px solid #dee2e6 !important;
+}
+
+/* padding للـ header والـ footer على الشاشات الكبيرة فقط */
+@media (min-width: 769px) {
+    #addLocalCustomerModal .modal-footer,
+    #localCustomerPurchaseHistoryModal .modal-footer,
+    #localCustomerReturnModal .modal-footer,
+    #editLocalCustomerModal .modal-footer,
+    #addRegionFromLocalCustomerModal .modal-footer,
+    #customerExportModal .modal-footer,
+    #importLocalCustomersModal .modal-footer,
+    #viewLocationModal .modal-footer,
+    #deleteLocalCustomerModal .modal-footer {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+}
+
+/* إزالة أي pseudo-elements قد تسبب مساحة فارغة */
+#addLocalCustomerModal .modal-content::after,
+#addLocalCustomerModal .modal-content::before,
+#localCustomerPurchaseHistoryModal .modal-content::after,
+#localCustomerPurchaseHistoryModal .modal-content::before,
+#localCustomerReturnModal .modal-content::after,
+#localCustomerReturnModal .modal-content::before,
+#editLocalCustomerModal .modal-content::after,
+#editLocalCustomerModal .modal-content::before,
+#addRegionFromLocalCustomerModal .modal-content::after,
+#addRegionFromLocalCustomerModal .modal-content::before,
+#customerExportModal .modal-content::after,
+#customerExportModal .modal-content::before,
+#importLocalCustomersModal .modal-content::after,
+#importLocalCustomersModal .modal-content::before,
+#viewLocationModal .modal-content::after,
+#viewLocationModal .modal-content::before,
+#deleteLocalCustomerModal .modal-content::after,
+#deleteLocalCustomerModal .modal-content::before {
+    display: none !important;
+    content: none !important;
+}
+
+/* إصلاح خاص لـ modal-dialog-scrollable (للشاشات الكبيرة فقط) */
+@media (min-width: 769px) {
+    #addLocalCustomerModal .modal-dialog.modal-dialog-scrollable .modal-content,
+    #localCustomerPurchaseHistoryModal .modal-dialog.modal-dialog-scrollable .modal-content,
+    #localCustomerReturnModal .modal-dialog.modal-dialog-scrollable .modal-content,
+    #editLocalCustomerModal .modal-dialog.modal-dialog-scrollable .modal-content,
+    #customerExportModal .modal-dialog.modal-dialog-scrollable .modal-content,
+    #importLocalCustomersModal .modal-dialog.modal-dialog-scrollable .modal-content,
+    #viewLocationModal .modal-dialog.modal-dialog-scrollable .modal-content,
+    #deleteLocalCustomerModal .modal-dialog.modal-dialog-scrollable .modal-content {
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    #addLocalCustomerModal .modal-dialog.modal-dialog-scrollable .modal-body,
+    #localCustomerPurchaseHistoryModal .modal-dialog.modal-dialog-scrollable .modal-body,
+    #localCustomerReturnModal .modal-dialog.modal-dialog-scrollable .modal-body,
+    #editLocalCustomerModal .modal-dialog.modal-dialog-scrollable .modal-body,
+    #customerExportModal .modal-dialog.modal-dialog-scrollable .modal-body,
+    #importLocalCustomersModal .modal-dialog.modal-dialog-scrollable .modal-body,
+    #viewLocationModal .modal-dialog.modal-dialog-scrollable .modal-body,
+    #deleteLocalCustomerModal .modal-dialog.modal-dialog-scrollable .modal-body {
+        flex: 0 1 auto !important;
+        overflow-y: auto !important;
+        max-height: calc(100vh - 250px) !important;
+    }
+}
+
+/* تنسيقات للشاشات الصغيرة */
+@media (max-width: 768px) {
+    #addLocalCustomerModal .modal-dialog,
+    #localCustomerPurchaseHistoryModal .modal-dialog,
+    #localCustomerReturnModal .modal-dialog,
+    #editLocalCustomerModal .modal-dialog,
+    #addRegionFromLocalCustomerModal .modal-dialog,
+    #customerExportModal .modal-dialog,
+    #importLocalCustomersModal .modal-dialog,
+    #viewLocationModal .modal-dialog,
+    #deleteLocalCustomerModal .modal-dialog {
+        margin: 0.5rem !important;
+        max-width: calc(100% - 1rem) !important;
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
+    }
+    
+    #addLocalCustomerModal .modal-content,
+    #localCustomerPurchaseHistoryModal .modal-content,
+    #localCustomerReturnModal .modal-content,
+    #editLocalCustomerModal .modal-content,
+    #addRegionFromLocalCustomerModal .modal-content,
+    #customerExportModal .modal-content,
+    #importLocalCustomersModal .modal-content,
+    #viewLocationModal .modal-content,
+    #deleteLocalCustomerModal .modal-content {
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
+    }
+    
+    #addLocalCustomerModal .modal-body,
+    #localCustomerPurchaseHistoryModal .modal-body,
+    #localCustomerReturnModal .modal-body,
+    #editLocalCustomerModal .modal-body,
+    #addRegionFromLocalCustomerModal .modal-body,
+    #customerExportModal .modal-body,
+    #importLocalCustomersModal .modal-body,
+    #viewLocationModal .modal-body,
+    #deleteLocalCustomerModal .modal-body {
+        flex: 0 1 auto !important;
+        flex-grow: 0 !important;
+        padding-bottom: 1rem !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow-y: visible !important;
+    }
+    
+    #addLocalCustomerModal .modal-footer,
+    #localCustomerPurchaseHistoryModal .modal-footer,
+    #localCustomerReturnModal .modal-footer,
+    #editLocalCustomerModal .modal-footer,
+    #addRegionFromLocalCustomerModal .modal-footer,
+    #customerExportModal .modal-footer,
+    #importLocalCustomersModal .modal-footer,
+    #viewLocationModal .modal-footer,
+    #deleteLocalCustomerModal .modal-footer {
+        flex-shrink: 0 !important;
+        flex-grow: 0 !important;
+        margin-top: 0 !important;
+        padding-top: 1rem !important;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    
+    #addLocalCustomerModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
+    #localCustomerPurchaseHistoryModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
+    #localCustomerReturnModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
+    #editLocalCustomerModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
+    #addRegionFromLocalCustomerModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
+    #customerExportModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
+    #importLocalCustomersModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
+    #viewLocationModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
+    #deleteLocalCustomerModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body {
         overflow-y: visible !important;
         max-height: none !important;
     }
