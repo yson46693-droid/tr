@@ -938,8 +938,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// إيقاف التحديث عند مغادرة الصفحة
-window.addEventListener('beforeunload', function() {
+// إيقاف التحديث عند مغادرة الصفحة - استخدام pagehide لإعادة تفعيل bfcache
+window.addEventListener('pagehide', function() {
     if (notificationCheckInterval) {
         clearInterval(notificationCheckInterval);
     }

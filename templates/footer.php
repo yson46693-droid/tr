@@ -439,10 +439,11 @@ if (!defined('ACCESS_ALLOWED')) {
         // تنفيذ أول مرة بعد 5 ثواني
         setTimeout(executeUnifiedPolling, 5000);
         
-        // تنظيف عند مغادرة الصفحة
-        window.addEventListener('beforeunload', () => {
+        // تنظيف عند مغادرة الصفحة - استخدام pagehide بدلاً من beforeunload لإعادة تفعيل bfcache
+        window.addEventListener('pagehide', () => {
             if (unifiedPollInterval) {
                 clearInterval(unifiedPollInterval);
+                unifiedPollInterval = null;
             }
             if (navigator.sendBeacon) {
                 const params = getPollingParams();
@@ -450,10 +451,20 @@ if (!defined('ACCESS_ALLOWED')) {
             }
         });
         
-        // تحديث عند العودة للصفحة
+        // استخدام visibilitychange لإيقاف/استئناف polling عند إخفاء/إظهار الصفحة
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-                setTimeout(executeUnifiedPolling, 1000);
+            if (document.hidden) {
+                // إيقاف polling مؤقتاً عند إخفاء الصفحة
+                if (unifiedPollInterval) {
+                    clearInterval(unifiedPollInterval);
+                    unifiedPollInterval = null;
+                }
+            } else {
+                // استئناف polling عند إظهار الصفحة
+                if (!unifiedPollInterval) {
+                    unifiedPollInterval = setInterval(executeUnifiedPolling, POLLING_INTERVAL);
+                    setTimeout(executeUnifiedPolling, 1000);
+                }
             }
         });
         
@@ -510,26 +521,25 @@ if (!defined('ACCESS_ALLOWED')) {
     ?>
     <!-- Performance: Load jQuery with defer for better performance -->
     <?php if ($isMobile): ?>
-    <!-- Mobile: تحميل jQuery بشكل متأخر بعد تحميل الصفحة -->
+    <!-- Mobile: تحميل jQuery بعد DOMContentLoaded لتحسين الأداء -->
     <script>
-        // تحميل jQuery بعد تحميل الصفحة على الموبايل
-        window.addEventListener('load', function() {
-            setTimeout(function() {
-                const script = document.createElement('script');
-                script.src = 'https://code.jquery.com/jquery-3.7.0.min.js';
-                script.crossOrigin = 'anonymous';
-                script.defer = true;
-                script.onload = function() {
-                    // التأكد من أن jQuery متاح عالمياً
-                    if (typeof window.jQuery === 'undefined') {
-                        window.jQuery = typeof jQuery !== 'undefined' ? jQuery : (typeof $ !== 'undefined' ? $ : null);
-                    }
-                    if (typeof window.$ === 'undefined') {
-                        window.$ = typeof $ !== 'undefined' ? $ : (typeof jQuery !== 'undefined' ? jQuery : null);
-                    }
-                };
-                document.body.appendChild(script);
-            }, 500); // بعد 500ms من تحميل الصفحة
+        // تحميل jQuery بعد DOMContentLoaded على الموبايل (أسرع من load event)
+        document.addEventListener('DOMContentLoaded', function() {
+            const script = document.createElement('script');
+            script.src = 'https://code.jquery.com/jquery-3.7.0.min.js';
+            script.crossOrigin = 'anonymous';
+            script.async = true; // استخدام async بدلاً من defer
+            script.onload = function() {
+                // التأكد من أن jQuery متاح عالمياً
+                if (typeof window.jQuery === 'undefined') {
+                    window.jQuery = typeof jQuery !== 'undefined' ? jQuery : (typeof $ !== 'undefined' ? $ : null);
+                }
+                if (typeof window.$ === 'undefined') {
+                    window.$ = typeof $ !== 'undefined' ? $ : (typeof jQuery !== 'undefined' ? jQuery : null);
+                }
+                document.dispatchEvent(new CustomEvent('jqueryLoaded'));
+            };
+            document.head.appendChild(script);
         });
     </script>
     <?php else: ?>
@@ -956,8 +966,8 @@ if (!defined('ACCESS_ALLOWED')) {
                 }
             });
             
-            // تنظيف عند إغلاق الصفحة
-            window.addEventListener('beforeunload', function() {
+            // تنظيف عند إغلاق الصفحة - استخدام pagehide لإعادة تفعيل bfcache
+            window.addEventListener('pagehide', function() {
                 if (updateCheckInterval) {
                     clearInterval(updateCheckInterval);
                     updateCheckInterval = null;
@@ -1416,8 +1426,8 @@ if (!defined('ACCESS_ALLOWED')) {
             window.__lastCheckedUrl = currentUrl;
         }, 1000);
         
-        // تنظيف عند إغلاق الصفحة
-        window.addEventListener('beforeunload', function() {
+        // تنظيف عند إغلاق الصفحة - استخدام pagehide لإعادة تفعيل bfcache
+        window.addEventListener('pagehide', function() {
             if (urlCheckInterval) {
                 clearInterval(urlCheckInterval);
             }

@@ -722,10 +722,28 @@ $lang = $translations;
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.php">
     
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="<?php echo ASSETS_URL; ?>css/style.css" rel="stylesheet">
-    <link href="<?php echo ASSETS_URL; ?>css/rtl.css" rel="stylesheet">
+    <!-- Preconnect to CDNs -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    
+    <!-- CSS Async Loader Script (must be before async CSS) -->
+    <script>
+        !function(e){"use strict";var t=function(t,n,o){var i,r=e.document,a=r.createElement("link");if(n)i=n;else{var l=(r.body||r.getElementsByTagName("head")[0]).childNodes;i=l[l.length-1]}var d=r.styleSheets;a.rel="stylesheet",a.href=t,a.media="only x",function e(t){if(r.body)return t();setTimeout(function(){e(t)})}(function(){i.parentNode.insertBefore(a,n?i:i.nextSibling)});var f=function(e){for(var t=a.href,n=d.length;n--;)if(d[n].href===t)return e();setTimeout(function(){f(e)})};return a.addEventListener&&a.addEventListener("load",function(){this.media=o||"all"}),a.onloadcssdefined=f,f(function(){a.media!==o&&(a.media=o||"all")}),a};"undefined"!=typeof exports?exports.loadCSS=t:e.loadCSS=t}("undefined"!=typeof global?global:this);
+    </script>
+    
+    <!-- Bootstrap 5 CSS - Async loading for better performance -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'" crossorigin="anonymous">
+    <noscript><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"></noscript>
+    
+    <!-- Bootstrap Icons - Async loading -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'" crossorigin="anonymous">
+    <noscript><link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" crossorigin="anonymous"></noscript>
+    
+    <!-- Custom CSS -->
+    <link href="<?php echo ASSETS_URL; ?>css/style.css" rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="<?php echo ASSETS_URL; ?>css/style.css" rel="stylesheet"></noscript>
+    <link href="<?php echo ASSETS_URL; ?>css/rtl.css" rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="<?php echo ASSETS_URL; ?>css/rtl.css" rel="stylesheet"></noscript>
     
     <!-- PWA Splash Screen CSS -->
     <style>
@@ -1086,7 +1104,7 @@ $lang = $translations;
     </div>
     
     <!-- Bootstrap 5 JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer></script>
     <!-- WebAuthn JS -->
     <script src="<?php echo ASSETS_URL; ?>js/webauthn.js?v=<?php echo time(); ?>"></script>
     <!-- Custom JS -->

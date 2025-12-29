@@ -350,8 +350,8 @@
             document.head.appendChild(style);
         }
 
-        // إضافة event listener للتنظيف عند إعادة تحميل الصفحة
-        window.addEventListener('beforeunload', function() {
+        // إضافة event listener للتنظيف عند إعادة تحميل الصفحة - استخدام pagehide لإعادة تفعيل bfcache
+        window.addEventListener('pagehide', function() {
             pageCache.clear();
         });
     }

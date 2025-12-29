@@ -317,7 +317,8 @@
       }, 250);
     });
 
-    window.addEventListener('beforeunload', () => {
+    // استخدام pagehide بدلاً من beforeunload لإعادة تفعيل bfcache
+    window.addEventListener('pagehide', () => {
       if (state.pendingFetchTimeout) {
         window.clearTimeout(state.pendingFetchTimeout);
         state.pendingFetchTimeout = null;
@@ -2004,7 +2005,8 @@
 
   document.addEventListener('DOMContentLoaded', init);
 
-  window.addEventListener('beforeunload', () => {
+  // استخدام pagehide بدلاً من beforeunload لإعادة تفعيل bfcache
+  window.addEventListener('pagehide', () => {
     if (state.pendingFetchTimeout) {
       window.clearTimeout(state.pendingFetchTimeout);
       state.pendingFetchTimeout = null;

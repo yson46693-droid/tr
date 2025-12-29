@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
+/* Google Fonts Cairo is now loaded via link tag in header.php for better performance */
 
 /* Hide footer in chat page */
 body:has(.chat-app) .footer,

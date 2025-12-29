@@ -666,16 +666,18 @@ function stopAutoRefresh() {
     }
 }
 
-    // إيقاف التحديث عند مغادرة الصفحة - مع معالجة Refresh
-window.addEventListener('beforeunload', function() {
+    // إيقاف التحديث عند مغادرة الصفحة - استخدام pagehide لإعادة تفعيل bfcache
+window.addEventListener('pagehide', function() {
     stopAutoRefresh();
     
-    // حفظ flag في sessionStorage أن المستخدم يقوم بـ Refresh
-    try {
-        sessionStorage.setItem('is_refreshing', 'true');
-        sessionStorage.setItem('refresh_timestamp', Date.now().toString());
-    } catch (e) {
-        // تجاهل إذا كان sessionStorage غير متاح
+    // حفظ flag في sessionStorage أن المستخدم يقوم بـ Refresh (إذا لم يكن من bfcache)
+    if (!event.persisted) {
+        try {
+            sessionStorage.setItem('is_refreshing', 'true');
+            sessionStorage.setItem('refresh_timestamp', Date.now().toString());
+        } catch (e) {
+            // تجاهل إذا كان sessionStorage غير متاح
+        }
     }
 });
 

@@ -294,6 +294,9 @@ if (ob_get_level() > 0) {
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link rel="preconnect" href="https://code.jquery.com" crossorigin>
     <link rel="dns-prefetch" href="https://code.jquery.com">
+    <!-- Google Fonts Preconnect -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     
     <!-- Performance: Preload Critical Resources - فقط على Desktop -->
     <?php if (!$isMobile): ?>
@@ -311,6 +314,11 @@ if (ob_get_level() > 0) {
     <link rel="dns-prefetch" href="https://code.jquery.com">
     <!-- Preload الخطوط المهمة على الموبايل -->
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/fonts/bootstrap-icons.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+    <!-- Preload Critical CSS on Mobile -->
+    <link rel="preload" href="<?php echo $assetsUrl; ?>css/homeline-dashboard.css?v=<?php echo $cacheVersion; ?>" as="style">
+    <link rel="preload" href="<?php echo $assetsUrl; ?>css/topbar.css?v=<?php echo $cacheVersion; ?>" as="style">
+    <!-- Preload Critical JS -->
+    <link rel="preload" href="<?php echo $assetsUrl; ?>js/main.js?v=<?php echo $cacheVersion; ?>" as="script">
     <?php endif; ?>
     
     <!-- Bootstrap 5 CSS - تحميل غير متزامن على الموبايل لتحسين الأداء -->
@@ -333,10 +341,21 @@ if (ob_get_level() > 0) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" crossorigin="anonymous">
     <?php endif; ?>
     
+    <!-- CSS Async Loader Script (must be before async CSS) -->
+    <script>
+        !function(e){"use strict";var t=function(t,n,o){var i,r=e.document,a=r.createElement("link");if(n)i=n;else{var l=(r.body||r.getElementsByTagName("head")[0]).childNodes;i=l[l.length-1]}var d=r.styleSheets;a.rel="stylesheet",a.href=t,a.media="only x",function e(t){if(r.body)return t();setTimeout(function(){e(t)})}(function(){i.parentNode.insertBefore(a,n?i:i.nextSibling)});var f=function(e){for(var t=a.href,n=d.length;n--;)if(d[n].href===t)return e();setTimeout(function(){f(e)})};return a.addEventListener&&a.addEventListener("load",function(){this.media=o||"all"}),a.onloadcssdefined=f,f(function(){a.media!==o&&(a.media=o||"all")}),a};"undefined"!=typeof exports?exports.loadCSS=t:e.loadCSS=t}("undefined"!=typeof global?global:this);
+    </script>
+    
+    <!-- Google Fonts - Cairo (for chat and other components) -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet"></noscript>
+    
     <!-- Custom CSS - Homeline Dashboard Design -->
     <!-- Critical CSS - تحميل مباشر (حرجة للتصيير الأولي) -->
-    <link href="<?php echo $assetsUrl; ?>css/homeline-dashboard.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
-    <link href="<?php echo $assetsUrl; ?>css/topbar.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
+    <link href="<?php echo $assetsUrl; ?>css/homeline-dashboard.css?v=<?php echo $cacheVersion; ?>" rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="<?php echo $assetsUrl; ?>css/homeline-dashboard.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
+    <link href="<?php echo $assetsUrl; ?>css/topbar.css?v=<?php echo $cacheVersion; ?>" rel="preload" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="<?php echo $assetsUrl; ?>css/topbar.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
     <?php if ($isMobile): ?>
     <!-- Mobile: تحميل responsive.css بشكل غير متزامن -->
     <link href="<?php echo $assetsUrl; ?>css/responsive.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
@@ -513,6 +532,20 @@ if (ob_get_level() > 0) {
     </script>
     
     <style>
+        /* Critical CSS - Above-the-fold styles */
+        body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background:#f8f9fa}
+        .dashboard-wrapper{display:flex;min-height:100vh;background:#f8f9fa}
+        .homeline-sidebar{position:fixed;top:0;left:0;width:260px;height:100vh;background:#fff;border-right:1px solid #e5e7eb;z-index:1000;overflow-y:auto}
+        .homeline-topbar{position:fixed;top:0;left:260px;right:0;height:64px;background:#fff;border-bottom:1px solid #e5e7eb;z-index:999;display:flex;align-items:center;padding:0 24px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+        [dir="rtl"] .homeline-topbar{left:0;right:260px}
+        .dashboard-main{flex:1;margin-left:260px;padding-top:64px}
+        [dir="rtl"] .dashboard-main{margin-left:0;margin-right:260px}
+        @media (max-width:768px){
+            .homeline-topbar{left:0!important;right:0!important;width:100%!important;height:56px;padding:0 8px}
+            .homeline-sidebar{transform:translateX(-100%);z-index:1050}
+            .dashboard-main{margin-left:0!important;margin-right:0!important}
+        }
+        
         /* منع Layout forced - إخفاء المحتوى حتى تحميل CSS */
         body:not(.css-loaded) {
             visibility: hidden;
@@ -582,13 +615,26 @@ if (ob_get_level() > 0) {
             font-family: 'bootstrap-icons';
             font-display: swap;
         }
-        
-        /* تطبيق font-display: swap على جميع الخطوط المخصصة */
-        * {
-            font-display: swap;
-        }
     </style>
     <script>
+        // CSS Async Loader - تحميل CSS بشكل غير متزامن
+        (function() {
+            function loadCSS(href) {
+                var link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = href;
+                var head = document.getElementsByTagName('head')[0];
+                head.appendChild(link);
+            }
+            // دالة لتحويل preload إلى stylesheet
+            window.loadCSSAsync = function(href) {
+                if (document.querySelector('link[href="' + href + '"]')) {
+                    return;
+                }
+                loadCSS(href);
+            };
+        })();
+        
         window.APP_CONFIG = window.APP_CONFIG || {};
         window.APP_CONFIG.passwordMinLength = <?php echo json_encode(getPasswordMinLength(), JSON_UNESCAPED_UNICODE); ?>;
         
@@ -1326,8 +1372,8 @@ if (ob_get_level() > 0) {
                 }
             });
             
-            // تنظيف عند إغلاق الصفحة
-            window.addEventListener('beforeunload', function() {
+            // تنظيف عند إغلاق الصفحة - استخدام pagehide لإعادة تفعيل bfcache
+            window.addEventListener('pagehide', function() {
                 if (updateCheckInterval) {
                     clearInterval(updateCheckInterval);
                 }
@@ -2807,15 +2853,17 @@ if (ob_get_level() > 0) {
     (function() {
         'use strict';
         
-        // منع Error Code: -2 عند Refresh
-        window.addEventListener('beforeunload', function() {
-            // حفظ flag أن المستخدم يقوم بـ Refresh
-            try {
-                sessionStorage.setItem('is_refreshing', 'true');
-                sessionStorage.setItem('refresh_timestamp', Date.now().toString());
-                sessionStorage.setItem('refresh_url', window.location.href);
-            } catch (e) {
-                // تجاهل إذا كان sessionStorage غير متاح
+        // منع Error Code: -2 عند Refresh - استخدام pagehide لإعادة تفعيل bfcache
+        window.addEventListener('pagehide', function(event) {
+            // حفظ flag أن المستخدم يقوم بـ Refresh (إذا لم يكن من bfcache)
+            if (!event.persisted) {
+                try {
+                    sessionStorage.setItem('is_refreshing', 'true');
+                    sessionStorage.setItem('refresh_timestamp', Date.now().toString());
+                    sessionStorage.setItem('refresh_url', window.location.href);
+                } catch (e) {
+                    // تجاهل إذا كان sessionStorage غير متاح
+                }
             }
         });
         
