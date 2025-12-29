@@ -1362,6 +1362,9 @@ error_log('Local customers summary - total_count: ' . $summaryTotalCustomers . '
 error_log('summaryTotalDebt type: ' . gettype($summaryTotalDebt) . ', value: ' . var_export($summaryTotalDebt, true));
 ?>
 
+<!-- Responsive Modals CSS - يجب أن يكون في البداية قبل أي محتوى -->
+<link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
+
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
     <h2 class="mb-2 mb-md-0">
         <i class="bi bi-people me-2"></i>العملاء المحليين
@@ -3959,9 +3962,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
     </div>
 </div>
 </script>
-
-<!-- Responsive Modals CSS -->
-<link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
 
 <style>
 /* تحسين جداول العملاء على الهواتف */

@@ -43,20 +43,20 @@
     }
 
     .modal-content {
-        max-height: 90vh;
-        border-radius: 12px;
-        overflow: hidden;
+        max-height: 90vh !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
     }
 
     .modal-body {
-        overflow-y: auto;
-        max-height: calc(90vh - 120px); /* header + footer */
-        padding: 1rem;
+        overflow-y: auto !important;
+        max-height: calc(90vh - 120px) !important; /* header + footer */
+        padding: 1rem !important;
     }
 
     .modal-header,
     .modal-footer {
-        padding: 0.75rem 1rem;
+        padding: 0.75rem 1rem !important;
     }
 }
 
@@ -69,13 +69,13 @@
     }
 
     .modal-content {
-        max-height: 100vh;
-        border-radius: 0;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
     }
 
     .modal-body {
-        max-height: calc(100vh - 110px);
-        padding: 0.75rem;
+        max-height: calc(100vh - 110px) !important;
+        padding: 0.75rem !important;
     }
 }
 
