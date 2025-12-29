@@ -271,8 +271,16 @@ self.addEventListener('install', (event) => {
       }
 
       try {
-        const precache = await caches.open(PRECACHE_NAME);
-        const staticCache = await caches.open(STATIC_CACHE_NAME);
+        // محاولة فتح الكاش مع معالجة أفضل للأخطاء
+        let precache, staticCache;
+        try {
+          precache = await caches.open(PRECACHE_NAME);
+          staticCache = await caches.open(STATIC_CACHE_NAME);
+        } catch (openError) {
+          // إذا فشل فتح الكاش، تخطي التخزين المؤقت
+          console.warn('[SW] Failed to open cache storage:', openError.message);
+          return;
+        }
         
         // Cache precache assets
         const precachePromises = PRECACHE_ASSETS.map(async (asset) => {
@@ -280,9 +288,8 @@ self.addEventListener('install', (event) => {
             await precache.add(asset);
             console.log(`[SW] Precached: ${asset}`);
           } catch (error) {
-            if (error.message?.includes('CacheStorage') || error.message?.includes('open')) {
-              console.warn(`[SW] CacheStorage unavailable, skipping precache for ${asset}`);
-            } else {
+            // تجاهل أخطاء التخزين المؤقت بصمت
+            if (error.name !== 'TypeError' && error.name !== 'NetworkError') {
               console.warn(`[SW] Failed to precache ${asset}:`, error.message);
             }
           }
@@ -294,9 +301,8 @@ self.addEventListener('install', (event) => {
             await staticCache.add(asset);
             console.log(`[SW] Cached critical asset: ${asset}`);
           } catch (error) {
-            if (error.message?.includes('CacheStorage') || error.message?.includes('open')) {
-              console.warn(`[SW] CacheStorage unavailable, skipping critical asset: ${asset}`);
-            } else {
+            // تجاهل أخطاء التخزين المؤقت بصمت
+            if (error.name !== 'TypeError' && error.name !== 'NetworkError') {
               console.warn(`[SW] Failed to cache critical asset ${asset}:`, error.message);
             }
           }
@@ -306,11 +312,7 @@ self.addEventListener('install', (event) => {
         console.log('[SW] Precaching completed');
       } catch (error) {
         // If CacheStorage fails completely, continue without caching
-        if (error.message?.includes('CacheStorage') || error.message?.includes('open')) {
-          console.warn('[SW] CacheStorage unavailable - continuing without cache');
-        } else {
-          console.error('[SW] Install error:', error);
-        }
+        console.warn('[SW] Cache operation failed, continuing without cache:', error.message);
         // Don't fail installation - service worker can work without cache
       }
     })()

@@ -17,8 +17,7 @@ if (!defined('HEADER_INCLUDED')) {
 // ملاحظة: notifications تم إزالته من Feature-Policy لأنه غير مدعوم
 if (!headers_sent()) {
     header("Permissions-Policy: geolocation=(self), camera=(self), microphone=(self)");
-    // Feature-Policy كبديل للمتصفحات القديمة (بدون notifications)
-    header("Feature-Policy: geolocation 'self'; camera 'self'; microphone 'self'");
+    // تم إزالة Feature-Policy لأنه deprecated ويسبب تحذيرات في المتصفحات الحديثة
     
     // === Cache Control Headers - محسّن لـ bfcache (back/forward cache) ===
     // تم تعديلها للسماح بـ bfcache مع الحفاظ على تحديث البيانات
@@ -213,7 +212,7 @@ if (ob_get_level() > 0) {
     <meta name="viewport" content="<?php echo htmlspecialchars($viewportContent, ENT_QUOTES, 'UTF-8'); ?>">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta http-equiv="Permissions-Policy" content="geolocation=(self), camera=(self), microphone=(self)">
-    <meta http-equiv="Feature-Policy" content="geolocation 'self'; camera 'self'; microphone 'self'">
+    <!-- تم إزالة Feature-Policy meta tag لأنه deprecated -->
     <!-- Cache Control Meta Tags - محسّن لـ bfcache (back/forward cache) -->
     <!-- تم تعديلها للسماح بـ bfcache مع الحفاظ على تحديث البيانات -->
     <meta http-equiv="Cache-Control" content="private, max-age=0, must-revalidate">
@@ -341,8 +340,7 @@ if (ob_get_level() > 0) {
     
     <!-- Google Fonts - Cairo (for chat and other components) - محسّن مع font-display: swap -->
     <!-- Preconnect تم نقله للأعلى مع باقي preconnects (السطر 298-299) -->
-    <!-- Preload font file مباشرة لتحسين الأداء -->
-    <link rel="preload" href="https://fonts.gstatic.com/s/cairo/v28/SLXGc1nY6HkvangtZmpQdkhzfH5lkSs2SgRjCAGMQ1z0hGA-W1ToLQ-HmkA.ttf" as="font" type="font/ttf" crossorigin="anonymous">
+    <!-- تم إزالة preload للخط لأن الرابط المباشر غير متاح - سيتم تحميل الخط عبر CSS -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet"></noscript>
     
