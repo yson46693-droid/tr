@@ -44,8 +44,9 @@ const CRITICAL_ASSETS = [
   'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/fonts/bootstrap-icons.woff2'
 ];
 
-// Network timeout (10 seconds)
-const NETWORK_TIMEOUT = 10000;
+// Network timeout (30 seconds for PHP pages, 10 seconds for static assets)
+const NETWORK_TIMEOUT = 30000;
+const STATIC_NETWORK_TIMEOUT = 10000;
 
 // ============================================
 // Helper Functions
@@ -111,13 +112,18 @@ function getApiErrorResponse() {
  * Network request with timeout
  */
 function fetchWithTimeout(request, timeout = NETWORK_TIMEOUT) {
+  // استخدام timeout أطول لصفحات PHP
+  const url = new URL(request.url);
+  const isPhpPage = url.pathname.endsWith('.php');
+  const actualTimeout = isPhpPage ? NETWORK_TIMEOUT : STATIC_NETWORK_TIMEOUT;
+  
   return Promise.race([
     fetch(request, {
       cache: 'no-store',
       credentials: 'same-origin'
     }),
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Request timeout')), timeout)
+      setTimeout(() => reject(new Error('Request timeout')), actualTimeout)
     )
   ]);
 }
@@ -191,8 +197,8 @@ async function networkFirst(request, cacheName, isNavigation = false) {
     return response;
   } catch (error) {
     // Network failed, try cache
-    if (isNetworkError(error)) {
-      // Silently handle network errors - don't log to console
+    if (isNetworkError(error) && !error.message.includes('timeout')) {
+      // فقط للأخطاء الحقيقية في الشبكة (ليس timeout)
       
       // Only try cache if CacheStorage is available
       if ('caches' in self) {
@@ -209,13 +215,14 @@ async function networkFirst(request, cacheName, isNavigation = false) {
         }
       }
       
-      // No cache, return offline page for navigation requests
+      // No cache, return offline page for navigation requests (فقط للأخطاء الحقيقية)
       if (isNavigation) {
         return await getOfflinePage();
       }
     }
     
-    // Re-throw non-network errors
+    // للأخطاء الأخرى (مثل timeout)، نترك البrowser يتعامل معها
+    // Re-throw non-network errors or timeout errors
     throw error;
   }
 }
@@ -226,18 +233,24 @@ async function networkFirst(request, cacheName, isNavigation = false) {
 async function networkOnly(request, isNavigation = false) {
   try {
     const response = await fetchWithTimeout(request);
+    // التحقق من أن الاستجابة صالحة
+    if (!response.ok && response.status >= 500) {
+      // أخطاء الخادم (500+) - لا نعتبرها network errors
+      // نعيد الاستجابة للبrowser للتعامل معها
+      return response;
+    }
     return response;
   } catch (error) {
-    if (isNetworkError(error)) {
-      // Silently handle network errors - don't log to console
-      
-      // Return offline page for navigation requests
+    // فقط للأخطاء الحقيقية في الشبكة، نعيد offline page
+    // timeout أو أخطاء أخرى نتركها للبrowser
+    if (isNetworkError(error) && !error.message.includes('timeout')) {
       if (isNavigation) {
         return await getOfflinePage();
       }
     }
     
-    // Re-throw non-network errors
+    // للأخطاء الأخرى (مثل timeout)، نترك البrowser يتعامل معها
+    // نعيد error للبrowser بدلاً من offline page
     throw error;
   }
 }
@@ -405,6 +418,18 @@ self.addEventListener('fetch', (event) => {
   // Handle PHP Pages - Network Only (No Caching)
   // ============================================
   if (url.pathname.endsWith('.php')) {
+    // استثناء index.php من service worker interception
+    // السماح للبrowser بالتعامل معه مباشرة لتجنب مشاكل الاتصال
+    const isIndexPage = url.pathname === '/index.php' || 
+                        url.pathname.endsWith('/index.php') ||
+                        url.pathname === '/' ||
+                        (url.pathname === '' && url.search === '');
+    
+    if (isIndexPage) {
+      // لا نعترض index.php - نتركه للبrowser
+      return;
+    }
+    
     const isNavigation = request.mode === 'navigate';
     event.respondWith(networkOnly(request, isNavigation));
     return;
