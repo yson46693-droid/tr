@@ -751,21 +751,53 @@ document.addEventListener('DOMContentLoaded', function() {
         clearAllBtn.addEventListener('click', async function(e) {
             e.preventDefault();
             e.stopPropagation();
+            e.stopImmediatePropagation();
+            
+            // منع إغلاق الـ dropdown
+            const dropdown = document.querySelector('.notifications-dropdown');
+            if (dropdown) {
+                const bsDropdown = bootstrap.Dropdown.getInstance(dropdown);
+                if (bsDropdown) {
+                    // إبقاء الـ dropdown مفتوحاً
+                    dropdown.classList.add('show');
+                }
+            }
             
             if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
                 return;
             }
             
             try {
+                // إظهار loading
+                const notificationsList = document.getElementById('notificationsList');
+                if (notificationsList) {
+                    notificationsList.innerHTML = '<small class="text-muted">جاري حذف الإشعارات...</small>';
+                }
+                
                 await deleteAllNotifications();
+                
+                // تحديث القائمة
+                if (notificationsList) {
+                    notificationsList.innerHTML = '<small class="text-muted">لا توجد إشعارات</small>';
+                }
+                
+                // تحديث العداد
+                await updateNotificationBadge(0);
+                
                 // إعادة تحميل الإشعارات بعد الحذف
                 if (typeof loadNotifications === 'function') {
                     await loadNotifications();
                 }
             } catch (error) {
+                console.error('Error deleting all notifications:', error);
                 alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
+                
+                // إعادة تحميل الإشعارات في حالة الخطأ
+                if (typeof loadNotifications === 'function') {
+                    await loadNotifications();
+                }
             }
-        });
+        }, { capture: true });
     }
 });
 
