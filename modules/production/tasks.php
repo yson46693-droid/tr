@@ -2148,36 +2148,21 @@ function tasksHtml(string $value): string
     //     // كود معطل لمنع إعادة التوجيه التلقائية
     // });
     
-    // عند الضغط على F5 أو CTRL+R، احفظ flag قبل reload
-    window.addEventListener('beforeunload', function() {
-        try {
-            sessionStorage.setItem(FORCE_RELOAD_KEY, 'true');
-        } catch (e) {
-            // تجاهل
+    // عند الضغط على F5 أو CTRL+R، احفظ flag قبل reload - استخدام pagehide لإعادة تفعيل bfcache
+    window.addEventListener('pagehide', function(event) {
+        // فقط إذا لم يكن من bfcache (أي refresh حقيقي)
+        if (!event.persisted) {
+            try {
+                sessionStorage.setItem(FORCE_RELOAD_KEY, 'true');
+            } catch (e) {
+                // تجاهل
+            }
         }
     });
     
-    // إضافة meta tags لمنع cache
-    if (!document.querySelector('meta[http-equiv="Cache-Control"]')) {
-        const metaCache = document.createElement('meta');
-        metaCache.httpEquiv = 'Cache-Control';
-        metaCache.content = 'no-cache, no-store, must-revalidate';
-        document.head.appendChild(metaCache);
-    }
-    
-    if (!document.querySelector('meta[http-equiv="Pragma"]')) {
-        const metaPragma = document.createElement('meta');
-        metaPragma.httpEquiv = 'Pragma';
-        metaPragma.content = 'no-cache';
-        document.head.appendChild(metaPragma);
-    }
-    
-    if (!document.querySelector('meta[http-equiv="Expires"]')) {
-        const metaExpires = document.createElement('meta');
-        metaExpires.httpEquiv = 'Expires';
-        metaExpires.content = '0';
-        document.head.appendChild(metaExpires);
-    }
+    // إزالة meta tags التي تمنع bfcache - استخدام private بدلاً من no-store
+    // ملاحظة: تم إزالة هذه الـ meta tags لأنها تمنع bfcache
+    // يمكن استخدام Cache-Control: private في headers بدلاً منها
 })();
 </script>
 
@@ -2315,8 +2300,10 @@ function tasksHtml(string $value): string
         startAutoRefresh();
     }
     
-    // إيقاف التحديث عند مغادرة الصفحة
-    window.addEventListener('beforeunload', stopAutoRefresh);
+    // إيقاف التحديث عند مغادرة الصفحة - استخدام pagehide لإعادة تفعيل bfcache
+    window.addEventListener('pagehide', function(event) {
+        stopAutoRefresh();
+    });
     
     // إيقاف التحديث عندما تكون الصفحة غير مرئية (tab inactive)
     document.addEventListener('visibilitychange', function() {
@@ -2326,9 +2313,6 @@ function tasksHtml(string $value): string
             startAutoRefresh();
         }
     });
-    
-    // تنظيف عند إغلاق الصفحة
-    window.addEventListener('unload', stopAutoRefresh);
     
     // دالة للتعامل مع تحديثات المهام من unified polling system (إذا تم إضافتها لاحقاً)
     window.handleTasksUpdate = function() {

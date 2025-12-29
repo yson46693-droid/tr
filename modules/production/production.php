@@ -10361,25 +10361,51 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// تحذير عند محاولة مغادرة الصفحة مع وجود تغييرات
+// تحذير عند محاولة مغادرة الصفحة مع وجود تغييرات - استخدام pagehide لإعادة تفعيل bfcache
+// ملاحظة: beforeunload مطلوب للتحذير، لكن نستخدم pagehide للتنظيف
+let formModified = false;
+
+// التحقق من التعديلات عند تغيير الحقول
+document.addEventListener('change', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        formModified = true;
+    }
+});
+
+// استخدام pagehide للتنظيف (لا يمنع bfcache)
+window.addEventListener('pagehide', function(event) {
+    // تنظيف إذا لزم الأمر
+    if (!event.persisted) {
+        formModified = false;
+    }
+});
+
+// استخدام beforeunload فقط عند الحاجة للتحذير (يجب أن يكون محدوداً)
 window.addEventListener('beforeunload', function(e) {
+    if (!formModified) {
+        return undefined;
+    }
+    
     const forms = document.querySelectorAll('form[method="post"], form[method="POST"]');
-    let formModified = false;
+    let hasModifications = false;
     
     forms.forEach(function(form) {
-        // التحقق إذا تم تعديل أي حقل
         const inputs = form.querySelectorAll('input, textarea, select');
         inputs.forEach(function(input) {
             if (input.value !== input.defaultValue) {
-                formModified = true;
+                hasModifications = true;
             }
         });
     });
     
-    // لا تعرض تحذيرًا إذا لم يتم تعديل أي شيء
-    if (!formModified) {
+    if (!hasModifications) {
         return undefined;
     }
+    
+    // فقط إذا كان هناك تعديلات حقيقية
+    e.preventDefault();
+    e.returnValue = '';
+    return '';
 });
 
 // التحقق من رسالة الخطأ الخاصة بالطلب المكرر وتحديث الصفحة تلقائياً

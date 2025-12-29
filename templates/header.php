@@ -298,7 +298,7 @@ if (ob_get_level() > 0) {
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     
-    <!-- Performance: Preload Critical Resources - فقط على Desktop -->
+    <!-- Performance: Preload Critical Resources - محسّن لـ LCP -->
     <?php if (!$isMobile): ?>
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" as="style" crossorigin="anonymous">
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" as="style" crossorigin="anonymous">
@@ -306,18 +306,11 @@ if (ob_get_level() > 0) {
     <link rel="preload" href="<?php echo $assetsUrl; ?>css/topbar.css?v=<?php echo $cacheVersion; ?>" as="style">
     <link rel="preload" href="https://code.jquery.com/jquery-3.7.0.min.js" as="script" crossorigin="anonymous">
     <link rel="preload" href="<?php echo $assetsUrl; ?>js/main.js?v=<?php echo $cacheVersion; ?>" as="script">
-    <?php endif; ?>
-    
-    <!-- Performance: Resource Hints للموبايل -->
-    <?php if ($isMobile): ?>
-    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-    <link rel="dns-prefetch" href="https://code.jquery.com">
-    <!-- Preload الخطوط المهمة على الموبايل -->
+    <?php else: ?>
+    <!-- Mobile: Preload Critical Resources فقط -->
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/fonts/bootstrap-icons.woff2" as="font" type="font/woff2" crossorigin="anonymous">
-    <!-- Preload Critical CSS on Mobile -->
     <link rel="preload" href="<?php echo $assetsUrl; ?>css/homeline-dashboard.css?v=<?php echo $cacheVersion; ?>" as="style">
     <link rel="preload" href="<?php echo $assetsUrl; ?>css/topbar.css?v=<?php echo $cacheVersion; ?>" as="style">
-    <!-- Preload Critical JS -->
     <link rel="preload" href="<?php echo $assetsUrl; ?>js/main.js?v=<?php echo $cacheVersion; ?>" as="script">
     <?php endif; ?>
     
@@ -346,7 +339,8 @@ if (ob_get_level() > 0) {
         !function(e){"use strict";var t=function(t,n,o){var i,r=e.document,a=r.createElement("link");if(n)i=n;else{var l=(r.body||r.getElementsByTagName("head")[0]).childNodes;i=l[l.length-1]}var d=r.styleSheets;a.rel="stylesheet",a.href=t,a.media="only x",function e(t){if(r.body)return t();setTimeout(function(){e(t)})}(function(){i.parentNode.insertBefore(a,n?i:i.nextSibling)});var f=function(e){for(var t=a.href,n=d.length;n--;)if(d[n].href===t)return e();setTimeout(function(){f(e)})};return a.addEventListener&&a.addEventListener("load",function(){this.media=o||"all"}),a.onloadcssdefined=f,f(function(){a.media!==o&&(a.media=o||"all")}),a};"undefined"!=typeof exports?exports.loadCSS=t:e.loadCSS=t}("undefined"!=typeof global?global:this);
     </script>
     
-    <!-- Google Fonts - Cairo (for chat and other components) -->
+    <!-- Google Fonts - Cairo (for chat and other components) - محسّن مع font-display: swap -->
+    <!-- Preconnect تم نقله للأعلى مع باقي preconnects (السطر 298-299) -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet"></noscript>
     
@@ -614,6 +608,45 @@ if (ob_get_level() > 0) {
         @font-face {
             font-family: 'bootstrap-icons';
             font-display: swap;
+        }
+        
+        @font-face {
+            font-family: 'Cairo';
+            font-display: swap;
+        }
+        
+        /* Layout Shift Prevention - منع تغييرات التخطيط */
+        /* Aspect ratio containers للصور */
+        .img-container {
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        .img-container img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        /* Placeholder للصور أثناء التحميل */
+        img[loading="lazy"] {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+        }
+        
+        /* Aspect ratios شائعة */
+        .aspect-ratio-16-9 { aspect-ratio: 16 / 9; }
+        .aspect-ratio-4-3 { aspect-ratio: 4 / 3; }
+        .aspect-ratio-1-1 { aspect-ratio: 1 / 1; }
+        .aspect-ratio-3-2 { aspect-ratio: 3 / 2; }
+        
+        /* منع Layout Shift للعناصر الديناميكية */
+        .card, .modal-content, .table {
+            min-height: 1px;
         }
     </style>
     <script>

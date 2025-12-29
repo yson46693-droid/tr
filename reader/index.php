@@ -1622,7 +1622,8 @@ $_SESSION['reader_session_id'] = $_SESSION['reader_session_id'] ?? bin2hex(rando
                 }
             });
         }
-        window.addEventListener('beforeunload', () => {
+        // استخدام pagehide لإعادة تفعيل bfcache بدلاً من beforeunload
+        window.addEventListener('pagehide', () => {
             stopCamera();
             if (ocrWorker) {
                 try {
