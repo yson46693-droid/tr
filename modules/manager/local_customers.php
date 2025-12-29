@@ -1790,72 +1790,85 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
                 <input type="hidden" name="action" value="add_customer">
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">اسم العميل <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">أرقام الهاتف</label>
-                        <div id="phoneNumbersContainer">
-                            <div class="input-group mb-2">
-                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
-                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
-                                    <i class="bi bi-trash"></i>
+                    <div class="row g-2 g-md-3">
+                        <!-- اسم العميل - يأخذ الصف كاملاً على الهاتف -->
+                        <div class="col-12 mb-3 mb-md-0">
+                            <label class="form-label">اسم العميل <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="name" required>
+                        </div>
+                        
+                        <!-- أرقام الهاتف - يأخذ الصف كاملاً على الهاتف -->
+                        <div class="col-12 mb-3 mb-md-0">
+                            <label class="form-label">أرقام الهاتف</label>
+                            <div id="phoneNumbersContainer">
+                                <div class="input-group mb-2">
+                                    <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="addPhoneBtn">
+                                <i class="bi bi-plus-circle"></i> إضافة رقم آخر
+                            </button>
+                            <input type="hidden" name="phone" value=""> <!-- للحفاظ على التوافق مع الكود القديم -->
+                        </div>
+                        
+                        <!-- ديون العميل - يأخذ نصف الصف على الهاتف -->
+                        <div class="col-6 col-md-12 mb-3 mb-md-0">
+                            <label class="form-label">ديون العميل / رصيد العميل</label>
+                            <input type="number" class="form-control" name="balance" step="0.01" value="0" placeholder="مثال: 0 أو -500">
+                            <small class="text-muted d-block mt-1">
+                                <strong>إدخال قيمة سالبة:</strong> يتم اعتبارها رصيد دائن للعميل (مبلغ متاح للعميل). 
+                                لا يتم تحصيل هذا الرصيد، ويمكن للعميل استخدامه عند شراء فواتير حيث يتم خصم قيمة الفاتورة من الرصيد تلقائياً دون تسجيلها كدين.
+                            </small>
+                        </div>
+                        
+                        <!-- العنوان - يأخذ نصف الصف على الهاتف -->
+                        <div class="col-6 col-md-12 mb-3 mb-md-0">
+                            <label class="form-label">العنوان</label>
+                            <textarea class="form-control" name="address" rows="2"></textarea>
+                        </div>
+                        
+                        <!-- المنطقة - يأخذ نصف الصف على الهاتف -->
+                        <div class="col-6 col-md-12 mb-3 mb-md-0">
+                            <label class="form-label">المنطقة</label>
+                            <div class="input-group">
+                                <select class="form-select" name="region_id" id="addLocalCustomerRegionId">
+                                    <option value="">اختر المنطقة</option>
+                                    <?php
+                                    $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                                    foreach ($regions as $region):
+                                    ?>
+                                        <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
+                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRegionFromLocalCustomerModal">
+                                    <i class="bi bi-plus-circle"></i>
+                                </button>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        
+                        <!-- الموقع الجغرافي - يأخذ نصف الصف على الهاتف -->
+                        <div class="col-6 col-md-12 mb-3 mb-md-0">
+                            <label class="form-label">الموقع الجغرافي</label>
+                            <div class="d-flex gap-2 mb-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="getLocationBtn">
+                                    <i class="bi bi-geo-alt"></i> الحصول على الموقع الحالي
                                 </button>
                             </div>
-                        </div>
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="addPhoneBtn">
-                            <i class="bi bi-plus-circle"></i> إضافة رقم آخر
-                        </button>
-                        <input type="hidden" name="phone" value=""> <!-- للحفاظ على التوافق مع الكود القديم -->
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">ديون العميل / رصيد العميل</label>
-                        <input type="number" class="form-control" name="balance" step="0.01" value="0" placeholder="مثال: 0 أو -500">
-                        <small class="text-muted">
-                            <strong>إدخال قيمة سالبة:</strong> يتم اعتبارها رصيد دائن للعميل (مبلغ متاح للعميل). 
-                            لا يتم تحصيل هذا الرصيد، ويمكن للعميل استخدامه عند شراء فواتير حيث يتم خصم قيمة الفاتورة من الرصيد تلقائياً دون تسجيلها كدين.
-                        </small>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">العنوان</label>
-                        <textarea class="form-control" name="address" rows="2"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">المنطقة</label>
-                        <div class="input-group">
-                            <select class="form-select" name="region_id" id="addLocalCustomerRegionId">
-                                <option value="">اختر المنطقة</option>
-                                <?php
-                                $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
-                                foreach ($regions as $region):
-                                ?>
-                                    <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
-                            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRegionFromLocalCustomerModal">
-                                <i class="bi bi-plus-circle"></i>
-                            </button>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">الموقع الجغرافي</label>
-                        <div class="d-flex gap-2 mb-2">
-                            <button type="button" class="btn btn-sm btn-outline-primary" id="getLocationBtn">
-                                <i class="bi bi-geo-alt"></i> الحصول على الموقع الحالي
-                            </button>
-                        </div>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <input type="text" class="form-control" name="latitude" id="addCustomerLatitude" placeholder="خط العرض" readonly>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <input type="text" class="form-control" name="latitude" id="addCustomerLatitude" placeholder="خط العرض" readonly>
+                                </div>
+                                <div class="col-6">
+                                    <input type="text" class="form-control" name="longitude" id="addCustomerLongitude" placeholder="خط الطول" readonly>
+                                </div>
                             </div>
-                            <div class="col-6">
-                                <input type="text" class="form-control" name="longitude" id="addCustomerLongitude" placeholder="خط الطول" readonly>
-                            </div>
+                            <small class="text-muted d-block mt-1">يمكنك الحصول على الموقع تلقائياً أو إدخاله يدوياً</small>
                         </div>
-                        <small class="text-muted">يمكنك الحصول على الموقع تلقائياً أو إدخاله يدوياً</small>
                     </div>
                 </div>
                 <div class="modal-footer">
