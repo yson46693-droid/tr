@@ -130,45 +130,54 @@ try {
     // إذا حدث خطأ في requireRole، نعيد التوجيه إلى تسجيل الدخول
     error_log("Accountant dashboard ERROR: requireRole failed: " . $e->getMessage());
     
-    // حماية من حلقة إعادة التوجيه: إذا كان المستخدم قد سجل دخوله للتو (في آخر 30 ثانية)، لا نعيد التوجيه
-    $loginTime = $_SESSION['login_time'] ?? 0;
-    $timeSinceLogin = time() - $loginTime;
-    if ($timeSinceLogin < 30 && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
-        // المستخدم قد سجل دخوله للتو - قد يكون هناك تأخير في قاعدة البيانات
-        // نترك الصفحة تعمل بدلاً من إعادة التوجيه لتجنب الحلقة
-        error_log("Accountant dashboard: User just logged in ({$timeSinceLogin}s ago), skipping redirect to prevent loop");
+    // حماية من حلقة إعادة التوجيه: التحقق من معامل _redirect في URL
+    $hasRedirectParam = isset($_GET['_redirect']) && $_GET['_redirect'] === '1';
+    if ($hasRedirectParam) {
+        // إذا كان هناك معامل _redirect=1، يعني أننا أعدنا التوجيه للتو من index.php
+        // لا نعيد التوجيه مرة أخرى لمنع الحلقة - نتابع تحميل الصفحة
+        error_log("Accountant dashboard: _redirect parameter detected, skipping redirect to prevent loop");
         // نتابع تحميل الصفحة بدلاً من إعادة التوجيه
     } else {
-        // المستخدم لم يسجل دخوله للتو - إعادة التوجيه آمنة
-        $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
-        $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
-        $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
-        if (strpos($loginUrl, '/') !== 0) {
-            $loginUrl = '/' . $loginUrl;
-        }
-        $loginUrl = preg_replace('/\/+/', '/', $loginUrl);
-        
-        // حفظ رسالة الخطأ
-        if (session_status() === PHP_SESSION_ACTIVE) {
-            $_SESSION['session_error'] = 'انتهت الجلسة أو حدث خطأ. يرجى تسجيل الدخول مرة أخرى.';
-            $_SESSION['session_failed'] = true;
-            $_SESSION['session_expired'] = true;
-        }
-        
-        // تنظيف output buffer
-        while (ob_get_level() > 0) {
-            @ob_end_clean();
-        }
-        
-        if (!@headers_sent()) {
-            @header('Location: ' . $loginUrl, true, 303);
-            exit;
+        // حماية من حلقة إعادة التوجيه: إذا كان المستخدم قد سجل دخوله للتو (في آخر 30 ثانية)، لا نعيد التوجيه
+        $loginTime = $_SESSION['login_time'] ?? 0;
+        $timeSinceLogin = time() - $loginTime;
+        if ($timeSinceLogin < 30 && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+            // المستخدم قد سجل دخوله للتو - قد يكون هناك تأخير في قاعدة البيانات
+            // نترك الصفحة تعمل بدلاً من إعادة التوجيه لتجنب الحلقة
+            error_log("Accountant dashboard: User just logged in ({$timeSinceLogin}s ago), skipping redirect to prevent loop");
+            // نتابع تحميل الصفحة بدلاً من إعادة التوجيه
         } else {
-            echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
-            echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
-            echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
-            echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
-            exit;
+            // المستخدم لم يسجل دخوله للتو - إعادة التوجيه آمنة
+            $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
+            $loginUrl = preg_replace('/^https?:\/\/[^\/]+/', '', $loginUrl);
+            $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
+            if (strpos($loginUrl, '/') !== 0) {
+                $loginUrl = '/' . $loginUrl;
+            }
+            $loginUrl = preg_replace('/\/+/', '/', $loginUrl);
+            
+            // حفظ رسالة الخطأ
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                $_SESSION['session_error'] = 'انتهت الجلسة أو حدث خطأ. يرجى تسجيل الدخول مرة أخرى.';
+                $_SESSION['session_failed'] = true;
+                $_SESSION['session_expired'] = true;
+            }
+            
+            // تنظيف output buffer
+            while (ob_get_level() > 0) {
+                @ob_end_clean();
+            }
+            
+            if (!@headers_sent()) {
+                @header('Location: ' . $loginUrl, true, 303);
+                exit;
+            } else {
+                echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+                echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+                echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+                echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
+                exit;
+            }
         }
     }
 }

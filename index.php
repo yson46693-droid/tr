@@ -286,10 +286,25 @@ if (preg_match('/[?&](_nocache|_refresh|_cache_bust|_t|_r|_auto_refresh)=\d+/', 
 // إذا لم يكن هناك POST، نعيد التوجيه إلى الداشبورد
 $isLoginAttempt = ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['username']) || isset($_POST['login_method'])));
 
+// حماية من حلقة إعادة التوجيه: التحقق من معامل URL
+$hasRedirectParam = isset($_GET['_redirect']) && $_GET['_redirect'] === '1';
+if ($hasRedirectParam) {
+    // إذا كان هناك معامل _redirect=1، يعني أننا أعدنا التوجيه للتو
+    // لا نعيد التوجيه مرة أخرى لمنع الحلقة
+    error_log("Redirect loop prevention: _redirect parameter detected, skipping redirect");
+    // إزالة المعامل من URL إذا كان موجوداً
+    $cleanUri = preg_replace('/[?&]_redirect=1/', '', $_SERVER['REQUEST_URI'] ?? '');
+    $cleanUri = preg_replace('/[?&]$/', '', $cleanUri);
+    if ($cleanUri !== $_SERVER['REQUEST_URI']) {
+        header('Location: ' . $cleanUri, true, 303);
+        exit;
+    }
+}
+
 // التحقق من الجلسة - isLoggedIn() يتحقق من قاعدة البيانات ويحذف الجلسة إذا لم تكن موجودة
 $isUserLoggedIn = isLoggedIn();
 
-if ($isUserLoggedIn && !$isLoginAttempt) {
+if ($isUserLoggedIn && !$isLoginAttempt && !$hasRedirectParam) {
     // يوجد جلسة نشطة ولا توجد محاولة تسجيل دخول - إعادة التوجيه إلى الداشبورد
     $userRole = $_SESSION['role'] ?? 'accountant';
     
@@ -474,14 +489,21 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
         $_SESSION['redirect_count'] = 1;
     }
     
+    // إضافة معامل _redirect=1 لمنع حلقة إعادة التوجيه
+    // إذا كان dashboard يعيد التوجيه مرة أخرى، سنكتشف ذلك
+    $separator = strpos($dashboardUrl, '?') !== false ? '&' : '?';
+    $dashboardUrlWithParam = $dashboardUrl . $separator . '_redirect=1';
+    
     if (!headers_sent()) {
-        header('Location: ' . $dashboardUrl, true, 303);
+        header('Location: ' . $dashboardUrlWithParam, true, 303);
         exit;
     } else {
-        $escapedUrl = htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8');
+        // إضافة معامل _redirect=1 في JavaScript redirect أيضاً
+        $separator = strpos($dashboardUrlWithParam, '?') !== false ? '&' : '?';
+        $escapedUrl = htmlspecialchars($dashboardUrlWithParam, ENT_QUOTES, 'UTF-8');
         echo '<script>';
         echo 'try {';
-        echo '  var dashboardUrl = ' . json_encode($dashboardUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
+        echo '  var dashboardUrl = ' . json_encode($dashboardUrlWithParam, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
         echo '  // تنظيف URL لضمان أنه مسار نسبي فقط';
         echo '  dashboardUrl = dashboardUrl.replace(/^https?:\\/\\//i, "");';
         echo '  dashboardUrl = dashboardUrl.replace(/^\\/\\/+/, "/");';
@@ -491,7 +513,7 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
         echo '  window.location.replace(dashboardUrl);';
         echo '} catch(e) {';
         echo '  console.error("Redirect error:", e);';
-        echo '  window.location.href = "/dashboard/accountant.php";';
+        echo '  window.location.href = "/dashboard/accountant.php?_redirect=1";';
         echo '}';
         echo '</script>';
         echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
@@ -722,17 +744,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     
                     // استخدام header redirect مباشرة (بدون JavaScript) لضمان التوجيه الصحيح
+                    // إضافة معامل _redirect=1 لمنع حلقة إعادة التوجيه
+                    $separator = strpos($dashboardUrl, '?') !== false ? '&' : '?';
+                    $dashboardUrlWithParam = $dashboardUrl . $separator . '_redirect=1';
+                    
                     if (!headers_sent()) {
-                        header('Location: ' . $dashboardUrl, true, 303);
+                        header('Location: ' . $dashboardUrlWithParam, true, 303);
                         exit;
                     } else {
                         // إذا كانت headers قد أُرسلت، استخدم JavaScript redirect
+                        // إضافة معامل _redirect=1 لمنع حلقة إعادة التوجيه
+                        $separator = strpos($dashboardUrl, '?') !== false ? '&' : '?';
+                        $dashboardUrlWithParam = $dashboardUrl . $separator . '_redirect=1';
+                        
                         // تنظيف URL لضمان أنه مسار نسبي فقط لمنع ERR_FAILED
-                        $escapedUrl = htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8');
+                        $escapedUrl = htmlspecialchars($dashboardUrlWithParam, ENT_QUOTES, 'UTF-8');
                         echo '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Redirecting...</title>';
                         echo '<script>';
                         echo 'try {';
-                        echo '  var dashboardUrl = ' . json_encode($dashboardUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
+                        echo '  var dashboardUrl = ' . json_encode($dashboardUrlWithParam, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';';
                         echo '  // تنظيف URL لضمان أنه مسار نسبي فقط';
                         echo '  dashboardUrl = dashboardUrl.replace(/^https?:\\/\\//i, "");';
                         echo '  dashboardUrl = dashboardUrl.replace(/^\\/\\/+/, "/");';
@@ -742,7 +772,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         echo '  window.location.replace(dashboardUrl);';
                         echo '} catch(e) {';
                         echo '  console.error("Redirect error:", e);';
-                        echo '  window.location.href = "/dashboard/accountant.php";';
+                        echo '  window.location.href = "/dashboard/accountant.php?_redirect=1";';
                         echo '}';
                         echo '</script>';
                         echo '<noscript><meta http-equiv="refresh" content="0;url=' . $escapedUrl . '"></noscript>';
