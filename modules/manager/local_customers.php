@@ -3956,10 +3956,29 @@ document.addEventListener('DOMContentLoaded', function() {
         -webkit-tap-highlight-color: rgba(0, 123, 255, 0.2) !important;
     }
     
-    /* إزالة backdrop الإضافي الذي يمنع التفاعل */
+    /* ضمان أن backdrop تحت المودال */
     #customerExportModal + .modal-backdrop,
-    .modal-backdrop.show {
+    .modal-backdrop.show,
+    .modal-backdrop {
         z-index: 1054 !important;
+    }
+    
+    /* ضمان أن المودال فوق backdrop وقابل للتفاعل */
+    #customerExportModal.modal.show {
+        z-index: 1055 !important;
+        pointer-events: auto !important;
+    }
+    
+    #customerExportModal .modal-dialog {
+        z-index: 1056 !important;
+        pointer-events: auto !important;
+        position: relative !important;
+    }
+    
+    #customerExportModal .modal-content {
+        z-index: 1057 !important;
+        pointer-events: auto !important;
+        position: relative !important;
     }
     
     /* إزالة أي backdrop إضافي */
@@ -3993,6 +4012,66 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
     display: none !important;
     pointer-events: none !important;
     z-index: -1 !important;
+}
+
+/* الحل الأساسي: ضمان أن المودال قابل للتفاعل دائماً على جميع الشاشات */
+#customerExportModal.modal.show,
+#customerExportModal.modal.showing {
+    pointer-events: auto !important;
+    z-index: 1055 !important;
+    position: fixed !important;
+}
+
+#customerExportModal .modal-dialog {
+    pointer-events: auto !important;
+    z-index: 1056 !important;
+    position: relative !important;
+}
+
+#customerExportModal .modal-content {
+    pointer-events: auto !important;
+    z-index: 1057 !important;
+    position: relative !important;
+}
+
+/* ضمان أن جميع العناصر داخل المودال قابلة للتفاعل */
+#customerExportModal * {
+    pointer-events: auto !important;
+}
+
+/* backdrop يجب أن يكون تحت المودال */
+.modal-backdrop {
+    z-index: 1054 !important;
+}
+
+/* إصلاح خاص للهواتف - ضمان التفاعل الفوري */
+@media (max-width: 768px) {
+    #customerExportModal.modal.show,
+    #customerExportModal.modal.showing {
+        pointer-events: auto !important;
+        z-index: 1055 !important;
+        position: fixed !important;
+        touch-action: manipulation !important;
+    }
+    
+    #customerExportModal .modal-dialog {
+        pointer-events: auto !important;
+        z-index: 1056 !important;
+        position: relative !important;
+        touch-action: manipulation !important;
+    }
+    
+    #customerExportModal .modal-content {
+        pointer-events: auto !important;
+        z-index: 1057 !important;
+        position: relative !important;
+        touch-action: manipulation !important;
+    }
+    
+    #customerExportModal * {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+    }
 }
 
 /* تحسينات الأداء على الموبايل */

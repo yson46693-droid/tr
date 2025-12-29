@@ -94,65 +94,125 @@
             return;
         }
         
-        // إزالة أي backdrop إضافي عند فتح المودال
-        exportModal.addEventListener('show.bs.modal', function() {
-            // إزالة أي backdrop إضافي قد يمنع التفاعل
-            const removeExtraBackdrops = function() {
-                const backdrops = document.querySelectorAll('.modal-backdrop');
-                if (backdrops.length > 1) {
-                    // إذا كان هناك أكثر من backdrop واحد، احذف الإضافية
-                    for (let i = 1; i < backdrops.length; i++) {
-                        backdrops[i].remove();
-                    }
-                }
-                // ضمان أن backdrop الوحيد لا يمنع التفاعل
-                if (backdrops.length > 0) {
-                    backdrops[0].style.pointerEvents = 'auto';
-                    backdrops[0].style.zIndex = '1054';
-                }
-            };
-            
-            // إزالة فورية
-            removeExtraBackdrops();
-            
-            // إزالة مرة أخرى بعد تأخير قصير (للتأكد)
-            setTimeout(removeExtraBackdrops, 50);
-            setTimeout(removeExtraBackdrops, 150);
-        });
-        
-        // إزالة backdrop إضافي عند اكتمال فتح المودال
-        exportModal.addEventListener('shown.bs.modal', function() {
-            const removeExtraBackdrops = function() {
-                const backdrops = document.querySelectorAll('.modal-backdrop');
-                if (backdrops.length > 1) {
-                    for (let i = 1; i < backdrops.length; i++) {
-                        backdrops[i].remove();
-                    }
-                }
-            };
-            
-            removeExtraBackdrops();
-            
-            // مراقبة مستمرة لإزالة أي backdrop إضافي قد يظهر
-            const backdropObserver = setInterval(function() {
-                const backdrops = document.querySelectorAll('.modal-backdrop');
-                if (backdrops.length > 1) {
-                    for (let i = 1; i < backdrops.length; i++) {
-                        backdrops[i].remove();
-                    }
+        // ضمان أن المودال قابل للتفاعل دائماً - فوري بدون تأخير
+        const ensureModalInteractive = function() {
+            // استخدام requestAnimationFrame للتأكد من التطبيق الفوري
+            requestAnimationFrame(function() {
+                // ضمان أن المودال نفسه قابل للتفاعل
+                exportModal.style.pointerEvents = 'auto';
+                exportModal.style.zIndex = '1055';
+                exportModal.style.position = 'fixed';
+                
+                const modalDialog = exportModal.querySelector('.modal-dialog');
+                if (modalDialog) {
+                    modalDialog.style.pointerEvents = 'auto';
+                    modalDialog.style.zIndex = '1056';
+                    modalDialog.style.position = 'relative';
                 }
                 
-                // إيقاف المراقبة إذا تم إغلاق المودال
-                if (!exportModal.classList.contains('show')) {
-                    clearInterval(backdropObserver);
+                const modalContent = exportModal.querySelector('.modal-content');
+                if (modalContent) {
+                    modalContent.style.pointerEvents = 'auto';
+                    modalContent.style.zIndex = '1057';
+                    modalContent.style.position = 'relative';
                 }
-            }, 200);
+                
+                // ضمان أن جميع العناصر داخل المودال قابلة للتفاعل
+                const allElements = exportModal.querySelectorAll('*');
+                allElements.forEach(function(el) {
+                    el.style.pointerEvents = 'auto';
+                });
+                
+                // ضمان أن backdrop تحت المودال
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                backdrops.forEach(function(backdrop) {
+                    backdrop.style.zIndex = '1054';
+                });
+            });
+        };
+        
+        // إزالة backdrop إضافي
+        const removeExtraBackdrops = function() {
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            if (backdrops.length > 1) {
+                for (let i = 1; i < backdrops.length; i++) {
+                    backdrops[i].remove();
+                }
+            }
+        };
+        
+        // عند بدء فتح المودال - فوري جداً
+        exportModal.addEventListener('show.bs.modal', function() {
+            // ضمان أن المودال قابل للتفاعل فوراً - بدون أي تأخير
+            ensureModalInteractive();
+            removeExtraBackdrops();
             
-            // إيقاف المراقبة عند إغلاق المودال
-            exportModal.addEventListener('hidden.bs.modal', function stopObserver() {
-                clearInterval(backdropObserver);
-                exportModal.removeEventListener('hidden.bs.modal', stopObserver);
-            }, { once: true });
+            // استدعاء فوري مرة أخرى للتأكد
+            requestAnimationFrame(function() {
+                ensureModalInteractive();
+                removeExtraBackdrops();
+            });
+        });
+        
+        // استدعاء فوري عند إضافة class "show" للمودال
+        const modalObserver = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    if (exportModal.classList.contains('show') || exportModal.classList.contains('showing')) {
+                        ensureModalInteractive();
+                        removeExtraBackdrops();
+                    }
+                }
+            });
+        });
+        
+        modalObserver.observe(exportModal, {
+            attributes: true,
+            attributeFilter: ['class']
+        });
+        
+        // مراقبة أي backdrop جديد يظهر
+        let backdropObserver = null;
+        
+        exportModal.addEventListener('show.bs.modal', function() {
+            // بدء المراقبة عند فتح المودال
+            backdropObserver = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === 1 && node.classList && node.classList.contains('modal-backdrop')) {
+                            // ضمان أن backdrop جديد تحت المودال
+                            node.style.zIndex = '1054';
+                            removeExtraBackdrops();
+                            ensureModalInteractive();
+                        }
+                    });
+                });
+            });
+            
+            backdropObserver.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        });
+        
+        // إيقاف المراقبة عند إغلاق المودال
+        exportModal.addEventListener('hidden.bs.modal', function() {
+            if (backdropObserver) {
+                backdropObserver.disconnect();
+                backdropObserver = null;
+            }
+        });
+        
+        // عند اكتمال فتح المودال - التأكد من أن المودال قابل للتفاعل
+        exportModal.addEventListener('shown.bs.modal', function() {
+            ensureModalInteractive();
+            removeExtraBackdrops();
+            
+            // التأكد مرة أخرى بعد تأخير قصير جداً
+            requestAnimationFrame(function() {
+                ensureModalInteractive();
+                removeExtraBackdrops();
+            });
         });
         
         // تنظيف backdrop المتبقي فقط عند إغلاق المودال
