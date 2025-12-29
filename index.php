@@ -450,6 +450,30 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
         exit;
     }
     
+    // حماية من حلقة إعادة التوجيه: التحقق من عدد محاولات إعادة التوجيه
+    $redirectCount = $_SESSION['redirect_count'] ?? 0;
+    $lastRedirectTime = $_SESSION['last_redirect_time'] ?? 0;
+    $timeSinceLastRedirect = time() - $lastRedirectTime;
+    
+    // إذا كانت هناك محاولات إعادة توجيه كثيرة في وقت قصير، نتوقف لمنع الحلقة
+    if ($redirectCount >= 3 && $timeSinceLastRedirect < 5) {
+        error_log("Redirect loop detected: {$redirectCount} redirects in {$timeSinceLastRedirect} seconds. Stopping redirect loop.");
+        // إعادة تعيين العداد والسماح بالوصول إلى الصفحة
+        unset($_SESSION['redirect_count']);
+        unset($_SESSION['last_redirect_time']);
+        // لا نعيد التوجيه - اترك المستخدم يرى صفحة تسجيل الدخول أو dashboard
+        exit;
+    }
+    
+    // زيادة عداد إعادة التوجيه
+    $_SESSION['redirect_count'] = $redirectCount + 1;
+    $_SESSION['last_redirect_time'] = time();
+    
+    // إذا مر أكثر من 10 ثوانٍ منذ آخر إعادة توجيه، نعيد تعيين العداد
+    if ($timeSinceLastRedirect > 10) {
+        $_SESSION['redirect_count'] = 1;
+    }
+    
     if (!headers_sent()) {
         header('Location: ' . $dashboardUrl, true, 303);
         exit;
@@ -634,6 +658,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             // error_log("Rate limiter reset error: " . $e->getMessage());
                         }
                     }
+                    
+                    // إعادة تعيين عداد إعادة التوجيه بعد تسجيل دخول ناجح
+                    unset($_SESSION['redirect_count']);
+                    unset($_SESSION['last_redirect_time']);
+                    
                     // النظام يعتمد على الجلسات (PHP Sessions)
                     $userRole = $result['user']['role'] ?? 'accountant';
                     

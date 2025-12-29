@@ -159,6 +159,7 @@ try {
                 $_SESSION['username'] = $userData['username'];
                 $_SESSION['role'] = $userData['role'];
                 $_SESSION['logged_in'] = true;
+                $_SESSION['login_time'] = time();
                 
                 // تسجيل سجل التدقيق
                 require_once __DIR__ . '/../includes/audit_log.php';
@@ -214,6 +215,7 @@ try {
                 $_SESSION['username'] = $user['username'];
                 $_SESSION['role'] = $user['role'];
                 $_SESSION['logged_in'] = true;
+                $_SESSION['login_time'] = time();
                 
                 // تسجيل سجل التدقيق
                 require_once __DIR__ . '/../includes/audit_log.php';

@@ -1269,6 +1269,17 @@ function requireRole($role) {
     try {
         requireLogin();
     } catch (Throwable $e) {
+        // حماية من حلقة إعادة التوجيه: إذا كان المستخدم قد سجل دخوله للتو (في آخر 30 ثانية)، لا نعيد التوجيه
+        $loginTime = $_SESSION['login_time'] ?? 0;
+        $timeSinceLogin = time() - $loginTime;
+        if ($timeSinceLogin < 30 && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+            // المستخدم قد سجل دخوله للتو - قد يكون هناك تأخير في قاعدة البيانات
+            // نتابع تحميل الصفحة بدلاً من إعادة التوجيه لتجنب الحلقة
+            error_log("requireRole() - User just logged in ({$timeSinceLogin}s ago), skipping redirect to prevent loop");
+            // نتابع تحميل الصفحة بدلاً من إعادة التوجيه
+            return;
+        }
+        
         // إذا حدث خطأ في requireLogin() (مثلاً فشل الاتصال بقاعدة البيانات)
         // نعيد التوجيه مباشرة إلى تسجيل الدخول
         error_log("requireRole() ERROR: Failed in requireLogin(): " . $e->getMessage());
@@ -1310,6 +1321,17 @@ function requireRole($role) {
     }
     
     if (!$currentUser || !is_array($currentUser) || empty($currentUser)) {
+        // حماية من حلقة إعادة التوجيه: إذا كان المستخدم قد سجل دخوله للتو (في آخر 30 ثانية)، لا نعيد التوجيه
+        $loginTime = $_SESSION['login_time'] ?? 0;
+        $timeSinceLogin = time() - $loginTime;
+        if ($timeSinceLogin < 30 && isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+            // المستخدم قد سجل دخوله للتو - قد يكون هناك تأخير في قاعدة البيانات
+            // نتابع تحميل الصفحة بدلاً من إعادة التوجيه لتجنب الحلقة
+            error_log("requireRole() - User just logged in ({$timeSinceLogin}s ago), user not found but skipping redirect to prevent loop");
+            // نتابع تحميل الصفحة بدلاً من إعادة التوجيه
+            return;
+        }
+        
         // المستخدم محذوف أو غير موجود - تم إلغاء تسجيل الدخول تلقائياً من getCurrentUser()
         $loginUrl = function_exists('getRelativeUrl') ? getRelativeUrl('index.php') : '/index.php';
         $loginUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $loginUrl);
