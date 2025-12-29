@@ -421,6 +421,8 @@ $lang = isset($translations) ? $translations : [];
 $pageTitle = isset($lang['menu_financial']) ? $lang['menu_financial'] : 'خزنة الشركة';
 ?>
 
+<link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
+
 <!-- صفحة الخزنة -->
 <div class="page-header mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
     <h2><i class="bi bi-safe me-2"></i><?php echo isset($lang['menu_financial']) ? $lang['menu_financial'] : 'خزنة الشركة'; ?></h2>
@@ -1701,62 +1703,5 @@ document.addEventListener('DOMContentLoaded', function() {
     opacity: 0 !important;
 }
 
-/* ===== Responsive Modals for Mobile ===== */
-@media (max-width: 768px) {
-    #generateReportModal,
-    #collectFromRepModal {
-        padding: 0 !important;
-    }
-
-    #generateReportModal .modal-dialog,
-    #collectFromRepModal .modal-dialog {
-        margin: 0.5rem auto;
-        max-width: 95% !important;
-        width: 95% !important;
-        height: auto;
-    }
-
-    #generateReportModal .modal-content,
-    #collectFromRepModal .modal-content {
-        max-height: 90vh;
-        border-radius: 12px;
-        overflow: hidden;
-    }
-
-    #generateReportModal .modal-body,
-    #collectFromRepModal .modal-body {
-        overflow-y: auto;
-        max-height: calc(90vh - 120px); /* header + footer */
-        padding: 1rem;
-    }
-
-    #generateReportModal .modal-header,
-    #generateReportModal .modal-footer,
-    #collectFromRepModal .modal-header,
-    #collectFromRepModal .modal-footer {
-        padding: 0.75rem 1rem;
-    }
-}
-
-/* ===== Extra Small Phones ===== */
-@media (max-width: 480px) {
-    #generateReportModal .modal-dialog,
-    #collectFromRepModal .modal-dialog {
-        max-width: 100% !important;
-        width: 100% !important;
-        margin: 0;
-    }
-
-    #generateReportModal .modal-content,
-    #collectFromRepModal .modal-content {
-        max-height: 100vh;
-        border-radius: 0;
-    }
-
-    #generateReportModal .modal-body,
-    #collectFromRepModal .modal-body {
-        max-height: calc(100vh - 110px);
-        padding: 0.75rem;
-    }
-}
+/* Responsive rules are now handled by responsive-modals.css */
 </style>

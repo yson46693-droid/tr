@@ -91,6 +91,13 @@
         width: 100% !important;
     }
     
+    /* دعم خاص لـ modal-dialog-scrollable */
+    .modal-dialog-scrollable .modal-body {
+        overflow-y: auto !important;
+        max-height: calc(90vh - 120px) !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    
     /* تحسين modal-xl body */
     .modal-dialog.modal-xl .modal-body {
         flex: 0 1 auto !important;
@@ -173,6 +180,13 @@
         -webkit-overflow-scrolling: touch !important;
         align-self: stretch !important;
         width: 100% !important;
+    }
+    
+    /* دعم خاص لـ modal-dialog-scrollable على الهواتف الصغيرة */
+    .modal-dialog-scrollable .modal-body {
+        overflow-y: auto !important;
+        max-height: calc(100vh - 110px) !important;
+        -webkit-overflow-scrolling: touch !important;
     }
     
     /* تحسين modal-xl body على الهواتف الصغيرة */
