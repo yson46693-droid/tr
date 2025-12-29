@@ -3,8 +3,9 @@
  * صفحة مرتب المستخدم مع طلب السلفة
  */
 
+// تعريف ACCESS_ALLOWED إذا لم يكن معرفاً (للاستدعاءات المباشرة)
 if (!defined('ACCESS_ALLOWED')) {
-    die('Direct access not allowed');
+    define('ACCESS_ALLOWED', true);
 }
 
 require_once __DIR__ . '/../../includes/config.php';
