@@ -259,6 +259,64 @@
     pointer-events: none;
 }
 
+/* ===== Version Badge ===== */
+.version-badge-container {
+    display: flex;
+    align-items: center;
+    margin: 0 var(--spacing-sm);
+}
+
+.version-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-700);
+    background: var(--gray-100);
+    border: 1.5px solid var(--gray-300);
+    border-radius: 12px;
+    white-space: nowrap;
+    user-select: none;
+    transition: all var(--transition-base);
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.5px;
+}
+
+.version-badge:hover {
+    background: var(--gray-200);
+    border-color: var(--gray-400);
+    transform: scale(1.05);
+}
+
+/* Dark mode support */
+[data-theme="dark"] .version-badge,
+.dark-mode .version-badge {
+    color: var(--gray-300);
+    background: var(--gray-800);
+    border-color: var(--gray-600);
+}
+
+[data-theme="dark"] .version-badge:hover,
+.dark-mode .version-badge:hover {
+    background: var(--gray-700);
+    border-color: var(--gray-500);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .version-badge {
+        font-size: 10px;
+        padding: 3px 8px;
+        margin: 0 4px;
+    }
+    
+    .version-badge-container {
+        margin: 0 4px;
+    }
+}
+
 .topbar-search input {
     width: 100%;
     padding: var(--spacing-sm) var(--spacing-md) var(--spacing-sm) 40px;

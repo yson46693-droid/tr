@@ -35,6 +35,13 @@ require_once __DIR__ . '/../includes/notifications.php';
 require_once __DIR__ . '/../includes/packaging_alerts.php';
 require_once __DIR__ . '/../includes/payment_schedules.php';
 require_once __DIR__ . '/../includes/production_reports.php';
+require_once __DIR__ . '/../includes/version_helper.php';
+
+// التحقق من التعديلات وتحديث الإصدار تلقائياً
+// النظام يتحقق من تغييرات الملفات الرئيسية ويحدث الإصدار تلقائياً
+// يمكن تعطيل هذا السطر في الإنتاج لتوفير الأداء
+// ملاحظة: التحديث يحدث فقط عند تغيير الملفات الرئيسية (header.php, footer.php, config.php, index.php)
+@checkAndUpdateVersion();
 
 // تحديد اللغة الحالية
 $currentLang = getCurrentLanguage();
@@ -3423,6 +3430,17 @@ if (ob_get_level() > 0) {
                     </ul>
                 </div>
                 <?php endif; ?>
+                
+                <!-- Version Badge -->
+                <div class="version-badge-container">
+                    <span class="version-badge" title="إصدار النظام">
+                        <?php 
+                        // الحصول على رقم الإصدار الحالي
+                        $currentVersion = function_exists('getCurrentVersion') ? getCurrentVersion() : 'v1.0';
+                        echo htmlspecialchars($currentVersion);
+                        ?>
+                    </span>
+                </div>
                 
                 <!-- Fingerprint Registration Button -->
                 <?php if (isLoggedIn()): ?>

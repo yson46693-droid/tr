@@ -1038,4 +1038,81 @@ if (DB_CONNECTION_CLEANUP_ENABLED) {
     }
 }
 
+/**
+ * الحصول على رقم الإصدار الحالي من version.json
+ * @return string رقم الإصدار (مثال: v1.0)
+ */
+function getCurrentVersion(): string {
+    $versionFile = __DIR__ . '/../version.json';
+    
+    if (!file_exists($versionFile)) {
+        // إنشاء ملف version.json افتراضي إذا لم يكن موجوداً
+        $defaultVersion = [
+            'version' => '1.0',
+            'build' => 0,
+            'last_updated' => date('Y-m-d H:i:s')
+        ];
+        @file_put_contents($versionFile, json_encode($defaultVersion, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        return 'v1.0';
+    }
+    
+    try {
+        $versionData = json_decode(file_get_contents($versionFile), true);
+        if (isset($versionData['version'])) {
+            return 'v' . $versionData['version'];
+        }
+    } catch (Exception $e) {
+        error_log('Error reading version.json: ' . $e->getMessage());
+    }
+    
+    return 'v1.0';
+}
+
+/**
+ * تحديث رقم الإصدار تلقائياً عند التعديلات
+ * يزيد رقم البناء (build) تلقائياً
+ * @return string رقم الإصدار المحدث
+ */
+function incrementVersionBuild(): string {
+    $versionFile = __DIR__ . '/../version.json';
+    $version = '1.0';
+    $build = 0;
+    
+    if (file_exists($versionFile)) {
+        try {
+            $versionData = json_decode(file_get_contents($versionFile), true);
+            $version = $versionData['version'] ?? '1.0';
+            $build = isset($versionData['build']) ? (int)$versionData['build'] : 0;
+        } catch (Exception $e) {
+            error_log('Error reading version.json: ' . $e->getMessage());
+        }
+    }
+    
+    // زيادة رقم البناء
+    $build++;
+    
+    // تحديث الإصدار بناءً على رقم البناء
+    // كل 10 تعديلات = زيادة في الإصدار الثانوي (1.0 -> 1.1 -> 1.2)
+    $minorVersion = floor($build / 10);
+    $versionParts = explode('.', $version);
+    $majorVersion = $versionParts[0] ?? '1';
+    $currentMinor = isset($versionParts[1]) ? (int)$versionParts[1] : 0;
+    
+    // تحديث الإصدار الثانوي إذا لزم الأمر
+    if ($minorVersion > $currentMinor) {
+        $version = $majorVersion . '.' . $minorVersion;
+    }
+    
+    // حفظ الإصدار المحدث
+    $versionData = [
+        'version' => $version,
+        'build' => $build,
+        'last_updated' => date('Y-m-d H:i:s')
+    ];
+    
+    @file_put_contents($versionFile, json_encode($versionData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    
+    return 'v' . $version;
+}
+
 
