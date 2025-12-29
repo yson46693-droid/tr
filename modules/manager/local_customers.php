@@ -1738,7 +1738,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 
 <!-- Modal تحصيل ديون العميل -->
 <div class="modal fade" id="collectPaymentModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-cash-coin me-2"></i>تحصيل ديون العميل المحلي</h5>
@@ -3858,12 +3858,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         <button type="button" class="btn btn-primary btn-sm" id="printExcelBtn">
                             <i class="bi bi-printer me-2"></i>طباعة
                         </button>
-                        <button type="button" class="btn btn-success btn-sm" id="downloadExcelBtn">
-                            <i class="bi bi-download me-2"></i>تحميل الملف
-                        </button>
-                        <button type="button" class="btn btn-info btn-sm" id="shareExcelBtn">
-                            <i class="bi bi-share me-2"></i>مشاركة
-                        </button>
                     </div>
                 </div>
             </div>
@@ -4226,6 +4220,119 @@ window.CUSTOMER_EXPORT_CONFIG = {
     .dashboard-table thead th:nth-child(7),
     .dashboard-table tbody td:nth-child(7) {
         min-width: 130px;
+    }
+}
+
+/* ===== تنسيقات نموذج تحصيل من عميل محلي - نفس أبعاد نموذج تحصيل من مندوب ===== */
+@media (min-width: 769px) {
+    #collectPaymentModal .modal-dialog.modal-dialog-centered {
+        margin: 0.5rem auto;
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 1rem);
+    }
+
+    #collectPaymentModal .modal-content {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    /* إصلاح المساحة البيضاء - منع modal-body من التمدد */
+    #collectPaymentModal .modal-body {
+        flex: 0 1 auto !important; /* منع التمدد التلقائي */
+        flex-grow: 0 !important;
+        flex-shrink: 1 !important;
+        flex-basis: auto !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding-bottom: 1rem !important;
+        margin-bottom: 0 !important;
+    }
+}
+
+/* قواعد عامة للـ header والـ footer (لا تتعارض مع media queries) */
+#collectPaymentModal .modal-header {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+}
+
+#collectPaymentModal .modal-footer {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-top: 1px solid #dee2e6 !important;
+}
+
+/* padding للـ header والـ footer على الشاشات الكبيرة فقط */
+@media (min-width: 769px) {
+    #collectPaymentModal .modal-footer {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+}
+
+/* إزالة أي pseudo-elements قد تسبب مساحة فارغة */
+#collectPaymentModal .modal-content::after,
+#collectPaymentModal .modal-content::before {
+    display: none !important;
+    content: none !important;
+}
+
+/* إصلاح خاص لـ modal-dialog-scrollable (للشاشات الكبيرة فقط) */
+@media (min-width: 769px) {
+    #collectPaymentModal .modal-dialog.modal-dialog-scrollable .modal-content {
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    #collectPaymentModal .modal-dialog.modal-dialog-scrollable .modal-body {
+        flex: 0 1 auto !important;
+        overflow-y: auto !important;
+        max-height: calc(100vh - 250px) !important;
+    }
+}
+
+/* تنسيقات للشاشات الصغيرة */
+@media (max-width: 768px) {
+    #collectPaymentModal .modal-dialog {
+        margin: 0.5rem !important;
+        max-width: calc(100% - 1rem) !important;
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
+    }
+    
+    #collectPaymentModal .modal-content {
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
+    }
+    
+    #collectPaymentModal .modal-body {
+        flex: 0 1 auto !important;
+        flex-grow: 0 !important;
+        padding-bottom: 1rem !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow-y: visible !important;
+    }
+    
+    #collectPaymentModal .modal-footer {
+        flex-shrink: 0 !important;
+        flex-grow: 0 !important;
+        margin-top: 0 !important;
+        padding-top: 1rem !important;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    
+    #collectPaymentModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body {
+        overflow-y: visible !important;
+        max-height: none !important;
     }
 }
 </style>
