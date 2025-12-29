@@ -1591,40 +1591,43 @@ document.addEventListener('DOMContentLoaded', function() {
 <style>
 /* إصلاح شامل للمساحة البيضاء في النماذج */
 
-/* إصلاح النماذج المركزية على جميع الأحجام */
-#generateReportModal .modal-dialog.modal-dialog-centered,
-#collectFromRepModal .modal-dialog.modal-dialog-centered {
-    margin: 0.5rem auto;
-    display: flex;
-    flex-direction: column;
-    max-height: calc(100vh - 1rem);
+/* إصلاح النماذج المركزية على جميع الأحجام (للشاشات الكبيرة فقط) */
+@media (min-width: 769px) {
+    #generateReportModal .modal-dialog.modal-dialog-centered,
+    #collectFromRepModal .modal-dialog.modal-dialog-centered {
+        margin: 0.5rem auto;
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 1rem);
+    }
+
+    #generateReportModal .modal-content,
+    #collectFromRepModal .modal-content {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    /* إصلاح المساحة البيضاء - منع modal-body من التمدد */
+    #generateReportModal .modal-body,
+    #collectFromRepModal .modal-body {
+        flex: 0 1 auto !important; /* منع التمدد التلقائي */
+        flex-grow: 0 !important;
+        flex-shrink: 1 !important;
+        flex-basis: auto !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding-bottom: 1rem !important;
+        margin-bottom: 0 !important;
+    }
 }
 
-#generateReportModal .modal-content,
-#collectFromRepModal .modal-content {
-    display: flex !important;
-    flex-direction: column !important;
-    height: auto !important;
-    max-height: 100% !important;
-    overflow: hidden !important;
-}
-
-/* إصلاح المساحة البيضاء - منع modal-body من التمدد */
-#generateReportModal .modal-body,
-#collectFromRepModal .modal-body {
-    flex: 0 1 auto !important; /* منع التمدد التلقائي */
-    flex-grow: 0 !important;
-    flex-shrink: 1 !important;
-    flex-basis: auto !important;
-    min-height: 0 !important;
-    height: auto !important;
-    max-height: none !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-    padding-bottom: 1rem !important;
-    margin-bottom: 0 !important;
-}
-
+/* قواعد عامة للـ header والـ footer (لا تتعارض مع media queries) */
 #generateReportModal .modal-header,
 #collectFromRepModal .modal-header {
     flex-shrink: 0 !important;
@@ -1637,9 +1640,16 @@ document.addEventListener('DOMContentLoaded', function() {
     flex-grow: 0 !important;
     margin-top: 0 !important;
     margin-bottom: 0 !important;
-    padding-top: 1rem !important;
-    padding-bottom: 1rem !important;
     border-top: 1px solid #dee2e6 !important;
+}
+
+/* padding للـ header والـ footer على الشاشات الكبيرة فقط */
+@media (min-width: 769px) {
+    #generateReportModal .modal-footer,
+    #collectFromRepModal .modal-footer {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
 }
 
 /* إزالة أي pseudo-elements قد تسبب مساحة فارغة */
@@ -1651,18 +1661,20 @@ document.addEventListener('DOMContentLoaded', function() {
     content: none !important;
 }
 
-/* إصلاح خاص لـ modal-dialog-scrollable */
-#generateReportModal .modal-dialog.modal-dialog-scrollable .modal-content,
-#collectFromRepModal .modal-dialog.modal-dialog-scrollable .modal-content {
-    max-height: 100% !important;
-    overflow: hidden !important;
-}
+/* إصلاح خاص لـ modal-dialog-scrollable (للشاشات الكبيرة فقط) */
+@media (min-width: 769px) {
+    #generateReportModal .modal-dialog.modal-dialog-scrollable .modal-content,
+    #collectFromRepModal .modal-dialog.modal-dialog-scrollable .modal-content {
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
 
-#generateReportModal .modal-dialog.modal-dialog-scrollable .modal-body,
-#collectFromRepModal .modal-dialog.modal-dialog-scrollable .modal-body {
-    flex: 0 1 auto !important;
-    overflow-y: auto !important;
-    max-height: calc(100vh - 250px) !important;
+    #generateReportModal .modal-dialog.modal-dialog-scrollable .modal-body,
+    #collectFromRepModal .modal-dialog.modal-dialog-scrollable .modal-body {
+        flex: 0 1 auto !important;
+        overflow-y: auto !important;
+        max-height: calc(100vh - 250px) !important;
+    }
 }
 
 /* تسريع إغلاق النماذج - إزالة جميع الـ transitions */
@@ -1687,59 +1699,6 @@ document.addEventListener('DOMContentLoaded', function() {
 .modal.fade:not(.show) .modal-dialog {
     transform: none !important;
     opacity: 0 !important;
-}
-
-/* تحسينات خاصة للهواتف المحمولة */
-@media (max-width: 768px) {
-    #generateReportModal .modal-dialog,
-    #collectFromRepModal .modal-dialog {
-        margin: 0.5rem !important;
-        max-width: calc(100% - 1rem) !important;
-        max-height: calc(100vh - 1rem) !important;
-        height: auto !important;
-    }
-    
-    #generateReportModal .modal-content,
-    #collectFromRepModal .modal-content {
-        max-height: calc(100vh - 1rem) !important;
-        height: auto !important;
-    }
-    
-    /* إصلاح شامل للمساحة البيضاء على الهواتف */
-    #collectFromRepModal .modal-body {
-        flex: 0 1 auto !important;
-        flex-grow: 0 !important;
-        padding-bottom: 1rem !important;
-        max-height: none !important;
-        height: auto !important;
-        overflow-y: visible !important; /* لا حاجة للتمرير في النماذج الصغيرة */
-    }
-    
-    #generateReportModal .modal-body {
-        flex: 0 1 auto !important;
-        flex-grow: 0 !important;
-        padding-bottom: 1rem !important;
-        max-height: calc(100vh - 250px) !important;
-        overflow-y: auto !important;
-        height: auto !important;
-    }
-    
-    #generateReportModal .modal-footer,
-    #collectFromRepModal .modal-footer {
-        flex-shrink: 0 !important;
-        flex-grow: 0 !important;
-        margin-top: 0 !important;
-        padding-top: 1rem !important;
-        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
-    }
-}
-
-/* إصلاح خاص للنماذج الصغيرة - إزالة التمرير غير الضروري */
-@media (max-width: 768px) {
-    #collectFromRepModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body {
-        overflow-y: visible !important;
-        max-height: none !important;
-    }
 }
 
 /* ===== Responsive Modals for Mobile ===== */
