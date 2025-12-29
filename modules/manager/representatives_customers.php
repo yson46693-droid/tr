@@ -3807,11 +3807,17 @@ try {
 <div class="modal fade" id="customerExportModal" tabindex="-1" aria-hidden="true" data-section="delegates">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title">
+            <div class="modal-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="modal-title mb-0">
                     <i class="bi bi-download me-2"></i>تصدير عملاء محددين إلى Excel
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                <div class="d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-light btn-sm" id="generateExcelBtnHeader" disabled>
+                        <i class="bi bi-file-earmark-excel me-1"></i>توليد ملف Excel
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">إغلاق</button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                </div>
             </div>
             <div class="modal-body">
                 <div class="customer-export-alerts mb-3"></div>
@@ -3867,12 +3873,6 @@ try {
                         </button>
                     </div>
                 </div>
-            </div>
-            <div class="modal-footer d-flex flex-column flex-sm-row gap-2">
-                <button type="button" class="btn btn-secondary w-100 w-sm-auto" data-bs-dismiss="modal">إغلاق</button>
-                <button type="button" class="btn btn-primary w-100 w-sm-auto" id="generateExcelBtn" disabled>
-                    <i class="bi bi-file-earmark-excel me-2"></i>توليد ملف Excel
-                </button>
             </div>
         </div>
     </div>
@@ -4166,6 +4166,27 @@ try {
     #customerExportModal .table th,
     #customerExportModal .table td {
         padding: 0.5rem 0.25rem;
+    }
+    
+    /* تحسين مظهر الأزرار في الـ header على الشاشات الصغيرة */
+    #customerExportModal .modal-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    #customerExportModal .modal-header .d-flex {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    
+    #customerExportModal .modal-header .btn {
+        font-size: 0.75rem;
+        padding: 0.375rem 0.5rem;
+        min-height: 36px;
+    }
+    
+    #customerExportModal .modal-header .btn-close {
+        margin-right: 0;
     }
 }
 

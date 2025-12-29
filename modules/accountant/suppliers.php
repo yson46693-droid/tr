@@ -631,6 +631,9 @@ if (isset($_GET['edit'])) {
 }
 ?>
 
+<!-- Responsive Modals CSS - يجب أن يكون في البداية قبل أي محتوى -->
+<link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
+
 <div class="card shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0"><i class="bi bi-truck me-2"></i><?php echo (isset($lang) && isset($lang['suppliers'])) ? $lang['suppliers'] : 'الموردين'; ?> (<?php echo $totalCount; ?>)</h5>
@@ -1090,12 +1093,7 @@ $historyTypeLabels = [
 </div>
 
 <style>
-#addSupplierModal .modal-body {
-    max-height: 70vh;
-    overflow-y: auto;
-    padding-right: 15px;
-}
-
+/* تحسين scrollbar فقط - القواعد العامة موجودة في responsive-modals.css */
 #addSupplierModal .modal-body::-webkit-scrollbar {
     width: 8px;
 }
@@ -1243,56 +1241,10 @@ $historyTypeLabels = [
     </div>
 </div>
 <style>
-/* تحسين السكرول الداخلي لنموذج تعديل المورد على الهاتف */
-@media (max-width: 768px) {
-    #editSupplierModal .modal-body {
-        max-height: calc(100vh - 180px) !important;
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch;
-        padding: 1rem;
-    }
-    
-    #editSupplierModal .modal-dialog {
-        margin: 0.5rem;
-        max-height: calc(100vh - 1rem);
-    }
-    
-    #editSupplierModal .modal-content {
-        max-height: calc(100vh - 1rem);
-        display: flex;
-        flex-direction: column;
-    }
-    
-    #editSupplierModal .modal-header {
-        flex-shrink: 0;
-    }
-    
-    #editSupplierModal .modal-footer {
-        flex-shrink: 0;
-        border-top: 1px solid #dee2e6;
-        padding: 0.75rem;
-    }
-    
-    #editSupplierModal .modal-body {
-        flex: 1;
-        overflow-y: auto;
-    }
-}
-
-@media (max-width: 480px) {
-    #editSupplierModal .modal-body {
-        max-height: calc(100vh - 160px) !important;
-        padding: 0.75rem;
-    }
-    
-    #editSupplierModal .modal-footer {
-        padding: 0.5rem;
-    }
-    
-    #editSupplierModal .modal-footer .btn {
-        padding: 0.5rem 1rem;
-        font-size: 0.875rem;
-    }
+/* تحسين السكرول الداخلي - القواعد العامة موجودة في responsive-modals.css */
+/* نضيف فقط تحسينات خاصة للـ scrollbar */
+#editSupplierModal .modal-body {
+    -webkit-overflow-scrolling: touch;
 }
 </style>
 <?php endif; ?>

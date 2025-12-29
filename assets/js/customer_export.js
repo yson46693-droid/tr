@@ -205,6 +205,7 @@
         
         // ربط أحداث الأزرار
         const generateBtn = document.getElementById('generateExcelBtn');
+        const generateBtnHeader = document.getElementById('generateExcelBtnHeader');
         const printBtn = document.getElementById('printExcelBtn');
         const downloadBtn = document.getElementById('downloadExcelBtn');
         const shareBtn = document.getElementById('shareExcelBtn');
@@ -213,6 +214,10 @@
         
         if (generateBtn) {
             generateBtn.addEventListener('click', handleGenerateExcel);
+        }
+        
+        if (generateBtnHeader) {
+            generateBtnHeader.addEventListener('click', handleGenerateExcel);
         }
         
         if (printBtn) {
@@ -237,6 +242,22 @@
             deselectAllBtn.addEventListener('click', function() {
                 selectAllCustomers(false);
             });
+        }
+    }
+    
+    /**
+     * دالة مساعدة لتحديث كلا زرين التوليد (في الـ header والـ footer)
+     */
+    function updateGenerateButtons(callback) {
+        const generateBtn = document.getElementById('generateExcelBtn');
+        const generateBtnHeader = document.getElementById('generateExcelBtnHeader');
+        
+        if (generateBtn && callback) {
+            callback(generateBtn);
+        }
+        
+        if (generateBtnHeader && callback) {
+            callback(generateBtnHeader);
         }
     }
     
@@ -290,13 +311,12 @@
         }
         
         // إظهار زر التوليد
-        const generateBtn = document.getElementById('generateExcelBtn');
-        if (generateBtn) {
-            generateBtn.disabled = true;
-            generateBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-2"></i>توليد ملف Excel';
-            generateBtn.classList.remove('btn-success');
-            generateBtn.classList.add('btn-primary');
-        }
+        updateGenerateButtons(function(btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-file-earmark-excel me-1"></i>توليد ملف Excel';
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-primary');
+        });
         
         // إعادة تعيين اختيار المندوب
         const repSelect = document.getElementById('exportRepSelect');
@@ -322,10 +342,9 @@
             selectRepMessage.innerHTML = '<i class="bi bi-info-circle me-2"></i>يرجى اختيار المندوب أولاً لعرض عملائه';
         }
         
-        const generateBtn = document.getElementById('generateExcelBtn');
-        if (generateBtn) {
-            generateBtn.disabled = true;
-        }
+        updateGenerateButtons(function(btn) {
+            btn.disabled = true;
+        });
     }
     
     /**
@@ -596,7 +615,6 @@
         const customersList = document.getElementById('exportCustomersList');
         const customersSection = document.getElementById('customersSection');
         const selectRepMessage = document.getElementById('selectRepMessage');
-        const generateBtn = document.getElementById('generateExcelBtn');
         
         if (!customersList) {
             return;
@@ -621,9 +639,9 @@
             }
             
             // تعطيل زر التوليد
-            if (generateBtn) {
-                generateBtn.disabled = true;
-            }
+            updateGenerateButtons(function(btn) {
+                btn.disabled = true;
+            });
             return;
         }
         
@@ -756,9 +774,9 @@
         }
         
         // تفعيل زر التوليد إذا كان هناك عملاء محددين
-        if (generateBtn) {
-            generateBtn.disabled = selectedCustomers.length === 0;
-        }
+        updateGenerateButtons(function(btn) {
+            btn.disabled = selectedCustomers.length === 0;
+        });
         
         // ربط أحداث checkbox
         const checkboxes = customersList.querySelectorAll('.customer-export-checkbox');
@@ -945,10 +963,9 @@
         });
         
         // تحديث حالة زر التوليد
-        const generateBtn = document.getElementById('generateExcelBtn');
-        if (generateBtn) {
-            generateBtn.disabled = selectedCustomers.length === 0;
-        }
+        updateGenerateButtons(function(btn) {
+            btn.disabled = selectedCustomers.length === 0;
+        });
     }
     
     /**
@@ -978,11 +995,10 @@
             return;
         }
         
-        const generateBtn = document.getElementById('generateExcelBtn');
-        if (generateBtn) {
-            generateBtn.disabled = true;
-            generateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري التوليد...';
-        }
+        updateGenerateButtons(function(btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري التوليد...';
+        });
         
         try {
             // تحديد القسم الحالي من المودال
@@ -1102,12 +1118,12 @@
             }
             
             // إعادة تعيين زر التوليد
-            if (generateBtn) {
-                generateBtn.disabled = false;
-                generateBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i>تم التوليد بنجاح';
-                generateBtn.classList.add('btn-success');
-                generateBtn.classList.remove('btn-primary');
-            }
+            updateGenerateButtons(function(btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>تم التوليد بنجاح';
+                btn.classList.add('btn-success');
+                btn.classList.remove('btn-primary');
+            });
             
             // إظهار رسالة نجاح
             showAlert('success', 'تم توليد ملف Excel بنجاح');
@@ -1116,10 +1132,10 @@
             console.error('Export error:', error);
             alert('حدث خطأ أثناء توليد ملف Excel: ' + error.message);
             
-            if (generateBtn) {
-                generateBtn.disabled = false;
-                generateBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-2"></i>توليد ملف Excel';
-            }
+            updateGenerateButtons(function(btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-file-earmark-excel me-1"></i>توليد ملف Excel';
+            });
         }
     }
     
