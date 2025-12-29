@@ -1330,18 +1330,62 @@ function isMobile() {
     return window.innerWidth <= 768;
 }
 
-// دالة للـ scroll تلقائي
-function scrollToElement(element) {
-    if (element) {
-        setTimeout(function() {
-            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            // إضافة offset صغير من الأعلى
-            window.scrollBy(0, -20);
-        }, 100);
+// دالة لإغلاق جميع النماذج المفتوحة
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const editCard = document.getElementById('editScheduleCard');
+    const reminderCard = document.getElementById('reminderCard');
+    
+    if (editCard && editCard.style.display !== 'none') {
+        editCard.style.display = 'none';
+        const form = editCard.querySelector('form');
+        if (form) form.reset();
+    }
+    
+    if (reminderCard && reminderCard.style.display !== 'none') {
+        reminderCard.style.display = 'none';
+        const form = reminderCard.querySelector('form');
+        if (form) form.reset();
+        const daysInput = document.getElementById('reminderCardDaysInput');
+        if (daysInput) daysInput.value = '3';
+    }
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const editModal = document.getElementById('editScheduleModal');
+    const reminderModal = document.getElementById('reminderModal');
+    
+    if (editModal) {
+        const modalInstance = bootstrap.Modal.getInstance(editModal);
+        if (modalInstance) modalInstance.hide();
+    }
+    
+    if (reminderModal) {
+        const modalInstance = bootstrap.Modal.getInstance(reminderModal);
+        if (modalInstance) modalInstance.hide();
     }
 }
 
+// دالة للـ scroll تلقائي محسّنة
+function scrollToElement(element) {
+    if (!element) return;
+    
+    // الانتظار قليلاً للتأكد من أن العنصر ظاهر
+    setTimeout(function() {
+        const elementTop = element.getBoundingClientRect().top + window.pageYOffset;
+        const offset = 20; // offset من الأعلى
+        const targetPosition = elementTop - offset;
+        
+        window.scrollTo({
+            top: targetPosition,
+            behavior: 'smooth'
+        });
+    }, 150);
+}
+
 function showReminderModal(scheduleId) {
+    // إغلاق جميع النماذج المفتوحة أولاً
+    closeAllForms();
+    
     if (isMobile()) {
         // على الموبايل: استخدام Card
         const scheduleIdInput = document.getElementById('reminderCardScheduleId');
@@ -1350,7 +1394,10 @@ function showReminderModal(scheduleId) {
         if (scheduleIdInput && cardElement) {
             scheduleIdInput.value = scheduleId;
             cardElement.style.display = 'block';
-            scrollToElement(cardElement);
+            // الانتظار قليلاً قبل الـ scroll
+            setTimeout(function() {
+                scrollToElement(cardElement);
+            }, 50);
         }
     } else {
         // على الكمبيوتر: استخدام Modal
@@ -1367,6 +1414,9 @@ function showReminderModal(scheduleId) {
 
 function showEditScheduleModal(button) {
     if (!button) return;
+
+    // إغلاق جميع النماذج المفتوحة أولاً
+    closeAllForms();
 
     const scheduleId = button.getAttribute('data-schedule-id') || '';
     const customer = button.getAttribute('data-customer') || '';
@@ -1389,7 +1439,10 @@ function showEditScheduleModal(button) {
         if (dueDateInput) dueDateInput.value = dueDate;
 
         cardEl.style.display = 'block';
-        scrollToElement(cardEl);
+        // الانتظار قليلاً قبل الـ scroll
+        setTimeout(function() {
+            scrollToElement(cardEl);
+        }, 50);
     } else {
         // على الكمبيوتر: استخدام Modal
         const modalEl = document.getElementById('editScheduleModal');
