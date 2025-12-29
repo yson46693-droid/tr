@@ -461,7 +461,16 @@ function updateNotificationList(notifications) {
 
     list.querySelectorAll('.notification-mark-read').forEach(button => {
         button.addEventListener('click', function(event) {
+            event.preventDefault();
             event.stopPropagation();
+            event.stopImmediatePropagation();
+            
+            // منع إغلاق الـ dropdown
+            const dropdown = document.querySelector('.notifications-dropdown');
+            if (dropdown) {
+                dropdown.classList.add('show');
+            }
+            
             const notificationId = this.getAttribute('data-id');
             markNotificationAsRead(notificationId).catch(console.error);
         });
@@ -469,7 +478,16 @@ function updateNotificationList(notifications) {
 
     list.querySelectorAll('.notification-delete').forEach(button => {
         button.addEventListener('click', function(event) {
+            event.preventDefault();
             event.stopPropagation();
+            event.stopImmediatePropagation();
+            
+            // منع إغلاق الـ dropdown
+            const dropdown = document.querySelector('.notifications-dropdown');
+            if (dropdown) {
+                dropdown.classList.add('show');
+            }
+            
             const notificationId = this.getAttribute('data-id');
             deleteNotification(notificationId).then(() => {
                 const item = this.closest('.notification-item');
@@ -764,19 +782,42 @@ document.addEventListener('DOMContentLoaded', function() {
             e.stopPropagation();
             e.stopImmediatePropagation();
             
-            // منع إغلاق الـ dropdown
+            // منع إغلاق الـ dropdown - يجب أن يكون قبل confirm
             const dropdown = document.querySelector('.notifications-dropdown');
+            const dropdownToggle = document.querySelector('[data-bs-toggle="dropdown"][id="notificationsDropdown"]');
+            
+            // حفظ حالة الإغلاق التلقائي الأصلية
+            let originalAutoClose = true;
+            let bsDropdownInstance = null;
+            
             if (dropdown) {
-                const bsDropdown = bootstrap.Dropdown.getInstance(dropdown);
-                if (bsDropdown) {
-                    // إبقاء الـ dropdown مفتوحاً
-                    dropdown.classList.add('show');
+                // إبقاء الـ dropdown مفتوحاً
+                dropdown.classList.add('show');
+                dropdown.setAttribute('data-bs-auto-close', 'false');
+            }
+            
+            // منع إغلاق الـ dropdown من Bootstrap
+            if (dropdownToggle) {
+                bsDropdownInstance = bootstrap.Dropdown.getInstance(dropdownToggle);
+                if (bsDropdownInstance) {
+                    // حفظ القيمة الأصلية
+                    originalAutoClose = bsDropdownInstance._config.autoClose !== false;
+                    // تعطيل الإغلاق التلقائي مؤقتاً
+                    bsDropdownInstance._config.autoClose = false;
                 }
             }
             
             // طلب التأكيد من المستخدم
             const confirmed = confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟\n\nهذه العملية لا يمكن التراجع عنها.');
+            
             if (!confirmed) {
+                // إعادة تفعيل الإغلاق التلقائي إذا لم يؤكد
+                if (bsDropdownInstance) {
+                    bsDropdownInstance._config.autoClose = originalAutoClose;
+                }
+                if (dropdown) {
+                    dropdown.setAttribute('data-bs-auto-close', 'outside');
+                }
                 return;
             }
             
@@ -818,18 +859,42 @@ document.addEventListener('DOMContentLoaded', function() {
             e.stopPropagation();
             e.stopImmediatePropagation();
             
-            // منع إغلاق الـ dropdown
+            // منع إغلاق الـ dropdown - يجب أن يكون قبل confirm
             const dropdown = document.querySelector('.notifications-dropdown');
+            const dropdownToggle = document.querySelector('[data-bs-toggle="dropdown"][id="notificationsDropdown"]');
+            
+            // حفظ حالة الإغلاق التلقائي الأصلية
+            let originalAutoClose = true;
+            let bsDropdownInstance = null;
+            
             if (dropdown) {
-                const bsDropdown = bootstrap.Dropdown.getInstance(dropdown);
-                if (bsDropdown) {
-                    dropdown.classList.add('show');
+                // إبقاء الـ dropdown مفتوحاً
+                dropdown.classList.add('show');
+                dropdown.setAttribute('data-bs-auto-close', 'false');
+            }
+            
+            // منع إغلاق الـ dropdown من Bootstrap
+            if (dropdownToggle) {
+                bsDropdownInstance = bootstrap.Dropdown.getInstance(dropdownToggle);
+                if (bsDropdownInstance) {
+                    // حفظ القيمة الأصلية
+                    originalAutoClose = bsDropdownInstance._config.autoClose !== false;
+                    // تعطيل الإغلاق التلقائي مؤقتاً
+                    bsDropdownInstance._config.autoClose = false;
                 }
             }
             
             // طلب التأكيد من المستخدم
             const confirmed = confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟\n\nهذه العملية لا يمكن التراجع عنها.');
+            
             if (!confirmed) {
+                // إعادة تفعيل الإغلاق التلقائي إذا لم يؤكد
+                if (bsDropdownInstance) {
+                    bsDropdownInstance._config.autoClose = originalAutoClose;
+                }
+                if (dropdown) {
+                    dropdown.setAttribute('data-bs-auto-close', 'outside');
+                }
                 return;
             }
             

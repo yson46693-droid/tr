@@ -565,6 +565,7 @@
         margin-top: 0.5rem !important;
         flex-shrink: 0 !important;
         order: 10 !important;
+        pointer-events: auto !important;
     }
     
     .notification-item .notification-actions .btn,
@@ -587,6 +588,15 @@
         border: 1px solid currentColor !important;
         touch-action: manipulation !important;
         -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1) !important;
+        cursor: pointer !important;
+        user-select: none !important;
+    }
+    
+    .notification-item .notification-actions .btn span,
+    .notification-item .notification-actions button span {
+        display: inline !important;
+        visibility: visible !important;
+        opacity: 1 !important;
     }
     
     .notification-item .notification-actions .btn i,
@@ -613,6 +623,11 @@
             font-size: 0.7rem !important;
             flex: 0 0 auto !important;
             max-width: calc(50% - 0.25rem) !important;
+        }
+        
+        .notification-item .notification-actions .btn span,
+        .notification-item .notification-actions button span {
+            display: inline !important;
         }
         
         .notification-item .notification-actions .btn i,
@@ -696,6 +711,17 @@
     -webkit-user-select: none !important;
     -moz-user-select: none !important;
     -ms-user-select: none !important;
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* ضمان ظهور النصوص داخل الأزرار */
+.notification-item .notification-actions .btn span,
+.notification-item .notification-actions button span {
+    display: inline !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 /* إصلاح خاص للـ dropdown على الموبايل */
@@ -715,6 +741,22 @@
     .notifications-dropdown .notification-item {
         max-width: 100% !important;
         box-sizing: border-box !important;
+    }
+    
+    /* ضمان ظهور الأزرار على الموبايل */
+    .notifications-dropdown .notification-actions {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+    
+    .notifications-dropdown .notification-actions .btn,
+    .notifications-dropdown .notification-actions button {
+        display: inline-flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
     }
 }
 

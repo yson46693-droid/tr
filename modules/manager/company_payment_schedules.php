@@ -1405,30 +1405,3 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-
-<style>
-/* CSS بسيط للمودال */
-#addScheduleModal .modal-dialog {
-    margin: 1rem auto;
-}
-
-#addScheduleModal .modal-body {
-    padding: 1rem;
-}
-
-#addScheduleModal .modal-footer {
-    padding: 0.75rem 1rem;
-}
-
-/* تقليل padding على الموبايل */
-@media (max-width: 768px) {
-    #addScheduleModal .modal-body {
-        padding: 0.75rem;
-    }
-    
-    #addScheduleModal .modal-footer {
-        padding: 0.5rem 0.75rem;
-    }
-}
-</style>
-
