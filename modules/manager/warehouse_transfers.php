@@ -1648,7 +1648,8 @@ if (isset($_GET['id'])) {
 </div>
 
 <!-- Modal رفض الطلب -->
-<div class="modal fade" id="rejectModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="rejectModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -1674,7 +1675,8 @@ if (isset($_GET['id'])) {
 </div>
 
 <!-- Modal نقل من منتجات الشركة -->
-<div class="modal fade" id="transferFromCompanyModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="transferFromCompanyModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -1840,7 +1842,8 @@ if (isset($_GET['id'])) {
 </div>
 
 <!-- Modal نقل من بضاعة المندوب -->
-<div class="modal fade" id="transferFromSalesRepModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="transferFromSalesRepModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
@@ -1898,7 +1901,8 @@ if (isset($_GET['id'])) {
 </div>
 
 <!-- Modal طلب نقل عام بين المخازن -->
-<div class="modal fade" id="generalTransferModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="generalTransferModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">

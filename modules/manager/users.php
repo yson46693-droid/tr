@@ -308,7 +308,7 @@ $users = $db->query($sql, $params);
 ?>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="bi bi-people me-2"></i>إدارة المستخدمين والأدوار</h2>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
+    <button class="btn btn-primary" onclick="showAddUserModal()">
         <i class="bi bi-person-plus me-2"></i>إضافة مستخدم
     </button>
 </div>
@@ -760,8 +760,330 @@ $users = $db->query($sql, $params);
     </div>
 </div>
 
+<!-- Card للموبايل - إضافة مستخدم -->
+<div class="card shadow-sm mb-4 d-md-none" id="addUserCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">إضافة مستخدم جديد</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="add_user">
+            <div class="row">
+                <div class="col-12 mb-3">
+                    <label class="form-label">اسم المستخدم <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="username" required>
+                </div>
+                <div class="col-12 mb-3">
+                    <label class="form-label">الدور <span class="text-danger">*</span></label>
+                    <select class="form-select" name="role" required>
+                        <option value="">اختر الدور</option>
+                        <option value="manager">مدير</option>
+                        <option value="accountant">محاسب</option>
+                        <option value="sales">مندوب مبيعات</option>
+                        <option value="production">عامل إنتاج</option>
+                    </select>
+                    <small class="text-muted">لا يمكن تغيير الدور بعد إنشاء المستخدم</small>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12 mb-3">
+                    <label class="form-label">كلمة المرور <span class="text-danger">*</span></label>
+                    <input type="password" class="form-control" name="password" 
+                           minlength="<?php echo $passwordMinLength; ?>" required>
+                    <small class="text-muted">على الأقل <?php echo $passwordMinLength; ?> أحرف</small>
+                </div>
+                <div class="col-12 mb-3">
+                    <label class="form-label">الاسم الكامل</label>
+                    <input type="text" class="form-control" name="full_name">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12 mb-3">
+                    <label class="form-label">رقم الهاتف</label>
+                    <input type="tel" class="form-control" name="phone">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">سعر الساعة (ج.م)</label>
+                <input type="number" step="0.01" class="form-control" name="hourly_rate" value="0" min="0" max="10000">
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">إضافة</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddUserCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card للموبايل - تعديل مستخدم -->
+<div class="card shadow-sm mb-4 d-md-none" id="editUserCard" style="display: none;">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">تعديل مستخدم</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="update_user">
+            <input type="hidden" name="user_id" id="editUserCardId">
+            <div class="row">
+                <div class="col-12 mb-3">
+                    <label class="form-label">اسم المستخدم</label>
+                    <input type="text" class="form-control" id="editUserCardUsername" readonly>
+                </div>
+                <div class="col-12 mb-3">
+                    <label class="form-label">الدور</label>
+                    <input type="text" class="form-control" id="editUserCardRoleDisplay" readonly style="background-color: #e9ecef;">
+                    <input type="hidden" name="role" id="editUserCardRole">
+                    <small class="text-muted">لا يمكن تغيير الدور بعد إنشاء المستخدم</small>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12 mb-3">
+                    <label class="form-label">الحالة</label>
+                    <select class="form-select" name="status" id="editUserCardStatus">
+                        <option value="active">نشط</option>
+                        <option value="inactive">غير نشط</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12 mb-3">
+                    <label class="form-label">الاسم الكامل</label>
+                    <input type="text" class="form-control" name="full_name" id="editUserCardFullName">
+                </div>
+                <div class="col-12 mb-3">
+                    <label class="form-label">رقم الهاتف</label>
+                    <input type="tel" class="form-control" name="phone" id="editUserCardPhone">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">سعر الساعة (ج.م)</label>
+                <input type="number" step="0.01" class="form-control" name="hourly_rate" id="editUserCardHourlyRate" min="0" max="10000">
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">حفظ</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditUserCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card للموبايل - إعادة تعيين كلمة المرور -->
+<div class="card shadow-sm mb-4 d-md-none" id="resetPasswordCard" style="display: none;">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">إعادة تعيين كلمة المرور</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="reset_password">
+            <input type="hidden" name="user_id" id="resetPasswordCardUserId">
+            <div class="mb-3">
+                <label class="form-label">المستخدم</label>
+                <input type="text" class="form-control" id="resetPasswordCardUsername" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">كلمة المرور الجديدة <span class="text-danger">*</span></label>
+                <input type="password" class="form-control" name="new_password" 
+                       minlength="<?php echo $passwordMinLength; ?>" required>
+                <small class="text-muted">على الأقل <?php echo $passwordMinLength; ?> أحرف</small>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-warning">إعادة تعيين</button>
+                <button type="button" class="btn btn-secondary" onclick="closeResetPasswordCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+// ===== دوال أساسية =====
+
+// التحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// Scroll تلقائي للعنصر
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// إغلاق جميع النماذج
+function closeAllForms() {
+    const cards = ['addUserCard', 'editUserCard', 'resetPasswordCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    const modals = ['addUserModal', 'editUserModal', 'resetPasswordModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// ===== دوال فتح النماذج =====
+
+// فتح نموذج إضافة مستخدم
+function showAddUserModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addUserCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addUserModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// ===== دوال إغلاق Cards =====
+
+function closeAddUserCard() {
+    const card = document.getElementById('addUserCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeEditUserCard() {
+    const card = document.getElementById('editUserCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeResetPasswordCard() {
+    const card = document.getElementById('resetPasswordCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+// ===== دوال موجودة - تعديلها لدعم الموبايل =====
+
 function editUser(user) {
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('editUserCard');
+        if (card) {
+            document.getElementById('editUserCardId').value = user.id;
+            document.getElementById('editUserCardUsername').value = user.username;
+            document.getElementById('editUserCardRole').value = user.role;
+            
+            const roleNames = {
+                'manager': 'مدير',
+                'accountant': 'محاسب',
+                'sales': 'مندوب مبيعات',
+                'production': 'عامل إنتاج'
+            };
+            document.getElementById('editUserCardRoleDisplay').value = roleNames[user.role] || user.role;
+            document.getElementById('editUserCardStatus').value = user.status;
+            document.getElementById('editUserCardFullName').value = user.full_name || '';
+            document.getElementById('editUserCardPhone').value = user.phone || '';
+            let hourlyRate = parseFloat(user.hourly_rate) || 0;
+            if (isNaN(hourlyRate) || hourlyRate > 100000) {
+                hourlyRate = 0;
+            }
+            document.getElementById('editUserCardHourlyRate').value = hourlyRate;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        document.getElementById('editUserId').value = user.id;
+        document.getElementById('editUsername').value = user.username;
+        
+        // تعيين الدور في الحقل المخفي
+        document.getElementById('editRole').value = user.role;
+        
+        // عرض الدور في حقل العرض فقط
+        const roleNames = {
+            'manager': 'مدير',
+            'accountant': 'محاسب',
+            'sales': 'مندوب مبيعات',
+            'production': 'عامل إنتاج'
+        };
+        document.getElementById('editRoleDisplay').value = roleNames[user.role] || user.role;
+        
+        document.getElementById('editStatus').value = user.status;
+        document.getElementById('editFullName').value = user.full_name || '';
+        document.getElementById('editPhone').value = user.phone || '';
+        let hourlyRate = parseFloat(user.hourly_rate) || 0;
+        if (isNaN(hourlyRate) || hourlyRate > 100000) {
+            hourlyRate = 0;
+        }
+        document.getElementById('editHourlyRate').value = hourlyRate;
+        
+        const modal = new bootstrap.Modal(document.getElementById('editUserModal'));
+        modal.show();
+    }
+}
+
+function resetPassword(userId, username) {
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('resetPasswordCard');
+        if (card) {
+            document.getElementById('resetPasswordCardUserId').value = userId;
+            document.getElementById('resetPasswordCardUsername').value = username;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        document.getElementById('resetUserId').value = userId;
+        document.getElementById('resetUsername').value = username;
+        
+        const modal = new bootstrap.Modal(document.getElementById('resetPasswordModal'));
+        modal.show();
+    }
+}
     document.getElementById('editUserId').value = user.id;
     document.getElementById('editUsername').value = user.username;
     

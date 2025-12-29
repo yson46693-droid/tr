@@ -1350,7 +1350,7 @@ foreach ($factoryProducts as $product) {
             </h5>
             <div class="d-flex gap-2 align-items-center">
                 <span class="badge"><?php echo $totalExternalProducts; ?> منتج</span>
-                <button type="button" class="btn btn-success-custom btn-sm" data-bs-toggle="modal" data-bs-target="#addExternalProductModal">
+                <button type="button" class="btn btn-success-custom btn-sm" onclick="showAddExternalProductModal()">
                     <i class="bi bi-plus-circle me-1"></i>إضافة منتج خارجي
                 </button>
             </div>
@@ -1424,7 +1424,8 @@ foreach ($factoryProducts as $product) {
 </div>
 
 <!-- Modal إضافة منتج خارجي -->
-<div class="modal fade" id="addExternalProductModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="addExternalProductModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -1463,7 +1464,8 @@ foreach ($factoryProducts as $product) {
 </div>
 
 <!-- Modal تعديل منتج خارجي -->
-<div class="modal fade" id="editExternalProductModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="editExternalProductModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
@@ -1503,7 +1505,8 @@ foreach ($factoryProducts as $product) {
 </div>
 
 <!-- Modal حذف منتج خارجي -->
-<div class="modal fade" id="deleteExternalProductModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="deleteExternalProductModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
@@ -1527,7 +1530,8 @@ foreach ($factoryProducts as $product) {
 </div>
 
 <!-- Modal طباعة الباركود -->
-<div class="modal fade" id="printBarcodesModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="printBarcodesModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
@@ -1565,6 +1569,94 @@ foreach ($factoryProducts as $product) {
     </div>
 </div>
 
+<!-- Card للموبايل - إضافة منتج خارجي -->
+<div class="card shadow-sm mb-4 d-md-none" id="addExternalProductCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة منتج خارجي جديد</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="create_external_product">
+            <div class="mb-3">
+                <label class="form-label">اسم المنتج <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="product_name" required>
+            </div>
+            <div class="row">
+                <div class="col-6 mb-3">
+                    <label class="form-label">الكمية</label>
+                    <input type="number" step="0.01" class="form-control" name="quantity" value="0" min="0">
+                </div>
+                <div class="col-6 mb-3">
+                    <label class="form-label">الوحدة</label>
+                    <input type="text" class="form-control" name="unit" value="قطعة">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">سعر الوحدة</label>
+                <input type="number" step="0.01" class="form-control" name="unit_price" value="0" min="0">
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary-custom">حفظ</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddExternalProductCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card للموبايل - تعديل منتج خارجي -->
+<div class="card shadow-sm mb-4 d-md-none" id="editExternalProductCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>تعديل منتج خارجي</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="update_external_product">
+            <input type="hidden" name="product_id" id="editCard_product_id">
+            <div class="mb-3">
+                <label class="form-label">اسم المنتج <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="product_name" id="editCard_product_name" required>
+            </div>
+            <div class="row">
+                <div class="col-6 mb-3">
+                    <label class="form-label">الكمية</label>
+                    <input type="number" step="0.01" class="form-control" name="quantity" id="editCard_quantity" min="0">
+                </div>
+                <div class="col-6 mb-3">
+                    <label class="form-label">الوحدة</label>
+                    <input type="text" class="form-control" name="unit" id="editCard_unit">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">سعر الوحدة</label>
+                <input type="number" step="0.01" class="form-control" name="unit_price" id="editCard_unit_price" min="0">
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary-custom">حفظ التغييرات</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditExternalProductCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card للموبايل - حذف منتج خارجي -->
+<div class="card shadow-sm mb-4 d-md-none" id="deleteExternalProductCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>تأكيد الحذف</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="delete_external_product">
+            <input type="hidden" name="product_id" id="deleteCard_product_id">
+            <p>هل أنت متأكد من حذف المنتج <strong id="deleteCard_product_name"></strong>؟</p>
+            <p class="text-danger mb-3"><small>لا يمكن التراجع عن هذه العملية.</small></p>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger">حذف</button>
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteExternalProductCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Modal تفاصيل التشغيلة -->
 <div class="modal fade" id="batchDetailsModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
@@ -1595,6 +1687,104 @@ foreach ($factoryProducts as $product) {
 </div>
 
 <script>
+// ===== دوال أساسية =====
+
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+function closeAllForms() {
+    const cards = ['addExternalProductCard', 'editExternalProductCard', 'deleteExternalProductCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    const modals = ['addExternalProductModal', 'editExternalProductModal', 'deleteExternalProductModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// ===== دوال فتح النماذج =====
+
+function showAddExternalProductModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addExternalProductCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addExternalProductModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// ===== دوال إغلاق Cards =====
+
+function closeAddExternalProductCard() {
+    const card = document.getElementById('addExternalProductCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeEditExternalProductCard() {
+    const card = document.getElementById('editExternalProductCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeDeleteExternalProductCard() {
+    const card = document.getElementById('deleteExternalProductCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+// ===== دوال موجودة - تعديلها لدعم الموبايل =====
+
 // تهيئة المتغيرات والدوال
 const PRINT_BARCODE_URL = <?php echo json_encode(getRelativeUrl('print_barcode.php')); ?>;
 if (typeof window !== 'undefined') {
@@ -2212,15 +2402,36 @@ function initEditExternalButtons() {
             const price = this.dataset.price;
             
             document.getElementById('edit_product_id').value = id;
-            document.getElementById('edit_product_name').value = name;
-            document.getElementById('edit_quantity').value = quantity;
-            document.getElementById('edit_unit').value = unit;
-            document.getElementById('edit_unit_price').value = price;
+            closeAllForms();
             
-            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                new bootstrap.Modal(document.getElementById('editExternalProductModal')).show();
+            if (isMobile()) {
+                // على الموبايل: استخدام Card
+                const card = document.getElementById('editExternalProductCard');
+                if (card) {
+                    document.getElementById('editCard_product_id').value = id;
+                    document.getElementById('editCard_product_name').value = name;
+                    document.getElementById('editCard_quantity').value = quantity;
+                    document.getElementById('editCard_unit').value = unit;
+                    document.getElementById('editCard_unit_price').value = price;
+                    
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        scrollToElement(card);
+                    }, 50);
+                }
             } else {
-                console.error('Bootstrap Modal not available');
+                // على الكمبيوتر: استخدام Modal
+                document.getElementById('edit_product_id').value = id;
+                document.getElementById('edit_product_name').value = name;
+                document.getElementById('edit_quantity').value = quantity;
+                document.getElementById('edit_unit').value = unit;
+                document.getElementById('edit_unit_price').value = price;
+                
+                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    new bootstrap.Modal(document.getElementById('editExternalProductModal')).show();
+                } else {
+                    console.error('Bootstrap Modal not available');
+                }
             }
         });
     });
@@ -2231,13 +2442,30 @@ function initEditExternalButtons() {
             const id = this.dataset.id;
             const name = this.dataset.name;
             
-            document.getElementById('delete_product_id').value = id;
-            document.getElementById('delete_product_name').textContent = name;
+            closeAllForms();
             
-            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                new bootstrap.Modal(document.getElementById('deleteExternalProductModal')).show();
+            if (isMobile()) {
+                // على الموبايل: استخدام Card
+                const card = document.getElementById('deleteExternalProductCard');
+                if (card) {
+                    document.getElementById('deleteCard_product_id').value = id;
+                    document.getElementById('deleteCard_product_name').textContent = name;
+                    
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        scrollToElement(card);
+                    }, 50);
+                }
             } else {
-                console.error('Bootstrap Modal not available');
+                // على الكمبيوتر: استخدام Modal
+                document.getElementById('delete_product_id').value = id;
+                document.getElementById('delete_product_name').textContent = name;
+                
+                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    new bootstrap.Modal(document.getElementById('deleteExternalProductModal')).show();
+                } else {
+                    console.error('Bootstrap Modal not available');
+                }
             }
         });
     });

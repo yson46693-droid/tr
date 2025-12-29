@@ -1379,7 +1379,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
         <i class="bi bi-people me-2"></i>العملاء المحليين
     </h2>
     <div class="d-flex gap-2">
-        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#importLocalCustomersModal">
+        <button class="btn btn-success" onclick="showImportLocalCustomersModal()">
             <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد من CSV
         </button>
         <?php if (in_array($currentRole, ['manager', 'developer', 'accountant'], true)): ?>
@@ -1882,7 +1882,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                     <?php endforeach; ?>
                                 </select>
                                 <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
-                                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRegionFromLocalCustomerModal">
+                                <button type="button" class="btn btn-outline-primary" onclick="showAddRegionFromLocalCustomerModal()">
                                     <i class="bi bi-plus-circle"></i>
                                 </button>
                                 <?php endif; ?>
@@ -4197,7 +4197,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Modal إضافة منطقة جديدة (من نموذج العميل المحلي) -->
 <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
-<div class="modal fade" id="addRegionFromLocalCustomerModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="addRegionFromLocalCustomerModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -4221,6 +4222,31 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </form>
         </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($userRole === 'manager'): ?>
+<!-- Card للموبايل - إضافة منطقة -->
+<div class="card shadow-sm mb-4 d-md-none" id="addRegionFromLocalCustomerCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">إضافة منطقة جديدة</h5>
+    </div>
+    <div class="card-body">
+        <form id="addRegionFromLocalCustomerCardForm">
+            <div class="mb-3">
+                <label class="form-label">اسم المنطقة <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="newLocalRegionCardName" required>
+            </div>
+            <div id="addLocalRegionCardMessage" class="alert d-none"></div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary" id="addLocalRegionCardSubmitBtn">
+                    <span class="spinner-border spinner-border-sm d-none me-2" id="addLocalRegionCardSpinner"></span>
+                    إضافة
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddRegionFromLocalCustomerCard()">إلغاء</button>
+            </div>
+        </form>
     </div>
 </div>
 <?php endif; ?>
@@ -4529,7 +4555,8 @@ window.CUSTOMER_EXPORT_CONFIG = {
 <?php endif; ?>
 
 <!-- Modal استيراد العملاء المحليين من CSV -->
-<div class="modal fade" id="importLocalCustomersModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="importLocalCustomersModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -5319,7 +5346,8 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
 
 <!-- Modal حذف العميل المحلي -->
 <?php if ($currentRole === 'manager'): ?>
-<div class="modal fade" id="deleteLocalCustomerModal" tabindex="-1" aria-hidden="true">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="deleteLocalCustomerModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
@@ -5354,7 +5382,238 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
     </div>
 </div>
 
+<!-- Card للموبايل - استيراد العملاء -->
+<div class="card shadow-sm mb-4 d-md-none" id="importLocalCustomersCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد العملاء المحليين من ملف CSV
+        </h5>
+    </div>
+    <div class="card-body">
+        <form id="importLocalCustomersCardForm" enctype="multipart/form-data">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>تعليمات الاستيراد:</strong>
+                <ul class="mb-0 mt-2">
+                    <li>يجب أن يحتوي الملف على الأعمدة التالية في الصف الأول: <strong>اسم العميل</strong> (مطلوب)، <strong>رقم الهاتف</strong>، <strong>العنوان</strong>، <strong>الرصيد</strong>، <strong>المنطقة</strong></li>
+                    <li>يجب أن يكون الصف الأول هو رؤوس الأعمدة</li>
+                    <li><strong>الملفات المدعومة:</strong> <strong>.csv</strong> (مفضّل - بدون مكتبات)، .xlsx, .xls (يتطلب مكتبة إضافية)</li>
+                    <li>لتصدير Excel كـ CSV: في Excel اختر <strong>ملف > حفظ باسم > CSV UTF-8</strong></li>
+                    <li>سيتم تخطي العملاء المكررين (بناءً على الاسم ورقم الهاتف)</li>
+                </ul>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">اختر ملف CSV أو Excel <span class="text-danger">*</span></label>
+                <input type="file" class="form-control" name="excel_file" id="localExcelCardFileInput" accept=".csv,.xlsx,.xls" required>
+                <small class="text-muted">الحجم الأقصى: 10 ميجابايت | يُفضل استخدام ملف CSV</small>
+            </div>
+            <div id="localImportCardProgress" class="d-none">
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div id="localImportCardStatus" class="text-center"></div>
+            </div>
+            <div id="localImportCardResults" class="d-none">
+                <div class="alert alert-success">
+                    <h6><i class="bi bi-check-circle me-2"></i>تم الاستيراد بنجاح</h6>
+                    <div id="localImportCardResultsContent"></div>
+                </div>
+            </div>
+            <div id="localImportCardErrors" class="d-none">
+                <div class="alert alert-danger">
+                    <h6><i class="bi bi-exclamation-triangle me-2"></i>أخطاء أثناء الاستيراد</h6>
+                    <div id="localImportCardErrorsContent"></div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success" id="localImportCardSubmitBtn">
+                    <i class="bi bi-upload me-2"></i>استيراد
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeImportLocalCustomersCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card للموبايل - حذف عميل -->
+<div class="card shadow-sm mb-4 d-md-none" id="deleteLocalCustomerCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-trash3 me-2"></i>حذف العميل المحلي</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+            <input type="hidden" name="action" value="delete_local_customer">
+            <input type="hidden" name="customer_id" id="deleteLocalCustomerCardId" value="">
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <strong>تحذير:</strong> سيتم حذف العميل المحلي <strong class="delete-local-customer-card-name">-</strong> وجميع السجلات المرتبطة به بشكل نهائي:
+                <ul class="mb-0 mt-2">
+                    <li>جميع الفواتير المحلية (local_invoices)</li>
+                    <li>جميع عناصر الفواتير (local_invoice_items)</li>
+                    <li>جميع المرتجعات (local_returns)</li>
+                    <li>جميع عناصر المرتجعات (local_return_items)</li>
+                    <li>جميع التحصيلات (local_collections)</li>
+                    <li>جميع أرقام الهواتف (local_customer_phones)</li>
+                    <li>سجل المشتريات</li>
+                </ul>
+            </div>
+            <p class="mb-3 text-danger fw-bold">لا يمكن التراجع عن هذه العملية!</p>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger">تأكيد الحذف</button>
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteLocalCustomerCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+// ===== دوال أساسية =====
+
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+function closeAllForms() {
+    const cards = ['addRegionFromLocalCustomerCard', 'importLocalCustomersCard', 'deleteLocalCustomerCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    const modals = ['addRegionFromLocalCustomerModal', 'importLocalCustomersModal', 'deleteLocalCustomerModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// ===== دوال فتح النماذج =====
+
+function showAddRegionFromLocalCustomerModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addRegionFromLocalCustomerCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addRegionFromLocalCustomerModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+function showImportLocalCustomersModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('importLocalCustomersCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('importLocalCustomersModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+function showDeleteLocalCustomerModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const customerId = button.getAttribute('data-customer-id') || '';
+    const customerName = button.getAttribute('data-customer-name') || '-';
+    
+    if (isMobile()) {
+        const card = document.getElementById('deleteLocalCustomerCard');
+        if (card) {
+            document.getElementById('deleteLocalCustomerCardId').value = customerId;
+            card.querySelector('.delete-local-customer-card-name').textContent = customerName;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('deleteLocalCustomerModal');
+        if (modal) {
+            modal.querySelector('input[name="customer_id"]').value = customerId;
+            modal.querySelector('.delete-local-customer-name').textContent = customerName;
+            
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// ===== دوال إغلاق Cards =====
+
+function closeAddRegionFromLocalCustomerCard() {
+    const card = document.getElementById('addRegionFromLocalCustomerCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeImportLocalCustomersCard() {
+    const card = document.getElementById('importLocalCustomersCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeDeleteLocalCustomerCard() {
+    const card = document.getElementById('deleteLocalCustomerCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     var deleteModal = document.getElementById('deleteLocalCustomerModal');
     if (deleteModal) {

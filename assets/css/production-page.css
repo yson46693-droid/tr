@@ -1236,3 +1236,73 @@ h5 {
     z-index: 1057;
 }
 
+/* ===== CSS Modal/Card Dual System ===== */
+
+/* إخفاء Modal على الموبايل */
+@media (max-width: 768px) {
+    #createFromTemplateModal,
+    #printBarcodesModal,
+    #addProductionModal,
+    #editProductionModal,
+    #addTaskModal,
+    #viewTaskModal {
+        display: none !important;
+    }
+}
+
+/* إخفاء Card على الكمبيوتر */
+@media (min-width: 769px) {
+    #createFromTemplateCard,
+    #printBarcodesCard,
+    #addProductionCard,
+    #editProductionCard,
+    #addTaskCard,
+    #viewTaskCard {
+        display: none !important;
+    }
+}
+
+/* منع الملفات العامة من التأثير على Modals */
+#createFromTemplateModal,
+#printBarcodesModal,
+#addProductionModal,
+#editProductionModal,
+#addTaskModal,
+#viewTaskModal {
+    height: auto !important;
+    max-height: none !important;
+}
+
+#createFromTemplateModal .modal-dialog,
+#printBarcodesModal .modal-dialog,
+#addProductionModal .modal-dialog,
+#editProductionModal .modal-dialog,
+#addTaskModal .modal-dialog,
+#viewTaskModal .modal-dialog {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 1.75rem auto !important;
+}
+
+#createFromTemplateModal .modal-content,
+#printBarcodesModal .modal-content,
+#addProductionModal .modal-content,
+#editProductionModal .modal-content,
+#addTaskModal .modal-content,
+#viewTaskModal .modal-content {
+    height: auto !important;
+    max-height: none !important;
+}
+
+#createFromTemplateModal .modal-body,
+#printBarcodesModal .modal-body,
+#addProductionModal .modal-body,
+#editProductionModal .modal-body,
+#addTaskModal .modal-body,
+#viewTaskModal .modal-body {
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+}
+

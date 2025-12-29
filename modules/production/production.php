@@ -10703,6 +10703,309 @@ observer.observe(document.body, {
     childList: true,
     subtree: true
 });
+
+// ===== دوال Modal/Card Dual System =====
+
+// دالة التحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// دالة Scroll تلقائي
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// دالة إغلاق جميع النماذج
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const cards = ['createFromTemplateCard', 'printBarcodesCard', 'addProductionCard', 'editProductionCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = ['createFromTemplateModal', 'printBarcodesModal', 'addProductionModal', 'editProductionModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// دوال إغلاق Cards
+function closeCreateFromTemplateCard() {
+    const card = document.getElementById('createFromTemplateCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closePrintBarcodesCard() {
+    const card = document.getElementById('printBarcodesCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
+function closeAddProductionCard() {
+    const card = document.getElementById('addProductionCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeEditProductionCard() {
+    const card = document.getElementById('editProductionCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+// تعديل دالة openCreateFromTemplateModal لدعم الموبايل
+const originalOpenCreateFromTemplateModal = window.openCreateFromTemplateModal;
+window.openCreateFromTemplateModal = function(element) {
+    if (!element) return;
+    
+    closeAllForms();
+    
+    const templateId = element.getAttribute('data-template-id');
+    const templateName = element.getAttribute('data-template-name');
+    const templateType = element.getAttribute('data-template-type') || 'legacy';
+    
+    try {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (scrollError) {
+        window.scrollTo(0, 0);
+    }
+    
+    document.querySelectorAll('.template-card-modern.selected-template').forEach(card => {
+        card.classList.remove('selected-template');
+        card.style.setProperty('--template-accent', card.dataset.originalAccent || '#0ea5e9');
+        card.style.setProperty('--template-accent-light', card.dataset.originalAccentLight || 'rgba(14, 165, 233, 0.15)');
+    });
+    if (element) {
+        element.classList.add('selected-template');
+        element.dataset.originalAccent = getComputedStyle(element).getPropertyValue('--template-accent');
+        element.dataset.originalAccentLight = getComputedStyle(element).getPropertyValue('--template-accent-light');
+        element.style.setProperty('--template-accent', '#1d4ed8');
+        element.style.setProperty('--template-accent-light', '#1d4ed822');
+    }
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('createFromTemplateCard');
+        if (card) {
+            document.getElementById('template_id_card').value = templateId;
+            document.getElementById('template_product_name_card').value = templateName;
+            document.getElementById('template_type_card').value = templateType;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+            
+            // استدعاء الدالة الأصلية لتحميل البيانات
+            if (originalOpenCreateFromTemplateModal) {
+                originalOpenCreateFromTemplateModal(element);
+            }
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        if (originalOpenCreateFromTemplateModal) {
+            originalOpenCreateFromTemplateModal(element);
+        }
+    }
+};
+
+// تعديل دالة showBarcodeModal لدعم الموبايل
+const originalShowBarcodeModal = window.showBarcodeModal;
+window.showBarcodeModal = function(batchNumber, productName, defaultQuantity) {
+    closeAllForms();
+    
+    const quantity = defaultQuantity > 0 ? defaultQuantity : 1;
+    window.batchNumbersToPrint = [batchNumber];
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('printBarcodesCard');
+        if (card) {
+            const productNameInput = document.getElementById('barcode_product_name_card');
+            const quantityText = document.getElementById('barcode_quantity_card');
+            const barcodeQtyInput = document.getElementById('barcode_print_quantity_card');
+            const batchListContainer = document.getElementById('batch_numbers_list_card');
+            
+            if (productNameInput) productNameInput.value = productName || '';
+            if (quantityText) quantityText.textContent = quantity;
+            if (barcodeQtyInput) barcodeQtyInput.value = quantity;
+            if (batchListContainer) {
+                batchListContainer.innerHTML = `
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>رقم التشغيلة:</strong> ${batchNumber}<br>
+                        <small>ستتم طباعة نفس رقم التشغيلة بعدد ${quantity} باركود</small>
+                    </div>
+                `;
+            }
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        if (originalShowBarcodeModal) {
+            originalShowBarcodeModal(batchNumber, productName, defaultQuantity);
+        }
+    }
+};
+
+// دالة فتح نموذج إضافة إنتاج
+function showAddProductionModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addProductionCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addProductionModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// تعديل دالة editProduction لدعم الموبايل
+const originalEditProduction = window.editProduction;
+window.editProduction = function(id) {
+    const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '');
+    const url = baseUrl + '/dashboard/production.php?page=production&ajax=1&id=' + id;
+    
+    fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                if (isMobile()) {
+                    // على الموبايل: استخدام Card
+                    const card = document.getElementById('editProductionCard');
+                    if (card) {
+                        document.getElementById('edit_production_id_card').value = data.production.id;
+                        document.getElementById('edit_product_id_card').value = data.production.product_id;
+                        document.getElementById('edit_quantity_card').value = data.production.quantity;
+                        document.getElementById('edit_production_date_card').value = data.production.date;
+                        document.getElementById('edit_materials_used_card').value = data.production.materials_used || '';
+                        document.getElementById('edit_notes_card').value = data.production.notes || '';
+                        if (document.getElementById('edit_status_card')) {
+                            document.getElementById('edit_status_card').value = data.production.status || 'pending';
+                        }
+                        
+                        closeAllForms();
+                        card.style.display = 'block';
+                        setTimeout(function() {
+                            scrollToElement(card);
+                        }, 50);
+                    }
+                } else {
+                    // على الكمبيوتر: استخدام Modal
+                    document.getElementById('edit_production_id').value = data.production.id;
+                    document.getElementById('edit_product_id').value = data.production.product_id;
+                    document.getElementById('edit_quantity').value = data.production.quantity;
+                    document.getElementById('edit_production_date').value = data.production.date;
+                    document.getElementById('edit_materials_used').value = data.production.materials_used || '';
+                    document.getElementById('edit_notes').value = data.production.notes || '';
+                    if (document.getElementById('edit_status')) {
+                        document.getElementById('edit_status').value = data.production.status || 'pending';
+                    }
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('editProductionModal'));
+                    modal.show();
+                }
+            } else {
+                alert(data.message || 'حدث خطأ في تحميل البيانات');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('حدث خطأ في تحميل البيانات: ' + error.message);
+        });
+};
+
+// دالة طباعة الباركودات من Card
+function printBarcodesCard() {
+    const actionButton = document.getElementById('sendBarcodeToTelegramBtnCard');
+    const fallbackMessages = document.getElementById('barcodeFallbackMessagesCard');
+    const barcodeQtyInput = document.getElementById('barcode_print_quantity_card');
+    
+    if (actionButton) {
+        actionButton.disabled = true;
+        actionButton.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>جاري الإرسال...';
+    }
+    
+    if (fallbackMessages) {
+        fallbackMessages.classList.add('d-none');
+        fallbackMessages.innerHTML = '';
+    }
+    
+    const quantity = barcodeQtyInput ? parseInt(barcodeQtyInput.value) || 1 : 1;
+    
+    if (window.batchNumbersToPrint && window.batchNumbersToPrint.length > 0) {
+        const batchNumber = window.batchNumbersToPrint[0];
+        if (window.printBarcodes) {
+            window.printBarcodes();
+        } else {
+            alert('دالة الطباعة غير متاحة');
+            if (actionButton) {
+                actionButton.disabled = false;
+                actionButton.innerHTML = '<i class="bi bi-send-check me-2"></i>إرسال رابط الطباعة';
+            }
+        }
+    } else {
+        alert('لا توجد أرقام تشغيلة للطباعة');
+        if (actionButton) {
+            actionButton.disabled = false;
+            actionButton.innerHTML = '<i class="bi bi-send-check me-2"></i>إرسال رابط الطباعة';
+        }
+    }
+}
 </script>
 
 <style>

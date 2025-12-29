@@ -158,7 +158,7 @@ $lang = $translations;
 <div class="page-header mb-4 d-flex justify-content-between align-items-center">
     <h2><i class="bi bi-geo-alt me-2"></i>إدارة المناطق</h2>
     <?php if ($userRole === 'manager'): ?>
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRegionModal">
+        <button type="button" class="btn btn-primary" onclick="showAddRegionModal()">
             <i class="bi bi-plus-circle me-2"></i>إضافة منطقة جديدة
         </button>
     <?php endif; ?>
@@ -233,9 +233,9 @@ $lang = $translations;
     </div>
 </div>
 
-<!-- Modal إضافة منطقة -->
+<!-- Modal للكمبيوتر فقط - إضافة منطقة -->
 <?php if ($userRole === 'manager'): ?>
-<div class="modal fade" id="addRegionModal" tabindex="-1">
+<div class="modal fade d-none d-md-block" id="addRegionModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -260,8 +260,8 @@ $lang = $translations;
 </div>
 <?php endif; ?>
 
-<!-- Modal تعديل منطقة -->
-<div class="modal fade" id="editRegionModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط - تعديل منطقة -->
+<div class="modal fade d-none d-md-block" id="editRegionModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -286,17 +286,167 @@ $lang = $translations;
     </div>
 </div>
 
+<?php if ($userRole === 'manager'): ?>
+<!-- Card للموبايل - إضافة منطقة -->
+<div class="card shadow-sm mb-4 d-md-none" id="addRegionCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">إضافة منطقة جديدة</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="add_region">
+            <div class="mb-3">
+                <label class="form-label">اسم المنطقة <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="name" required>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">إضافة</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddRegionCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- Card للموبايل - تعديل منطقة -->
+<div class="card shadow-sm mb-4 d-md-none" id="editRegionCard" style="display: none;">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">تعديل المنطقة</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="edit_region">
+            <input type="hidden" name="id" id="editRegionCardId">
+            <div class="mb-3">
+                <label class="form-label">اسم المنطقة <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="name" id="editRegionCardName" required>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditRegionCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+// ===== دوال أساسية =====
+
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+function closeAllForms() {
+    const cards = ['addRegionCard', 'editRegionCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    const modals = ['addRegionModal', 'editRegionModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// ===== دوال فتح النماذج =====
+
+function showAddRegionModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addRegionCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addRegionModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// ===== دوال إغلاق Cards =====
+
+function closeAddRegionCard() {
+    const card = document.getElementById('addRegionCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeEditRegionCard() {
+    const card = document.getElementById('editRegionCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+// ===== Event Listeners =====
+
 document.addEventListener('DOMContentLoaded', function() {
     // تعديل المنطقة
     document.querySelectorAll('.edit-region-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
+            closeAllForms();
+            
             const id = this.getAttribute('data-id');
             const name = this.getAttribute('data-name');
-            document.getElementById('editRegionId').value = id;
-            document.getElementById('editRegionName').value = name;
-            const modal = new bootstrap.Modal(document.getElementById('editRegionModal'));
-            modal.show();
+            
+            if (isMobile()) {
+                // على الموبايل: استخدام Card
+                const card = document.getElementById('editRegionCard');
+                if (card) {
+                    document.getElementById('editRegionCardId').value = id;
+                    document.getElementById('editRegionCardName').value = name;
+                    
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        scrollToElement(card);
+                    }, 50);
+                }
+            } else {
+                // على الكمبيوتر: استخدام Modal
+                document.getElementById('editRegionId').value = id;
+                document.getElementById('editRegionName').value = name;
+                const modal = new bootstrap.Modal(document.getElementById('editRegionModal'));
+                modal.show();
+            }
         });
     });
     

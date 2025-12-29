@@ -1246,7 +1246,7 @@ function tasksHtml(string $value): string
     <div class="d-flex justify-content-between align-items-center flex-wrap mb-3">
         <h2 class="mb-0"><i class="bi bi-list-check me-2"></i>إدارة المهام</h2>
         <?php if ($isManager): ?>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTaskModal">
+            <button type="button" class="btn btn-primary" onclick="showAddTaskModal()">
                 <i class="bi bi-plus-circle me-2"></i>إضافة مهمة جديدة
             </button>
         <?php endif; ?>
@@ -1555,7 +1555,7 @@ function tasksHtml(string $value): string
 </div>
 
 <?php if ($isManager): ?>
-<div class="modal fade" id="addTaskModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade d-none d-md-block" id="addTaskModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" action="" id="addTaskForm">
@@ -1641,7 +1641,7 @@ function tasksHtml(string $value): string
     </div>
 </div>
 
-<div class="modal fade" id="viewTaskModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade d-none d-md-block" id="viewTaskModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -1655,6 +1655,99 @@ function tasksHtml(string $value): string
         </div>
     </div>
 </div>
+
+<!-- ===== Cards للموبايل ===== -->
+
+<!-- Card إضافة مهمة للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="addTaskCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">إضافة مهمة جديدة</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="" id="addTaskFormCard">
+            <input type="hidden" name="action" value="add_task">
+            <div class="mb-3">
+                <label class="form-label">نوع المهمة <span class="text-danger">*</span></label>
+                <select class="form-select" name="task_type" id="task_type_card" required>
+                    <option value="general">مهمة عامة</option>
+                    <option value="production">مهمة إنتاج</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">العنوان <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="title" id="task_title_card" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الوصف</label>
+                <textarea class="form-control" name="description" rows="3" placeholder="تفاصيل المهمة"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">المخصص إلى</label>
+                <select class="form-select" name="assigned_to">
+                    <option value="0">غير محدد</option>
+                    <?php foreach ($users as $user): ?>
+                        <option value="<?php echo (int) $user['id']; ?>"><?php echo tasksHtml($user['full_name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الأولوية</label>
+                <select class="form-select" name="priority">
+                    <option value="normal" selected>عادية</option>
+                    <option value="low">منخفضة</option>
+                    <option value="urgent">عاجلة</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">تاريخ الاستحقاق</label>
+                <input type="date" class="form-control" name="due_date">
+            </div>
+
+            <div class="border rounded p-3 mb-3" id="production_fields_card" style="display: none;">
+                <h6 class="fw-bold mb-3">بيانات مهمة الإنتاج</h6>
+                <div class="mb-3">
+                    <label class="form-label">اختر من القوالب</label>
+                    <select class="form-select" name="product_id" id="product_id_card">
+                        <option value="0">اختر القالب</option>
+                        <?php foreach ($products as $product): ?>
+                            <option value="<?php echo (int) $product['id']; ?>" data-product-name="<?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?>">
+                                <?php echo tasksHtml($product['name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="form-text mt-1">أو أدخل اسم المنتج يدوياً أدناه</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">اسم المنتج <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="product_name" id="product_name_card" placeholder="أدخل اسم المنتج أو اختر من القوالب أعلاه" value="">
+                    <div class="form-text mt-1">سيتم تحديث هذا الحقل تلقائياً عند اختيار قالب</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية <span class="text-danger">*</span></label>
+                    <input type="number" step="0.01" min="0.01" class="form-control" name="quantity" id="quantity_card" placeholder="0.00">
+                </div>
+                <div class="form-text">سيتم إنشاء العنوان تلقائيًا بناءً على المنتج والكمية.</div>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">حفظ</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddTaskCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card عرض تفاصيل المهمة للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="viewTaskCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">تفاصيل المهمة</h5>
+    </div>
+    <div class="card-body" id="viewTaskContentCard"></div>
+    <div class="card-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeViewTaskCard()">إغلاق</button>
+    </div>
+</div>
+
 <?php endif; ?>
 
 <form method="POST" action="" id="taskActionForm" style="display: none;">
@@ -2322,4 +2415,164 @@ function tasksHtml(string $value): string
         }
     };
 })();
+
+// ===== دوال Modal/Card Dual System =====
+
+// دالة التحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// دالة Scroll تلقائي
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// دالة إغلاق جميع النماذج
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const cards = ['addTaskCard', 'viewTaskCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = ['addTaskModal', 'viewTaskModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// دوال إغلاق Cards
+function closeAddTaskCard() {
+    const card = document.getElementById('addTaskCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+        const productionFields = document.getElementById('production_fields_card');
+        if (productionFields) productionFields.style.display = 'none';
+    }
+}
+
+function closeViewTaskCard() {
+    const card = document.getElementById('viewTaskCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
+// دالة فتح نموذج إضافة مهمة
+function showAddTaskModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addTaskCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+            
+            // ربط event listeners
+            const taskTypeSelect = document.getElementById('task_type_card');
+            const productionFields = document.getElementById('production_fields_card');
+            if (taskTypeSelect && productionFields) {
+                taskTypeSelect.addEventListener('change', function() {
+                    if (this.value === 'production') {
+                        productionFields.style.display = 'block';
+                    } else {
+                        productionFields.style.display = 'none';
+                    }
+                });
+            }
+        }
+    } else {
+        const modal = document.getElementById('addTaskModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// تعديل دالة viewTask لدعم الموبايل
+const originalViewTask = window.viewTask;
+if (typeof originalViewTask === 'function') {
+    window.viewTask = function(taskId) {
+        closeAllForms();
+        
+        // تحميل بيانات المهمة
+        fetch(`?ajax=1&task_id=${taskId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.task) {
+                    const task = data.task;
+                    let content = `
+                        <div class="mb-3">
+                            <strong>العنوان:</strong> ${task.title || '-'}
+                        </div>
+                        <div class="mb-3">
+                            <strong>الوصف:</strong> ${task.description || '-'}
+                        </div>
+                        <div class="mb-3">
+                            <strong>الحالة:</strong> ${task.status || '-'}
+                        </div>
+                        <div class="mb-3">
+                            <strong>الأولوية:</strong> ${task.priority || '-'}
+                        </div>
+                    `;
+                    
+                    if (isMobile()) {
+                        const card = document.getElementById('viewTaskCard');
+                        const contentEl = document.getElementById('viewTaskContentCard');
+                        if (card && contentEl) {
+                            contentEl.innerHTML = content;
+                            card.style.display = 'block';
+                            setTimeout(function() {
+                                scrollToElement(card);
+                            }, 50);
+                        }
+                    } else {
+                        const modal = document.getElementById('viewTaskModal');
+                        const contentEl = document.getElementById('viewTaskContent');
+                        if (modal && contentEl) {
+                            contentEl.innerHTML = content;
+                            const modalInstance = new bootstrap.Modal(modal);
+                            modalInstance.show();
+                        }
+                    }
+                } else {
+                    alert('حدث خطأ في تحميل بيانات المهمة');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('حدث خطأ في تحميل بيانات المهمة');
+            });
+    };
+}
 </script>

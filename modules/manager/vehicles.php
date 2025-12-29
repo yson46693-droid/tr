@@ -274,7 +274,7 @@ if (isset($_GET['id'])) {
 ?>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="bi bi-truck me-2"></i>إدارة السيارات</h2>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
+    <button class="btn btn-primary" onclick="showAddVehicleModal()">
         <i class="bi bi-plus-circle me-2"></i>إضافة سيارة جديدة
     </button>
 </div>
@@ -454,8 +454,8 @@ if (isset($_GET['id'])) {
     </div>
 </div>
 
-<!-- Modal إضافة سيارة -->
-<div class="modal fade" id="addVehicleModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط - إضافة سيارة -->
+<div class="modal fade d-none d-md-block" id="addVehicleModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -516,8 +516,8 @@ if (isset($_GET['id'])) {
     </div>
 </div>
 
-<!-- Modal التعديل السريع -->
-<div class="modal fade" id="editVehicleModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط - تعديل سيارة -->
+<div class="modal fade d-none d-md-block" id="editVehicleModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
@@ -580,8 +580,8 @@ if (isset($_GET['id'])) {
     </div>
 </div>
 
-<!-- Modal تأكيد الحذف -->
-<div class="modal fade" id="deleteVehicleModal" tabindex="-1">
+<!-- Modal للكمبيوتر فقط - تأكيد الحذف -->
+<div class="modal fade d-none d-md-block" id="deleteVehicleModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
@@ -610,8 +610,326 @@ if (isset($_GET['id'])) {
     </div>
 </div>
 
+<!-- Card للموبايل - إضافة سيارة -->
+<div class="card shadow-sm mb-4 d-md-none" id="addVehicleCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">إضافة سيارة جديدة</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="create_vehicle">
+            <div class="mb-3">
+                <label class="form-label">رقم السيارة <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="vehicle_number" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع السيارة</label>
+                <input type="text" class="form-control" name="vehicle_type" placeholder="مثال: شاحنة">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الموديل</label>
+                <input type="text" class="form-control" name="model" placeholder="مثال: تويوتا هايلكس">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">السنة</label>
+                <input type="number" class="form-control" name="year" 
+                       min="2000" max="<?php echo date('Y'); ?>" 
+                       placeholder="<?php echo date('Y'); ?>">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">المندوب (السائق)</label>
+                <select class="form-select" name="driver_id">
+                    <option value="">لا يوجد</option>
+                    <?php foreach ($salesReps as $rep): ?>
+                        <option value="<?php echo $rep['id']; ?>">
+                            <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الحالة</label>
+                <select class="form-select" name="status">
+                    <option value="active">نشطة</option>
+                    <option value="inactive">غير نشطة</option>
+                    <option value="maintenance">صيانة</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" name="notes" rows="3"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">إضافة</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddVehicleCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card للموبايل - تعديل سيارة -->
+<div class="card shadow-sm mb-4 d-md-none" id="editVehicleCard" style="display: none;">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>تعديل السيارة</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="editVehicleCardForm">
+            <input type="hidden" name="action" value="update_vehicle">
+            <input type="hidden" name="vehicle_id" id="editVehicleCardId">
+            <div class="mb-3">
+                <label class="form-label">رقم السيارة <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="vehicle_number" id="editVehicleCardNumber" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع السيارة</label>
+                <input type="text" class="form-control" name="vehicle_type" id="editVehicleCardType">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الموديل</label>
+                <input type="text" class="form-control" name="model" id="editVehicleCardModel">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">السنة</label>
+                <input type="number" class="form-control" name="year" id="editVehicleCardYear" 
+                       min="2000" max="<?php echo date('Y'); ?>">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">المندوب (السائق)</label>
+                <select class="form-select" name="driver_id" id="editVehicleCardDriver">
+                    <option value="">لا يوجد</option>
+                    <?php foreach ($salesReps as $rep): ?>
+                        <option value="<?php echo $rep['id']; ?>">
+                            <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الحالة</label>
+                <select class="form-select" name="status" id="editVehicleCardStatus">
+                    <option value="active">نشطة</option>
+                    <option value="inactive">غير نشطة</option>
+                    <option value="maintenance">صيانة</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" name="notes" id="editVehicleCardNotes" rows="3"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-warning">
+                    <i class="bi bi-save me-2"></i>حفظ التغييرات
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditVehicleCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card للموبايل - تأكيد الحذف -->
+<div class="card shadow-sm mb-4 d-md-none" id="deleteVehicleCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>تأكيد الحذف</h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <strong>تحذير:</strong> سيتم حذف السيارة بشكل نهائي ولا يمكن التراجع عن هذه العملية.
+        </div>
+        <p>هل أنت متأكد من حذف السيارة رقم: <strong id="deleteVehicleCardNumber"></strong>؟</p>
+        <p class="text-muted small">ملاحظة: لا يمكن حذف السيارة إذا كانت مرتبطة بمخزون أو طلبات أو نقلات.</p>
+        <form method="POST" id="deleteVehicleCardForm">
+            <input type="hidden" name="action" value="delete_vehicle">
+            <input type="hidden" name="vehicle_id" id="deleteVehicleCardId">
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger">
+                    <i class="bi bi-trash me-2"></i>حذف
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteVehicleCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+// ===== دوال أساسية =====
+
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+function closeAllForms() {
+    const cards = ['addVehicleCard', 'editVehicleCard', 'deleteVehicleCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    const modals = ['addVehicleModal', 'editVehicleModal', 'deleteVehicleModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// ===== دوال فتح النماذج =====
+
+function showAddVehicleModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('addVehicleCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('addVehicleModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// ===== دوال إغلاق Cards =====
+
+function closeAddVehicleCard() {
+    const card = document.getElementById('addVehicleCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeEditVehicleCard() {
+    const card = document.getElementById('editVehicleCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+    }
+}
+
+function closeDeleteVehicleCard() {
+    const card = document.getElementById('deleteVehicleCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
+// ===== دوال موجودة - تعديلها لدعم الموبايل =====
+
 function openEditModal(vehicleData) {
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('editVehicleCard');
+        if (card) {
+            document.getElementById('editVehicleCardId').value = vehicleData.id;
+            document.getElementById('editVehicleCardNumber').value = vehicleData.vehicle_number || '';
+            document.getElementById('editVehicleCardType').value = vehicleData.vehicle_type || '';
+            document.getElementById('editVehicleCardModel').value = vehicleData.model || '';
+            
+            if (vehicleData.year) {
+                const yearValue = typeof vehicleData.year === 'string' ? 
+                    new Date(vehicleData.year + '-01-01').getFullYear() : 
+                    vehicleData.year;
+                document.getElementById('editVehicleCardYear').value = yearValue;
+            } else {
+                document.getElementById('editVehicleCardYear').value = '';
+            }
+            
+            document.getElementById('editVehicleCardDriver').value = vehicleData.driver_id || '';
+            document.getElementById('editVehicleCardStatus').value = vehicleData.status || 'active';
+            document.getElementById('editVehicleCardNotes').value = vehicleData.notes || '';
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        document.getElementById('editVehicleId').value = vehicleData.id;
+        document.getElementById('editVehicleNumber').value = vehicleData.vehicle_number || '';
+        document.getElementById('editVehicleType').value = vehicleData.vehicle_type || '';
+        document.getElementById('editVehicleModel').value = vehicleData.model || '';
+        
+        // معالجة السنة
+        if (vehicleData.year) {
+            const yearValue = typeof vehicleData.year === 'string' ? 
+                new Date(vehicleData.year + '-01-01').getFullYear() : 
+                vehicleData.year;
+            document.getElementById('editVehicleYear').value = yearValue;
+        } else {
+            document.getElementById('editVehicleYear').value = '';
+        }
+        
+        document.getElementById('editVehicleDriver').value = vehicleData.driver_id || '';
+        document.getElementById('editVehicleStatus').value = vehicleData.status || 'active';
+        document.getElementById('editVehicleNotes').value = vehicleData.notes || '';
+        
+        // فتح الـ modal
+        const modal = new bootstrap.Modal(document.getElementById('editVehicleModal'));
+        modal.show();
+    }
+}
+
+function confirmDelete(vehicleId, vehicleNumber) {
+    closeAllForms();
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('deleteVehicleCard');
+        if (card) {
+            document.getElementById('deleteVehicleCardId').value = vehicleId;
+            document.getElementById('deleteVehicleCardNumber').textContent = vehicleNumber;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        document.getElementById('deleteVehicleId').value = vehicleId;
+        document.getElementById('deleteVehicleNumber').textContent = vehicleNumber;
+        
+        // فتح الـ modal
+        const modal = new bootstrap.Modal(document.getElementById('deleteVehicleModal'));
+        modal.show();
+    }
+}
     document.getElementById('editVehicleId').value = vehicleData.id;
     document.getElementById('editVehicleNumber').value = vehicleData.vehicle_number || '';
     document.getElementById('editVehicleType').value = vehicleData.vehicle_type || '';

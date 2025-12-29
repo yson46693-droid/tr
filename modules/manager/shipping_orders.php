@@ -2765,7 +2765,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
             <h5 class="mb-1">تسجيل طلب شحن جديد</h5>
             <small class="text-muted">قم بتسليم المنتجات لشركة الشحن وتتبع الدين عليها لحين استلام العميل.</small>
         </div>
-        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addShippingCompanyModal">
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick="showAddShippingCompanyModal()">
             <i class="bi bi-plus-circle me-1"></i>شركة شحن جديدة
         </button>
     </div>
@@ -2803,7 +2803,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#addShippingCompanyModal" title="إضافة شركة شحن">
+                            <button class="btn btn-outline-secondary" type="button" onclick="showAddShippingCompanyModal()" title="إضافة شركة شحن">
                                 <i class="bi bi-plus"></i>
                             </button>
                         </div>
@@ -2822,7 +2822,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#addLocalCustomerModal" title="إضافة عميل جديد">
+                            <button class="btn btn-outline-secondary" type="button" onclick="showAddLocalCustomerModal()" title="إضافة عميل جديد">
                                 <i class="bi bi-plus"></i>
                             </button>
                         </div>
@@ -3043,8 +3043,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                                 </form>
                                                 <button type="button" 
                                                         class="btn btn-success btn-sm" 
-                                                        data-bs-toggle="modal" 
-                                                        data-bs-target="#deliveryModal"
+                                                        onclick="showDeliveryModal(this)"
                                                         data-order-id="<?php echo (int)$order['id']; ?>"
                                                         data-order-number="<?php echo htmlspecialchars($order['order_number'] ?? ''); ?>"
                                                         data-customer-id="<?php echo (int)($order['customer_id'] ?? 0); ?>"
@@ -3183,7 +3182,8 @@ $hasShippingCompanies = !empty($shippingCompanies);
     </div>
 </div>
 
-<div class="modal fade" id="addShippingCompanyModal" tabindex="-1" aria-hidden="true">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="addShippingCompanyModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -3231,7 +3231,8 @@ $hasShippingCompanies = !empty($shippingCompanies);
     </div>
 </div>
 
-<div class="modal fade" id="addLocalCustomerModal" tabindex="-1" aria-hidden="true">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="addLocalCustomerModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -3560,7 +3561,8 @@ $hasShippingCompanies = !empty($shippingCompanies);
 </script>
 
 <!-- Modal لتسليم الطلب -->
-<div class="modal fade" id="deliveryModal" tabindex="-1" aria-labelledby="deliveryModalLabel" aria-hidden="true">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="deliveryModal" tabindex="-1" aria-labelledby="deliveryModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">

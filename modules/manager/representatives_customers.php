@@ -3381,7 +3381,8 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <!-- Modal عرض موقع العميل -->
-<div class="modal fade" id="allCustomersViewLocationModal" tabindex="-1" aria-hidden="true">
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="allCustomersViewLocationModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">

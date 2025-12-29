@@ -213,8 +213,8 @@ unset($return);
     </div>
 </div>
 
-<!-- Return Details Modal -->
-<div class="modal fade" id="returnDetailsModal" tabindex="-1" aria-hidden="true">
+<!-- Modal للكمبيوتر فقط - تفاصيل المرتجع -->
+<div class="modal fade d-none d-md-block" id="returnDetailsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -232,7 +232,74 @@ unset($return);
     </div>
 </div>
 
+<!-- Card للموبايل - تفاصيل المرتجع -->
+<div class="card shadow-sm mb-4 d-md-none" id="returnDetailsCard" style="display: none;">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">تفاصيل طلب المرتجع</h5>
+    </div>
+    <div class="card-body" id="returnDetailsCardContent">
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">جاري التحميل...</span>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeReturnDetailsCard()">إغلاق</button>
+    </div>
+</div>
+
 <script>
+// ===== دوال أساسية =====
+
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, elementTop - offset),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+function closeAllForms() {
+    const cards = ['returnDetailsCard'];
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+        }
+    });
+    
+    const modals = ['returnDetailsModal'];
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+function closeReturnDetailsCard() {
+    const card = document.getElementById('returnDetailsCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
 const basePath = '<?php echo getBasePath(); ?>';
 
 // دالة لإظهار رسالة النجاح
@@ -622,11 +689,26 @@ function rejectReturn(returnId, event) {
 }
 
 function viewReturnDetails(returnId) {
-    const modal = new bootstrap.Modal(document.getElementById('returnDetailsModal'));
-    const content = document.getElementById('returnDetailsContent');
+    closeAllForms();
+    
+    const content = isMobile() ? document.getElementById('returnDetailsCardContent') : document.getElementById('returnDetailsContent');
+    
+    if (!content) return;
     
     content.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">جاري التحميل...</span></div></div>';
-    modal.show();
+    
+    if (isMobile()) {
+        const card = document.getElementById('returnDetailsCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = new bootstrap.Modal(document.getElementById('returnDetailsModal'));
+        modal.show();
+    }
     
     fetch(basePath + '/api/returns.php?action=get_return_details&return_id=' + returnId, {
         credentials: 'same-origin',
