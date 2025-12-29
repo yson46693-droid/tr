@@ -70,21 +70,19 @@ function isNetworkError(error) {
  * Get offline page response
  */
 async function getOfflinePage() {
-  // Only try cache if CacheStorage is available
-  if ('caches' in self) {
-    try {
-      const cache = await caches.open(PRECACHE_NAME);
-      const offlinePage = await cache.match('/offline.html');
-      if (offlinePage) {
-        return offlinePage;
-      }
-    } catch (error) {
-      // Silently fail - will use fallback
-      if (!error.message?.includes('CacheStorage') && !error.message?.includes('open')) {
-        console.warn('[SW] Failed to get offline page from cache:', error.message);
+    // Only try cache if CacheStorage is available
+    if ('caches' in self) {
+      try {
+        const cache = await caches.open(PRECACHE_NAME);
+        const offlinePage = await cache.match('/offline.html');
+        if (offlinePage) {
+          return offlinePage;
+        }
+      } catch (error) {
+        // Silently fail - will use fallback
+        // Don't log any errors to console
       }
     }
-  }
   
   // Fallback offline response
   return new Response(
@@ -148,27 +146,21 @@ async function cacheFirst(request, cacheName) {
     // Only cache successful responses
     if (response.status === 200 && response.ok) {
       const responseClone = response.clone();
-      cache.put(request, responseClone).catch((error) => {
-        // Silently fail caching - don't block response
-        console.warn(`[SW] Failed to cache ${request.url}:`, error.message);
-      });
+        cache.put(request, responseClone).catch(() => {
+          // Silently fail caching - don't block response
+          // Don't log to console
+        });
     }
     
     return response;
   } catch (error) {
     // If cache operations fail, fallback to network only
-    // Don't log as error if it's a known CacheStorage issue
-    if (error.message?.includes('CacheStorage') || error.message?.includes('open')) {
-      console.warn(`[SW] CacheStorage unavailable for ${request.url}, using network only`);
-    } else {
-      console.error(`[SW] Cache First error for ${request.url}:`, error);
-    }
-    
+    // Silently handle CacheStorage errors - don't log to console
     // Fallback to network
     try {
       return await fetch(request);
     } catch (networkError) {
-      console.error(`[SW] Network fallback failed for ${request.url}:`, networkError);
+      // Silently handle network errors too
       throw networkError;
     }
   }
@@ -186,17 +178,13 @@ async function networkFirst(request, cacheName, isNavigation = false) {
       try {
         const cache = await caches.open(cacheName);
         const responseClone = response.clone();
-        cache.put(request, responseClone).catch((error) => {
+        cache.put(request, responseClone).catch(() => {
           // Silently fail caching - don't block response
-          console.warn(`[SW] Failed to cache ${request.url}:`, error.message);
+          // Don't log to console
         });
       } catch (cacheError) {
         // Cache error shouldn't block response
-        if (cacheError.message?.includes('CacheStorage') || cacheError.message?.includes('open')) {
-          console.warn(`[SW] CacheStorage unavailable, skipping cache for ${request.url}`);
-        } else {
-          console.warn(`[SW] Cache error for ${request.url}:`, cacheError.message);
-        }
+        // Silently handle all cache errors - don't log to console
       }
     }
     
@@ -204,7 +192,7 @@ async function networkFirst(request, cacheName, isNavigation = false) {
   } catch (error) {
     // Network failed, try cache
     if (isNetworkError(error)) {
-      console.error(`[SW] Network error for ${request.url}:`, error.message);
+      // Silently handle network errors - don't log to console
       
       // Only try cache if CacheStorage is available
       if ('caches' in self) {
@@ -217,9 +205,7 @@ async function networkFirst(request, cacheName, isNavigation = false) {
           }
         } catch (cacheError) {
           // Silently fail cache lookup
-          if (!cacheError.message?.includes('CacheStorage') && !cacheError.message?.includes('open')) {
-            console.warn(`[SW] Cache lookup failed for ${request.url}:`, cacheError.message);
-          }
+          // Don't log any errors to console
         }
       }
       
@@ -243,7 +229,7 @@ async function networkOnly(request, isNavigation = false) {
     return response;
   } catch (error) {
     if (isNetworkError(error)) {
-      console.error(`Network error for ${request.url}:`, error);
+      // Silently handle network errors - don't log to console
       
       // Return offline page for navigation requests
       if (isNavigation) {
@@ -260,20 +246,18 @@ async function networkOnly(request, isNavigation = false) {
 // Install Event - Precaching
 // ============================================
 self.addEventListener('install', (event) => {
-  console.log(`[SW] Installing Service Worker v${CACHE_VERSION}`);
-  
   event.waitUntil(
     (async () => {
       // Check if CacheStorage is available
       if (!('caches' in self)) {
-        console.warn('[SW] CacheStorage API not available - skipping precaching');
+        // Silently skip precaching if CacheStorage is not available
         return;
       }
 
       try {
         // التحقق من دعم CacheStorage أولاً
         if (!('caches' in self) || typeof caches.open !== 'function') {
-          console.warn('[SW] CacheStorage API not available - skipping precaching');
+          // Silently skip precaching if CacheStorage is not available
           return;
         }
         
@@ -284,7 +268,7 @@ self.addEventListener('install', (event) => {
           staticCache = await caches.open(STATIC_CACHE_NAME);
         } catch (openError) {
           // إذا فشل فتح الكاش، تخطي التخزين المؤقت بصمت
-          // لا نطبع warning لأن هذا قد يكون طبيعياً في بعض الحالات (خصوصية المتصفح، إعدادات الأمان)
+          // لا نطبع أي شيء في الكونسول
           return;
         }
         
@@ -292,12 +276,8 @@ self.addEventListener('install', (event) => {
         const precachePromises = PRECACHE_ASSETS.map(async (asset) => {
           try {
             await precache.add(asset);
-            console.log(`[SW] Precached: ${asset}`);
           } catch (error) {
-            // تجاهل أخطاء التخزين المؤقت بصمت
-            if (error.name !== 'TypeError' && error.name !== 'NetworkError') {
-              console.warn(`[SW] Failed to precache ${asset}:`, error.message);
-            }
+            // تجاهل أخطاء التخزين المؤقت بصمت - لا نطبع أي شيء
           }
         });
 
@@ -305,20 +285,15 @@ self.addEventListener('install', (event) => {
         const criticalPromises = CRITICAL_ASSETS.map(async (asset) => {
           try {
             await staticCache.add(asset);
-            console.log(`[SW] Cached critical asset: ${asset}`);
           } catch (error) {
-            // تجاهل أخطاء التخزين المؤقت بصمت
-            if (error.name !== 'TypeError' && error.name !== 'NetworkError') {
-              console.warn(`[SW] Failed to cache critical asset ${asset}:`, error.message);
-            }
+            // تجاهل أخطاء التخزين المؤقت بصمت - لا نطبع أي شيء
           }
         });
 
         await Promise.allSettled([...precachePromises, ...criticalPromises]);
-        console.log('[SW] Precaching completed');
       } catch (error) {
         // If CacheStorage fails completely, continue without caching
-        console.warn('[SW] Cache operation failed, continuing without cache:', error.message);
+        // Silently handle errors - don't log to console
         // Don't fail installation - service worker can work without cache
       }
     })()
@@ -332,13 +307,11 @@ self.addEventListener('install', (event) => {
 // Activate Event - Cleanup Old Caches
 // ============================================
 self.addEventListener('activate', (event) => {
-  console.log(`[SW] Activating Service Worker v${CACHE_VERSION}`);
-  
   event.waitUntil(
     (async () => {
       // Check if CacheStorage is available
       if (!('caches' in self)) {
-        console.warn('[SW] CacheStorage API not available - skipping cache cleanup');
+        // Silently skip cache cleanup if CacheStorage is not available
         return;
       }
 
@@ -352,29 +325,19 @@ self.addEventListener('activate', (event) => {
           .map(async (key) => {
             try {
               await caches.delete(key);
-              console.log(`[SW] Deleted old cache: ${key}`);
             } catch (error) {
               // Don't fail if individual cache deletion fails
-              if (error.message?.includes('CacheStorage') || error.message?.includes('open')) {
-                console.warn(`[SW] CacheStorage unavailable, skipping deletion of ${key}`);
-              } else {
-                console.warn(`[SW] Failed to delete cache ${key}:`, error.message);
-              }
+              // Silently handle errors - don't log to console
             }
           });
 
         await Promise.allSettled(deletePromises);
-        console.log('[SW] Cache cleanup completed');
         
         // Claim clients (optional - can be removed if causing issues)
         // await self.clients.claim();
       } catch (error) {
         // If CacheStorage fails completely, continue without cleanup
-        if (error.message?.includes('CacheStorage') || error.message?.includes('open')) {
-          console.warn('[SW] CacheStorage unavailable - continuing without cleanup');
-        } else {
-          console.error('[SW] Activate error:', error);
-        }
+        // Silently handle errors - don't log to console
         // Don't fail activation - service worker can work without cache
       }
     })()

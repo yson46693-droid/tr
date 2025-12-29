@@ -115,7 +115,7 @@
       try {
         await caches.open(CACHE_NAME);
       } catch (error) {
-        console.warn('Failed to initialize media cache:', error);
+        // Silently handle cache initialization errors - don't log to console
       }
     }
   }
@@ -139,7 +139,7 @@
         });
       }
     } catch (error) {
-      console.warn('Error reading from cache:', error);
+      // Silently handle cache errors - don't log to console
     }
     return null;
   }
@@ -164,9 +164,15 @@
         
         // Cleanup old cache if needed
         setTimeout(() => cleanupCache(), 1000);
+      } else {
+        // Silently handle 404 and other HTTP errors - don't log to console
+        // Don't cache failed responses
+        return;
       }
     } catch (error) {
-      console.warn('Error caching media:', error);
+      // Silently handle all errors (network errors, 404, cache errors) - don't log to console
+      // Don't throw or log anything
+      return;
     }
   }
 
@@ -210,7 +216,7 @@
         }
       }
     } catch (error) {
-      console.warn('Error cleaning up cache:', error);
+        // Silently handle cache cleanup errors - don't log to console
     }
   }
 
@@ -1307,9 +1313,13 @@
           `;
           
           // Cache the media in background for next time (non-blocking)
-          cacheMedia(apiUrl).catch(() => {});
+          // Silently handle errors - don't show in console
+          cacheMedia(apiUrl).catch(() => {
+            // Silently ignore cache errors
+          });
           
           // Try to load from cache and update if available (non-blocking)
+          // Silently handle errors - don't show in console
           getCachedMedia(apiUrl).then(cachedUrl => {
             if (cachedUrl) {
               // Use requestAnimationFrame to ensure DOM is ready
@@ -1321,7 +1331,22 @@
                 }
               });
             }
-          }).catch(() => {});
+          }).catch(() => {
+            // Silently ignore cache errors
+          });
+          
+          // Add error handler for image load failures (404, etc.)
+          // This prevents console errors when images fail to load
+          requestAnimationFrame(() => {
+            const imgElement = document.querySelector(`[data-media-id="${mediaId}"]`);
+            if (imgElement && imgElement.tagName === 'IMG') {
+              imgElement.addEventListener('error', function() {
+                // Silently handle image load errors - don't log to console
+                // Optionally show a placeholder or hide the broken image
+                this.style.display = 'none';
+              }, { once: true });
+            }
+          });
           
           return imageHtml;
         } else if (isVideo) {
