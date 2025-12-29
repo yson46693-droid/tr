@@ -63,24 +63,46 @@ if (!defined('ACCESS_ALLOWED')) {
                 if (isAttendancePage) {
                     // التحقق من أن modal الكاميرا مفتوح - إذا كان مفتوحاً، لا تقم بعمل refresh
                     const cameraModal = document.getElementById('cameraModal');
-                    if (cameraModal && cameraModal.classList.contains('show')) {
-                        pageshowRefreshHandled = true;
-                        return;
+                    if (cameraModal) {
+                        // التحقق من class show أو style display
+                        const isModalVisible = cameraModal.classList.contains('show') || 
+                                             window.getComputedStyle(cameraModal).display !== 'none';
+                        if (isModalVisible) {
+                            pageshowRefreshHandled = true;
+                            return;
+                        }
                     }
                     
                     // التحقق من أن الكاميرا تعمل - إذا كانت تعمل، لا تقم بعمل refresh
                     const video = document.getElementById('video');
-                    if (video && video.srcObject && !video.paused) {
-                        pageshowRefreshHandled = true;
-                        return;
+                    if (video) {
+                        const hasStream = video.srcObject !== null;
+                        const isPlaying = !video.paused && video.readyState >= 2;
+                        const isVisible = window.getComputedStyle(video).display !== 'none' && 
+                                        window.getComputedStyle(video).visibility !== 'hidden';
+                        
+                        if (hasStream || isPlaying || isVisible) {
+                            pageshowRefreshHandled = true;
+                            return;
+                        }
                     }
                     
                     // التحقق من أن حالة التحميل نشطة - إذا كانت نشطة، لا تقم بعمل refresh
                     const cameraLoading = document.getElementById('cameraLoading');
-                    if (cameraLoading && cameraLoading.style.display !== 'none' && cameraLoading.style.visibility !== 'hidden') {
-                        pageshowRefreshHandled = true;
-                        return;
+                    if (cameraLoading) {
+                        const loadingStyle = window.getComputedStyle(cameraLoading);
+                        const isLoading = loadingStyle.display !== 'none' && 
+                                       loadingStyle.visibility !== 'hidden';
+                        if (isLoading) {
+                            pageshowRefreshHandled = true;
+                            return;
+                        }
                     }
+                    
+                    // منع refresh تماماً على صفحة attendance إذا كان هناك أي نشاط كاميرا
+                    // هذا يضمن عدم حدوث refresh أثناء استخدام الكاميرا
+                    pageshowRefreshHandled = true;
+                    return;
                 }
                 
                 // التحقق من sessionStorage لمنع refresh متكرر في نفس الجلسة

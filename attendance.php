@@ -609,7 +609,7 @@ $lang = isset($translations) ? $translations : [];
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="cancelBtn">إلغاء</button>
-                <button type="button" class="btn btn-primary" id="captureBtn" style="display: none;">
+                <button type="button" class="btn btn-primary" id="captureBtn" style="display: none; visibility: hidden;">
                     <i class="bi bi-camera me-2"></i>التقاط
                 </button>
                 <button type="button" class="btn btn-success" id="retakeBtn" style="display: none;">

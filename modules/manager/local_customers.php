@@ -4570,6 +4570,59 @@ window.CUSTOMER_EXPORT_CONFIG = {
     }
 }
 
+/* ===== إصلاح نموذج إضافة عميل محلي جديد - ضمان ظهور الأزرار ===== */
+#addLocalCustomerModal .modal-dialog {
+    max-height: calc(100vh - 2rem) !important;
+    margin: 1rem auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+#addLocalCustomerModal .modal-content {
+    max-height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+#addLocalCustomerModal .modal-header {
+    flex-shrink: 0 !important;
+}
+
+#addLocalCustomerModal .modal-body {
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    min-height: 0 !important;
+}
+
+#addLocalCustomerModal .modal-footer {
+    flex-shrink: 0 !important;
+    margin-top: auto !important;
+    border-top: 1px solid #dee2e6 !important;
+}
+
+/* على الهاتف */
+@media (max-width: 768px) {
+    #addLocalCustomerModal .modal-dialog {
+        max-height: calc(100vh - 1rem) !important;
+        margin: 0.5rem !important;
+        max-width: calc(100% - 1rem) !important;
+    }
+    
+    #addLocalCustomerModal .modal-content {
+        max-height: calc(100vh - 1rem) !important;
+    }
+    
+    #addLocalCustomerModal .modal-footer {
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+        background: white !important;
+        position: sticky !important;
+        bottom: 0 !important;
+        z-index: 10 !important;
+    }
+}
+
 </style>
 
 <!-- Modal حذف العميل المحلي -->

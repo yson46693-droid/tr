@@ -133,11 +133,25 @@ async function initCamera() {
         });
         
         // إخفاء حالة التحميل
-        if (cameraLoading) cameraLoading.style.display = 'none';
-        if (cameraError) cameraError.style.display = 'none';
+        if (cameraLoading) {
+            cameraLoading.style.display = 'none';
+            cameraLoading.style.visibility = 'hidden';
+        }
+        if (cameraError) {
+            cameraError.style.display = 'none';
+            cameraError.style.visibility = 'hidden';
+        }
         
+        // إظهار زر التقاط الصورة بشكل واضح
         const captureBtn = document.getElementById('captureBtn');
-        if (captureBtn) captureBtn.style.display = 'inline-block';
+        if (captureBtn) {
+            captureBtn.style.display = 'inline-block';
+            captureBtn.style.visibility = 'visible';
+            captureBtn.style.opacity = '1';
+            captureBtn.disabled = false;
+            // إجبار reflow لضمان أن الزر مرئي
+            captureBtn.offsetHeight;
+        }
         
         console.log('Camera initialized successfully');
         
@@ -640,11 +654,27 @@ document.addEventListener('DOMContentLoaded', function() {
         const delayReasonContainer = document.getElementById('delayReasonContainer');
         const delayReasonInput = document.getElementById('delayReason');
         
-        if (cameraContainer) cameraContainer.style.display = 'block';
-        if (capturedImageContainer) capturedImageContainer.style.display = 'none';
-        if (captureBtn) captureBtn.style.display = 'none';
-        if (retakeBtn) retakeBtn.style.display = 'none';
-        if (submitBtn) submitBtn.style.display = 'none';
+        if (cameraContainer) {
+            cameraContainer.style.display = 'block';
+            cameraContainer.style.visibility = 'visible';
+        }
+        if (capturedImageContainer) {
+            capturedImageContainer.style.display = 'none';
+            capturedImageContainer.style.visibility = 'hidden';
+        }
+        if (captureBtn) {
+            captureBtn.style.display = 'none';
+            captureBtn.style.visibility = 'hidden';
+            captureBtn.disabled = false; // التأكد من أن الزر غير معطل
+        }
+        if (retakeBtn) {
+            retakeBtn.style.display = 'none';
+            retakeBtn.style.visibility = 'hidden';
+        }
+        if (submitBtn) {
+            submitBtn.style.display = 'none';
+            submitBtn.style.visibility = 'hidden';
+        }
         if (delayReasonContainer) delayReasonContainer.style.display = 'none';
         if (delayReasonInput) {
             delayReasonInput.value = '';
@@ -674,19 +704,76 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // إزالة backdrop بعد تأخير قصير (للتأكد من إزالته حتى لو تم إنشاؤه بعد فتح Modal)
-        setTimeout(() => {
-            removeBackdrop();
-            initCamera();
-        }, 100);
+        // إزالة backdrop فقط - لا نستدعي initCamera هنا
+        // سنستدعيها في shown.bs.modal بعد أن يكون Modal مرئياً تماماً
+        removeBackdrop();
         
         // مراقبة مستمرة لإزالة backdrop
         const backdropInterval = setInterval(() => {
             removeBackdrop();
-        }, 50);
+        }, 1000);
         
         // حفظ interval ID لإيقافه لاحقاً
         cameraModal.dataset.backdropInterval = backdropInterval;
+    });
+    
+    // عند اكتمال فتح الـ modal (بعد أن يكون مرئياً تماماً) - مهم جداً للموبايل
+    cameraModal.addEventListener('shown.bs.modal', function(event) {
+        // كشف ما إذا كان الجهاز موبايل
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // إزالة backdrop
+        removeBackdrop();
+        
+        // على الموبايل، ننتظر وقت أطول لضمان أن Modal مرئي تماماً
+        const delay = isMobile ? 300 : 150;
+        
+        // استخدام requestAnimationFrame لضمان أن Modal مرئي تماماً
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                setTimeout(async () => {
+                    // التأكد مرة أخرى من إزالة backdrop
+                    removeBackdrop();
+                    
+                    // التأكد من أن Modal مرئي
+                    const modalElement = document.getElementById('cameraModal');
+                    if (!modalElement || !modalElement.classList.contains('show')) {
+                        console.warn('Modal not visible, retrying in 200ms...');
+                        setTimeout(async () => {
+                            try {
+                                await initCamera();
+                            } catch (error) {
+                                console.error('Error initializing camera in modal (retry):', error);
+                            }
+                        }, 200);
+                        return;
+                    }
+                    
+                    // التأكد من أن container مرئي
+                    const cameraContainer = document.getElementById('cameraContainer');
+                    if (cameraContainer) {
+                        cameraContainer.style.display = 'block';
+                        cameraContainer.style.visibility = 'visible';
+                        cameraContainer.style.opacity = '1';
+                        cameraContainer.offsetHeight; // إجبار reflow
+                    }
+                    
+                    // التأكد من أن video element جاهز
+                    const video = document.getElementById('video');
+                    if (video) {
+                        video.style.position = 'relative';
+                        video.style.zIndex = '2';
+                        video.offsetHeight; // إجبار reflow
+                    }
+                    
+                    try {
+                        await initCamera();
+                    } catch (error) {
+                        console.error('Error initializing camera in modal:', error);
+                    }
+                }, delay);
+            });
+        });
     });
     
     // عند إغلاق الـ modal
