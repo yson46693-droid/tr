@@ -187,6 +187,15 @@ try {
         ], JSON_UNESCAPED_UNICODE);
         
     } elseif ($action === 'get_all_employees_today') {
+        // التحقق من الصلاحيات - فقط للمحاسبين والمديرين
+        if (!hasRole('accountant') && !hasRole('manager')) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'غير مصرح لك بالوصول إلى هذه البيانات'
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        
         // الحصول على تفاصيل حضور جميع الموظفين لليوم
         $date = $_GET['date'] ?? date('Y-m-d');
         $employeesAttendance = getAllEmployeesAttendanceToday($date);

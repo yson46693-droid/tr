@@ -562,7 +562,8 @@ $lang = isset($translations) ? $translations : [];
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
             </div>
             <div class="modal-body">
-                <!-- تفاصيل حضور جميع الموظفين -->
+                <!-- تفاصيل حضور جميع الموظفين (فقط للمحاسبين والمديرين) -->
+                <?php if (hasRole('accountant') || hasRole('manager')): ?>
                 <div id="allEmployeesAttendanceContainer" class="mb-3" style="display: none;">
                     <div class="card border-primary">
                         <div class="card-header bg-primary text-white py-2">
@@ -600,6 +601,7 @@ $lang = isset($translations) ? $translations : [];
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
                 
                 <!-- ملخص الوقت (للتسجيل الحضور فقط) -->
                 <div id="timeSummaryContainer" style="display: none;" class="mb-3">
@@ -635,6 +637,11 @@ $lang = isset($translations) ? $translations : [];
                     <div id="cameraError" class="alert alert-danger" style="display: none;">
                         <i class="bi bi-exclamation-triangle me-2"></i>
                         <span id="cameraErrorText">خطأ في الكاميرا</span>
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="retryCameraBtn">
+                                <i class="bi bi-arrow-clockwise me-1"></i>إعادة المحاولة
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div id="capturedImageContainer" style="display: none; text-align: center;">
