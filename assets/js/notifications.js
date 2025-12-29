@@ -883,58 +883,75 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // إضافة event listener لزر مسح كل الإشعارات
-    const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-    if (clearAllBtn) {
-        clearAllBtn.addEventListener('click', async function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation(); // منع انتشار الحدث لأي معالجات أخرى
+    function setupClearAllButton() {
+        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+        if (clearAllBtn) {
+            // إزالة event listeners السابقة لتجنب التكرار
+            const newBtn = clearAllBtn.cloneNode(true);
+            clearAllBtn.parentNode.replaceChild(newBtn, clearAllBtn);
             
-            if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
-                return;
-            }
-            
-            // تعطيل الزر أثناء المعالجة
-            const originalHTML = clearAllBtn.innerHTML;
-            clearAllBtn.disabled = true;
-            clearAllBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
-            
-            try {
-                const result = await deleteAllNotifications();
+            newBtn.addEventListener('click', async function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
                 
-                // إذا كان المستخدم قد سجل خروج، لا نتابع
-                if (result && result.loggedOut) {
+                if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
                     return;
                 }
                 
-                // إعادة تحميل الإشعارات بعد الحذف
-                if (typeof loadNotifications === 'function') {
-                    await loadNotifications();
-                }
+                // تعطيل الزر أثناء المعالجة
+                const originalHTML = newBtn.innerHTML;
+                newBtn.disabled = true;
+                newBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
                 
-                // تحديث العداد للتأكد
-                if (typeof updateNotificationBadge === 'function') {
-                    await updateNotificationBadge(0);
+                try {
+                    const result = await deleteAllNotifications();
+                    
+                    // إذا كان المستخدم قد سجل خروج، لا نتابع
+                    if (result && result.loggedOut) {
+                        return;
+                    }
+                    
+                    // إعادة تحميل الإشعارات بعد الحذف
+                    if (typeof loadNotifications === 'function') {
+                        await loadNotifications();
+                    }
+                    
+                    // تحديث العداد للتأكد
+                    if (typeof updateNotificationBadge === 'function') {
+                        await updateNotificationBadge(0);
+                    }
+                } catch (error) {
+                    // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
+                    if (error.message && error.message.includes('Unauthorized')) {
+                        console.warn('User logged out during notification deletion');
+                        return;
+                    }
+                    console.error('Error in deleteAllNotifications:', error);
+                    // إظهار رسالة خطأ فقط للأخطاء الأخرى
+                    if (error.message && !error.message.includes('Unauthorized')) {
+                        alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
+                    }
+                } finally {
+                    // إعادة تمكين الزر فقط إذا لم يتم إعادة التوجيه
+                    if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
+                        newBtn.disabled = false;
+                        newBtn.innerHTML = originalHTML;
+                    }
                 }
-            } catch (error) {
-                // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
-                if (error.message && error.message.includes('Unauthorized')) {
-                    console.warn('User logged out during notification deletion');
-                    return;
-                }
-                console.error('Error in deleteAllNotifications:', error);
-                // إظهار رسالة خطأ فقط للأخطاء الأخرى
-                if (error.message && !error.message.includes('Unauthorized')) {
-                    alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
-                }
-            } finally {
-                // إعادة تمكين الزر فقط إذا لم يتم إعادة التوجيه
-                if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
-                    clearAllBtn.disabled = false;
-                    clearAllBtn.innerHTML = originalHTML;
-                }
-            }
-        }, true); // استخدام capture phase لضمان التنفيذ أولاً
+            }, true);
+        }
+    }
+    
+    // إعداد الزر عند تحميل الصفحة
+    setupClearAllButton();
+    
+    // إعداد الزر مرة أخرى عند فتح dropdown (للتأكد من أن event listener يعمل)
+    const notificationDropdown = document.getElementById('notificationsDropdown');
+    if (notificationDropdown) {
+        notificationDropdown.addEventListener('shown.bs.dropdown', function() {
+            setTimeout(setupClearAllButton, 100);
+        });
     }
 });
 

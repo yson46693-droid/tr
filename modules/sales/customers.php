@@ -4029,6 +4029,95 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <?php endif; ?>
 
+<!-- Modal إضافة عميل جديد - يجب أن يكون خارج أي شرط ليعمل مع جميع الأقسام -->
+<div class="modal fade" id="addCustomerModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">إضافة عميل جديد</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+                <input type="hidden" name="action" value="add_customer">
+                <input type="hidden" name="section" value="<?php echo htmlspecialchars($section); ?>">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم العميل <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">أرقام الهاتف</label>
+                        <div id="phoneNumbersContainer">
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="addPhoneBtn">
+                            <i class="bi bi-plus-circle"></i> إضافة رقم آخر
+                        </button>
+                        <input type="hidden" name="phone" value=""> <!-- للحفاظ على التوافق مع الكود القديم -->
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">ديون العميل / رصيد العميل</label>
+                        <input type="number" class="form-control" name="balance" step="0.01" value="0" placeholder="مثال: 0 أو -500">
+                        <small class="text-muted">
+                            <strong>إدخال قيمة سالبة:</strong> يتم اعتبارها رصيد دائن للعميل (مبلغ متاح للعميل). 
+                            لا يتم تحصيل هذا الرصيد، ويمكن للعميل استخدامه عند شراء فواتير حيث يتم خصم قيمة الفاتورة من الرصيد تلقائياً دون تسجيلها كدين.
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">العنوان</label>
+                        <textarea class="form-control" name="address" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">المنطقة</label>
+                        <div class="input-group">
+                            <select class="form-select" name="region_id" id="addCustomerRegionId">
+                                <option value="">اختر المنطقة</option>
+                                <?php
+                                $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
+                                foreach ($regions as $region):
+                                ?>
+                                    <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
+                            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRegionFromCustomerModal">
+                                <i class="bi bi-plus-circle"></i>
+                            </button>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الموقع الجغرافي</label>
+                        <div class="d-flex gap-2 mb-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="getLocationBtn">
+                                <i class="bi bi-geo-alt"></i> الحصول على الموقع الحالي
+                            </button>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <input type="text" class="form-control" name="latitude" id="addCustomerLatitude" placeholder="خط العرض" readonly>
+                            </div>
+                            <div class="col-6">
+                                <input type="text" class="form-control" name="longitude" id="addCustomerLongitude" placeholder="خط الطول" readonly>
+                            </div>
+                        </div>
+                        <small class="text-muted">يمكنك الحصول على الموقع تلقائياً أو إدخاله يدوياً</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">إضافة</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <?php if ($section === 'company'): ?>
 
 <style>
@@ -5402,95 +5491,6 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
 </div>
 
-<!-- Modal إضافة عميل جديد -->
-<div class="modal fade" id="addCustomerModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">إضافة عميل جديد</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
-                <input type="hidden" name="action" value="add_customer">
-                <input type="hidden" name="section" value="<?php echo htmlspecialchars($section); ?>">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">اسم العميل <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">أرقام الهاتف</label>
-                        <div id="phoneNumbersContainer">
-                            <div class="input-group mb-2">
-                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
-                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="addPhoneBtn">
-                            <i class="bi bi-plus-circle"></i> إضافة رقم آخر
-                        </button>
-                        <input type="hidden" name="phone" value=""> <!-- للحفاظ على التوافق مع الكود القديم -->
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">ديون العميل / رصيد العميل</label>
-                        <input type="number" class="form-control" name="balance" step="0.01" value="0" placeholder="مثال: 0 أو -500">
-                        <small class="text-muted">
-                            <strong>إدخال قيمة سالبة:</strong> يتم اعتبارها رصيد دائن للعميل (مبلغ متاح للعميل). 
-                            لا يتم تحصيل هذا الرصيد، ويمكن للعميل استخدامه عند شراء فواتير حيث يتم خصم قيمة الفاتورة من الرصيد تلقائياً دون تسجيلها كدين.
-                        </small>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">العنوان</label>
-                        <textarea class="form-control" name="address" rows="2"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">المنطقة</label>
-                        <div class="input-group">
-                            <select class="form-select" name="region_id" id="addCustomerRegionId">
-                                <option value="">اختر المنطقة</option>
-                                <?php
-                                $regions = $db->query("SELECT id, name FROM regions ORDER BY name ASC");
-                                foreach ($regions as $region):
-                                ?>
-                                    <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
-                            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRegionFromCustomerModal">
-                                <i class="bi bi-plus-circle"></i>
-                            </button>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">الموقع الجغرافي</label>
-                        <div class="d-flex gap-2 mb-2">
-                            <button type="button" class="btn btn-sm btn-outline-primary" id="getLocationBtn">
-                                <i class="bi bi-geo-alt"></i> الحصول على الموقع الحالي
-                            </button>
-                        </div>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <input type="text" class="form-control" name="latitude" id="addCustomerLatitude" placeholder="خط العرض" readonly>
-                            </div>
-                            <div class="col-6">
-                                <input type="text" class="form-control" name="longitude" id="addCustomerLongitude" placeholder="خط الطول" readonly>
-                            </div>
-                        </div>
-                        <small class="text-muted">يمكنك الحصول على الموقع تلقائياً أو إدخاله يدوياً</small>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-primary">إضافة</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <!-- Modal استيراد العملاء من Excel -->
 <?php if (in_array($currentRole, ['manager', 'accountant', 'sales'], true)): ?>
 <div class="modal fade" id="importCustomersModal" tabindex="-1">
@@ -5912,8 +5912,6 @@ if (!$isSalesUser && !$isCompanySection && in_array($currentRole, ['manager', 'd
 </style>
 <?php endif; ?>
 
-<?php endif; // end if ($section === 'company') ?>
-
 <!-- إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات -->
 <script>
 // إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات
@@ -6076,3 +6074,4 @@ window.CUSTOMER_EXPORT_CONFIG = {
 };
 </script>
 <script src="<?php echo ASSETS_URL; ?>js/customer_export.js?v=<?php echo time(); ?>"></script>
+<?php endif; // end if ($section === 'company') from line 4121 ?>
