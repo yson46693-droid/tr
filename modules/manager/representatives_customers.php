@@ -2096,18 +2096,19 @@ function viewRepReturnItemDetails(invoiceItemId) {
 document.addEventListener('DOMContentLoaded', function() {
     const repDetailsModal = document.getElementById('repDetailsModal');
     if (repDetailsModal) {
-        // إزالة backdrop بسرعة عند بدء الإغلاق
-        repDetailsModal.addEventListener('hide.bs.modal', function() {
+        // إزالة backdrop فوراً عند بدء الإغلاق
+        repDetailsModal.addEventListener('hide.bs.modal', function(e) {
+            // إزالة backdrop فوراً بدون انتظار
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => {
-                backdrop.style.transition = 'opacity 0.1s linear';
+                backdrop.style.transition = 'none';
                 backdrop.style.opacity = '0';
-                setTimeout(() => {
-                    if (backdrop.parentNode) {
-                        backdrop.remove();
-                    }
-                }, 100);
+                backdrop.remove();
             });
+            // تنظيف body classes فوراً
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
         });
         
         repDetailsModal.addEventListener('hidden.bs.modal', function() {
@@ -2117,7 +2118,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 currentRepDetailsAbortController = null;
             }
             
-            // تنظيف backdrop المتبقي
+            // تنظيف backdrop المتبقي (احتياطي)
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => backdrop.remove());
             document.body.classList.remove('modal-open');
@@ -2131,22 +2132,21 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('DOMContentLoaded', function() {
     const repCollectModal = document.getElementById('repCollectPaymentModal');
     if (repCollectModal) {
-        // إزالة backdrop بسرعة عند بدء الإغلاق
+        // إزالة backdrop فوراً عند بدء الإغلاق
         repCollectModal.addEventListener('hide.bs.modal', function() {
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => {
-                backdrop.style.transition = 'opacity 0.1s linear';
+                backdrop.style.transition = 'none';
                 backdrop.style.opacity = '0';
-                setTimeout(() => {
-                    if (backdrop.parentNode) {
-                        backdrop.remove();
-                    }
-                }, 100);
+                backdrop.remove();
             });
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
         });
         
         repCollectModal.addEventListener('hidden.bs.modal', function() {
-            // تنظيف backdrop المتبقي
+            // تنظيف backdrop المتبقي (احتياطي)
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => backdrop.remove());
             document.body.classList.remove('modal-open');
@@ -3263,22 +3263,21 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('DOMContentLoaded', function () {
     var collectionModal = document.getElementById('allCustomersCollectPaymentModal');
     if (collectionModal) {
-        // إزالة backdrop بسرعة عند بدء الإغلاق
+        // إزالة backdrop فوراً عند بدء الإغلاق
         collectionModal.addEventListener('hide.bs.modal', function() {
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => {
-                backdrop.style.transition = 'opacity 0.1s linear';
+                backdrop.style.transition = 'none';
                 backdrop.style.opacity = '0';
-                setTimeout(() => {
-                    if (backdrop.parentNode) {
-                        backdrop.remove();
-                    }
-                }, 100);
+                backdrop.remove();
             });
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
         });
         
         collectionModal.addEventListener('hidden.bs.modal', function() {
-            // تنظيف backdrop المتبقي
+            // تنظيف backdrop المتبقي (احتياطي)
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => backdrop.remove());
             document.body.classList.remove('modal-open');
@@ -3531,18 +3530,17 @@ document.addEventListener('DOMContentLoaded', function() {
         editRepCustomerModal.addEventListener('hide.bs.modal', function() {
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => {
-                backdrop.style.transition = 'opacity 0.1s linear';
+                backdrop.style.transition = 'none';
                 backdrop.style.opacity = '0';
-                setTimeout(() => {
-                    if (backdrop.parentNode) {
-                        backdrop.remove();
-                    }
-                }, 100);
+                backdrop.remove();
             });
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
         });
         
         editRepCustomerModal.addEventListener('hidden.bs.modal', function() {
-            // تنظيف backdrop المتبقي
+            // تنظيف backdrop المتبقي (احتياطي)
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => backdrop.remove());
             document.body.classList.remove('modal-open');
@@ -3872,7 +3870,52 @@ try {
 </div>
 
 <style>
-/* تحسينات عامة للأداء - تقليل animations */
+/* تحسينات عامة للأداء - إزالة animations على الهواتف */
+@media (max-width: 768px) {
+    /* إزالة animations كلياً على الهواتف */
+    .modal.fade .modal-dialog,
+    .modal.show .modal-dialog,
+    .modal.showing .modal-dialog {
+        transition: none !important;
+        transform: translate3d(0, 0, 0) !important;
+        opacity: 1 !important;
+    }
+    
+    .modal:not(.show) .modal-dialog {
+        transition: none !important;
+        transform: translate3d(0, 0, 0) !important;
+        opacity: 0 !important;
+    }
+    
+    /* إزالة backdrop transition على الهواتف */
+    .modal-backdrop,
+    .modal-backdrop.fade,
+    .modal-backdrop.show {
+        transition: none !important;
+    }
+    
+    /* إصلاح الجزء الأبيض الفارغ في modals صغيرة على الهواتف */
+    .modal-dialog:not(.modal-xl):not(.modal-lg) .modal-content {
+        height: auto !important;
+        max-height: calc(100vh - 2rem) !important;
+    }
+    
+    .modal-dialog:not(.modal-xl):not(.modal-lg) .modal-body {
+        flex-shrink: 0;
+        max-height: calc(100vh - 12rem) !important;
+        overflow-y: auto;
+        padding-bottom: 0.5rem;
+    }
+    
+    .modal-dialog:not(.modal-xl):not(.modal-lg) .modal-footer {
+        flex-shrink: 0;
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+        margin-top: 0;
+    }
+}
+
+/* تحسينات عامة للأداء - تقليل animations على الشاشات الكبيرة */
 .modal.fade .modal-dialog {
     transition: transform 0.1s ease-out, opacity 0.1s ease-out !important;
 }
@@ -3921,16 +3964,37 @@ try {
 /* إصلاح الجزء الأبيض الفارغ في modals صغيرة */
 .modal-dialog-centered .modal-content {
     max-height: none !important;
+    height: auto !important;
 }
 
 .modal-dialog:not(.modal-xl):not(.modal-lg) .modal-body {
     padding-bottom: 0.5rem;
+    flex-shrink: 0;
 }
 
 .modal-dialog:not(.modal-xl):not(.modal-lg) .modal-footer {
     padding-top: 0.75rem;
     padding-bottom: 0.75rem;
     margin-top: 0;
+    flex-shrink: 0;
+}
+
+/* إزالة أي مسافات زائدة */
+.modal-dialog:not(.modal-xl):not(.modal-lg) .modal-content {
+    height: auto !important;
+    max-height: none !important;
+}
+
+/* منع overflow غير ضروري في modals صغيرة */
+@media (max-width: 768px) {
+    .modal-dialog:not(.modal-xl):not(.modal-lg) .modal-content {
+        max-height: calc(100vh - 2rem) !important;
+    }
+    
+    .modal-dialog:not(.modal-xl):not(.modal-lg) .modal-body {
+        max-height: calc(100vh - 10rem) !important;
+        overflow-y: auto;
+    }
 }
 
 /* إصلاح مشكلة Taskbar يغطي زر توليد Excel - تحسينات للمودال */
@@ -3969,14 +4033,18 @@ try {
     display: none;
 }
 
-/* تحسين animation الإغلاق */
-#customerExportModal.modal.fade .modal-dialog {
-    transition: transform 0.1s ease-out, opacity 0.1s ease-out !important;
-}
-
-#customerExportModal.modal.fade:not(.show) .modal-dialog {
-    transform: translate(0, -10px) !important;
-    opacity: 0 !important;
+/* إزالة animations على الهواتف */
+@media (max-width: 768px) {
+    #customerExportModal.modal.fade .modal-dialog,
+    #customerExportModal.modal.show .modal-dialog {
+        transition: none !important;
+        transform: translate3d(0, 0, 0) !important;
+    }
+    
+    #customerExportModal.modal:not(.show) .modal-dialog {
+        transition: none !important;
+        transform: translate3d(0, 0, 0) !important;
+    }
 }
 
 /* تحسينات responsive للمودال */
@@ -4107,22 +4175,21 @@ window.CUSTOMER_EXPORT_CONFIG = {
 document.addEventListener('DOMContentLoaded', function() {
     const customerExportModal = document.getElementById('customerExportModal');
     if (customerExportModal) {
-        // إزالة backdrop بسرعة عند بدء الإغلاق
+        // إزالة backdrop فوراً عند بدء الإغلاق
         customerExportModal.addEventListener('hide.bs.modal', function() {
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => {
-                backdrop.style.transition = 'opacity 0.05s linear';
+                backdrop.style.transition = 'none';
                 backdrop.style.opacity = '0';
-                setTimeout(() => {
-                    if (backdrop.parentNode) {
-                        backdrop.remove();
-                    }
-                }, 50);
+                backdrop.remove();
             });
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
         });
         
         customerExportModal.addEventListener('hidden.bs.modal', function() {
-            // تنظيف backdrop المتبقي
+            // تنظيف backdrop المتبقي (احتياطي)
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => backdrop.remove());
             document.body.classList.remove('modal-open');
@@ -4136,22 +4203,21 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('DOMContentLoaded', function() {
     var creditLimitModal = document.getElementById('setCreditLimitModal');
     if (creditLimitModal) {
-        // إزالة backdrop بسرعة عند بدء الإغلاق
+        // إزالة backdrop فوراً عند بدء الإغلاق
         creditLimitModal.addEventListener('hide.bs.modal', function() {
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => {
-                backdrop.style.transition = 'opacity 0.05s linear';
+                backdrop.style.transition = 'none';
                 backdrop.style.opacity = '0';
-                setTimeout(() => {
-                    if (backdrop.parentNode) {
-                        backdrop.remove();
-                    }
-                }, 50);
+                backdrop.remove();
             });
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
         });
         
         creditLimitModal.addEventListener('hidden.bs.modal', function() {
-            // تنظيف backdrop المتبقي
+            // تنظيف backdrop المتبقي (احتياطي)
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => backdrop.remove());
             document.body.classList.remove('modal-open');
@@ -4305,18 +4371,17 @@ document.addEventListener('DOMContentLoaded', function() {
         changeSalesRepModal.addEventListener('hide.bs.modal', function() {
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => {
-                backdrop.style.transition = 'opacity 0.1s linear';
+                backdrop.style.transition = 'none';
                 backdrop.style.opacity = '0';
-                setTimeout(() => {
-                    if (backdrop.parentNode) {
-                        backdrop.remove();
-                    }
-                }, 100);
+                backdrop.remove();
             });
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
         });
         
         changeSalesRepModal.addEventListener('hidden.bs.modal', function() {
-            // تنظيف backdrop المتبقي
+            // تنظيف backdrop المتبقي (احتياطي)
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => backdrop.remove());
             document.body.classList.remove('modal-open');

@@ -94,22 +94,21 @@
             return;
         }
         
-        // إضافة event handlers لإغلاق سريع
+        // إضافة event handlers لإغلاق فوري
         exportModal.addEventListener('hide.bs.modal', function() {
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => {
-                backdrop.style.transition = 'opacity 0.1s linear';
+                backdrop.style.transition = 'none';
                 backdrop.style.opacity = '0';
-                setTimeout(() => {
-                    if (backdrop.parentNode) {
-                        backdrop.remove();
-                    }
-                }, 100);
+                backdrop.remove();
             });
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
         });
         
         exportModal.addEventListener('hidden.bs.modal', function() {
-            // تنظيف backdrop المتبقي
+            // تنظيف backdrop المتبقي (احتياطي)
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => backdrop.remove());
             document.body.classList.remove('modal-open');

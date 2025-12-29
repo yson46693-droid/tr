@@ -2010,20 +2010,6 @@
       state.pendingFetchTimeout = null;
     }
     
-    // إيقاف التسجيل الصوتي إذا كان جارياً
-    if (state.isRecording) {
-      stopRecording();
-    }
-    
-    // إيقاف stream الميكروفون
-    if (state.audioStream) {
-      state.audioStream.getTracks().forEach(track => {
-        track.stop();
-        track.enabled = false;
-      });
-      state.audioStream = null;
-    }
-    
     stopPolling();
     stopPresenceUpdates();
   });

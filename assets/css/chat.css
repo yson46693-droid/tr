@@ -1037,26 +1037,6 @@ body:has([data-chat-app]) .footer,
   transform: scale(1.05);
 }
 
-.chat-mic-button.recording {
-  animation: pulse-recording 1.5s ease-in-out infinite;
-  background: rgba(239, 68, 68, 0.1) !important;
-}
-
-.chat-mic-button.recording:hover {
-  background: rgba(239, 68, 68, 0.2) !important;
-}
-
-@keyframes pulse-recording {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 0.8;
-  }
-}
-
 /* Emoji Picker */
 .chat-emoji-wrapper {
   position: relative;
