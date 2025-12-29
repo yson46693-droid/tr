@@ -148,45 +148,15 @@ function showBrowserNotification(title, body, icon = null, tag = null) {
  * تحميل الإشعارات
  */
 async function loadNotifications() {
-    // تخطي الاستدعاء إذا كانت الصفحة مخفية لتقليل الضغط
-    if (document.hidden) {
-        return;
-    }
-    
     try {
         const apiPath = getApiPath('api/notifications.php');
         const limit = typeof NOTIFICATION_LIMIT !== 'undefined' ? NOTIFICATION_LIMIT : NOTIFICATION_DEFAULT_LIMIT;
-        
-        // إضافة ETag و Last-Modified headers للمزامنة الفورية
-        const headers = {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-        };
-        
-        // إضافة If-None-Match header إذا كان موجوداً
-        const lastEtag = sessionStorage.getItem('notifications_etag');
-        if (lastEtag) {
-            headers['If-None-Match'] = lastEtag;
-        }
-        
         const response = await fetch(`${apiPath}?action=list&limit=${limit}`, {
-            credentials: 'same-origin',
-            headers: headers
+            credentials: 'same-origin'
         });
-        
-        // إذا كانت الاستجابة 304 Not Modified، لا حاجة لتحديث
-        if (response.status === 304) {
-            return;
-        }
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        // حفظ ETag للاستخدام في الطلبات القادمة
-        const etag = response.headers.get('ETag');
-        if (etag) {
-            sessionStorage.setItem('notifications_etag', etag);
         }
         
         // قراءة الاستجابة كنص أولاً للتحقق من أنها JSON صالحة
@@ -218,8 +188,8 @@ async function loadNotifications() {
             const unreadCount = displayNotifications.filter(isNotificationUnread).length;
 
             updateNotificationBadge(unreadCount);
-            await handleBrowserNotifications(displayNotifications);
-            await updateNotificationList(displayNotifications);
+            handleBrowserNotifications(displayNotifications);
+            updateNotificationList(displayNotifications);
 
             return;
         }
@@ -271,29 +241,28 @@ function getNotificationTimestamp(notification) {
     return parsed;
 }
 
-async function handleBrowserNotifications(notifications) {
+function handleBrowserNotifications(notifications) {
     if (!Array.isArray(notifications) || notifications.length === 0) {
         return;
     }
 
     const now = Date.now();
-    for (const notification of notifications) {
+    notifications.forEach(notification => {
         const notificationId = parseInt(notification.id ?? notification.notification_id, 10);
         if (!notificationId || seenNotificationIds.has(notificationId)) {
-            continue;
+            return;
         }
         seenNotificationIds.add(notificationId);
 
         const createdAt = getNotificationTimestamp(notification);
         if (!createdAt) {
-            continue;
+            return;
         }
 
         const ageMs = now - createdAt.getTime();
         if (ageMs <= 60000 && isNotificationUnread(notification)) {
             // التحقق من إشعار تغيير الدور أولاً
-            const shouldRedirect = await checkForRoleChangeNotification([notification]);
-            if (shouldRedirect) {
+            if (checkForRoleChangeNotification([notification])) {
                 return; // سيتم إعادة التوجيه
             }
             showBrowserNotification(
@@ -303,7 +272,7 @@ async function handleBrowserNotifications(notifications) {
                 'notification_' + notificationId
             );
         }
-    }
+    });
 }
 
 /**
@@ -330,13 +299,12 @@ async function updateNotificationBadge(count = null) {
     const badge = document.getElementById('notificationBadge');
     if (badge) {
         const safeCount = Number.isFinite(Number(count)) ? Math.max(0, parseInt(count, 10)) : 0;
-        badge.textContent = safeCount > 99 ? '99+' : safeCount.toString();
+        badge.textContent = safeCount.toString();
+        badge.style.display = 'inline-block';
         if (safeCount > 0) {
             badge.classList.add('has-notifications');
-            badge.style.display = 'inline-flex';
         } else {
             badge.classList.remove('has-notifications');
-            badge.style.display = 'none';
         }
     }
 }
@@ -344,7 +312,7 @@ async function updateNotificationBadge(count = null) {
 /**
  * التحقق من إشعار تغيير الدور وإجبار إعادة تسجيل الدخول
  */
-async function checkForRoleChangeNotification(notifications) {
+function checkForRoleChangeNotification(notifications) {
     // البحث عن إشعار تغيير الدور غير المقروء
     const roleChangeNotification = notifications.find(n => 
         n.read == 0 && 
@@ -352,37 +320,7 @@ async function checkForRoleChangeNotification(notifications) {
     );
     
     if (roleChangeNotification) {
-        // التحقق أولاً من تطابق الدور في الجلسة مع الدور في قاعدة البيانات
-        try {
-            const apiPath = getApiPath('api/notifications.php');
-            const response = await fetch(`${apiPath}?action=check_role`, {
-                credentials: 'same-origin'
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                
-                // إذا كان الدور في الجلسة يطابق الدور في قاعدة البيانات،
-                // هذا يعني أن المستخدم قام بتسجيل الدخول بالفعل بعد تغيير الدور
-                // لذا يجب تمييز الإشعار كمقروء بدلاً من إجبار تسجيل الخروج
-                if (data.success && data.roles_match === true) {
-                    console.log('Role matches database. Marking role change notification as read.');
-                    
-                    // تمييز الإشعار كمقروء
-                    await markNotificationAsRead(roleChangeNotification.id || roleChangeNotification.notification_id, { silent: true });
-                    
-                    // إعادة تحميل الإشعارات لتحديث القائمة
-                    loadNotifications();
-                    
-                    return false; // لا حاجة لإجبار تسجيل الخروج
-                }
-            }
-        } catch (error) {
-            console.warn('Error checking role match:', error);
-            // في حالة الخطأ، نمضي قدماً بإجبار تسجيل الخروج للأمان
-        }
-        
-        // إشعار تغيير الدور موجود والدور لا يطابق - إجبار إعادة تسجيل الدخول
+        // إشعار تغيير الدور موجود - إجبار إعادة تسجيل الدخول
         console.warn('Role change detected. Forcing logout and cache clear.');
         
         // مسح الكاش
@@ -426,13 +364,12 @@ async function checkForRoleChangeNotification(notifications) {
 /**
  * تحديث قائمة الإشعارات
  */
-async function updateNotificationList(notifications) {
+function updateNotificationList(notifications) {
     const list = document.getElementById('notificationsList');
     if (!list) return;
     
     // التحقق من إشعار تغيير الدور أولاً
-    const shouldRedirect = await checkForRoleChangeNotification(notifications);
-    if (shouldRedirect) {
+    if (checkForRoleChangeNotification(notifications)) {
         return; // سيتم إعادة التوجيه، لا حاجة لتحديث القائمة
     }
     
@@ -511,10 +448,8 @@ async function updateNotificationList(notifications) {
                 markNotificationAsRead(notificationId);
             }
             
-            // التحقق من وجود رابط قبل التحويل
-            // إذا كان الإشعار من نوع "تنبيه: تأخير في الحضور"، لا يتم التحويل
-            const notification = notifications.find(n => (n.id == notificationId || String(n.id) === String(notificationId)));
-            if (notification && notification.link && notification.title !== 'تنبيه: تأخير في الحضور') {
+                if (notifications.find(n => (n.id == notificationId || String(n.id) === String(notificationId)) && n.link)) {
+                    const notification = notifications.find(n => (n.id == notificationId || String(n.id) === String(notificationId)));
                 window.location.href = notification.link;
             }
         });
@@ -598,35 +533,16 @@ async function markNotificationAsRead(notificationId, options = {}) {
 async function deleteNotification(notificationId) {
     try {
         const apiPath = getApiPath('api/notifications.php');
-        const response = await fetch(apiPath, {
+        await fetch(apiPath, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
-            credentials: 'same-origin', // إرسال cookies مع الطلب
             body: new URLSearchParams({
                 action: 'delete',
                 id: notificationId
             })
         });
-
-        // التحقق من حالة الاستجابة
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            if (response.status === 401) {
-                // إذا كان Unauthorized، المستخدم قد سجل خروج - لا نعرض رسالة خطأ
-                console.warn('Unauthorized when deleting notification - user may have logged out');
-                // لا نعيد التوجيه تلقائياً - نترك المستخدم في الصفحة الحالية
-                // إعادة التوجيه ستحدث فقط عند تسجيل الخروج الفعلي أو انتهاء الجلسة في قاعدة البيانات
-                return;
-            }
-            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        if (!data.success) {
-            throw new Error(data.error || 'فشل حذف الإشعار');
-        }
 
         loadNotifications();
     } catch (error) {
@@ -634,16 +550,7 @@ async function deleteNotification(notificationId) {
             console.log('CORS error ignored when deleting notification');
             return;
         }
-        // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
-        if (error.message && error.message.includes('Unauthorized')) {
-            console.warn('Unauthorized when deleting notification - user may have logged out');
-            return;
-        }
         console.error('Error deleting notification:', error);
-        // إظهار رسالة خطأ للمستخدم فقط للأخطاء الأخرى
-        if (error.message && !error.message.includes('CORS') && !error.message.includes('Unauthorized')) {
-            alert('حدث خطأ أثناء حذف الإشعار: ' + error.message);
-        }
     }
 }
 
@@ -658,24 +565,10 @@ async function deleteAllNotifications() {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
-            credentials: 'same-origin', // إرسال cookies مع الطلب
             body: new URLSearchParams({
                 action: 'delete_all'
             })
         });
-        
-        // التحقق من حالة الاستجابة
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            if (response.status === 401) {
-                // إذا كان Unauthorized، المستخدم قد سجل خروج - لا نعرض رسالة خطأ
-                console.warn('Unauthorized when deleting all notifications - user may have logged out');
-                // لا نعيد التوجيه تلقائياً - نترك المستخدم في الصفحة الحالية
-                // إعادة التوجيه ستحدث فقط عند تسجيل الخروج الفعلي أو انتهاء الجلسة في قاعدة البيانات
-                return { success: false, loggedOut: true };
-            }
-            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-        }
         
         const data = await response.json();
         
@@ -686,21 +579,11 @@ async function deleteAllNotifications() {
                 notificationsList.innerHTML = '<small class="text-muted">لا توجد إشعارات</small>';
             }
             
-            // تحديث العداد أولاً
-            if (typeof updateNotificationBadge === 'function') {
-                await updateNotificationBadge(0);
-            }
+            // تحديث العداد
+            await updateNotificationBadge(0);
             
-            // مسح جميع عناصر الإشعارات من DOM
-            const notificationItems = document.querySelectorAll('.notification-item');
-            notificationItems.forEach(item => item.remove());
-            
-            // إعادة تحميل الإشعارات للتأكد (مع delay صغير)
-            if (typeof loadNotifications === 'function') {
-                setTimeout(() => {
-                    loadNotifications();
-                }, 100);
-            }
+            // إعادة تحميل الإشعارات للتأكد
+            loadNotifications();
             
             return { success: true };
         } else {
@@ -711,18 +594,7 @@ async function deleteAllNotifications() {
             console.log('CORS error ignored when deleting all notifications');
             return;
         }
-        // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
-        if (error.message && error.message.includes('Unauthorized')) {
-            console.warn('Unauthorized when deleting all notifications - user may have logged out');
-            // لا نعيد التوجيه تلقائياً - نترك المستخدم في الصفحة الحالية
-            // إعادة التوجيه ستحدث فقط عند تسجيل الخروج الفعلي أو انتهاء الجلسة في قاعدة البيانات
-            return { success: false, loggedOut: true };
-        }
         console.error('Error deleting all notifications:', error);
-        // إظهار رسالة خطأ للمستخدم فقط للأخطاء الأخرى
-        if (error.message && !error.message.includes('CORS') && !error.message.includes('Unauthorized')) {
-            throw new Error('حدث خطأ أثناء حذف الإشعارات: ' + error.message);
-        }
         throw error;
     }
 }
@@ -796,29 +668,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 seenNotificationIds.add(notificationId);
             }
         });
-        (async () => {
-            const displayNotifications = filterDisplayableNotifications(window.initialNotifications);
-            const unreadCount = displayNotifications.filter(isNotificationUnread).length;
-            updateNotificationBadge(unreadCount);
-            await updateNotificationList(displayNotifications);
-        })();
+        const displayNotifications = filterDisplayableNotifications(window.initialNotifications);
+        const unreadCount = displayNotifications.filter(isNotificationUnread).length;
+        updateNotificationBadge(unreadCount);
+        updateNotificationList(displayNotifications);
     }
     
     // تحميل الإشعارات فوراً
     loadNotifications();
     
-    // تحديث الإشعارات (زيادة الفترة لتقليل الاستهلاك بشكل كبير)
-    let pollInterval = 90000; // 90 ثانية كافتراضي بدلاً من 60 ثانية لتقليل الضغط
+    // تحديث الإشعارات (استخدام الفترة من config أو 60 ثانية افتراضياً)
+    let pollInterval = 60000;
     if (typeof window.NOTIFICATION_POLL_INTERVAL !== 'undefined') {
         const parsed = Number(window.NOTIFICATION_POLL_INTERVAL);
         if (Number.isFinite(parsed) && parsed > 0) {
             pollInterval = parsed;
         }
-    }
-    
-    // الحد الأدنى 60 ثانية (زيادة من 30 ثانية لتقليل الاستهلاك)
-    if (pollInterval < 60000) {
-        pollInterval = 60000;
     }
     const autoRefreshEnabled = (function () {
         if (typeof window.NOTIFICATION_AUTO_REFRESH_ENABLED === 'undefined') {
@@ -833,8 +698,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (autoRefreshEnabled) {
         if (window.currentUser && window.currentUser.role === 'production') {
-            // زيادة الفترة لعمال الإنتاج إلى 90 ثانية لتقليل الضغط
-            pollInterval = Math.min(pollInterval, 90000);
+            pollInterval = Math.min(pollInterval, 15000);
             if (checkNotificationPermission() === 'default') {
                 const requestOnInteraction = () => {
                     requestNotificationPermission().catch(err => console.error('Error requesting notification permission:', err));
@@ -848,12 +712,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (!window.__notificationAutoRefreshActive) {
             window.__notificationAutoRefreshActive = true;
-            // التحقق من أن الصفحة مرئية قبل الطلب
-            notificationCheckInterval = setInterval(function() {
-                if (!document.hidden) {
-                    loadNotifications();
-                }
-            }, pollInterval);
+            notificationCheckInterval = setInterval(loadNotifications, pollInterval);
         }
     }
     
@@ -888,53 +747,21 @@ document.addEventListener('DOMContentLoaded', function() {
         clearAllBtn.addEventListener('click', async function(e) {
             e.preventDefault();
             e.stopPropagation();
-            e.stopImmediatePropagation(); // منع انتشار الحدث لأي معالجات أخرى
             
             if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
                 return;
             }
             
-            // تعطيل الزر أثناء المعالجة
-            const originalHTML = clearAllBtn.innerHTML;
-            clearAllBtn.disabled = true;
-            clearAllBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
-            
             try {
-                const result = await deleteAllNotifications();
-                
-                // إذا كان المستخدم قد سجل خروج، لا نتابع
-                if (result && result.loggedOut) {
-                    return;
-                }
-                
+                await deleteAllNotifications();
                 // إعادة تحميل الإشعارات بعد الحذف
                 if (typeof loadNotifications === 'function') {
                     await loadNotifications();
                 }
-                
-                // تحديث العداد للتأكد
-                if (typeof updateNotificationBadge === 'function') {
-                    await updateNotificationBadge(0);
-                }
             } catch (error) {
-                // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
-                if (error.message && error.message.includes('Unauthorized')) {
-                    console.warn('User logged out during notification deletion');
-                    return;
-                }
-                console.error('Error in deleteAllNotifications:', error);
-                // إظهار رسالة خطأ فقط للأخطاء الأخرى
-                if (error.message && !error.message.includes('Unauthorized')) {
-                    alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
-                }
-            } finally {
-                // إعادة تمكين الزر فقط إذا لم يتم إعادة التوجيه
-                if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
-                    clearAllBtn.disabled = false;
-                    clearAllBtn.innerHTML = originalHTML;
-                }
+                alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
             }
-        }, true); // استخدام capture phase لضمان التنفيذ أولاً
+        });
     }
 });
 
