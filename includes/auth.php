@@ -1133,6 +1133,19 @@ function requireLogin() {
     // تسجيل محاولة الوصول غير المصرح به
     error_log("requireLogin() FAILED: User attempted to access protected page without valid session | Script: " . ($_SERVER['SCRIPT_NAME'] ?? 'unknown') . " | IsProtectedPage: " . ($isProtectedPage ? 'true' : 'false'));
     
+    // حماية من حلقة إعادة التوجيه: إذا كان المستخدم قد سجل دخوله للتو (في آخر 15 ثواني)، لا نعيد التوجيه
+    // هذا يمنع الحلقة عندما يكون هناك تأخير في قاعدة البيانات بعد تسجيل الدخول
+    $loginTime = $_SESSION['login_time'] ?? 0;
+    $timeSinceLogin = time() - $loginTime;
+    $hasSessionData = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
+    
+    if ($timeSinceLogin < 15 && $hasSessionData) {
+        // المستخدم قد سجل دخوله للتو - قد يكون هناك تأخير في قاعدة البيانات
+        // نعتبره مسجل دخول مؤقتاً لتجنب حلقة إعادة التوجيه
+        error_log("requireLogin() - User just logged in ({$timeSinceLogin}s ago), allowing access to prevent redirect loop");
+        return; // نسمح بالوصول بدلاً من إعادة التوجيه
+    }
+    
     // في الصفحات المحمية (API endpoints)، نعيد JSON response بدلاً من حذف الجلسة
     if ($isProtectedPage && ($isNotificationsAPI || $isWebAuthnAPI)) {
         // API endpoint - إرجاع JSON response

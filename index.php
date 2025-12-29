@@ -429,9 +429,24 @@ if ($isUserLoggedIn && !$isLoginAttempt) {
         // إذا كان REQUEST_URI يشير إلى dashboard ولكننا في index.php، قد يكون هناك خطأ في .htaccess
         // في هذه الحالة، نتخطى إعادة التوجيه لتجنب الحلقة
         error_log("Redirect loop prevention: Already on dashboard URL. Current: {$currentPath}, Target: {$dashboardPath}");
-        // لا نعيد التوجيه - اترك الكود يستمر (قد يكون هناك خطأ في التكوين)
-        // لكن يجب أن نتأكد من أننا لا نعرض صفحة تسجيل الدخول
-        // في هذه الحالة، نخرج لأن المستخدم مسجل دخول بالفعل
+        // لا نعيد التوجيه - اخرج لأن المستخدم مسجل دخول بالفعل
+        // إذا كان المستخدم يحاول الوصول إلى dashboard من index.php، يجب أن نترك dashboard يتعامل معه
+        exit;
+    }
+    
+    // حماية إضافية: إذا كان REQUEST_URI يحتوي على /dashboard/، لا نعيد التوجيه
+    // هذا يمنع الحلقة عندما يكون المستخدم في dashboard ولكن index.php يحاول إعادة التوجيه
+    if (strpos($currentPath, '/dashboard/') !== false) {
+        error_log("Redirect loop prevention: Request URI contains /dashboard/. Current: {$currentPath}");
+        // لا نعيد التوجيه - اخرج لأن المستخدم يحاول الوصول إلى dashboard
+        exit;
+    }
+    
+    // حماية إضافية: إذا كان SCRIPT_NAME يحتوي على dashboard، لا نعيد التوجيه
+    // هذا يمنع الحلقة عندما يكون index.php يتم استدعاؤه من dashboard
+    $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+    if (strpos($scriptName, '/dashboard/') !== false || basename($scriptName) !== 'index.php') {
+        error_log("Redirect loop prevention: Script name indicates dashboard. Script: {$scriptName}");
         exit;
     }
     
