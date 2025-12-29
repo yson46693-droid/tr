@@ -1126,13 +1126,13 @@ if (isset($_GET['id'])) {
                 <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة موعد تحصيل</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
             </div>
-            <form method="POST">
+            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>" id="addScheduleForm" onsubmit="return handleAddScheduleSubmit(event)">
                 <input type="hidden" name="action" value="create_schedule">
                 <div class="modal-body">
                     <?php if ($hasDebtorCustomers): ?>
                     <div class="mb-3">
                         <label class="form-label">العميل <span class="text-danger">*</span></label>
-                        <select class="form-select" name="customer_id" required>
+                        <select class="form-select" name="customer_id" id="addScheduleCustomerId" required>
                             <option value="">اختر العميل</option>
                             <?php foreach ($debtorCustomers as $customer): ?>
                                 <option value="<?php echo (int) $customer['id']; ?>">
@@ -1144,21 +1144,16 @@ if (isset($_GET['id'])) {
                     </div>
                     <div class="mb-3">
                         <label class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
-                        <input type="number" name="amount" class="form-control" step="0.01" min="0.01"
-                               value="<?php echo (($_POST['action'] ?? '') === 'create_schedule') ? htmlspecialchars($_POST['amount'] ?? '') : ''; ?>"
-                               required>
+                        <input type="number" name="amount" class="form-control" step="0.01" min="0.01" id="addScheduleAmount" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">موعد التحصيل <span class="text-danger">*</span></label>
-                        <input type="date" name="due_date" class="form-control"
-                               value="<?php echo (($_POST['action'] ?? '') === 'create_schedule') ? htmlspecialchars($_POST['due_date'] ?? '') : date('Y-m-d'); ?>"
-                               required>
+                        <input type="date" name="due_date" class="form-control" id="addScheduleDueDate" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">عدد الأيام قبل الموعد للتذكير</label>
-                        <input type="number" name="days_before_due" class="form-control" 
-                               value="<?php echo (($_POST['action'] ?? '') === 'create_schedule') ? htmlspecialchars($_POST['days_before_due'] ?? '3') : '3'; ?>"
-                               min="1" max="30" step="1">
+                        <input type="number" name="days_before_due" class="form-control" id="addScheduleDaysBeforeDue"
+                               value="3" min="1" max="30" step="1">
                         <small class="text-muted">سيتم إرسال التذكير قبل موعد الاستحقاق بهذا العدد من الأيام (اختياري - الافتراضي: 3 أيام)</small>
                     </div>
                     <?php else: ?>
@@ -1318,19 +1313,91 @@ function showEditScheduleModal(button) {
     modal.show();
 }
 
+// دالة للتحقق من submit النموذج (خاصة للموبايل)
+function handleAddScheduleSubmit(event) {
+    // منع submit تلقائي على الموبايل
+    if (!event || !event.isTrusted) {
+        console.warn('Form submit blocked - not a trusted event');
+        return false;
+    }
+    
+    const form = event.target;
+    if (!form) {
+        return false;
+    }
+    
+    // التحقق من أن النموذج صحيح
+    const customerId = form.querySelector('#addScheduleCustomerId')?.value;
+    const amount = form.querySelector('#addScheduleAmount')?.value;
+    const dueDate = form.querySelector('#addScheduleDueDate')?.value;
+    
+    if (!customerId || !amount || !dueDate) {
+        event.preventDefault();
+        alert('يرجى ملء جميع الحقول المطلوبة');
+        return false;
+    }
+    
+    // السماح بالـ submit الطبيعي
+    return true;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const addScheduleModal = document.getElementById('addScheduleModal');
     if (addScheduleModal) {
+        // إعادة تعيين النموذج عند فتح المودال (ليس عند إغلاقه) - مهم للموبايل
+        addScheduleModal.addEventListener('show.bs.modal', function () {
+            const form = addScheduleModal.querySelector('form');
+            if (form) {
+                // إعادة تعيين النموذج
+                form.reset();
+                
+                // تعيين القيم الافتراضية
+                const dueDateInput = form.querySelector('#addScheduleDueDate');
+                if (dueDateInput) {
+                    const today = new Date().toISOString().split('T')[0];
+                    dueDateInput.value = today;
+                }
+                
+                const daysInput = form.querySelector('#addScheduleDaysBeforeDue');
+                if (daysInput) {
+                    daysInput.value = '3';
+                }
+                
+                // إزالة أي classes أو attributes قد تسبب مشاكل
+                form.classList.remove('was-validated');
+                const inputs = form.querySelectorAll('input, select');
+                inputs.forEach(input => {
+                    input.classList.remove('is-invalid', 'is-valid');
+                });
+            }
+        });
+        
+        // تنظيف النموذج عند إغلاق المودال
         addScheduleModal.addEventListener('hidden.bs.modal', function () {
             const form = addScheduleModal.querySelector('form');
             if (form) {
                 form.reset();
-                const dueDateInput = form.querySelector('input[name="due_date"]');
-                if (dueDateInput) {
-                    dueDateInput.value = '<?php echo date('Y-m-d'); ?>';
-                }
             }
         });
+        
+        // منع submit تلقائي على الموبايل عند فتح المودال
+        const form = addScheduleModal.querySelector('form');
+        if (form) {
+            // منع submit تلقائي من touch events
+            form.addEventListener('touchstart', function(e) {
+                e.stopPropagation();
+            }, { passive: true });
+            
+            // منع submit تلقائي من click events غير موثوقة
+            form.addEventListener('submit', function(e) {
+                if (!e.isTrusted) {
+                    console.warn('Blocked untrusted form submit');
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                }
+            });
+        }
     }
 
     const editScheduleModal = document.getElementById('editScheduleModal');
@@ -1419,21 +1486,53 @@ document.addEventListener('DOMContentLoaded', function() {
                              currentUrl.searchParams.has('error') ||
                              currentUrl.searchParams.has('created');
     
+    // دالة للتحقق من وجود modal مفتوح
+    function isModalOpen() {
+        const openModals = document.querySelectorAll('.modal.show, .modal.showing');
+        return openModals.length > 0;
+    }
+    
     // فقط إذا كان هناك معاملات رسالة في URL و alert موجود
     if ((successAlert || errorAlert) && hasMessageParams) {
         const alertElement = successAlert || errorAlert;
         
         if (alertElement && alertElement.dataset.autoRefresh === 'true') {
-            // عمل refresh مرة واحدة فقط بعد 3 ثوانٍ
-            setTimeout(function() {
-                // إزالة معاملات الرسائل من URL
-                currentUrl.searchParams.delete('success');
-                currentUrl.searchParams.delete('error');
-                currentUrl.searchParams.delete('created');
-                // إزالة _nocache إذا كان موجوداً
-                currentUrl.searchParams.delete('_nocache');
-                window.location.href = currentUrl.toString();
-            }, 3000);
+            // التحقق من عدم وجود modal مفتوح قبل عمل refresh
+            if (isModalOpen()) {
+                // إذا كان هناك modal مفتوح، ننتظر حتى يُغلق
+                const checkInterval = setInterval(function() {
+                    if (!isModalOpen()) {
+                        clearInterval(checkInterval);
+                        // عمل refresh بعد إغلاق المودال
+                        setTimeout(function() {
+                            currentUrl.searchParams.delete('success');
+                            currentUrl.searchParams.delete('error');
+                            currentUrl.searchParams.delete('created');
+                            currentUrl.searchParams.delete('_nocache');
+                            window.location.href = currentUrl.toString();
+                        }, 1000);
+                    }
+                }, 500);
+                
+                // timeout أقصى 30 ثانية
+                setTimeout(function() {
+                    clearInterval(checkInterval);
+                }, 30000);
+            } else {
+                // عمل refresh مرة واحدة فقط بعد 3 ثوانٍ
+                setTimeout(function() {
+                    // التحقق مرة أخرى من عدم وجود modal مفتوح قبل refresh
+                    if (!isModalOpen()) {
+                        // إزالة معاملات الرسائل من URL
+                        currentUrl.searchParams.delete('success');
+                        currentUrl.searchParams.delete('error');
+                        currentUrl.searchParams.delete('created');
+                        // إزالة _nocache إذا كان موجوداً
+                        currentUrl.searchParams.delete('_nocache');
+                        window.location.href = currentUrl.toString();
+                    }
+                }, 3000);
+            }
         }
     }
 })();

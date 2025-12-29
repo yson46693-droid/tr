@@ -4827,6 +4827,87 @@ document.addEventListener('DOMContentLoaded', function() {
             modal.querySelector('.delete-local-customer-name').textContent = customerName;
         });
     }
+    
+    // ===== إصلاح مشكلة freeze بعد إغلاق النماذج - تنظيف backdrop و body =====
+    // قائمة بجميع النماذج في الصفحة
+    const modals = [
+        'collectPaymentModal',
+        'addLocalCustomerModal',
+        'localCustomerPurchaseHistoryModal',
+        'localCustomerReturnModal',
+        'viewLocationModal',
+        'editLocalCustomerModal',
+        'addRegionFromLocalCustomerModal',
+        'customerExportModal',
+        'importLocalCustomersModal',
+        'deleteLocalCustomerModal'
+    ];
+    
+    // دالة تنظيف backdrop و body
+    function cleanupAfterModalClose() {
+        // الانتظار قليلاً للتأكد من اكتمال animation
+        setTimeout(function() {
+            // التحقق من عدم وجود نماذج مفتوحة أخرى
+            const openModals = document.querySelectorAll('.modal.show, .modal.showing');
+            
+            if (openModals.length === 0) {
+                // إزالة جميع backdrops
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                backdrops.forEach(function(backdrop) {
+                    backdrop.remove();
+                });
+                
+                // تنظيف body
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+                
+                // إزالة أي pointer-events أو touch-action styles يدوية
+                document.body.style.pointerEvents = '';
+                document.body.style.touchAction = '';
+                
+                // إزالة أي styles أخرى قد تمنع التفاعل
+                document.body.style.position = '';
+                document.body.style.height = '';
+            }
+        }, 300);
+    }
+    
+    // إضافة event listeners لجميع النماذج
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            // عند بدء الإغلاق
+            modal.addEventListener('hide.bs.modal', function() {
+                // إزالة backdrop فوراً
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                backdrops.forEach(function(backdrop) {
+                    backdrop.style.transition = 'opacity 0.15s linear';
+                    backdrop.style.opacity = '0';
+                });
+            });
+            
+            // بعد الإغلاق الكامل
+            modal.addEventListener('hidden.bs.modal', function() {
+                cleanupAfterModalClose();
+            });
+        }
+    });
+    
+    // تنظيف إضافي عند تحميل الصفحة
+    setTimeout(function() {
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        if (backdrops.length > 0) {
+            backdrops.forEach(function(backdrop) {
+                backdrop.remove();
+            });
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+            document.body.style.pointerEvents = '';
+            document.body.style.touchAction = '';
+        }
+    }, 100);
 });
 </script>
 <?php endif; ?>
