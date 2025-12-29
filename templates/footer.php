@@ -209,27 +209,15 @@ if (!defined('ACCESS_ALLOWED')) {
             }
         });
         
-        // إضافة meta tags لمنع cache في جميع الصفحات
-        if (!document.querySelector('meta[http-equiv="Cache-Control"][content*="no-cache"]')) {
+        // إضافة meta tags محسّنة لـ bfcache (back/forward cache)
+        // تم تعديلها للسماح بـ bfcache مع الحفاظ على تحديث البيانات
+        if (!document.querySelector('meta[http-equiv="Cache-Control"]')) {
             const metaCache = document.createElement('meta');
             metaCache.httpEquiv = 'Cache-Control';
-            metaCache.content = 'no-cache, no-store, must-revalidate, max-age=0';
+            metaCache.content = 'private, max-age=0, must-revalidate';
             document.head.insertBefore(metaCache, document.head.firstChild);
         }
-        
-        if (!document.querySelector('meta[http-equiv="Pragma"]')) {
-            const metaPragma = document.createElement('meta');
-            metaPragma.httpEquiv = 'Pragma';
-            metaPragma.content = 'no-cache';
-            document.head.appendChild(metaPragma);
-        }
-        
-        if (!document.querySelector('meta[http-equiv="Expires"]')) {
-            const metaExpires = document.createElement('meta');
-            metaExpires.httpEquiv = 'Expires';
-            metaExpires.content = '0';
-            document.head.appendChild(metaExpires);
-        }
+        // إزالة Pragma و Expires لأنها تمنع bfcache
     })();
     </script>
     
@@ -521,6 +509,31 @@ if (!defined('ACCESS_ALLOWED')) {
     $cacheVersion = defined('ASSETS_VERSION') ? ASSETS_VERSION : (defined('APP_VERSION') ? APP_VERSION : '1.0.0');
     ?>
     <!-- Performance: Load jQuery with defer for better performance -->
+    <?php if ($isMobile): ?>
+    <!-- Mobile: تحميل jQuery بشكل متأخر بعد تحميل الصفحة -->
+    <script>
+        // تحميل jQuery بعد تحميل الصفحة على الموبايل
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                const script = document.createElement('script');
+                script.src = 'https://code.jquery.com/jquery-3.7.0.min.js';
+                script.crossOrigin = 'anonymous';
+                script.defer = true;
+                script.onload = function() {
+                    // التأكد من أن jQuery متاح عالمياً
+                    if (typeof window.jQuery === 'undefined') {
+                        window.jQuery = typeof jQuery !== 'undefined' ? jQuery : (typeof $ !== 'undefined' ? $ : null);
+                    }
+                    if (typeof window.$ === 'undefined') {
+                        window.$ = typeof $ !== 'undefined' ? $ : (typeof jQuery !== 'undefined' ? jQuery : null);
+                    }
+                };
+                document.body.appendChild(script);
+            }, 500); // بعد 500ms من تحميل الصفحة
+        });
+    </script>
+    <?php else: ?>
+    <!-- Desktop: تحميل عادي -->
     <script src="https://code.jquery.com/jquery-3.7.0.min.js" defer crossorigin="anonymous"></script>
     <script>
         // الانتظار حتى تحميل jQuery
@@ -543,6 +556,7 @@ if (!defined('ACCESS_ALLOWED')) {
             });
         })();
     </script>
+    <?php endif; ?>
     <!-- Performance: Load Bootstrap JS with defer -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" defer crossorigin="anonymous"></script>
     <!-- Custom JS -->
@@ -577,10 +591,33 @@ if (!defined('ACCESS_ALLOWED')) {
     <!-- Modal Mobile Fix JS - إصلاح النماذج على الهواتف المحمولة -->
     <script src="<?php echo $assetsUrl; ?>js/modal-mobile-fix.js?v=<?php echo $cacheVersion; ?>" defer></script>
     
-    <!-- Medium Priority JS - تحميل مباشر -->
+    <!-- Medium Priority JS - تحميل مشروط -->
+    <?php if ($isMobile): ?>
+    <!-- Mobile: تحميل متأخر للـ JS غير الحرجة -->
+    <script>
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                const scripts = [
+                    '<?php echo $assetsUrl; ?>js/fix-modal-interaction.js?v=<?php echo $cacheVersion; ?>',
+                    '<?php echo $assetsUrl; ?>js/notifications.js?v=<?php echo $cacheVersion; ?>',
+                    '<?php echo $assetsUrl; ?>js/image-lazy-loading.js?v=<?php echo $cacheVersion; ?>'
+                ];
+                
+                scripts.forEach(function(src) {
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.defer = true;
+                    document.body.appendChild(script);
+                });
+            }, 800); // بعد 800ms من تحميل الصفحة
+        });
+    </script>
+    <?php else: ?>
+    <!-- Desktop: تحميل مباشر -->
     <script src="<?php echo $assetsUrl; ?>js/fix-modal-interaction.js?v=<?php echo $cacheVersion; ?>" defer></script>
     <script src="<?php echo $assetsUrl; ?>js/notifications.js?v=<?php echo $cacheVersion; ?>" defer></script>
     <script src="<?php echo $assetsUrl; ?>js/image-lazy-loading.js?v=<?php echo $cacheVersion; ?>" defer></script>
+    <?php endif; ?>
     
     <!-- Low Priority JS - تحميل متأخر على الموبايل -->
     <?php if (!$isMobile): ?>

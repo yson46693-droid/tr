@@ -20,11 +20,11 @@ if (!headers_sent()) {
     // Feature-Policy كبديل للمتصفحات القديمة (بدون notifications)
     header("Feature-Policy: geolocation 'self'; camera 'self'; microphone 'self'");
     
-    // === Cache Control Headers - منع تخزين الصفحات في cache ===
-    // هذه headers ضرورية لضمان تحديث البيانات بعد أي طلب
-    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0, private');
-    header('Pragma: no-cache');
-    header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+    // === Cache Control Headers - محسّن لـ bfcache (back/forward cache) ===
+    // تم تعديلها للسماح بـ bfcache مع الحفاظ على تحديث البيانات
+    // استخدام private بدلاً من no-store للسماح بـ bfcache
+    header('Cache-Control: private, max-age=0, must-revalidate');
+    // إزالة Pragma و Expires لأنها تمنع bfcache
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
     header('ETag: "' . md5(time() . rand() . uniqid()) . '"');
 }
@@ -214,10 +214,10 @@ if (ob_get_level() > 0) {
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta http-equiv="Permissions-Policy" content="geolocation=(self), camera=(self), microphone=(self)">
     <meta http-equiv="Feature-Policy" content="geolocation 'self'; camera 'self'; microphone 'self'">
-    <!-- Cache Control Meta Tags - منع تخزين الصفحة لضمان جلب البيانات المحدثة -->
-    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
+    <!-- Cache Control Meta Tags - محسّن لـ bfcache (back/forward cache) -->
+    <!-- تم تعديلها للسماح بـ bfcache مع الحفاظ على تحديث البيانات -->
+    <meta http-equiv="Cache-Control" content="private, max-age=0, must-revalidate">
+    <!-- إزالة Pragma و Expires لأنها تمنع bfcache -->
     <title><?php echo isset($pageTitle) ? $pageTitle . ' - ' : ''; ?><?php echo APP_NAME; ?></title>
     
     <?php
@@ -309,10 +309,19 @@ if (ob_get_level() > 0) {
     <?php if ($isMobile): ?>
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link rel="dns-prefetch" href="https://code.jquery.com">
+    <!-- Preload الخطوط المهمة على الموبايل -->
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/fonts/bootstrap-icons.woff2" as="font" type="font/woff2" crossorigin="anonymous">
     <?php endif; ?>
     
-    <!-- Bootstrap 5 CSS -->
+    <!-- Bootstrap 5 CSS - تحميل غير متزامن على الموبايل لتحسين الأداء -->
+    <?php if ($isMobile): ?>
+    <!-- Mobile: تحميل Bootstrap CSS بشكل غير متزامن -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" media="print" onload="this.media='all'" crossorigin="anonymous">
+    <noscript><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"></noscript>
+    <?php else: ?>
+    <!-- Desktop: تحميل عادي -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+    <?php endif; ?>
     
     <!-- Bootstrap Icons - تحميل مشروط للموبايل (أقل) -->
     <?php if ($isMobile): ?>
@@ -325,10 +334,17 @@ if (ob_get_level() > 0) {
     <?php endif; ?>
     
     <!-- Custom CSS - Homeline Dashboard Design -->
-    <!-- Critical CSS - تحميل مباشر -->
+    <!-- Critical CSS - تحميل مباشر (حرجة للتصيير الأولي) -->
     <link href="<?php echo $assetsUrl; ?>css/homeline-dashboard.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
     <link href="<?php echo $assetsUrl; ?>css/topbar.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
+    <?php if ($isMobile): ?>
+    <!-- Mobile: تحميل responsive.css بشكل غير متزامن -->
+    <link href="<?php echo $assetsUrl; ?>css/responsive.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="<?php echo $assetsUrl; ?>css/responsive.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
+    <?php else: ?>
+    <!-- Desktop: تحميل عادي -->
     <link href="<?php echo $assetsUrl; ?>css/responsive.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
+    <?php endif; ?>
     
     <!-- Medium Priority CSS - تحميل مشروط -->
     <link href="<?php echo $assetsUrl; ?>css/sidebar.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
@@ -362,11 +378,13 @@ if (ob_get_level() > 0) {
     <link href="<?php echo $assetsUrl; ?>css/dark-mode.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
     <noscript><link href="<?php echo $assetsUrl; ?>css/dark-mode.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
     
-    <!-- Accessibility Improvements -->
-    <link href="<?php echo $assetsUrl; ?>css/accessibility-improvements.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
+    <!-- Accessibility Improvements - تحميل غير متزامن -->
+    <link href="<?php echo $assetsUrl; ?>css/accessibility-improvements.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="<?php echo $assetsUrl; ?>css/accessibility-improvements.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
     
-    <!-- Image Optimization -->
-    <link href="<?php echo $assetsUrl; ?>css/image-optimization.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
+    <!-- Image Optimization - تحميل غير متزامن -->
+    <link href="<?php echo $assetsUrl; ?>css/image-optimization.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="<?php echo $assetsUrl; ?>css/image-optimization.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
     <?php if (!empty($pageStylesheets) && is_array($pageStylesheets)): ?>
         <?php foreach ($pageStylesheets as $stylesheetPath): ?>
             <?php
@@ -402,7 +420,14 @@ if (ob_get_level() > 0) {
         <?php endforeach; ?>
     <?php endif; ?>
     <?php if ($dir === 'rtl'): ?>
+    <?php if ($isMobile): ?>
+    <!-- Mobile: تحميل RTL CSS بشكل غير متزامن -->
+    <link href="<?php echo $assetsUrl; ?>css/rtl.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="<?php echo $assetsUrl; ?>css/rtl.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet"></noscript>
+    <?php else: ?>
+    <!-- Desktop: تحميل عادي -->
     <link href="<?php echo $assetsUrl; ?>css/rtl.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
+    <?php endif; ?>
     <?php endif; ?>
     
     <!-- Structured Data (JSON-LD) for SEO -->
@@ -551,6 +576,17 @@ if (ob_get_level() > 0) {
             clip: auto;
             white-space: normal;
         }
+        
+        /* Performance: Font Display Optimization - تحسين عرض الخطوط */
+        @font-face {
+            font-family: 'bootstrap-icons';
+            font-display: swap;
+        }
+        
+        /* تطبيق font-display: swap على جميع الخطوط المخصصة */
+        * {
+            font-display: swap;
+        }
     </style>
     <script>
         window.APP_CONFIG = window.APP_CONFIG || {};
@@ -605,6 +641,39 @@ if (ob_get_level() > 0) {
                 document.body.classList.add('css-loaded');
             });
         })();
+        
+        // Performance: تحسين تحميل CSS بشكل غير متزامن على الموبايل
+        <?php if ($isMobile): ?>
+        (function() {
+            // تحميل CSS بشكل غير متزامن باستخدام media="print" trick
+            function loadCSS(href, onload) {
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = href;
+                link.media = 'print';
+                link.onload = function() {
+                    this.media = 'all';
+                    if (onload) onload();
+                };
+                document.head.appendChild(link);
+            }
+            
+            // تحسين تحميل CSS المتبقي بعد تحميل الصفحة
+            window.addEventListener('load', function() {
+                setTimeout(function() {
+                    // تحميل CSS غير الحرجة بشكل متأخر
+                    const lazyCSS = document.querySelectorAll('link[rel="stylesheet"][media="print"]');
+                    lazyCSS.forEach(function(link) {
+                        if (link.onload) {
+                            link.onload();
+                        } else {
+                            link.media = 'all';
+                        }
+                    });
+                }, 100);
+            });
+        })();
+        <?php endif; ?>
     </script>
     
     <!-- Favicon -->
