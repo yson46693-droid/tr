@@ -591,7 +591,7 @@ $lang = isset($translations) ? $translations : [];
                         </div>
                         <p class="mt-2 text-muted">جاري تحميل الكاميرا...</p>
                     </div>
-                    <video id="video" autoplay playsinline muted style="width: 100%; border-radius: 8px; background: #000; display: none; visibility: hidden;"></video>
+                    <video id="video" autoplay playsinline muted style="width: 100%; border-radius: 8px; background: #000; display: none; visibility: hidden;" onclick="if(this.paused) this.play().catch(e => console.log('Play failed:', e));"></video>
                     <canvas id="canvas" style="display: none;"></canvas>
                     <div id="cameraError" class="alert alert-danger" style="display: none;">
                         <i class="bi bi-exclamation-triangle me-2"></i>

@@ -237,8 +237,15 @@ async function initCamera() {
                 video.style.display = 'block';
                 video.style.visibility = 'visible';
                 video.style.opacity = '1';
+                video.style.width = '100%';
+                video.style.height = 'auto';
+                video.style.maxWidth = '100%';
+                
+                // إجبار reflow لضمان أن الفيديو مرئي
+                video.offsetHeight;
+                
                 // إضافة event listener للتحقق من أن الفيديو يعمل
-                video.addEventListener('playing', () => {
+                const playingHandler = () => {
                     safeLog('Video is now playing');
                     // التأكد من إظهار زر التقاط الصورة بعد بدء تشغيل الفيديو
                     const captureBtn = document.getElementById('captureBtn');
@@ -246,13 +253,60 @@ async function initCamera() {
                         captureBtn.style.display = 'inline-block';
                         captureBtn.style.visibility = 'visible';
                         captureBtn.style.opacity = '1';
+                        captureBtn.disabled = false;
                     }
-                }, { once: true });
-                video.play().then(() => {
+                    // إخفاء حالة التحميل
+                    if (cameraLoading) {
+                        cameraLoading.style.display = 'none';
+                        cameraLoading.style.visibility = 'hidden';
+                    }
+                };
+                
+                video.addEventListener('playing', playingHandler, { once: true });
+                
+                // محاولة تشغيل الفيديو
+                const playPromise = video.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            resolveOnce();
+                        })
+                        .catch((playError) => {
+                            // على الموبايل، قد يفشل autoplay - نحاول مرة أخرى بعد تأخير قصير
+                            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                            if (isMobile && playError.name === 'NotAllowedError') {
+                                safeLog('Autoplay blocked, will retry after user interaction');
+                                // ننتظر حتى يكون هناك user interaction
+                                const retryPlay = () => {
+                                    video.play()
+                                        .then(() => {
+                                            resolveOnce();
+                                        })
+                                        .catch((retryError) => {
+                                            rejectOnce(new Error('فشل في تشغيل الفيديو: ' + retryError.message));
+                                        });
+                                };
+                                
+                                // محاولة إعادة التشغيل بعد تأخير قصير
+                                setTimeout(() => {
+                                    video.play()
+                                        .then(() => {
+                                            resolveOnce();
+                                        })
+                                        .catch(() => {
+                                            // إذا فشل، نعرض رسالة للمستخدم
+                                            rejectOnce(new Error('يرجى النقر على الفيديو لتشغيل الكاميرا'));
+                                        });
+                                }, 500);
+                            } else {
+                                rejectOnce(new Error('فشل في تشغيل الفيديو: ' + playError.message));
+                            }
+                        });
+                } else {
+                    // المتصفحات القديمة
                     resolveOnce();
-                }).catch((playError) => {
-                    rejectOnce(new Error('فشل في تشغيل الفيديو: ' + playError.message));
-                });
+                }
             };
             
             video.onerror = (e) => {
@@ -265,8 +319,15 @@ async function initCamera() {
                 video.style.display = 'block';
                 video.style.visibility = 'visible';
                 video.style.opacity = '1';
+                video.style.width = '100%';
+                video.style.height = 'auto';
+                video.style.maxWidth = '100%';
+                
+                // إجبار reflow
+                video.offsetHeight;
+                
                 // إضافة event listener للتحقق من أن الفيديو يعمل
-                video.addEventListener('playing', () => {
+                const playingHandler = () => {
                     safeLog('Video is now playing (readyState >= 2)');
                     // التأكد من إظهار زر التقاط الصورة بعد بدء تشغيل الفيديو
                     const captureBtn = document.getElementById('captureBtn');
@@ -274,13 +335,43 @@ async function initCamera() {
                         captureBtn.style.display = 'inline-block';
                         captureBtn.style.visibility = 'visible';
                         captureBtn.style.opacity = '1';
+                        captureBtn.disabled = false;
                     }
-                }, { once: true });
-                video.play().then(() => {
+                    // إخفاء حالة التحميل
+                    if (cameraLoading) {
+                        cameraLoading.style.display = 'none';
+                        cameraLoading.style.visibility = 'hidden';
+                    }
+                };
+                
+                video.addEventListener('playing', playingHandler, { once: true });
+                
+                const playPromise = video.play();
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            resolveOnce();
+                        })
+                        .catch((playError) => {
+                            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                            if (isMobile && playError.name === 'NotAllowedError') {
+                                safeLog('Autoplay blocked, will retry');
+                                setTimeout(() => {
+                                    video.play()
+                                        .then(() => {
+                                            resolveOnce();
+                                        })
+                                        .catch(() => {
+                                            rejectOnce(new Error('يرجى النقر على الفيديو لتشغيل الكاميرا'));
+                                        });
+                                }, 500);
+                            } else {
+                                rejectOnce(new Error('فشل في تشغيل الفيديو: ' + playError.message));
+                            }
+                        });
+                } else {
                     resolveOnce();
-                }).catch((playError) => {
-                    rejectOnce(new Error('فشل في تشغيل الفيديو: ' + playError.message));
-                });
+                }
             }
         });
         
@@ -998,49 +1089,82 @@ document.addEventListener('DOMContentLoaded', function() {
         removeBackdrop();
         
         // على الموبايل، ننتظر وقت أطول لضمان أن Modal مرئي تماماً
-        const delay = isMobile ? 300 : 100;
+        // ونستخدم requestAnimationFrame لضمان أن DOM جاهز
+        const delay = isMobile ? 500 : 200;
         
-        setTimeout(async () => {
-            // التأكد مرة أخرى من إزالة backdrop
-            removeBackdrop();
-            
-            // التأكد من أن Modal مرئي
-            const modalElement = document.getElementById('cameraModal');
-            if (!modalElement || !modalElement.classList.contains('show')) {
-                console.warn('Modal not visible, retrying...');
+        // استخدام requestAnimationFrame لضمان أن Modal مرئي تماماً
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
                 setTimeout(async () => {
+                    // التأكد مرة أخرى من إزالة backdrop
+                    removeBackdrop();
+                    
+                    // التأكد من أن Modal مرئي
+                    const modalElement = document.getElementById('cameraModal');
+                    if (!modalElement || !modalElement.classList.contains('show')) {
+                        console.warn('Modal not visible, retrying in 300ms...');
+                        setTimeout(async () => {
+                            try {
+                                await initCamera();
+                            } catch (error) {
+                                console.error('Error initializing camera in modal (retry):', error);
+                            }
+                        }, 300);
+                        return;
+                    }
+                    
+                    // التأكد من أن container مرئي
+                    const cameraContainer = document.getElementById('cameraContainer');
+                    if (cameraContainer) {
+                        cameraContainer.style.display = 'block';
+                        cameraContainer.style.visibility = 'visible';
+                        cameraContainer.style.opacity = '1';
+                        cameraContainer.style.zIndex = '1';
+                        // إجبار reflow لضمان أن العنصر مرئي
+                        cameraContainer.offsetHeight;
+                    }
+                    
+                    // التأكد من أن video element جاهز ومرئي
+                    const video = document.getElementById('video');
+                    if (video) {
+                        video.style.position = 'relative';
+                        video.style.zIndex = '2';
+                        video.style.width = '100%';
+                        video.style.height = 'auto';
+                        video.style.maxWidth = '100%';
+                        // إجبار reflow
+                        video.offsetHeight;
+                    }
+                    
+                    // على الموبايل، نضيف تأخير إضافي لضمان أن كل شيء جاهز
+                    if (isMobile) {
+                        await new Promise(resolve => setTimeout(resolve, 150));
+                    }
+                    
+                    // إضافة click handler للفيديو على الموبايل لتفعيل الكاميرا إذا فشل autoplay
+                    if (isMobile && video) {
+                        const videoClickHandler = async () => {
+                            if (video.paused && video.readyState >= 2) {
+                                try {
+                                    await video.play();
+                                    video.removeEventListener('click', videoClickHandler);
+                                } catch (e) {
+                                    console.log('Manual play failed:', e);
+                                }
+                            }
+                        };
+                        video.addEventListener('click', videoClickHandler);
+                    }
+                    
                     try {
                         await initCamera();
                     } catch (error) {
                         console.error('Error initializing camera in modal:', error);
+                        // showCameraError سيتم استدعاؤها من داخل initCamera
                     }
-                }, 200);
-                return;
-            }
-            
-            // التأكد من أن container مرئي
-            const cameraContainer = document.getElementById('cameraContainer');
-            if (cameraContainer) {
-                cameraContainer.style.display = 'block';
-                cameraContainer.style.visibility = 'visible';
-                cameraContainer.style.opacity = '1';
-                cameraContainer.style.zIndex = '1';
-            }
-            
-            // التأكد من أن video element جاهز
-            const video = document.getElementById('video');
-            if (video) {
-                video.style.position = 'relative';
-                video.style.zIndex = '2';
-            }
-            
-            try {
-                await initCamera();
-            } catch (error) {
-                console.error('Error initializing camera in modal:', error);
-                // showCameraError سيتم استدعاؤها من داخل initCamera
-            }
-        }, delay);
+                }, delay);
+            });
+        });
     });
     
     // عند إغلاق الـ modal

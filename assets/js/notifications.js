@@ -521,49 +521,27 @@ async function updateNotificationList(notifications) {
     });
 
     list.querySelectorAll('.notification-mark-read').forEach(button => {
-        // ضمان ظهور الزر
-        button.style.cssText = 'display: inline-flex !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; position: relative !important; z-index: 10 !important; cursor: pointer !important;';
-        
-        // إزالة أي event listeners سابقة
-        const newButton = button.cloneNode(true);
-        button.parentNode.replaceChild(newButton, button);
-        
-        newButton.addEventListener('click', function(event) {
+        button.addEventListener('click', function(event) {
             event.stopPropagation();
-            event.stopImmediatePropagation();
-            event.preventDefault();
             const notificationId = this.getAttribute('data-id');
-            if (notificationId) {
-                markNotificationAsRead(notificationId).catch(console.error);
-            }
-        }, true);
+            markNotificationAsRead(notificationId).catch(console.error);
+        });
     });
 
     list.querySelectorAll('.notification-delete').forEach(button => {
-        // ضمان ظهور الزر
-        button.style.cssText = 'display: inline-flex !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; position: relative !important; z-index: 10 !important; cursor: pointer !important;';
-        
-        // إزالة أي event listeners سابقة
-        const newButton = button.cloneNode(true);
-        button.parentNode.replaceChild(newButton, button);
-        
-        newButton.addEventListener('click', function(event) {
+        button.addEventListener('click', function(event) {
             event.stopPropagation();
-            event.stopImmediatePropagation();
-            event.preventDefault();
             const notificationId = this.getAttribute('data-id');
-            if (notificationId) {
-                deleteNotification(notificationId).then(() => {
-                    const item = this.closest('.notification-item');
-                    if (item) {
-                        item.remove();
-                    }
-                    if (!list.querySelector('.notification-item')) {
-                        list.innerHTML = '<small class="text-muted">لا توجد إشعارات</small>';
-                    }
-                }).catch(console.error);
-            }
-        }, true);
+            deleteNotification(notificationId).then(() => {
+                const item = this.closest('.notification-item');
+                if (item) {
+                    item.remove();
+                }
+                if (!list.querySelector('.notification-item')) {
+                    list.innerHTML = '<small class="text-muted">لا توجد إشعارات</small>';
+                }
+            }).catch(console.error);
+        });
     });
 }
 
@@ -905,83 +883,63 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // إضافة event listener لزر مسح كل الإشعارات
-    function setupClearAllButton() {
-        const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
-        if (clearAllBtn) {
-            // إزالة event listeners السابقة لتجنب التكرار
-            const newBtn = clearAllBtn.cloneNode(true);
-            clearAllBtn.parentNode.replaceChild(newBtn, clearAllBtn);
+    const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', async function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation(); // منع انتشار الحدث لأي معالجات أخرى
             
-            // إضافة style لضمان ظهور الزر
-            newBtn.style.cssText = 'pointer-events: auto !important; z-index: 1000 !important; position: relative !important; display: inline-block !important; visibility: visible !important; opacity: 1 !important; cursor: pointer !important;';
+            if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
+                return;
+            }
             
-            newBtn.addEventListener('click', async function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
+            // تعطيل الزر أثناء المعالجة
+            const originalHTML = clearAllBtn.innerHTML;
+            clearAllBtn.disabled = true;
+            clearAllBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
+            
+            try {
+                const result = await deleteAllNotifications();
                 
-                if (!confirm('هل أنت متأكد من رغبتك في مسح جميع الإشعارات؟')) {
+                // إذا كان المستخدم قد سجل خروج، لا نتابع
+                if (result && result.loggedOut) {
                     return;
                 }
                 
-                // تعطيل الزر أثناء المعالجة
-                const originalHTML = newBtn.innerHTML;
-                newBtn.disabled = true;
-                newBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحذف...';
-                
-                try {
-                    const result = await deleteAllNotifications();
-                    
-                    // إذا كان المستخدم قد سجل خروج، لا نتابع
-                    if (result && result.loggedOut) {
-                        return;
-                    }
-                    
-                    // إعادة تحميل الإشعارات بعد الحذف
-                    if (typeof loadNotifications === 'function') {
-                        await loadNotifications();
-                    }
-                    
-                    // تحديث العداد للتأكد
-                    if (typeof updateNotificationBadge === 'function') {
-                        await updateNotificationBadge(0);
-                    }
-                } catch (error) {
-                    // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
-                    if (error.message && error.message.includes('Unauthorized')) {
-                        console.warn('User logged out during notification deletion');
-                        return;
-                    }
-                    console.error('Error in deleteAllNotifications:', error);
-                    // إظهار رسالة خطأ فقط للأخطاء الأخرى
-                    if (error.message && !error.message.includes('Unauthorized')) {
-                        alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
-                    }
-                } finally {
-                    // إعادة تمكين الزر فقط إذا لم يتم إعادة التوجيه
-                    if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
-                        newBtn.disabled = false;
-                        newBtn.innerHTML = originalHTML;
-                    }
+                // إعادة تحميل الإشعارات بعد الحذف
+                if (typeof loadNotifications === 'function') {
+                    await loadNotifications();
                 }
-            }, true);
-        }
-    }
-    
-    // إعداد الزر عند تحميل الصفحة
-    setupClearAllButton();
-    
-    // إعداد الزر مرة أخرى عند فتح dropdown (للتأكد من أن event listener يعمل)
-    const notificationDropdown = document.getElementById('notificationsDropdown');
-    if (notificationDropdown) {
-        notificationDropdown.addEventListener('shown.bs.dropdown', function() {
-            setTimeout(setupClearAllButton, 100);
-        });
+                
+                // تحديث العداد للتأكد
+                if (typeof updateNotificationBadge === 'function') {
+                    await updateNotificationBadge(0);
+                }
+            } catch (error) {
+                // إذا كان الخطأ Unauthorized، لا نعرض رسالة خطأ
+                if (error.message && error.message.includes('Unauthorized')) {
+                    console.warn('User logged out during notification deletion');
+                    return;
+                }
+                console.error('Error in deleteAllNotifications:', error);
+                // إظهار رسالة خطأ فقط للأخطاء الأخرى
+                if (error.message && !error.message.includes('Unauthorized')) {
+                    alert('حدث خطأ أثناء حذف الإشعارات: ' + (error.message || 'خطأ غير معروف'));
+                }
+            } finally {
+                // إعادة تمكين الزر فقط إذا لم يتم إعادة التوجيه
+                if (window.location.pathname !== '/index.php' && !window.location.pathname.includes('index.php')) {
+                    clearAllBtn.disabled = false;
+                    clearAllBtn.innerHTML = originalHTML;
+                }
+            }
+        }, true); // استخدام capture phase لضمان التنفيذ أولاً
     }
 });
 
-// إيقاف التحديث عند مغادرة الصفحة - استخدام pagehide لإعادة تفعيل bfcache
-window.addEventListener('pagehide', function() {
+// إيقاف التحديث عند مغادرة الصفحة
+window.addEventListener('beforeunload', function() {
     if (notificationCheckInterval) {
         clearInterval(notificationCheckInterval);
     }
