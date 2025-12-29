@@ -55,7 +55,37 @@ try {
     
     // التأكد من أن الملف موجود وأنه داخل مجلد uploads/chat
     if (!$fullPath || !file_exists($fullPath)) {
+        // بدلاً من إرجاع 404 فقط، نرجع placeholder image للصور
+        $fileExtension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        $isImage = in_array($fileExtension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'], true);
+        
+        if ($isImage) {
+            // محاولة استخدام placeholder icon
+            $placeholderPath = __DIR__ . '/../../assets/icons/icon-192x192.png';
+            
+            if (file_exists($placeholderPath)) {
+                header('Content-Type: image/png');
+                header('X-File-Status: missing');
+                header('Cache-Control: no-cache, must-revalidate');
+                readfile($placeholderPath);
+                exit;
+            }
+            
+            // إذا لم يوجد placeholder، نرجع SVG بسيط
+            header('Content-Type: image/svg+xml');
+            header('X-File-Status: missing');
+            header('Cache-Control: no-cache, must-revalidate');
+            echo '<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" fill="#e5e7eb"/>
+  <text x="50%" y="50%" font-family="Arial" font-size="14" fill="#999999" text-anchor="middle" dy=".3em">الملف غير متوفر</text>
+</svg>';
+            exit;
+        }
+        
+        // للملفات غير الصور، نرجع 404 عادي
         http_response_code(404);
+        header('X-File-Status: missing');
         echo 'File not found';
         exit;
     }

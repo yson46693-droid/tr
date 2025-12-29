@@ -1326,6 +1326,7 @@
               requestAnimationFrame(() => {
                 const element = document.querySelector(`[data-media-id="${mediaId}"]`);
                 if (element && element.tagName === 'IMG') {
+                  // Check if cached image is actually a placeholder (check response header)
                   // Update to cached version if available
                   element.src = cachedUrl;
                 }
@@ -1334,6 +1335,25 @@
           }).catch(() => {
             // Silently ignore cache errors
           });
+          
+          // Check if the loaded image is a placeholder (by checking response header)
+          // This helps identify missing files even after they're cached
+          fetch(apiUrl, { method: 'HEAD', credentials: 'include' })
+            .then(response => {
+              const fileStatus = response.headers.get('X-File-Status');
+              if (fileStatus === 'missing') {
+                requestAnimationFrame(() => {
+                  const element = document.querySelector(`[data-media-id="${mediaId}"]`);
+                  if (element && element.tagName === 'IMG') {
+                    element.style.opacity = '0.6';
+                    element.title = 'الملف غير متوفر';
+                  }
+                });
+              }
+            })
+            .catch(() => {
+              // Silently ignore fetch errors
+            });
           
           // Add error handler for image load failures (404, etc.)
           // This prevents console errors when images fail to load
