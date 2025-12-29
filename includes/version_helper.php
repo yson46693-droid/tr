@@ -56,71 +56,152 @@ function checkAndUpdateVersion(bool $forceIncrement = false): string {
         $lastHash = trim(file_get_contents($lastCheckFile));
     }
     
-    // حساب hash للملفات الرئيسية والملفات المهمة
-    // استخدام طريقة أفضل للكشف عن التحديثات من GitHub
-    $mainFiles = [
-        __DIR__ . '/../templates/header.php',
-        __DIR__ . '/../templates/footer.php',
-        __DIR__ . '/../includes/config.php',
-        __DIR__ . '/../includes/db.php',
-        __DIR__ . '/../includes/auth.php',
-        __DIR__ . '/../index.php',
+    // حساب hash شامل لجميع الملفات المهمة مع مراقبة:
+    // 1. محتوى الملفات (hash)
+    // 2. حجم الملفات (bytes)
+    // 3. عدد الأسطر في الملفات
+    // 4. تاريخ آخر تعديل
+    
+    $baseDir = __DIR__ . '/..';
+    $currentHash = '';
+    $maxMtime = 0;
+    
+    // قائمة المجلدات والملفات المهمة للمراقبة
+    $watchDirs = [
+        'includes' => ['*.php'],
+        'templates' => ['*.php'],
+        'modules' => ['**/*.php'],
+        'api' => ['*.php'],
+        'assets/js' => ['*.js'],
+        'assets/css' => ['*.css'],
     ];
     
-    // حساب hash من محتوى الملفات + تاريخ آخر تعديل
-    $currentHash = '';
-    $maxMtime = 0; // آخر تاريخ تعديل
+    // الملفات الرئيسية (يتم مراقبتها دائماً)
+    $mainFiles = [
+        'index.php',
+        'version.json',
+    ];
     
-    foreach ($mainFiles as $file) {
-        if (file_exists($file)) {
-            // إضافة hash المحتوى
-            $currentHash .= md5_file($file);
-            // تتبع آخر تاريخ تعديل
-            $mtime = filemtime($file);
+    // دالة لحساب hash شامل للملف (محتوى + حجم + عدد الأسطر)
+    $getFileHash = function($filePath) {
+        if (!file_exists($filePath)) {
+            return '';
+        }
+        
+        $hash = '';
+        
+        // 1. Hash المحتوى
+        $hash .= md5_file($filePath);
+        
+        // 2. حجم الملف (bytes)
+        $fileSize = filesize($filePath);
+        $hash .= $fileSize;
+        
+        // 3. عدد الأسطر في الملف
+        $lineCount = 0;
+        if (is_readable($filePath)) {
+            $handle = @fopen($filePath, 'r');
+            if ($handle) {
+                while (!feof($handle)) {
+                    fgets($handle);
+                    $lineCount++;
+                }
+                fclose($handle);
+            }
+        }
+        $hash .= $lineCount;
+        
+        // 4. تاريخ آخر تعديل
+        $mtime = filemtime($filePath);
+        $hash .= $mtime;
+        
+        return $hash;
+    };
+    
+    // مراقبة الملفات الرئيسية
+    foreach ($mainFiles as $mainFile) {
+        $filePath = $baseDir . '/' . $mainFile;
+        if (file_exists($filePath)) {
+            $currentHash .= $getFileHash($filePath);
+            $mtime = filemtime($filePath);
             if ($mtime > $maxMtime) {
                 $maxMtime = $mtime;
             }
         }
     }
     
-    // إضافة آخر تاريخ تعديل للملفات الرئيسية في hash
-    $currentHash .= $maxMtime;
-    
-    // التحقق من وجود ملف .git (Git repository) واستخدام commit hash إذا كان متوفراً
-    $gitHeadFile = __DIR__ . '/../.git/HEAD';
-    if (file_exists($gitHeadFile)) {
-        $gitHead = trim(file_get_contents($gitHeadFile));
-        // إذا كان HEAD يشير إلى branch، احصل على commit hash
-        if (strpos($gitHead, 'ref:') === 0) {
-            $refPath = trim(str_replace('ref:', '', $gitHead));
-            $refFile = __DIR__ . '/../.git/' . $refPath;
-            if (file_exists($refFile)) {
-                $commitHash = trim(file_get_contents($refFile));
-                $currentHash .= substr($commitHash, 0, 8); // أول 8 أحرف من commit hash
-            }
-        } else {
-            // HEAD يحتوي على commit hash مباشرة
-            $currentHash .= substr($gitHead, 0, 8);
+    // مراقبة الملفات في المجلدات المهمة
+    // استخدام RecursiveDirectoryIterator للبحث بشكل أسرع
+    foreach ($watchDirs as $dir => $patterns) {
+        $dirPath = $baseDir . '/' . $dir;
+        if (!is_dir($dirPath)) {
+            continue;
         }
-    }
-    
-    // إضافة hash من آخر 5 ملفات معدلة في مجلد includes
-    $includesDir = __DIR__ . '/../includes';
-    if (is_dir($includesDir)) {
-        $includeFiles = glob($includesDir . '/*.php');
-        if (is_array($includeFiles) && count($includeFiles) > 0) {
-            usort($includeFiles, function($a, $b) {
-                return filemtime($b) - filemtime($a);
-            });
-            $recentIncludeFiles = array_slice($includeFiles, 0, 5);
-            foreach ($recentIncludeFiles as $file) {
-                if (file_exists($file)) {
-                    $currentHash .= filemtime($file); // استخدام تاريخ التعديل فقط لتسريع العملية
+        
+        foreach ($patterns as $pattern) {
+            // تحويل pattern إلى regex للبحث بشكل أسرع
+            $regexPattern = str_replace(['*', '**'], ['.*', '.*'], $pattern);
+            $regexPattern = '/^' . str_replace('/', '\/', $regexPattern) . '$/';
+            
+            try {
+                $iterator = new RecursiveIteratorIterator(
+                    new RecursiveDirectoryIterator($dirPath, RecursiveDirectoryIterator::SKIP_DOTS),
+                    RecursiveIteratorIterator::SELF_FIRST
+                );
+                
+                foreach ($iterator as $file) {
+                    if ($file->isFile()) {
+                        $relativePath = str_replace($dirPath . '/', '', $file->getPathname());
+                        // التحقق من تطابق pattern
+                        if (preg_match($regexPattern, $relativePath) || 
+                            fnmatch($pattern, $relativePath, FNM_PATHNAME)) {
+                            $filePath = $file->getPathname();
+                            $currentHash .= $getFileHash($filePath);
+                            $mtime = $file->getMTime();
+                            if ($mtime > $maxMtime) {
+                                $maxMtime = $mtime;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                // في حالة الخطأ، استخدم glob كبديل
+                $files = glob($dirPath . '/' . $pattern, GLOB_BRACE);
+                if (is_array($files)) {
+                    foreach ($files as $file) {
+                        if (is_file($file)) {
+                            $currentHash .= $getFileHash($file);
+                            $mtime = filemtime($file);
+                            if ($mtime > $maxMtime) {
+                                $maxMtime = $mtime;
+                            }
+                        }
+                    }
                 }
             }
         }
     }
     
+    // إضافة آخر تاريخ تعديل شامل
+    $currentHash .= $maxMtime;
+    
+    // التحقق من Git commit hash إذا كان متوفراً
+    $gitHeadFile = $baseDir . '/.git/HEAD';
+    if (file_exists($gitHeadFile)) {
+        $gitHead = trim(file_get_contents($gitHeadFile));
+        if (strpos($gitHead, 'ref:') === 0) {
+            $refPath = trim(str_replace('ref:', '', $gitHead));
+            $refFile = $baseDir . '/.git/' . $refPath;
+            if (file_exists($refFile)) {
+                $commitHash = trim(file_get_contents($refFile));
+                $currentHash .= substr($commitHash, 0, 12);
+            }
+        } else {
+            $currentHash .= substr($gitHead, 0, 12);
+        }
+    }
+    
+    // حساب hash نهائي
     $currentHash = md5($currentHash);
     
     // إذا تغير hash أو تم فرض التحديث، حدث الإصدار
