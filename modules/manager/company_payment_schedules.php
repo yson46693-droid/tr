@@ -1126,7 +1126,7 @@ if (isset($_GET['id'])) {
                 <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة موعد تحصيل</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
             </div>
-            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>" id="addScheduleForm">
+            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>" id="addScheduleForm" onsubmit="return handleAddScheduleSubmit(event)">
                 <input type="hidden" name="action" value="create_schedule">
                 <div class="modal-body">
                     <?php if ($hasDebtorCustomers): ?>
@@ -1166,7 +1166,7 @@ if (isset($_GET['id'])) {
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-primary" <?php echo $hasDebtorCustomers ? '' : 'disabled'; ?>>
+                    <button type="button" class="btn btn-primary" id="addScheduleSubmitBtn" <?php echo $hasDebtorCustomers ? '' : 'disabled'; ?>>
                         <?php echo $hasDebtorCustomers ? 'حفظ' : 'لا يوجد عملاء مدينون'; ?>
                     </button>
                 </div>
@@ -1313,22 +1313,105 @@ function showEditScheduleModal(button) {
     modal.show();
 }
 
+// دالة submit يدوية للنموذج
+function submitAddScheduleForm() {
+    const form = document.getElementById('addScheduleForm');
+    if (!form) return;
+    
+    // التحقق من أن النموذج صحيح
+    const customerId = form.querySelector('#addScheduleCustomerId')?.value;
+    const amount = form.querySelector('#addScheduleAmount')?.value;
+    const dueDate = form.querySelector('#addScheduleDueDate')?.value;
+    
+    if (!customerId || !amount || !dueDate) {
+        alert('يرجى ملء جميع الحقول المطلوبة');
+        return;
+    }
+    
+    // submit يدوي
+    form.submit();
+}
+
+// دالة للتحقق من submit النموذج (خاصة للموبايل)
+function handleAddScheduleSubmit(event) {
+    // منع submit تلقائي على الموبايل
+    if (!event || !event.isTrusted) {
+        console.warn('Form submit blocked - not a trusted event');
+        return false;
+    }
+    
+    const form = event.target;
+    if (!form) {
+        return false;
+    }
+    
+    // التحقق من أن النموذج صحيح
+    const customerId = form.querySelector('#addScheduleCustomerId')?.value;
+    const amount = form.querySelector('#addScheduleAmount')?.value;
+    const dueDate = form.querySelector('#addScheduleDueDate')?.value;
+    
+    if (!customerId || !amount || !dueDate) {
+        event.preventDefault();
+        alert('يرجى ملء جميع الحقول المطلوبة');
+        return false;
+    }
+    
+    // السماح بالـ submit الطبيعي
+    return true;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const addScheduleModal = document.getElementById('addScheduleModal');
     if (addScheduleModal) {
-        // تعيين القيم الافتراضية عند فتح المودال
+        // إعادة تعيين النموذج عند فتح المودال (ليس عند إغلاقه) - مهم للموبايل
         addScheduleModal.addEventListener('show.bs.modal', function () {
-            const dueDateInput = addScheduleModal.querySelector('#addScheduleDueDate');
-            if (dueDateInput) {
-                const today = new Date().toISOString().split('T')[0];
-                dueDateInput.value = today;
-            }
-            
-            const daysInput = addScheduleModal.querySelector('#addScheduleDaysBeforeDue');
-            if (daysInput) {
-                daysInput.value = '3';
+            const form = addScheduleModal.querySelector('form');
+            if (form) {
+                // إعادة تعيين النموذج
+                form.reset();
+                
+                // تعيين القيم الافتراضية
+                const dueDateInput = form.querySelector('#addScheduleDueDate');
+                if (dueDateInput) {
+                    const today = new Date().toISOString().split('T')[0];
+                    dueDateInput.value = today;
+                }
+                
+                const daysInput = form.querySelector('#addScheduleDaysBeforeDue');
+                if (daysInput) {
+                    daysInput.value = '3';
+                }
+                
+                // إزالة أي classes أو attributes قد تسبب مشاكل
+                form.classList.remove('was-validated');
+                // إزالة classes من جميع inputs و selects مباشرة (بدون loop)
+                const invalidInputs = form.querySelectorAll('.is-invalid, .is-valid');
+                if (invalidInputs.length > 0) {
+                    // استخدام CSS classList API مباشرة
+                    invalidInputs.forEach(input => {
+                        input.classList.remove('is-invalid', 'is-valid');
+                    });
+                }
             }
         });
+        
+        // تنظيف النموذج عند إغلاق المودال
+        addScheduleModal.addEventListener('hidden.bs.modal', function () {
+            const form = addScheduleModal.querySelector('form');
+            if (form) {
+                form.reset();
+            }
+        });
+        
+        // ربط زر submit يدوي
+        const submitBtn = addScheduleModal.querySelector('#addScheduleSubmitBtn');
+        if (submitBtn) {
+            submitBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                submitAddScheduleForm();
+            });
+        }
     }
 
     const editScheduleModal = document.getElementById('editScheduleModal');
@@ -1402,6 +1485,325 @@ document.addEventListener('DOMContentLoaded', function() {
             // لا نعيد تعيين القيمة إلى 3 - سنجلبها من السيرفر عند فتح المودال مرة أخرى
         });
     }
+});
+</script>
+
+<!-- إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات -->
+<script>
+(function() {
+    const successAlert = document.getElementById('successAlert');
+    const errorAlert = document.getElementById('errorAlert');
+    
+    // التحقق من وجود معاملات في URL تشير إلى رسالة جديدة
+    const currentUrl = new URL(window.location.href);
+    const hasMessageParams = currentUrl.searchParams.has('success') || 
+                             currentUrl.searchParams.has('error') ||
+                             currentUrl.searchParams.has('created');
+    
+    // دالة للتحقق من وجود modal مفتوح
+    function isModalOpen() {
+        const openModals = document.querySelectorAll('.modal.show, .modal.showing');
+        return openModals.length > 0;
+    }
+    
+    // فقط إذا كان هناك معاملات رسالة في URL و alert موجود
+    if ((successAlert || errorAlert) && hasMessageParams) {
+        const alertElement = successAlert || errorAlert;
+        
+        if (alertElement && alertElement.dataset.autoRefresh === 'true') {
+            // إزالة معاملات الرسائل من URL مباشرة بدون timeout
+            if (!isModalOpen()) {
+                currentUrl.searchParams.delete('success');
+                currentUrl.searchParams.delete('error');
+                currentUrl.searchParams.delete('created');
+                currentUrl.searchParams.delete('_nocache');
+                // تحديث URL بدون إعادة تحميل الصفحة
+                window.history.replaceState({}, '', currentUrl.toString());
+            }
+        }
+    }
+})();
+</script>
+
+<style>
+/* ===== تنسيقات جميع النماذج - نفس أبعاد نموذج تحصيل من مندوب ===== */
+/* قائمة النماذج: addScheduleModal, editScheduleModal, reminderModal */
+
+@media (min-width: 769px) {
+    #addScheduleModal .modal-dialog.modal-dialog-centered,
+    #editScheduleModal .modal-dialog.modal-dialog-centered,
+    #reminderModal .modal-dialog.modal-dialog-centered {
+        margin: 0.5rem auto;
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 1rem);
+    }
+
+    #addScheduleModal .modal-content,
+    #editScheduleModal .modal-content,
+    #reminderModal .modal-content {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    /* إصلاح المساحة البيضاء - منع modal-body من التمدد */
+    #addScheduleModal .modal-body,
+    #editScheduleModal .modal-body,
+    #reminderModal .modal-body {
+        flex: 0 1 auto !important;
+        flex-grow: 0 !important;
+        flex-shrink: 1 !important;
+        flex-basis: auto !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding-bottom: 1rem !important;
+        margin-bottom: 0 !important;
+    }
+}
+
+/* قواعد عامة للـ header والـ footer */
+#addScheduleModal .modal-header,
+#editScheduleModal .modal-header,
+#reminderModal .modal-header {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+}
+
+#addScheduleModal .modal-footer,
+#editScheduleModal .modal-footer,
+#reminderModal .modal-footer {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-top: 1px solid #dee2e6 !important;
+}
+
+/* padding للـ header والـ footer على الشاشات الكبيرة فقط */
+@media (min-width: 769px) {
+    #addScheduleModal .modal-footer,
+    #editScheduleModal .modal-footer,
+    #reminderModal .modal-footer {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+}
+
+/* إزالة أي pseudo-elements قد تسبب مساحة فارغة */
+#addScheduleModal .modal-content::after,
+#addScheduleModal .modal-content::before,
+#editScheduleModal .modal-content::after,
+#editScheduleModal .modal-content::before,
+#reminderModal .modal-content::after,
+#reminderModal .modal-content::before {
+    display: none !important;
+    content: none !important;
+}
+
+/* إصلاح خاص لـ modal-dialog-scrollable (للشاشات الكبيرة فقط) */
+@media (min-width: 769px) {
+    #addScheduleModal .modal-dialog.modal-dialog-scrollable .modal-content,
+    #editScheduleModal .modal-dialog.modal-dialog-scrollable .modal-content,
+    #reminderModal .modal-dialog.modal-dialog-scrollable .modal-content {
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    #addScheduleModal .modal-dialog.modal-dialog-scrollable .modal-body,
+    #editScheduleModal .modal-dialog.modal-dialog-scrollable .modal-body,
+    #reminderModal .modal-dialog.modal-dialog-scrollable .modal-body {
+        flex: 0 1 auto !important;
+        overflow-y: auto !important;
+        max-height: calc(100vh - 250px) !important;
+    }
+}
+
+/* تنسيقات للشاشات الصغيرة */
+@media (max-width: 768px) {
+    #addScheduleModal .modal-dialog,
+    #editScheduleModal .modal-dialog,
+    #reminderModal .modal-dialog {
+        margin: 0.5rem !important;
+        max-width: calc(100% - 1rem) !important;
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
+    }
+    
+    #addScheduleModal .modal-content,
+    #editScheduleModal .modal-content,
+    #reminderModal .modal-content {
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
+    }
+    
+    #addScheduleModal .modal-body,
+    #editScheduleModal .modal-body,
+    #reminderModal .modal-body {
+        flex: 0 1 auto !important;
+        flex-grow: 0 !important;
+        padding-bottom: 1rem !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow-y: visible !important;
+    }
+    
+    #addScheduleModal .modal-footer,
+    #editScheduleModal .modal-footer,
+    #reminderModal .modal-footer {
+        flex-shrink: 0 !important;
+        flex-grow: 0 !important;
+        margin-top: 0 !important;
+        padding-top: 1rem !important;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    
+    #addScheduleModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
+    #editScheduleModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body,
+    #reminderModal .modal-dialog:not(.modal-dialog-scrollable) .modal-body {
+        overflow-y: visible !important;
+        max-height: none !important;
+    }
+}
+
+/* ===== منع scroll و touch خارج النموذج عند فتحه ===== */
+/* منع scroll في body عند فتح النموذج */
+body.modal-open {
+    overflow: hidden !important;
+}
+
+/* ضمان أن backdrop يمنع التفاعل */
+.modal-backdrop {
+    z-index: 1040 !important;
+    background-color: #000 !important;
+    pointer-events: auto !important;
+    touch-action: none !important;
+}
+
+.modal-backdrop.show {
+    opacity: 0.5 !important;
+}
+
+/* منع touch events على المحتوى خلف النموذج */
+body.modal-open > *:not(.modal):not(.modal-backdrop) {
+    pointer-events: none !important;
+    touch-action: none !important;
+}
+
+/* السماح بالتفاعل داخل النموذج فقط */
+#addScheduleModal.modal.show,
+#editScheduleModal.modal.show,
+#reminderModal.modal.show {
+    pointer-events: auto !important;
+    touch-action: auto !important;
+}
+
+#addScheduleModal .modal-dialog,
+#editScheduleModal .modal-dialog,
+#reminderModal .modal-dialog {
+    pointer-events: auto !important;
+    touch-action: auto !important;
+}
+
+#addScheduleModal .modal-content,
+#editScheduleModal .modal-content,
+#reminderModal .modal-content {
+    pointer-events: auto !important;
+    touch-action: auto !important;
+}
+
+/* السماح بالتمرير داخل modal-body فقط */
+#addScheduleModal .modal-body,
+#editScheduleModal .modal-body,
+#reminderModal .modal-body {
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+    pointer-events: auto !important;
+}
+
+/* منع scroll على المحتوى خلف النموذج على الموبايل */
+@media (max-width: 768px) {
+    body.modal-open {
+        overflow: hidden !important;
+        touch-action: none !important;
+    }
+    
+    body.modal-open > *:not(.modal):not(.modal-backdrop) {
+        pointer-events: none !important;
+        touch-action: none !important;
+        -webkit-overflow-scrolling: none !important;
+    }
+    
+    /* السماح بالتمرير داخل النموذج فقط */
+    #addScheduleModal .modal-body,
+    #editScheduleModal .modal-body,
+    #reminderModal .modal-body {
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-y !important;
+        overflow-y: auto !important;
+        max-height: calc(100vh - 180px) !important;
+    }
+}
+</style>
+
+<script>
+// ===== منع scroll و touch خارج النموذج =====
+document.addEventListener('DOMContentLoaded', function() {
+    const modals = ['addScheduleModal', 'editScheduleModal', 'reminderModal'];
+    
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        
+        // عند فتح النموذج - لا حاجة لإضافة classes أو styles
+        modal.addEventListener('show.bs.modal', function() {
+            // لا شيء - Bootstrap يتعامل مع هذا تلقائياً
+        });
+        
+        // عند إغلاق النموذج - لا حاجة لتنظيف
+        modal.addEventListener('hidden.bs.modal', function() {
+            // لا شيء - Bootstrap يتعامل مع هذا تلقائياً
+        });
+        
+        // منع propagation للأحداث من النموذج إلى body
+        modal.addEventListener('touchstart', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+        
+        modal.addEventListener('touchmove', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+        
+        modal.addEventListener('touchend', function(e) {
+            e.stopPropagation();
+        }, { passive: true });
+        
+        // منع scroll على backdrop
+        modal.addEventListener('wheel', function(e) {
+            const modalContent = modal.querySelector('.modal-content');
+            if (modalContent && !modalContent.contains(e.target)) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+    });
+    
+    // منع scroll على backdrop مباشرة
+    document.addEventListener('touchmove', function(e) {
+        if (e.target.classList.contains('modal-backdrop')) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+    
+    document.addEventListener('wheel', function(e) {
+        if (e.target.classList.contains('modal-backdrop')) {
+            e.preventDefault();
+        }
+    }, { passive: false });
 });
 </script>
 
