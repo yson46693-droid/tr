@@ -463,10 +463,19 @@
     border-radius: 3px;
 }
 
+/* إصلاح dropdown-item-text لضمان ظهور الأزرار */
+.notifications-dropdown .dropdown-item-text {
+    padding: 0 !important;
+    white-space: normal !important;
+    overflow: visible !important;
+}
+
 .notification-item {
     padding: var(--spacing-md);
     border-bottom: 1px solid var(--border-color);
     transition: background var(--transition-base);
+    position: relative;
+    overflow: visible;
 }
 
 .notification-item .notification-actions {
@@ -561,12 +570,41 @@
             font-size: 0.7rem !important;
         }
         
-        .notification-item .notification-actions .btn i,
-        .notification-item .notification-actions button i {
-            margin-inline-end: 0.25rem;
-            font-size: 0.9rem;
-        }
+    .notification-item .notification-actions .btn i,
+    .notification-item .notification-actions button i {
+        margin-inline-end: 0.25rem;
+        font-size: 0.9rem;
     }
+}
+
+/* إصلاح زر مسح كل الإشعارات */
+#clearAllNotificationsBtn {
+    display: inline-block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    cursor: pointer !important;
+    position: relative !important;
+    z-index: 1000 !important;
+    margin: 0 !important;
+    padding: 0.25rem 0.5rem !important;
+}
+
+#clearAllNotificationsBtn:hover {
+    opacity: 0.8 !important;
+    text-decoration: underline !important;
+}
+
+@media (max-width: 768px) {
+    #clearAllNotificationsBtn {
+        font-size: 0.75rem !important;
+        padding: 0.375rem 0.5rem !important;
+    }
+    
+    #clearAllNotificationsBtn span {
+        display: inline !important;
+    }
+}
 }
 
 /* ضمان ظهور زر مسح الكل */

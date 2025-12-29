@@ -490,9 +490,9 @@ async function updateNotificationList(notifications) {
                         <div class="small text-muted">${safeMessage}</div>
                         <div class="small text-muted mt-1">${timeAgo}</div>
                     </div>
-                    <div class="notification-actions" style="display: flex !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important;">
+                    <div class="notification-actions">
                         ${markReadButton}
-                        <button type="button" class="btn btn-sm btn-outline-danger notification-delete" data-id="${notificationId}" title="حذف الإشعار" style="display: inline-flex !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; cursor: pointer !important;">
+                        <button type="button" class="btn btn-sm btn-outline-danger notification-delete" data-id="${notificationId}" title="حذف الإشعار">
                             <i class="bi bi-trash me-1"></i>حذف
                         </button>
                     </div>
@@ -522,46 +522,48 @@ async function updateNotificationList(notifications) {
 
     list.querySelectorAll('.notification-mark-read').forEach(button => {
         // ضمان ظهور الزر
-        button.style.display = 'inline-flex';
-        button.style.visibility = 'visible';
-        button.style.opacity = '1';
-        button.style.pointerEvents = 'auto';
-        button.style.position = 'relative';
-        button.style.zIndex = '10';
-        button.style.cursor = 'pointer';
+        button.style.cssText = 'display: inline-flex !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; position: relative !important; z-index: 10 !important; cursor: pointer !important;';
         
-        button.addEventListener('click', function(event) {
+        // إزالة أي event listeners سابقة
+        const newButton = button.cloneNode(true);
+        button.parentNode.replaceChild(newButton, button);
+        
+        newButton.addEventListener('click', function(event) {
             event.stopPropagation();
+            event.stopImmediatePropagation();
             event.preventDefault();
             const notificationId = this.getAttribute('data-id');
-            markNotificationAsRead(notificationId).catch(console.error);
-        });
+            if (notificationId) {
+                markNotificationAsRead(notificationId).catch(console.error);
+            }
+        }, true);
     });
 
     list.querySelectorAll('.notification-delete').forEach(button => {
         // ضمان ظهور الزر
-        button.style.display = 'inline-flex';
-        button.style.visibility = 'visible';
-        button.style.opacity = '1';
-        button.style.pointerEvents = 'auto';
-        button.style.position = 'relative';
-        button.style.zIndex = '10';
-        button.style.cursor = 'pointer';
+        button.style.cssText = 'display: inline-flex !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; position: relative !important; z-index: 10 !important; cursor: pointer !important;';
         
-        button.addEventListener('click', function(event) {
+        // إزالة أي event listeners سابقة
+        const newButton = button.cloneNode(true);
+        button.parentNode.replaceChild(newButton, button);
+        
+        newButton.addEventListener('click', function(event) {
             event.stopPropagation();
+            event.stopImmediatePropagation();
             event.preventDefault();
             const notificationId = this.getAttribute('data-id');
-            deleteNotification(notificationId).then(() => {
-                const item = this.closest('.notification-item');
-                if (item) {
-                    item.remove();
-                }
-                if (!list.querySelector('.notification-item')) {
-                    list.innerHTML = '<small class="text-muted">لا توجد إشعارات</small>';
-                }
-            }).catch(console.error);
-        });
+            if (notificationId) {
+                deleteNotification(notificationId).then(() => {
+                    const item = this.closest('.notification-item');
+                    if (item) {
+                        item.remove();
+                    }
+                    if (!list.querySelector('.notification-item')) {
+                        list.innerHTML = '<small class="text-muted">لا توجد إشعارات</small>';
+                    }
+                }).catch(console.error);
+            }
+        }, true);
     });
 }
 
@@ -911,13 +913,7 @@ document.addEventListener('DOMContentLoaded', function() {
             clearAllBtn.parentNode.replaceChild(newBtn, clearAllBtn);
             
             // إضافة style لضمان ظهور الزر
-            newBtn.style.pointerEvents = 'auto';
-            newBtn.style.zIndex = '1000';
-            newBtn.style.position = 'relative';
-            newBtn.style.display = 'inline-block';
-            newBtn.style.visibility = 'visible';
-            newBtn.style.opacity = '1';
-            newBtn.style.cursor = 'pointer';
+            newBtn.style.cssText = 'pointer-events: auto !important; z-index: 1000 !important; position: relative !important; display: inline-block !important; visibility: visible !important; opacity: 1 !important; cursor: pointer !important;';
             
             newBtn.addEventListener('click', async function(e) {
                 e.preventDefault();
