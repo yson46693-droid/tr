@@ -499,8 +499,19 @@
             customersList.innerHTML = '';
         }
         
+        // بدء قياس الوقت للتشخيص
+        const startTime = performance.now();
+        
         try {
             const apiUrl = `${getApiPath('get_rep_customers_for_export.php')}?rep_id=${repId}&page=${page}&_t=${Date.now()}`;
+            
+            // استخدام AbortController مع timeout أطول قليلاً
+            const timeoutId = setTimeout(() => {
+                if (currentLoadAbortController) {
+                    currentLoadAbortController.abort();
+                }
+            }, 30000); // 30 ثانية timeout
+            
             const response = await fetch(apiUrl, {
                 method: 'GET',
                 headers: {
@@ -511,6 +522,8 @@
                 signal: currentLoadAbortController.signal,
                 cache: 'no-store'
             });
+            
+            clearTimeout(timeoutId);
             
             // التحقق من نوع الاستجابة
             const contentType = response.headers.get('content-type') || '';
@@ -557,6 +570,10 @@
                        typeof customer.name === 'string' && 
                        customer.name.trim() !== '';
             });
+            
+            // قياس الوقت المستغرق
+            const loadTime = performance.now() - startTime;
+            console.log('Customers loaded in', loadTime.toFixed(2), 'ms');
             
             // عرض قائمة العملاء مع pagination مباشرة
             displayCustomersList(validCustomers, {

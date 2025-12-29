@@ -1455,22 +1455,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // إعادة تعيين النموذج عند إغلاق Modal
     const collectModal = document.getElementById('collectFromRepModal');
     if (collectModal) {
-        // إزالة backdrop بسرعة عند بدء الإغلاق
+        // إزالة backdrop فوراً عند بدء الإغلاق - بدون أي تأخير
         collectModal.addEventListener('hide.bs.modal', function() {
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => {
-                backdrop.style.transition = 'opacity 0.05s linear';
+                backdrop.style.transition = 'none'; /* إزالة transition تماماً */
                 backdrop.style.opacity = '0';
-                setTimeout(() => {
-                    if (backdrop.parentNode) {
-                        backdrop.remove();
-                    }
-                }, 50);
+                backdrop.remove(); /* إزالة فوراً بدون setTimeout */
             });
+            // تنظيف body classes فوراً
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
         });
         
         collectModal.addEventListener('hidden.bs.modal', function() {
-            // تنظيف backdrop المتبقي
+            // تنظيف backdrop المتبقي (احتياطي)
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => backdrop.remove());
             document.body.classList.remove('modal-open');
@@ -1494,22 +1494,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // معالجة Modal تقرير تفصيلي
     const generateReportModal = document.getElementById('generateReportModal');
     if (generateReportModal) {
-        // إزالة backdrop بسرعة عند بدء الإغلاق
+        // إزالة backdrop فوراً عند بدء الإغلاق - بدون أي تأخير
         generateReportModal.addEventListener('hide.bs.modal', function() {
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => {
-                backdrop.style.transition = 'opacity 0.05s linear';
+                backdrop.style.transition = 'none'; /* إزالة transition تماماً */
                 backdrop.style.opacity = '0';
-                setTimeout(() => {
-                    if (backdrop.parentNode) {
-                        backdrop.remove();
-                    }
-                }, 50);
+                backdrop.remove(); /* إزالة فوراً بدون setTimeout */
             });
+            // تنظيف body classes فوراً
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
         });
         
         generateReportModal.addEventListener('hidden.bs.modal', function() {
-            // تنظيف backdrop المتبقي
+            // تنظيف backdrop المتبقي (احتياطي)
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => backdrop.remove());
             document.body.classList.remove('modal-open');
@@ -1593,31 +1593,34 @@ document.addEventListener('DOMContentLoaded', function() {
 #generateReportModal .modal-dialog,
 #collectFromRepModal .modal-dialog {
     margin: 0.5rem;
-    max-height: calc(100vh - 1rem);
     display: flex;
     flex-direction: column;
 }
 
 #generateReportModal .modal-content,
 #collectFromRepModal .modal-content {
-    max-height: calc(100vh - 1rem);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    max-height: none !important;
+    height: auto !important;
 }
 
+/* إصلاح المساحة البيضاء الفارغة - استخدام auto height بدلاً من flex: 1 */
 #generateReportModal .modal-body,
 #collectFromRepModal .modal-body {
     overflow-y: auto;
-    flex: 1 1 auto;
+    flex: 0 1 auto !important; /* تغيير من 1 1 auto إلى 0 1 auto لإزالة المساحة الفارغة */
     min-height: 0;
     padding-bottom: 1rem;
+    max-height: none !important;
+    height: auto !important;
 }
 
 #generateReportModal .modal-footer,
 #collectFromRepModal .modal-footer {
-    flex-shrink: 0;
-    margin-top: auto;
+    flex-shrink: 0 !important;
+    margin-top: 0 !important; /* إزالة margin-top: auto */
     padding-top: 1rem;
     padding-bottom: 1rem;
     border-top: 1px solid #dee2e6;
@@ -1629,9 +1632,9 @@ document.addEventListener('DOMContentLoaded', function() {
     display: none;
 }
 
-/* تحسين backdrop */
+/* تسريع إغلاق النماذج - إزالة جميع الـ transitions */
 .modal-backdrop {
-    transition: opacity 0.05s linear !important;
+    transition: none !important; /* إزالة transition تماماً */
 }
 
 .modal-backdrop.fade {
@@ -1642,38 +1645,52 @@ document.addEventListener('DOMContentLoaded', function() {
     opacity: 0.5 !important;
 }
 
-/* تحسين animation الإغلاق */
+/* إزالة animation الإغلاق تماماً */
 .modal.fade .modal-dialog {
-    transition: transform 0.1s ease-out, opacity 0.1s ease-out !important;
+    transition: none !important; /* إزالة transition تماماً */
 }
 
 .modal.fade:not(.show) .modal-dialog {
-    transform: translate(0, -10px) !important;
+    transform: none !important;
     opacity: 0 !important;
 }
 
-/* منع overflow غير ضروري */
+/* تحسينات إضافية للهواتف */
 @media (max-width: 768px) {
     #generateReportModal .modal-dialog,
     #collectFromRepModal .modal-dialog {
-        margin: 0.25rem;
-        max-height: calc(100vh - 0.5rem);
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+        max-height: calc(100vh - 1rem) !important;
     }
     
     #generateReportModal .modal-content,
     #collectFromRepModal .modal-content {
-        max-height: calc(100vh - 0.5rem);
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
     }
     
-    #generateReportModal .modal-body,
+    /* للنماذج الصغيرة - إزالة المساحة الفارغة تماماً */
     #collectFromRepModal .modal-body {
-        padding-bottom: 0.75rem;
+        flex: 0 1 auto !important;
+        padding-bottom: 1rem;
+        max-height: none !important;
+        height: auto !important;
+    }
+    
+    /* للنماذج الأطول - السماح بالتمرير عند الحاجة فقط */
+    #generateReportModal .modal-body {
+        flex: 0 1 auto !important;
+        padding-bottom: 1rem;
+        max-height: calc(100vh - 250px) !important; /* ارتفاع مناسب مع احتياطي للهيدر والفوتر */
+        overflow-y: auto;
     }
     
     #generateReportModal .modal-footer,
     #collectFromRepModal .modal-footer {
-        padding-top: 0.75rem;
-        padding-bottom: 0.75rem;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        margin-top: 0 !important;
     }
 }
 </style>

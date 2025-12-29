@@ -42,13 +42,13 @@
     /* جسم النموذج - قابل للتمرير */
     .modal.show .modal-body,
     .modal.showing .modal-body {
-        flex: 1 1 auto !important;
+        flex: 0 1 auto !important; /* تغيير من 1 1 auto إلى 0 1 auto لإزالة المساحة الفارغة */
         min-height: 0 !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
         -webkit-overflow-scrolling: touch !important;
-        /* إضافة padding-bottom إضافي لضمان ظهور جميع الحقول */
-        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px) + 60px) !important;
+        /* تقليل padding-bottom - فقط عند الحاجة للتمرير */
+        padding-bottom: 1rem !important;
         /* إزالة أي max-height محدد مسبقاً */
         max-height: none !important;
         height: auto !important;
@@ -66,7 +66,7 @@
         position: relative !important;
         z-index: 10 !important;
         border-top: 1px solid #dee2e6 !important;
-        margin-top: 0 !important;
+        margin-top: 0 !important; /* إزالة margin-top: auto لمنع المساحة الفارغة */
     }
 }
 
@@ -142,15 +142,14 @@
     /* هذا هو الحل - نقل التمرير من modal-content إلى modal-body */
     .modal.show .modal-dialog-scrollable .modal-body,
     .modal.showing .modal-dialog-scrollable .modal-body {
-        flex: 1 1 auto !important;
+        flex: 0 1 auto !important; /* تغيير من 1 1 auto إلى 0 1 auto لإزالة المساحة الفارغة */
         min-height: 0 !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
         -webkit-overflow-scrolling: touch !important;
-        max-height: none !important;
+        max-height: calc(100vh - 250px) !important; /* ارتفاع مناسب مع احتياطي للهيدر والفوتر */
         height: auto !important;
-        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px) + 60px) !important;
-        /* إضافة مساحة إضافية في الأسفل لضمان ظهور جميع الحقول */
+        padding-bottom: 1rem !important; /* تقليل padding-bottom */
         position: relative !important;
     }
     
@@ -165,7 +164,7 @@
         background-color: #fff !important;
         padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
         border-top: 1px solid #dee2e6 !important;
-        margin-top: 0 !important;
+        margin-top: 0 !important; /* إزالة margin-top: auto لمنع المساحة الفارغة */
         position: relative !important;
         z-index: 10 !important;
     }
@@ -369,6 +368,24 @@
         .modal-content {
             max-height: calc(100dvh - 1rem);
         }
+    }
+}
+
+/* ===== تسريع إغلاق النماذج - إزالة جميع الـ transitions ===== */
+@media (max-width: 768px) {
+    /* إزالة transition من backdrop لإغلاق فوري */
+    .modal-backdrop {
+        transition: none !important;
+    }
+    
+    /* إزالة animation الإغلاق تماماً */
+    .modal.fade .modal-dialog {
+        transition: none !important;
+    }
+    
+    .modal.fade:not(.show) .modal-dialog {
+        transform: none !important;
+        opacity: 0 !important;
     }
 }
 

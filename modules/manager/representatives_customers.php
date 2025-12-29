@@ -2672,28 +2672,31 @@ document.addEventListener('DOMContentLoaded', function() {
 /* تحسينات المودالات على الهواتف - repCollectPaymentModal */
 #repCollectPaymentModal .modal-dialog {
     margin: 0.5rem;
-    max-height: calc(100vh - 1rem);
     display: flex;
     flex-direction: column;
 }
 
 #repCollectPaymentModal .modal-content {
-    max-height: calc(100vh - 1rem);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    max-height: none !important;
+    height: auto !important;
 }
 
+/* إصلاح المساحة البيضاء الفارغة - استخدام auto height بدلاً من flex: 1 */
 #repCollectPaymentModal .modal-body {
     overflow-y: auto;
-    flex: 1 1 auto;
+    flex: 0 1 auto !important; /* تغيير من 1 1 auto إلى 0 1 auto لإزالة المساحة الفارغة */
     min-height: 0;
     padding-bottom: 1rem;
+    max-height: none !important;
+    height: auto !important;
 }
 
 #repCollectPaymentModal .modal-footer {
-    flex-shrink: 0;
-    margin-top: auto;
+    flex-shrink: 0 !important;
+    margin-top: 0 !important; /* إزالة margin-top: auto */
     padding-top: 1rem;
     padding-bottom: 1rem;
     border-top: 1px solid #dee2e6;
@@ -2704,9 +2707,9 @@ document.addEventListener('DOMContentLoaded', function() {
     display: none;
 }
 
-/* تحسين backdrop */
+/* تسريع إغلاق النماذج - إزالة جميع الـ transitions */
 .modal-backdrop {
-    transition: opacity 0.05s linear !important;
+    transition: none !important; /* إزالة transition تماماً */
 }
 
 .modal-backdrop.fade {
@@ -2717,34 +2720,40 @@ document.addEventListener('DOMContentLoaded', function() {
     opacity: 0.5 !important;
 }
 
-/* تحسين animation الإغلاق */
+/* إزالة animation الإغلاق تماماً */
 .modal.fade .modal-dialog {
-    transition: transform 0.1s ease-out, opacity 0.1s ease-out !important;
+    transition: none !important; /* إزالة transition تماماً */
 }
 
 .modal.fade:not(.show) .modal-dialog {
-    transform: translate(0, -10px) !important;
+    transform: none !important;
     opacity: 0 !important;
 }
 
-/* منع overflow غير ضروري */
+/* تحسينات إضافية للهواتف */
 @media (max-width: 768px) {
     #repCollectPaymentModal .modal-dialog {
-        margin: 0.25rem;
-        max-height: calc(100vh - 0.5rem);
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+        max-height: calc(100vh - 1rem) !important;
     }
     
     #repCollectPaymentModal .modal-content {
-        max-height: calc(100vh - 0.5rem);
+        max-height: calc(100vh - 1rem) !important;
+        height: auto !important;
     }
     
     #repCollectPaymentModal .modal-body {
-        padding-bottom: 0.75rem;
+        flex: 0 1 auto !important;
+        padding-bottom: 1rem;
+        max-height: none !important;
+        height: auto !important;
     }
     
     #repCollectPaymentModal .modal-footer {
-        padding-top: 0.75rem;
-        padding-bottom: 0.75rem;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        margin-top: 0 !important;
     }
 }
 </style>
@@ -4026,6 +4035,47 @@ try {
     padding-bottom: 1rem;
     border-top: 1px solid #dee2e6;
     background-color: #fff;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+
+/* إصلاح مشكلة التولبار يغطي الأزرار على الهواتف */
+@media (max-width: 768px) {
+    #customerExportModal .modal-dialog {
+        margin: 0.25rem;
+        margin-bottom: 100px !important; /* مسافة كبيرة من الأسفل لتجنب التولبار */
+        max-height: calc(100vh - 100px) !important;
+        max-width: calc(100% - 0.5rem);
+    }
+    
+    #customerExportModal .modal-content {
+        max-height: calc(100vh - 100px) !important;
+        margin-bottom: 0;
+    }
+    
+    #customerExportModal .modal-body {
+        padding-bottom: 1rem;
+        max-height: calc(100vh - 250px) !important; /* مساحة للأزرار والتولبار */
+    }
+    
+    #customerExportModal .modal-footer {
+        padding-top: 1rem;
+        padding-bottom: 2rem !important; /* مسافة كبيرة من الأسفل */
+        margin-bottom: 0;
+        position: sticky;
+        bottom: 0;
+        z-index: 15;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* إضافة مسافة إضافية من الأسفل للمحتوى */
+    #customerExportModal .modal-body::after {
+        content: '';
+        display: block;
+        height: 80px;
+        flex-shrink: 0;
+    }
 }
 
 /* إصلاح الجزء الأبيض الفارغ */
@@ -4051,21 +4101,36 @@ try {
 @media (max-width: 768px) {
     #customerExportModal .modal-dialog {
         margin: 0.25rem;
-        max-height: calc(100vh - 0.5rem);
+        margin-bottom: 100px !important; /* مسافة كبيرة من الأسفل */
+        max-height: calc(100vh - 100px) !important;
         max-width: calc(100% - 0.5rem);
     }
     
     #customerExportModal .modal-content {
-        max-height: calc(100vh - 0.5rem);
+        max-height: calc(100vh - 100px) !important;
     }
     
     #customerExportModal .modal-body {
-        padding-bottom: 0.75rem;
+        padding-bottom: 1rem;
+        max-height: calc(100vh - 250px) !important; /* مساحة للأزرار والتولبار */
     }
     
     #customerExportModal .modal-footer {
-        padding-top: 0.75rem;
-        padding-bottom: 0.75rem;
+        padding-top: 1rem;
+        padding-bottom: 2rem !important; /* مسافة كبيرة من الأسفل */
+        position: sticky;
+        bottom: 0;
+        z-index: 15;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        background-color: #fff;
+    }
+    
+    /* إضافة مسافة إضافية من الأسفل للمحتوى */
+    #customerExportModal .modal-body::after {
+        content: '';
+        display: block;
+        height: 80px;
+        flex-shrink: 0;
     }
     
     #customerExportModal .table-responsive {
@@ -4082,6 +4147,7 @@ try {
     
     #customerExportModal .modal-footer .btn {
         font-size: 0.875rem;
+        min-height: 44px; /* حجم مناسب للمس */
     }
     
     #customerExportModal table {

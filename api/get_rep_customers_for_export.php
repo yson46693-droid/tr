@@ -111,9 +111,9 @@ try {
         ], 404);
     }
     
-    // معاملات pagination
+    // معاملات pagination - زيادة عدد العملاء في الصفحة الواحدة لتسريع التحميل
     $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-    $perPage = 3; // 3 عميل في كل صفحة
+    $perPage = 20; // 20 عميل في كل صفحة (زيادة من 3 لتسريع التحميل)
     $offset = ($page - 1) * $perPage;
     
     // جلب إجمالي عدد عملاء المندوب المدينين فقط
@@ -126,15 +126,16 @@ try {
     $totalCount = (int)($totalCountResult['total'] ?? 0);
     $totalPages = ceil($totalCount / $perPage);
     
-    // جلب عملاء المندوب مع pagination
+    // جلب عملاء المندوب مع pagination - استعلام محسّن للأداء
     // فحص أمني: العملاء يظهرون فقط للمندوب الذي أنشأهم (created_by)
     // وليس بناءً على rep_id - هذا يضمن عدم ظهور عملاء المندوب القديم للمندوب الجديد
     // فلترة: عرض العملاء أصحاب الرصيد المدين فقط (balance > 0)
+    // تحسين: استخدام index على created_by و balance لتسريع الاستعلام
     $customers = $db->query(
-        "SELECT c.*, r.name as region_name
+        "SELECT c.id, c.name, c.phone, c.address, c.balance, c.created_by, r.name as region_name
          FROM customers c
          LEFT JOIN regions r ON c.region_id = r.id
-         WHERE c.created_by = ? AND c.status = 'active' AND (c.balance IS NOT NULL AND c.balance > 0)
+         WHERE c.created_by = ? AND c.status = 'active' AND c.balance > 0
          ORDER BY c.name ASC
          LIMIT ? OFFSET ?",
         [$repId, $perPage, $offset]
@@ -158,29 +159,38 @@ try {
     }
     $customers = $validCustomers;
     
-    // جلب أرقام الهواتف الإضافية لكل عميل
-    $result = [];
-    foreach ($customers as $customer) {
-        $customerId = (int)($customer['id'] ?? 0);
-        
-        // جلب أرقام الهواتف الإضافية (غير الأساسية)
-        $additionalPhones = [];
+    // جلب جميع أرقام الهواتف دفعة واحدة لتسريع العملية
+    $customerIds = array_map(function($c) { return (int)($c['id'] ?? 0); }, $customers);
+    $customerIds = array_filter($customerIds, function($id) { return $id > 0; });
+    $allPhones = [];
+    
+    if (!empty($customerIds)) {
         try {
-            $phones = $db->query(
-                "SELECT phone FROM customer_phones WHERE customer_id = ? AND is_primary = 0 ORDER BY id ASC",
-                [$customerId]
+            $placeholders = implode(',', array_fill(0, count($customerIds), '?'));
+            $phonesData = $db->query(
+                "SELECT customer_id, phone FROM customer_phones WHERE customer_id IN ($placeholders) AND is_primary = 0 ORDER BY customer_id, id ASC",
+                $customerIds
             );
             
-            foreach ($phones as $phoneRow) {
+            foreach ($phonesData as $phoneRow) {
+                $cid = (int)($phoneRow['customer_id'] ?? 0);
                 $phone = trim($phoneRow['phone'] ?? '');
-                if (!empty($phone)) {
-                    $additionalPhones[] = $phone;
+                if ($cid > 0 && !empty($phone)) {
+                    if (!isset($allPhones[$cid])) {
+                        $allPhones[$cid] = [];
+                    }
+                    $allPhones[$cid][] = $phone;
                 }
             }
         } catch (Exception $e) {
-            error_log('Error fetching customer phones: ' . $e->getMessage());
+            error_log('Error fetching customer phones batch: ' . $e->getMessage());
         }
-        
+    }
+    
+    // بناء النتيجة
+    $result = [];
+    foreach ($customers as $customer) {
+        $customerId = (int)($customer['id'] ?? 0);
         $balance = isset($customer['balance']) ? (float)$customer['balance'] : 0.0;
         $customerName = trim($customer['name'] ?? '');
         
@@ -191,7 +201,7 @@ try {
                 'id' => $customerId,
                 'name' => $customerName,
                 'phone' => trim($customer['phone'] ?? ''),
-                'alternative_phones' => $additionalPhones,
+                'alternative_phones' => $allPhones[$customerId] ?? [],
                 'balance' => $balance,
                 'balance_formatted' => number_format(abs($balance), 2) . ' ج.م',
                 'address' => trim($customer['address'] ?? ''),
