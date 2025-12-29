@@ -166,12 +166,22 @@ async function initCamera() {
         // إظهار زر التقاط الصورة بشكل واضح
         const captureBtn = isMobileDevice ? document.getElementById('captureBtnCard') : document.getElementById('captureBtn');
         if (captureBtn) {
-            captureBtn.style.display = 'inline-block';
-            captureBtn.style.visibility = 'visible';
-            captureBtn.style.opacity = '1';
+            // استخدام setProperty مع !important لضمان الإظهار
+            captureBtn.style.setProperty('display', 'inline-block', 'important');
+            captureBtn.style.setProperty('visibility', 'visible', 'important');
+            captureBtn.style.setProperty('opacity', '1', 'important');
+            captureBtn.style.setProperty('pointer-events', 'auto', 'important');
             captureBtn.disabled = false;
             // إجبار reflow لضمان أن الزر مرئي
             captureBtn.offsetHeight;
+            console.log('Capture button shown:', {
+                display: captureBtn.style.display,
+                visibility: captureBtn.style.visibility,
+                opacity: captureBtn.style.opacity,
+                disabled: captureBtn.disabled
+            });
+        } else {
+            console.error('Capture button not found!', { isMobileDevice });
         }
         
         console.log('Camera initialized successfully');
@@ -179,6 +189,18 @@ async function initCamera() {
     } catch (error) {
         console.error('Error accessing camera:', error);
         showCameraError(error);
+        
+        // محاولة إظهار زر التقاط حتى لو فشلت الكاميرا (للمستخدم يمكنه المحاولة مرة أخرى)
+        const isMobileDevice = isMobile();
+        const captureBtn = isMobileDevice ? document.getElementById('captureBtnCard') : document.getElementById('captureBtn');
+        if (captureBtn) {
+            captureBtn.style.setProperty('display', 'inline-block', 'important');
+            captureBtn.style.setProperty('visibility', 'visible', 'important');
+            captureBtn.style.setProperty('opacity', '1', 'important');
+            captureBtn.style.setProperty('pointer-events', 'auto', 'important');
+            captureBtn.disabled = false;
+            console.log('Capture button shown as fallback after camera error');
+        }
     }
 }
 
@@ -217,7 +239,14 @@ function showCameraError(error) {
         
         cameraErrorText.textContent = errorMessage;
     }
-    if (captureBtn) captureBtn.style.display = 'none';
+    // إظهار زر التقاط حتى لو كان هناك خطأ (للمستخدم يمكنه المحاولة مرة أخرى)
+    if (captureBtn) {
+        captureBtn.style.setProperty('display', 'inline-block', 'important');
+        captureBtn.style.setProperty('visibility', 'visible', 'important');
+        captureBtn.style.setProperty('opacity', '1', 'important');
+        captureBtn.style.setProperty('pointer-events', 'auto', 'important');
+        captureBtn.disabled = false;
+    }
 }
 
 // إيقاف الكاميرا
@@ -257,13 +286,33 @@ async function capturePhoto() {
     
     // إظهار أزرار إعادة التقاط والتأكيد
     if (isMobileDevice) {
-        document.getElementById('captureBtnCard').style.display = 'none';
-        document.getElementById('retakeBtnCard').style.display = 'inline-block';
-        document.getElementById('submitBtnCard').style.display = 'inline-block';
+        const captureBtnCard = document.getElementById('captureBtnCard');
+        const retakeBtnCard = document.getElementById('retakeBtnCard');
+        const submitBtnCard = document.getElementById('submitBtnCard');
+        
+        if (captureBtnCard) captureBtnCard.style.setProperty('display', 'none', 'important');
+        if (retakeBtnCard) {
+            retakeBtnCard.style.setProperty('display', 'inline-block', 'important');
+            retakeBtnCard.style.setProperty('visibility', 'visible', 'important');
+        }
+        if (submitBtnCard) {
+            submitBtnCard.style.setProperty('display', 'inline-block', 'important');
+            submitBtnCard.style.setProperty('visibility', 'visible', 'important');
+        }
     } else {
-        document.getElementById('captureBtn').style.display = 'none';
-        document.getElementById('retakeBtn').style.display = 'inline-block';
-        document.getElementById('submitBtn').style.display = 'inline-block';
+        const captureBtn = document.getElementById('captureBtn');
+        const retakeBtn = document.getElementById('retakeBtn');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        if (captureBtn) captureBtn.style.setProperty('display', 'none', 'important');
+        if (retakeBtn) {
+            retakeBtn.style.setProperty('display', 'inline-block', 'important');
+            retakeBtn.style.setProperty('visibility', 'visible', 'important');
+        }
+        if (submitBtn) {
+            submitBtn.style.setProperty('display', 'inline-block', 'important');
+            submitBtn.style.setProperty('visibility', 'visible', 'important');
+        }
     }
     
     // تحديث ملخص الوقت بعد التقاط الصورة
@@ -778,9 +827,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     
                     try {
+                        console.log('Initializing camera in modal...');
                         await initCamera();
+                        console.log('Camera initialized successfully in modal');
                     } catch (error) {
                         console.error('Error initializing camera in modal:', error);
+                        // محاولة إظهار زر التقاط حتى لو فشلت الكاميرا
+                        const captureBtn = document.getElementById('captureBtn');
+                        if (captureBtn) {
+                            captureBtn.style.setProperty('display', 'inline-block', 'important');
+                            captureBtn.style.setProperty('visibility', 'visible', 'important');
+                        }
                     }
                 }, delay);
             });

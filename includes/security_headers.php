@@ -40,10 +40,10 @@ class SecurityHeaders {
                "script-src 'self' 'unsafe-inline' 'unsafe-eval' " .
                "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " .
                "style-src 'self' 'unsafe-inline' " .
-               "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " .
+               "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; " .
                "img-src 'self' data: https: blob:; " .
-               "font-src 'self' data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " .
-               "connect-src 'self' https://api.telegram.org https://api.apdf.io; " .
+               "font-src 'self' data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.gstatic.com https://fonts.googleapis.com; " .
+               "connect-src 'self' https://api.telegram.org https://api.apdf.io https://fonts.googleapis.com https://fonts.gstatic.com; " .
                "frame-src 'self'; " .
                "object-src 'none'; " .
                "base-uri 'self'; " .
