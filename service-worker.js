@@ -21,7 +21,27 @@ const PRECACHE_ASSETS = [
 // CDN assets to cache
 const CDN_ASSETS = [
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
-  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css'
+  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css',
+  'https://code.jquery.com/jquery-3.7.0.min.js',
+  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js'
+];
+
+// Critical static assets to cache (CSS, JS, Fonts)
+const CRITICAL_ASSETS = [
+  // CSS files
+  '/assets/css/homeline-dashboard.css',
+  '/assets/css/topbar.css',
+  '/assets/css/responsive.css',
+  '/assets/css/sidebar.css',
+  '/assets/css/cards.css',
+  '/assets/css/tables.css',
+  // JS files
+  '/assets/js/main.js',
+  '/assets/js/ajax-navigation.js',
+  '/assets/js/notifications.js',
+  // Fonts
+  'https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap',
+  'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/fonts/bootstrap-icons.woff2'
 ];
 
 // Network timeout (10 seconds)
@@ -251,15 +271,15 @@ self.addEventListener('install', (event) => {
       }
 
       try {
-        const cache = await caches.open(PRECACHE_NAME);
+        const precache = await caches.open(PRECACHE_NAME);
+        const staticCache = await caches.open(STATIC_CACHE_NAME);
         
         // Cache precache assets
-        const cachePromises = PRECACHE_ASSETS.map(async (asset) => {
+        const precachePromises = PRECACHE_ASSETS.map(async (asset) => {
           try {
-            await cache.add(asset);
+            await precache.add(asset);
             console.log(`[SW] Precached: ${asset}`);
           } catch (error) {
-            // Don't fail if individual asset fails
             if (error.message?.includes('CacheStorage') || error.message?.includes('open')) {
               console.warn(`[SW] CacheStorage unavailable, skipping precache for ${asset}`);
             } else {
@@ -268,7 +288,21 @@ self.addEventListener('install', (event) => {
           }
         });
 
-        await Promise.allSettled(cachePromises);
+        // Cache critical assets
+        const criticalPromises = CRITICAL_ASSETS.map(async (asset) => {
+          try {
+            await staticCache.add(asset);
+            console.log(`[SW] Cached critical asset: ${asset}`);
+          } catch (error) {
+            if (error.message?.includes('CacheStorage') || error.message?.includes('open')) {
+              console.warn(`[SW] CacheStorage unavailable, skipping critical asset: ${asset}`);
+            } else {
+              console.warn(`[SW] Failed to cache critical asset ${asset}:`, error.message);
+            }
+          }
+        });
+
+        await Promise.allSettled([...precachePromises, ...criticalPromises]);
         console.log('[SW] Precaching completed');
       } catch (error) {
         // If CacheStorage fails completely, continue without caching
@@ -282,8 +316,8 @@ self.addEventListener('install', (event) => {
     })()
   );
   
-  // Don't use skipWaiting to avoid unexpected page reloads
-  // Let the user control when to update
+  // Use skipWaiting for faster activation
+  self.skipWaiting();
 });
 
 // ============================================

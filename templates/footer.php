@@ -592,6 +592,13 @@ if (!defined('ACCESS_ALLOWED')) {
     ?>
     
     <!-- Critical JS - تحميل مباشر -->
+    <!-- Performance: Load Local Storage Cache Manager early -->
+    <script src="<?php echo $assetsUrl; ?>js/local-storage-cache.js?v=<?php echo $cacheVersion; ?>" defer></script>
+    
+    <!-- Performance: Load Lazy Loading Manager early -->
+    <script src="<?php echo $assetsUrl; ?>js/lazy-loading.js?v=<?php echo $cacheVersion; ?>" defer></script>
+    
+    <!-- Main JS -->
     <script src="<?php echo $assetsUrl; ?>js/main.js?v=<?php echo $cacheVersion; ?>" defer></script>
     <script src="<?php echo $assetsUrl; ?>js/sidebar.js?v=<?php echo $cacheVersion; ?>" defer></script>
     

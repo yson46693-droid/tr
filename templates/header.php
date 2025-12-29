@@ -341,6 +341,8 @@ if (ob_get_level() > 0) {
     
     <!-- Google Fonts - Cairo (for chat and other components) - محسّن مع font-display: swap -->
     <!-- Preconnect تم نقله للأعلى مع باقي preconnects (السطر 298-299) -->
+    <!-- Preload font file مباشرة لتحسين الأداء -->
+    <link rel="preload" href="https://fonts.gstatic.com/s/cairo/v28/SLXGc1nY6HkvangtZmpQdkhzfH5lkSs2SgRjCAGMQ1z0hGA-W1ToLQ-HmkA.ttf" as="font" type="font/ttf" crossorigin="anonymous">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet"></noscript>
     
@@ -613,6 +615,38 @@ if (ob_get_level() > 0) {
         @font-face {
             font-family: 'Cairo';
             font-display: swap;
+        }
+        
+        /* تحسين تحميل الخطوط - استخدام fallback fonts */
+        body {
+            font-family: 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        /* منع FOIT (Flash of Invisible Text) */
+        @font-face {
+            font-family: 'Cairo';
+            font-display: swap;
+            font-weight: 300;
+        }
+        @font-face {
+            font-family: 'Cairo';
+            font-display: swap;
+            font-weight: 400;
+        }
+        @font-face {
+            font-family: 'Cairo';
+            font-display: swap;
+            font-weight: 500;
+        }
+        @font-face {
+            font-family: 'Cairo';
+            font-display: swap;
+            font-weight: 600;
+        }
+        @font-face {
+            font-family: 'Cairo';
+            font-display: swap;
+            font-weight: 700;
         }
         
         /* Layout Shift Prevention - منع تغييرات التخطيط */
