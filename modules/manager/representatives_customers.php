@@ -3874,11 +3874,11 @@ try {
 <style>
 /* تحسينات عامة للأداء - تقليل animations */
 .modal.fade .modal-dialog {
-    transition: transform 0.15s ease-out, opacity 0.15s ease-out !important;
+    transition: transform 0.1s ease-out, opacity 0.1s ease-out !important;
 }
 
 .modal-backdrop.fade {
-    transition: opacity 0.1s linear !important;
+    transition: opacity 0.05s linear !important;
 }
 
 .modal-backdrop.show {
@@ -3888,7 +3888,7 @@ try {
 /* إزالة backdrop بسرعة */
 .modal-backdrop {
     will-change: opacity;
-    transition: opacity 0.1s linear !important;
+    transition: opacity 0.05s linear !important;
 }
 
 /* منع overflow غير ضروري */
@@ -3933,62 +3933,71 @@ try {
     margin-top: 0;
 }
 
-/* إصلاح مشكلة Taskbar يغطي زر توليد Excel */
+/* إصلاح مشكلة Taskbar يغطي زر توليد Excel - تحسينات للمودال */
 #customerExportModal .modal-dialog {
-    margin-bottom: 80px !important; /* مسافة أكبر من الأسفل لتجنب Taskbar */
-    max-height: calc(100vh - 140px) !important; /* ارتفاع أقصى مع مراعاة Taskbar */
-    height: auto;
+    margin: 0.5rem;
+    max-height: calc(100vh - 1rem);
     display: flex;
     flex-direction: column;
 }
 
 #customerExportModal .modal-content {
-    max-height: calc(100vh - 140px);
-    height: 100%;
+    max-height: calc(100vh - 1rem);
     display: flex;
     flex-direction: column;
-    overflow: hidden; /* يمنع overflow من الـ content نفسه */
+    overflow: hidden;
 }
 
 #customerExportModal .modal-body {
     overflow-y: auto;
     flex: 1 1 auto;
-    min-height: 0; /* مهم ليعمل flexbox مع overflow بشكل صحيح */
-    max-height: 100%; /* يضمن أن الـ body لا يتجاوز الـ content */
-    padding-bottom: 1rem; /* مسافة إضافية من الأسفل */
+    min-height: 0;
+    padding-bottom: 1rem;
 }
 
 #customerExportModal .modal-footer {
     flex-shrink: 0;
     margin-top: auto;
-    padding-bottom: 1.5rem; /* مسافة أكبر من الأسفل */
     padding-top: 1rem;
-    background-color: #fff;
+    padding-bottom: 1rem;
     border-top: 1px solid #dee2e6;
-    position: relative;
-    z-index: 1055; /* أعلى من z-index المودال العادي */
+    background-color: #fff;
+}
+
+/* إصلاح الجزء الأبيض الفارغ */
+#customerExportModal .modal-content::after {
+    display: none;
+}
+
+/* تحسين animation الإغلاق */
+#customerExportModal.modal.fade .modal-dialog {
+    transition: transform 0.1s ease-out, opacity 0.1s ease-out !important;
+}
+
+#customerExportModal.modal.fade:not(.show) .modal-dialog {
+    transform: translate(0, -10px) !important;
+    opacity: 0 !important;
 }
 
 /* تحسينات responsive للمودال */
 @media (max-width: 768px) {
     #customerExportModal .modal-dialog {
-        margin: 0.5rem;
-        margin-bottom: 80px !important; /* مسافة أكبر على الشاشات الصغيرة */
-        max-width: calc(100% - 1rem);
-        max-height: calc(100vh - 140px) !important;
+        margin: 0.25rem;
+        max-height: calc(100vh - 0.5rem);
+        max-width: calc(100% - 0.5rem);
     }
     
     #customerExportModal .modal-content {
-        max-height: calc(100vh - 140px);
-        height: 100%;
+        max-height: calc(100vh - 0.5rem);
     }
     
     #customerExportModal .modal-body {
-        padding-bottom: 1.5rem; /* مسافة أكبر على الشاشات الصغيرة */
+        padding-bottom: 0.75rem;
     }
     
     #customerExportModal .modal-footer {
-        padding-bottom: 2rem; /* مسافة أكبر على الشاشات الصغيرة */
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
     }
     
     #customerExportModal .table-responsive {
@@ -4001,11 +4010,6 @@ try {
     
     #customerExportModal .btn-group .btn {
         flex: 1;
-    }
-    
-    #customerExportModal .modal-footer {
-        padding: 0.75rem;
-        padding-bottom: 1rem;
     }
     
     #customerExportModal .modal-footer .btn {
@@ -4025,18 +4029,16 @@ try {
 /* للشاشات الكبيرة أيضاً */
 @media (min-width: 769px) {
     #customerExportModal .modal-dialog {
-        margin-bottom: 70px !important; /* مسافة كافية من الأسفل */
-        max-height: calc(100vh - 130px) !important;
-        height: auto;
+        margin: 1rem auto;
+        max-height: calc(100vh - 2rem);
     }
     
     #customerExportModal .modal-content {
-        max-height: calc(100vh - 130px);
-        height: 100%;
+        max-height: calc(100vh - 2rem);
     }
     
     #customerExportModal .modal-footer {
-        padding-bottom: 1.5rem; /* مسافة كافية */
+        padding-bottom: 1rem;
     }
 }
 </style>
@@ -4101,6 +4103,35 @@ window.CUSTOMER_EXPORT_CONFIG = {
 <script src="<?php echo ASSETS_URL; ?>js/customer_export.js?v=<?php echo time(); ?>"></script>
 
 <script>
+// معالج Modal تصدير العملاء
+document.addEventListener('DOMContentLoaded', function() {
+    const customerExportModal = document.getElementById('customerExportModal');
+    if (customerExportModal) {
+        // إزالة backdrop بسرعة عند بدء الإغلاق
+        customerExportModal.addEventListener('hide.bs.modal', function() {
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(backdrop => {
+                backdrop.style.transition = 'opacity 0.05s linear';
+                backdrop.style.opacity = '0';
+                setTimeout(() => {
+                    if (backdrop.parentNode) {
+                        backdrop.remove();
+                    }
+                }, 50);
+            });
+        });
+        
+        customerExportModal.addEventListener('hidden.bs.modal', function() {
+            // تنظيف backdrop المتبقي
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(backdrop => backdrop.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        });
+    }
+});
+
 // معالج Modal تحديد الحد الائتماني
 document.addEventListener('DOMContentLoaded', function() {
     var creditLimitModal = document.getElementById('setCreditLimitModal');
@@ -4109,13 +4140,13 @@ document.addEventListener('DOMContentLoaded', function() {
         creditLimitModal.addEventListener('hide.bs.modal', function() {
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(backdrop => {
-                backdrop.style.transition = 'opacity 0.1s linear';
+                backdrop.style.transition = 'opacity 0.05s linear';
                 backdrop.style.opacity = '0';
                 setTimeout(() => {
                     if (backdrop.parentNode) {
                         backdrop.remove();
                     }
-                }, 100);
+                }, 50);
             });
         });
         
