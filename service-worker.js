@@ -383,6 +383,18 @@ self.addEventListener('fetch', (event) => {
   }
 
   // ============================================
+  // استثناء index.php من service worker - السماح للبrowser بالتعامل معه مباشرة
+  // ============================================
+  const isIndexPage = url.pathname === '/index.php' || 
+                      url.pathname.endsWith('/index.php') ||
+                      (url.pathname === '/' && request.mode === 'navigate');
+  
+  if (isIndexPage) {
+    // لا نعترض index.php - نتركه للبrowser مباشرة
+    return;
+  }
+
+  // ============================================
   // Handle API Requests - Network Only
   // ============================================
   if (url.pathname.startsWith('/api/')) {
@@ -418,18 +430,6 @@ self.addEventListener('fetch', (event) => {
   // Handle PHP Pages - Network Only (No Caching)
   // ============================================
   if (url.pathname.endsWith('.php')) {
-    // استثناء index.php من service worker interception
-    // السماح للبrowser بالتعامل معه مباشرة لتجنب مشاكل الاتصال
-    const isIndexPage = url.pathname === '/index.php' || 
-                        url.pathname.endsWith('/index.php') ||
-                        url.pathname === '/' ||
-                        (url.pathname === '' && url.search === '');
-    
-    if (isIndexPage) {
-      // لا نعترض index.php - نتركه للبrowser
-      return;
-    }
-    
     const isNavigation = request.mode === 'navigate';
     event.respondWith(networkOnly(request, isNavigation));
     return;
