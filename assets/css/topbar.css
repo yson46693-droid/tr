@@ -75,16 +75,20 @@
     }
     
     /* إظهار القائمة السريعة على الموبايل */
-    .quick-actions-dropdown {
+    .quick-actions-dropdown,
+    .topbar-dropdown.quick-actions-dropdown {
         display: block !important;
     }
     
-    .quick-actions-toggle {
+    .quick-actions-toggle,
+    #quickActionsDropdown,
+    a.quick-actions-toggle,
+    a#quickActionsDropdown {
         display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
-        width: 36px;
-        height: 36px;
+        width: 36px !important;
+        height: 36px !important;
     }
     
     .topbar-action {
@@ -125,10 +129,15 @@
         }
         
         /* إظهار زر القائمة السريعة على الشاشات الصغيرة جداً */
-        .quick-actions-toggle {
+        .quick-actions-toggle,
+        #quickActionsDropdown,
+        a.quick-actions-toggle,
+        a#quickActionsDropdown {
             display: flex !important;
             visibility: visible !important;
             opacity: 1 !important;
+            width: 36px !important;
+            height: 36px !important;
         }
         
         .topbar-left {
@@ -1195,12 +1204,17 @@
     z-index: 1000;
 }
 
-.quick-actions-toggle {
+.quick-actions-toggle,
+#quickActionsDropdown,
+a.quick-actions-toggle,
+a#quickActionsDropdown {
     display: flex !important;
     align-items: center;
     justify-content: center;
     visibility: visible !important;
     opacity: 1 !important;
+    width: 40px;
+    height: 40px;
 }
 
 .quick-actions-menu {
@@ -1307,10 +1321,15 @@
     }
     
     /* إظهار زر القائمة السريعة على الهواتف */
-    .quick-actions-toggle {
+    .quick-actions-toggle,
+    #quickActionsDropdown,
+    a.quick-actions-toggle,
+    a#quickActionsDropdown {
         display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
+        width: 36px !important;
+        height: 36px !important;
     }
     
     /* إخفاء جميع الأزرار الفردية على الهواتف */

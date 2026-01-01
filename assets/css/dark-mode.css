@@ -76,6 +76,244 @@
     color: var(--gray-700) !important;
 }
 
+/* ===== Card Content Elements ===== */
+[data-theme="dark"] .card-body,
+[data-theme="dark"] .dashboard-card .card-body,
+[data-theme="dark"] .stat-card .card-body,
+[data-theme="dark"] .analytics-card .card-body {
+    background-color: transparent !important;
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] .card-title,
+[data-theme="dark"] .card-header,
+[data-theme="dark"] .dashboard-card h3,
+[data-theme="dark"] .dashboard-card h4,
+[data-theme="dark"] .dashboard-card h5,
+[data-theme="dark"] .stat-card h3,
+[data-theme="dark"] .stat-card h4,
+[data-theme="dark"] .stat-card h5 {
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] .card-text,
+[data-theme="dark"] .card-body p,
+[data-theme="dark"] .card-body span,
+[data-theme="dark"] .card-body div {
+    color: var(--gray-600) !important;
+}
+
+/* ===== Card Values and Numbers ===== */
+[data-theme="dark"] .card-value,
+[data-theme="dark"] .stat-value,
+[data-theme="dark"] .card-number,
+[data-theme="dark"] .stat-number,
+[data-theme="dark"] .dashboard-card .value,
+[data-theme="dark"] .stat-card .value,
+[data-theme="dark"] .card-body .value {
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] .card-label,
+[data-theme="dark"] .stat-label,
+[data-theme="dark"] .card-title-small,
+[data-theme="dark"] .dashboard-card .label,
+[data-theme="dark"] .stat-card .label {
+    color: var(--gray-500) !important;
+}
+
+/* ===== Card Icons ===== */
+[data-theme="dark"] .card-icon,
+[data-theme="dark"] .stat-icon,
+[data-theme="dark"] .dashboard-card .icon,
+[data-theme="dark"] .stat-card .icon {
+    color: var(--gray-600) !important;
+}
+
+/* ===== Card Badges and Tags ===== */
+[data-theme="dark"] .card .badge,
+[data-theme="dark"] .card-body .badge,
+[data-theme="dark"] .dashboard-card .badge,
+[data-theme="dark"] .stat-card .badge {
+    color: white !important;
+}
+
+/* ===== Card Links ===== */
+[data-theme="dark"] .card a,
+[data-theme="dark"] .card-body a,
+[data-theme="dark"] .dashboard-card a,
+[data-theme="dark"] .stat-card a {
+    color: var(--accent-blue) !important;
+}
+
+[data-theme="dark"] .card a:hover,
+[data-theme="dark"] .card-body a:hover,
+[data-theme="dark"] .dashboard-card a:hover,
+[data-theme="dark"] .stat-card a:hover {
+    color: var(--accent-blue) !important;
+    opacity: 0.8;
+}
+
+/* ===== Stat Card Specific Elements ===== */
+[data-theme="dark"] .stat-card-value,
+[data-theme="dark"] .stat-card .stat-card-value,
+[data-theme="dark"] .stat-card h2,
+[data-theme="dark"] .stat-card h3,
+[data-theme="dark"] .stat-card h4 {
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] .stat-card-title,
+[data-theme="dark"] .stat-card .stat-card-title {
+    color: var(--gray-600) !important;
+}
+
+[data-theme="dark"] .stat-card-label,
+[data-theme="dark"] .stat-card .stat-card-label,
+[data-theme="dark"] .stat-card small,
+[data-theme="dark"] .stat-card .text-muted {
+    color: var(--gray-500) !important;
+}
+
+[data-theme="dark"] .stat-card-description,
+[data-theme="dark"] .stat-card .stat-card-description {
+    color: var(--gray-500) !important;
+}
+
+[data-theme="dark"] .stat-card-header {
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] .stat-card-footer {
+    border-top-color: var(--border-color) !important;
+    color: var(--gray-600) !important;
+}
+
+[data-theme="dark"] .stat-card-change {
+    color: var(--gray-600) !important;
+}
+
+[data-theme="dark"] .stat-card-change.positive {
+    color: var(--accent-green) !important;
+}
+
+[data-theme="dark"] .stat-card-change.negative {
+    color: var(--accent-red) !important;
+}
+
+[data-theme="dark"] .stat-card-icon {
+    /* Icons keep their colors but ensure visibility */
+    opacity: 1 !important;
+}
+
+/* ===== Card Body Text Elements ===== */
+[data-theme="dark"] .card-body h1,
+[data-theme="dark"] .card-body h2,
+[data-theme="dark"] .card-body h3,
+[data-theme="dark"] .card-body h4,
+[data-theme="dark"] .card-body h5,
+[data-theme="dark"] .card-body h6 {
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] .card-body p,
+[data-theme="dark"] .card-body span:not(.badge):not(.btn),
+[data-theme="dark"] .card-body div:not(.badge):not(.btn) {
+    color: var(--gray-600) !important;
+}
+
+[data-theme="dark"] .card-body .text-muted,
+[data-theme="dark"] .card-body small {
+    color: var(--gray-400) !important;
+}
+
+/* ===== Numbers and Values in Cards ===== */
+[data-theme="dark"] .card-body [class*="value"],
+[data-theme="dark"] .card-body [class*="number"],
+[data-theme="dark"] .card-body [class*="amount"],
+[data-theme="dark"] .card-body [class*="count"],
+[data-theme="dark"] .card-body [class*="total"] {
+    color: var(--gray-700) !important;
+}
+
+/* ===== Special Badge Types (Credit/Debit) ===== */
+[data-theme="dark"] .badge[class*="credit"],
+[data-theme="dark"] .badge[class*="debit"],
+[data-theme="dark"] .badge[class*="رصيد"],
+[data-theme="dark"] .badge.text-bg-info,
+[data-theme="dark"] .badge.text-bg-primary,
+[data-theme="dark"] .badge.text-bg-success,
+[data-theme="dark"] .badge.text-bg-danger,
+[data-theme="dark"] .badge.text-bg-warning,
+[data-theme="dark"] .badge.text-bg-secondary {
+    color: white !important;
+}
+
+[data-theme="dark"] .badge.text-bg-info {
+    background-color: var(--accent-blue) !important;
+    color: white !important;
+}
+
+[data-theme="dark"] .badge.text-bg-primary {
+    background-color: var(--accent-blue) !important;
+    color: white !important;
+}
+
+[data-theme="dark"] .badge.text-bg-success {
+    background-color: var(--accent-green) !important;
+    color: white !important;
+}
+
+[data-theme="dark"] .badge.text-bg-danger {
+    background-color: var(--accent-red) !important;
+    color: white !important;
+}
+
+[data-theme="dark"] .badge.text-bg-warning {
+    background-color: var(--accent-orange) !important;
+    color: var(--gray-900) !important;
+}
+
+[data-theme="dark"] .badge.text-bg-secondary {
+    background-color: var(--gray-300) !important;
+    color: var(--gray-900) !important;
+}
+
+[data-theme="dark"] .badge.text-bg-light {
+    background-color: var(--gray-200) !important;
+    color: var(--gray-900) !important;
+}
+
+/* ===== Override Light Colored Badges ===== */
+[data-theme="dark"] .badge[style*="background-color: #"],
+[data-theme="dark"] .badge[style*="background: #"] {
+    /* Override inline styles for badges */
+}
+
+[data-theme="dark"] .badge[style*="background-color: #0dcaf0"],
+[data-theme="dark"] .badge[style*="background-color:#0dcaf0"],
+[data-theme="dark"] .badge[style*="background: #0dcaf0"],
+[data-theme="dark"] .badge[style*="background:#0dcaf0"] {
+    background-color: var(--accent-blue) !important;
+    color: white !important;
+}
+
+[data-theme="dark"] .badge[style*="background-color: #198754"],
+[data-theme="dark"] .badge[style*="background-color:#198754"],
+[data-theme="dark"] .badge[style*="background: #198754"],
+[data-theme="dark"] .badge[style*="background:#198754"] {
+    background-color: var(--accent-green) !important;
+    color: white !important;
+}
+
+[data-theme="dark"] .badge[style*="background-color: #dc3545"],
+[data-theme="dark"] .badge[style*="background-color:#dc3545"],
+[data-theme="dark"] .badge[style*="background: #dc3545"],
+[data-theme="dark"] .badge[style*="background:#dc3545"] {
+    background-color: var(--accent-red) !important;
+    color: white !important;
+}
+
 /* ===== General Container Elements ===== */
 [data-theme="dark"] .container,
 [data-theme="dark"] .container-fluid,
@@ -250,26 +488,77 @@
 }
 
 /* ===== Modals ===== */
+[data-theme="dark"] .modal,
+[data-theme="dark"] .modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
 [data-theme="dark"] .modal-content {
-    background-color: var(--bg-card);
-    border-color: var(--border-color);
-    color: var(--gray-700);
+    background-color: var(--bg-card) !important;
+    border-color: var(--border-color) !important;
+    color: var(--gray-700) !important;
 }
 
 [data-theme="dark"] .modal-header {
-    border-bottom-color: var(--border-color);
+    background-color: var(--bg-card) !important;
+    border-bottom-color: var(--border-color) !important;
+    color: var(--gray-700) !important;
 }
 
 [data-theme="dark"] .modal-footer {
-    border-top-color: var(--border-color);
+    background-color: var(--bg-card) !important;
+    border-top-color: var(--border-color) !important;
+    color: var(--gray-600) !important;
 }
 
 [data-theme="dark"] .modal-title {
-    color: var(--gray-700);
+    color: var(--gray-700) !important;
 }
 
 [data-theme="dark"] .modal-body {
-    color: var(--gray-600);
+    background-color: var(--bg-card) !important;
+    color: var(--gray-600) !important;
+}
+
+[data-theme="dark"] .modal-body * {
+    color: inherit;
+}
+
+[data-theme="dark"] .modal-body .form-control,
+[data-theme="dark"] .modal-body .form-select,
+[data-theme="dark"] .modal-body input,
+[data-theme="dark"] .modal-body textarea,
+[data-theme="dark"] .modal-body select {
+    background-color: var(--bg-card) !important;
+    border-color: var(--border-color) !important;
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] .modal-body .form-label,
+[data-theme="dark"] .modal-body label {
+    color: var(--gray-600) !important;
+}
+
+[data-theme="dark"] .modal-body .text-muted {
+    color: var(--gray-400) !important;
+}
+
+[data-theme="dark"] .modal-body .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+[data-theme="dark"] .modal-body .table {
+    color: var(--gray-600) !important;
+}
+
+[data-theme="dark"] .modal-body .table thead th {
+    background-color: var(--gray-100) !important;
+    color: var(--gray-700) !important;
+}
+
+[data-theme="dark"] .modal-body .table tbody td {
+    color: var(--gray-600) !important;
+    background-color: transparent !important;
 }
 
 /* ===== Alerts ===== */
@@ -309,34 +598,98 @@
 
 /* ===== Badges ===== */
 [data-theme="dark"] .badge {
-    color: white;
+    color: white !important;
 }
 
-[data-theme="dark"] .badge-primary {
-    background-color: var(--accent-blue);
+[data-theme="dark"] .badge-primary,
+[data-theme="dark"] .badge.bg-primary {
+    background-color: var(--accent-blue) !important;
+    color: white !important;
 }
 
-[data-theme="dark"] .badge-success {
-    background-color: var(--accent-green);
+[data-theme="dark"] .badge-success,
+[data-theme="dark"] .badge.bg-success {
+    background-color: var(--accent-green) !important;
+    color: white !important;
 }
 
-[data-theme="dark"] .badge-danger {
-    background-color: var(--accent-red);
+[data-theme="dark"] .badge-danger,
+[data-theme="dark"] .badge.bg-danger {
+    background-color: var(--accent-red) !important;
+    color: white !important;
 }
 
-[data-theme="dark"] .badge-warning {
-    background-color: var(--accent-orange);
-    color: var(--gray-900);
+[data-theme="dark"] .badge-warning,
+[data-theme="dark"] .badge.bg-warning {
+    background-color: var(--accent-orange) !important;
+    color: var(--gray-900) !important;
 }
 
-[data-theme="dark"] .badge-secondary {
-    background-color: var(--gray-300);
-    color: var(--gray-900);
+[data-theme="dark"] .badge-secondary,
+[data-theme="dark"] .badge.bg-secondary {
+    background-color: var(--gray-300) !important;
+    color: var(--gray-900) !important;
 }
 
-[data-theme="dark"] .badge-light {
-    background-color: var(--gray-200);
-    color: var(--gray-900);
+[data-theme="dark"] .badge-light,
+[data-theme="dark"] .badge.bg-light {
+    background-color: var(--gray-200) !important;
+    color: var(--gray-900) !important;
+}
+
+[data-theme="dark"] .badge-info,
+[data-theme="dark"] .badge.bg-info {
+    background-color: var(--accent-blue) !important;
+    color: white !important;
+}
+
+/* ===== Special Badges (Credit/Debit) ===== */
+[data-theme="dark"] .badge[class*="credit"],
+[data-theme="dark"] .badge[class*="debit"],
+[data-theme="dark"] .badge[class*="رصيد"],
+[data-theme="dark"] span.badge,
+[data-theme="dark"] .badge.text-bg-info,
+[data-theme="dark"] .badge.text-bg-primary,
+[data-theme="dark"] .badge.text-bg-success,
+[data-theme="dark"] .badge.text-bg-danger,
+[data-theme="dark"] .badge.text-bg-warning {
+    color: white !important;
+}
+
+/* ===== Badges in Cards ===== */
+[data-theme="dark"] .card .badge,
+[data-theme="dark"] .dashboard-card .badge,
+[data-theme="dark"] .stat-card .badge,
+[data-theme="dark"] .analytics-card .badge {
+    color: white !important;
+}
+
+[data-theme="dark"] .card .badge-success,
+[data-theme="dark"] .dashboard-card .badge-success,
+[data-theme="dark"] .stat-card .badge-success {
+    background-color: var(--accent-green) !important;
+    color: white !important;
+}
+
+[data-theme="dark"] .card .badge-danger,
+[data-theme="dark"] .dashboard-card .badge-danger,
+[data-theme="dark"] .stat-card .badge-danger {
+    background-color: var(--accent-red) !important;
+    color: white !important;
+}
+
+[data-theme="dark"] .card .badge-primary,
+[data-theme="dark"] .dashboard-card .badge-primary,
+[data-theme="dark"] .stat-card .badge-primary {
+    background-color: var(--accent-blue) !important;
+    color: white !important;
+}
+
+[data-theme="dark"] .card .badge-info,
+[data-theme="dark"] .dashboard-card .badge-info,
+[data-theme="dark"] .stat-card .badge-info {
+    background-color: var(--accent-blue) !important;
+    color: white !important;
 }
 
 /* ===== Breadcrumbs ===== */

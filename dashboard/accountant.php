@@ -2706,131 +2706,179 @@ function handleReportSubmit(event) {
     return false;
 }
 
+// دالة مشتركة لجلب رصيد المندوب
+function loadSalesRepBalance(salesRepId, repBalanceElement, collectAmountElement) {
+    if (!salesRepId || salesRepId === '') {
+        if (repBalanceElement) {
+            repBalanceElement.value = '-- اختر مندوب أولاً --';
+            repBalanceElement.style.color = '#6c757d';
+        }
+        if (collectAmountElement) {
+            collectAmountElement.max = '';
+            collectAmountElement.removeAttribute('data-max-balance');
+        }
+        return;
+    }
+    
+    // إظهار loading state
+    if (repBalanceElement) {
+        repBalanceElement.value = 'جاري التحميل...';
+        repBalanceElement.style.color = '#6c757d';
+    }
+    
+    // جلب رصيد المندوب
+    const url = new URL(window.location.href);
+    url.searchParams.set('ajax', 'get_sales_rep_balance');
+    url.searchParams.set('sales_rep_id', salesRepId);
+    
+    fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        cache: 'no-cache'
+    })
+    .then(response => {
+        const contentType = response.headers.get('content-type') || '';
+        
+        return response.text().then(text => {
+            if (!contentType.includes('application/json')) {
+                console.error('Server response (first 500 chars):', text.substring(0, 500));
+                throw new Error('Invalid response type. Expected JSON but got: ' + contentType);
+            }
+            
+            if (!response.ok) {
+                throw new Error('HTTP error! status: ' + response.status);
+            }
+            
+            if (!text || text.trim() === '') {
+                throw new Error('Empty response from server');
+            }
+            
+            try {
+                return JSON.parse(text);
+            } catch (parseError) {
+                console.error('JSON Parse Error:', parseError);
+                console.error('Response text:', text.substring(0, 500));
+                throw new Error('Invalid JSON response: ' + parseError.message);
+            }
+        });
+    })
+    .then(data => {
+        if (!data || typeof data !== 'object') {
+            throw new Error('Invalid response format');
+        }
+        
+        if (data.success) {
+            const balance = parseFloat(data.balance) || 0;
+            const formattedBalance = balance.toLocaleString('ar-EG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+            
+            if (repBalanceElement) {
+                repBalanceElement.value = formattedBalance;
+                repBalanceElement.style.color = balance > 0 ? '#198754' : '#6c757d';
+            }
+            
+            if (collectAmountElement) {
+                collectAmountElement.max = balance;
+                collectAmountElement.setAttribute('data-max-balance', balance);
+            }
+        } else {
+            const errorMsg = data.message || 'فشل جلب رصيد المندوب';
+            if (repBalanceElement) {
+                repBalanceElement.value = 'خطأ: ' + errorMsg;
+                repBalanceElement.style.color = '#dc3545';
+            }
+            console.error('Error:', errorMsg);
+        }
+    })
+    .catch(error => {
+        console.error('Fetch Error:', error);
+        const errorMsg = error.message || 'حدث خطأ أثناء جلب رصيد المندوب';
+        if (repBalanceElement) {
+            repBalanceElement.value = 'خطأ في الاتصال';
+            repBalanceElement.style.color = '#dc3545';
+        }
+    });
+}
+
 // معالجة تحصيل من مندوب
 document.addEventListener('DOMContentLoaded', function() {
+    // Modal elements
     const salesRepSelect = document.getElementById('salesRepSelect');
     const repBalanceAmount = document.getElementById('repBalanceAmount');
     const collectAmount = document.getElementById('collectAmount');
     const collectForm = document.getElementById('collectFromRepForm');
     const submitBtn = document.getElementById('submitCollectBtn');
     
+    // Card elements
+    const collectCardSalesRepSelect = document.getElementById('collectFromRepCardSalesRepSelect');
+    const collectCardRepBalanceAmount = document.getElementById('collectFromRepCardRepBalanceAmount');
+    const collectCardAmount = document.getElementById('collectFromRepCardAmount');
+    const collectCardForm = document.getElementById('collectFromRepCardForm');
+    const collectCardSubmitBtn = document.getElementById('collectFromRepCardSubmitBtn');
+    
+    // معالجة تغيير المندوب في Modal
     if (salesRepSelect) {
         salesRepSelect.addEventListener('change', function() {
-            const salesRepId = this.value;
-            
-            if (salesRepId && salesRepId !== '') {
-                // إظهار loading state
-                if (repBalanceAmount) {
-                    repBalanceAmount.value = 'جاري التحميل...';
-                    repBalanceAmount.style.color = '#6c757d';
-                }
-                
-                // جلب رصيد المندوب
-                // بناء URL بشكل صحيح
-                const url = new URL(window.location.href);
-                url.searchParams.set('ajax', 'get_sales_rep_balance');
-                url.searchParams.set('sales_rep_id', salesRepId);
-                
-                fetch(url.toString(), {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    cache: 'no-cache'
-                })
-                .then(response => {
-                    // التحقق من content-type أولاً
-                    const contentType = response.headers.get('content-type') || '';
-                    
-                    return response.text().then(text => {
-                        // إذا لم يكن JSON، عرض الخطأ
-                        if (!contentType.includes('application/json')) {
-                            console.error('Server response (first 500 chars):', text.substring(0, 500));
-                            throw new Error('Invalid response type. Expected JSON but got: ' + contentType);
-                        }
-                        
-                        if (!response.ok) {
-                            throw new Error('HTTP error! status: ' + response.status);
-                        }
-                        
-                        if (!text || text.trim() === '') {
-                            throw new Error('Empty response from server');
-                        }
-                        
-                        try {
-                            return JSON.parse(text);
-                        } catch (parseError) {
-                            console.error('JSON Parse Error:', parseError);
-                            console.error('Response text:', text.substring(0, 500));
-                            throw new Error('Invalid JSON response: ' + parseError.message);
-                        }
-                    });
-                })
-                .then(data => {
-                    if (!data || typeof data !== 'object') {
-                        throw new Error('Invalid response format');
-                    }
-                    
-                    if (data.success) {
-                        const balance = parseFloat(data.balance) || 0;
-                        const formattedBalance = balance.toLocaleString('ar-EG', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                        });
-                        
-                        if (repBalanceAmount) {
-                            repBalanceAmount.value = formattedBalance;
-                            repBalanceAmount.style.color = balance > 0 ? '#198754' : '#6c757d';
-                        }
-                        
-                        if (collectAmount) {
-                            collectAmount.max = balance;
-                            collectAmount.setAttribute('data-max-balance', balance);
-                        }
-                    } else {
-                        const errorMsg = data.message || 'فشل جلب رصيد المندوب';
-                        if (repBalanceAmount) {
-                            repBalanceAmount.value = 'خطأ: ' + errorMsg;
-                            repBalanceAmount.style.color = '#dc3545';
-                        }
-                        console.error('Error:', errorMsg);
-                    }
-                })
-                .catch(error => {
-                    console.error('Fetch Error:', error);
-                    const errorMsg = error.message || 'حدث خطأ أثناء جلب رصيد المندوب';
-                    if (repBalanceAmount) {
-                        repBalanceAmount.value = 'خطأ في الاتصال';
-                        repBalanceAmount.style.color = '#dc3545';
-                    }
-                });
-            } else {
-                // إعادة تعيين الحقل عند عدم اختيار مندوب
-                if (repBalanceAmount) {
-                    repBalanceAmount.value = '-- اختر مندوب أولاً --';
-                    repBalanceAmount.style.color = '#6c757d';
-                }
-                if (collectAmount) {
-                    collectAmount.max = '';
-                    collectAmount.removeAttribute('data-max-balance');
-                }
+            loadSalesRepBalance(this.value, repBalanceAmount, collectAmount);
+        });
+    }
+    
+    // معالجة تغيير المندوب في Card
+    if (collectCardSalesRepSelect) {
+        collectCardSalesRepSelect.addEventListener('change', function() {
+            loadSalesRepBalance(this.value, collectCardRepBalanceAmount, collectCardAmount);
+        });
+    }
+    
+    // دالة مشتركة للتحقق من المبلغ قبل الإرسال
+    function validateCollectAmount(amountInput, maxBalance, submitButton) {
+        const amount = parseFloat(amountInput.value);
+        const maxBalanceValue = parseFloat(maxBalance || '0');
+        
+        if (amount <= 0) {
+            alert('يرجى إدخال مبلغ صحيح أكبر من الصفر');
+            amountInput.focus();
+            return false;
+        }
+        
+        if (maxBalanceValue > 0 && amount > maxBalanceValue) {
+            alert('المبلغ المطلوب (' + amount.toLocaleString('ar-EG') + ' ج.م) أكبر من رصيد المندوب (' + maxBalanceValue.toLocaleString('ar-EG') + ' ج.م)');
+            amountInput.focus();
+            return false;
+        }
+        
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري التحصيل...';
+        }
+        
+        return true;
+    }
+    
+    // التحقق من المبلغ قبل الإرسال - Modal
+    if (collectForm) {
+        collectForm.addEventListener('submit', function(e) {
+            if (!validateCollectAmount(collectAmount, collectAmount.getAttribute('data-max-balance'), submitBtn)) {
+                e.preventDefault();
+                return false;
             }
         });
     }
     
-    // التحقق من المبلغ قبل الإرسال
-    if (collectForm) {
-        collectForm.addEventListener('submit', function(e) {
-            const amount = parseFloat(collectAmount.value);
-            const maxBalance = parseFloat(collectAmount.getAttribute('data-max-balance') || '0');
-            
-            if (amount <= 0) {
+    // التحقق من المبلغ قبل الإرسال - Card
+    if (collectCardForm) {
+        collectCardForm.addEventListener('submit', function(e) {
+            if (!validateCollectAmount(collectCardAmount, collectCardAmount.getAttribute('data-max-balance'), collectCardSubmitBtn)) {
                 e.preventDefault();
-                alert('يرجى إدخال مبلغ صحيح أكبر من الصفر');
-                collectAmount.focus();
                 return false;
             }
+        });
+    }
             
             if (maxBalance > 0 && amount > maxBalance) {
                 e.preventDefault();
@@ -2838,10 +2886,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 collectAmount.focus();
                 return false;
             }
-            
-            // تعطيل الزر أثناء الإرسال
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري التحصيل...';
         });
     }
     
