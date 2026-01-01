@@ -281,7 +281,7 @@ if (!defined('ACCESS_ALLOWED')) {
         window.__unifiedPollingActive = true;
         
         let lastActivity = Date.now();
-        const POLLING_INTERVAL = 60 * 1000; // 60 ثانية - فترة موحدة لجميع المهام
+        const POLLING_INTERVAL = 90 * 1000; // 90 ثانية - فترة موحدة لجميع المهام (تم زيادة الفترة لتقليل الضغط)
         const ACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 دقيقة
         
         const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click', 'keydown'];
@@ -357,7 +357,7 @@ if (!defined('ACCESS_ALLOWED')) {
             const apiPath = getApiPath('api/unified_polling.php') + (params ? '?' + params : '');
             
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 12000);
+            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 ثواني بدلاً من 12 لتقليل الانتظار
             
             fetch(apiPath, {
                 method: 'GET',
@@ -448,7 +448,12 @@ if (!defined('ACCESS_ALLOWED')) {
             .catch(error => {
                 clearTimeout(timeoutId);
                 if (error.name !== 'AbortError') {
-                    consecutiveFailures++;
+                    // إذا كانت الصفحة مخفية، لا نعد الفشل
+                    if (document.hidden) {
+                        consecutiveFailures = Math.max(0, consecutiveFailures - 1);
+                    } else {
+                        consecutiveFailures++;
+                    }
                     
                     if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
                         console.warn('Unified polling: Multiple failures detected');
@@ -509,10 +514,12 @@ if (!defined('ACCESS_ALLOWED')) {
                     unifiedPollInterval = null;
                 }
             } else {
-                // استئناف polling عند إظهار الصفحة
+                // عند العودة، استئناف polling فوراً
                 if (!unifiedPollInterval) {
+                    // تنفيذ polling فوراً أولاً
+                    executeUnifiedPolling();
+                    // ثم البدء بالـ interval
                     unifiedPollInterval = setInterval(executeUnifiedPolling, POLLING_INTERVAL);
-                    setTimeout(executeUnifiedPolling, 1000);
                 }
             }
         });
@@ -659,6 +666,27 @@ if (!defined('ACCESS_ALLOWED')) {
     
     <!-- معالجة زر مسح الكل - بدون تنبيهات -->
     <script>
+    // دالة مساعدة لحساب المسار الصحيح لـ API (مثل getApiPath في notifications.js)
+    function getNotificationsApiPath() {
+        const cleanEndpoint = 'api/notifications.php';
+        const currentPath = window.location.pathname || '/';
+        const parts = currentPath.split('/').filter(Boolean);
+        const stopSegments = new Set(['dashboard', 'modules', 'api', 'assets', 'includes']);
+        const baseParts = [];
+
+        for (const part of parts) {
+            if (stopSegments.has(part) || part.endsWith('.php')) {
+                break;
+            }
+            baseParts.push(part);
+        }
+
+        const basePath = baseParts.length ? '/' + baseParts.join('/') : '';
+        const apiPath = (basePath + '/' + cleanEndpoint).replace(/\/+/g, '/');
+
+        return apiPath.startsWith('/') ? apiPath : '/' + apiPath;
+    }
+    
     function handleClearAllNotifications(event) {
         event.preventDefault();
         event.stopPropagation();
@@ -674,8 +702,10 @@ if (!defined('ACCESS_ALLOWED')) {
         const form = event.target.closest('form');
         if (!form) return false;
         
-        const formData = new FormData(form);
-        const apiPath = form.action;
+        // استخدام getNotificationsApiPath بدلاً من form.action لضمان المسار الصحيح
+        const apiPath = getNotificationsApiPath();
+        const formData = new URLSearchParams();
+        formData.append('action', 'delete_all');
         
         // إظهار loading
         const notificationsList = document.getElementById('notificationsList');
@@ -683,15 +713,29 @@ if (!defined('ACCESS_ALLOWED')) {
             notificationsList.innerHTML = '<small class="text-muted">جاري حذف الإشعارات...</small>';
         }
         
-        // إرسال الطلب
+        // إرسال الطلب مع معالجة أفضل للأخطاء
         fetch(apiPath, {
             method: 'POST',
             credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
             body: formData
         })
-        .then(response => response.json())
+        .then(response => {
+            // التحقق من حالة الاستجابة
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            // التحقق من نوع المحتوى
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                throw new Error('Invalid response type');
+            }
+            return response.json();
+        })
         .then(data => {
-            if (data.success) {
+            if (data && data.success) {
                 // تحديث القائمة
                 if (notificationsList) {
                     notificationsList.innerHTML = '<small class="text-muted">لا توجد إشعارات</small>';
@@ -704,18 +748,31 @@ if (!defined('ACCESS_ALLOWED')) {
                     badge.style.display = 'none';
                 }
                 
-                // إعادة تحميل الإشعارات
-                if (typeof loadNotifications === 'function') {
-                    loadNotifications();
-                }
+                // إعادة تحميل الإشعارات بعد تأخير بسيط
+                setTimeout(() => {
+                    if (typeof loadNotifications === 'function') {
+                        loadNotifications();
+                    } else if (typeof window.loadNotifications === 'function') {
+                        window.loadNotifications();
+                    }
+                }, 100);
+            } else {
+                throw new Error(data?.error || 'Unknown error');
             }
         })
         .catch(error => {
             console.error('Error deleting notifications:', error);
             // إعادة تحميل الإشعارات في حالة الخطأ
-            if (typeof loadNotifications === 'function') {
-                loadNotifications();
+            if (notificationsList) {
+                notificationsList.innerHTML = '<small class="text-muted">خطأ في حذف الإشعارات</small>';
             }
+            setTimeout(() => {
+                if (typeof loadNotifications === 'function') {
+                    loadNotifications();
+                } else if (typeof window.loadNotifications === 'function') {
+                    window.loadNotifications();
+                }
+            }, 500);
         });
         
         return false;

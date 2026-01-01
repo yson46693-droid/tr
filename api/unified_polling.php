@@ -7,9 +7,9 @@
 
 define('ACCESS_ALLOWED', true);
 
-// إعدادات timeout محسّنة
-@set_time_limit(20);
-@ini_set('max_execution_time', 20);
+// إعدادات timeout محسّنة (تم تقليلها لتحسين الأداء)
+@set_time_limit(10);
+@ini_set('max_execution_time', 10);
 @ini_set('max_input_time', 5);
 
 // تنظيف output buffer
@@ -211,13 +211,13 @@ try {
                 $chatId = isset($_GET['chat_id']) ? (int)$_GET['chat_id'] : 0;
                 
                 if ($chatId > 0) {
-                    // جلب الرسائل الجديدة فقط
+                    // جلب الرسائل الجديدة فقط (تم تقليل LIMIT من 50 إلى 20 لتحسين الأداء)
                     $sql = "SELECT m.*, u.name as user_name, u.role as user_role 
                             FROM chat_messages m
                             LEFT JOIN users u ON m.user_id = u.id
                             WHERE m.chat_id = ? AND m.id > ?
                             ORDER BY m.created_at ASC
-                            LIMIT 50";
+                            LIMIT 20";
                     $stmt = $db->prepare($sql);
                     $stmt->execute([$chatId, $lastMessageId]);
                     $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);

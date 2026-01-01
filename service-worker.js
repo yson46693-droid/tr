@@ -44,8 +44,8 @@ const CRITICAL_ASSETS = [
   'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/fonts/bootstrap-icons.woff2'
 ];
 
-// Network timeout (30 seconds for PHP pages, 10 seconds for static assets)
-const NETWORK_TIMEOUT = 30000;
+// Network timeout (15 seconds for PHP pages, 10 seconds for static assets) - تم تقليل timeout لتحسين الأداء
+const NETWORK_TIMEOUT = 15000;
 const STATIC_NETWORK_TIMEOUT = 10000;
 
 // ============================================

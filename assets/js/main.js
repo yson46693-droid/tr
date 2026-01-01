@@ -682,7 +682,7 @@ window.addEventListener('pagehide', function() {
 });
 
 // معالجة Refresh لمنع Error Code: -2
-// مع منع refresh loop
+// مع منع refresh loop - تم تحسينه لمنع الشاشة البيضاء عند العودة للتبويبة
 let mainPageshowHandled = false;
 window.addEventListener('pageshow', function(event) {
     // منع refresh loop - فقط معالجة مرة واحدة لكل صفحة
@@ -691,61 +691,25 @@ window.addEventListener('pageshow', function(event) {
     }
     
     try {
-        // التحقق من أن هذا refresh وليس navigation عادي
+        // تنظيف flags القديمة فقط
         const isRefreshing = sessionStorage.getItem('is_refreshing') === 'true';
-        const refreshTimestamp = parseInt(sessionStorage.getItem('refresh_timestamp') || '0');
-        const timeSinceRefresh = Date.now() - refreshTimestamp;
-        
-        // التحقق من عدم وجود معاملات refresh في URL
-        const currentUrl = new URL(window.location.href);
-        const hasRefreshParam = currentUrl.searchParams.has('_refresh') || 
-                               currentUrl.searchParams.has('_t') ||
-                               currentUrl.searchParams.has('_nocache');
-        
-        // إذا كان هناك معامل refresh، لا نقوم بمعالجة إضافية
-        if (hasRefreshParam) {
-            mainPageshowHandled = true;
-            // تنظيف flags
+        if (isRefreshing) {
             sessionStorage.removeItem('is_refreshing');
             sessionStorage.removeItem('refresh_timestamp');
-            return;
         }
         
-        // إذا كان refresh حديث (أقل من 5 ثوان)، قد نحتاج لمعالجة خاصة
-        if (isRefreshing && timeSinceRefresh < 5000) {
-            // إزالة flag
-            sessionStorage.removeItem('is_refreshing');
-            sessionStorage.removeItem('refresh_timestamp');
-            
-            // إذا كانت الصفحة من cache وكان هناك مشكلة في الاتصال
-            if (event.persisted) {
-                // التحقق من عدم حدوث refresh loop
-                const lastPageshow = sessionStorage.getItem('last_main_pageshow');
-                const now = Date.now();
-                
-                if (lastPageshow && (now - parseInt(lastPageshow, 10)) < 3000) {
-                    // آخر pageshow كان منذ أقل من 3 ثوان - منع refresh loop
-                    mainPageshowHandled = true;
-                    return;
-                }
-                
-                sessionStorage.setItem('last_main_pageshow', now.toString());
-                
-                // محاولة إعادة تحميل من السيرفر بطريقة آمنة
-                const url = new URL(window.location.href);
-                if (!url.searchParams.has('_refresh')) {
-                    url.searchParams.set('_refresh', Date.now().toString());
-                    mainPageshowHandled = true;
-                    setTimeout(function() {
-                        window.location.href = url.toString();
-                    }, 100);
-                }
+        // إذا كانت الصفحة من cache، نستأنف polling فقط بدلاً من عمل refresh
+        // هذا يحل مشكلة الشاشة البيضاء
+        if (event.persisted) {
+            // استئناف polling إذا كان متوقفاً
+            if (typeof window.unifiedPolling !== 'undefined' && window.unifiedPolling.execute) {
+                setTimeout(() => {
+                    window.unifiedPolling.execute();
+                }, 500);
             }
-        } else {
-            // إزالة flag القديم
-            sessionStorage.removeItem('is_refreshing');
-            sessionStorage.removeItem('refresh_timestamp');
         }
+        
+        mainPageshowHandled = true;
     } catch (e) {
         // تجاهل الأخطاء
         console.warn('Error in pageshow handler:', e);
