@@ -1848,6 +1848,40 @@ function closeEditExternalProductCard() {
     }
 }
 
+function closeBatchDetailsCard() {
+    const card = document.getElementById('batchDetailsCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
+function closePrintBarcodesCard() {
+    const card = document.getElementById('printBarcodesCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
+function printBarcodesFromCard() {
+    const batchNumbers = window.batchNumbersToPrint || [];
+    if (batchNumbers.length === 0) {
+        alert('لا توجد أرقام تشغيلة للطباعة');
+        return;
+    }
+
+    const quantityInput = document.getElementById('barcodeCardPrintQuantity');
+    const printQuantity = quantityInput ? parseInt(quantityInput.value, 10) : 1;
+    
+    if (!printQuantity || printQuantity < 1) {
+        alert('يرجى إدخال عدد صحيح للطباعة');
+        return;
+    }
+
+    const batchNumber = batchNumbers[0];
+    const printUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${printQuantity}&print=1`;
+    window.open(printUrl, '_blank');
+}
+
 function closeDeleteExternalProductCard() {
     const card = document.getElementById('deleteExternalProductCard');
     if (card) {
@@ -1866,45 +1900,88 @@ if (typeof window !== 'undefined') {
 }
 
 function showBarcodePrintModal(batchNumber, productName, defaultQuantity) {
-    const modalElement = document.getElementById('printBarcodesModal');
-    if (!modalElement) {
-        console.error('Modal printBarcodesModal not found');
-        const quantity = defaultQuantity > 0 ? defaultQuantity : 1;
-        const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
-        window.open(fallbackUrl, '_blank');
-        return;
+    if (typeof closeAllForms === 'function') {
+        closeAllForms();
     }
     
     const quantity = defaultQuantity > 0 ? defaultQuantity : 1;
     window.batchNumbersToPrint = [batchNumber];
-
-    const productNameInput = document.getElementById('barcode_product_name');
-    if (productNameInput) {
-        productNameInput.value = productName || '';
-    }
-
-    const quantityInput = document.getElementById('barcode_print_quantity');
-    if (quantityInput) {
-        quantityInput.value = quantity;
-    }
-
-    const batchListContainer = document.getElementById('batch_numbers_list');
-    if (batchListContainer) {
-        batchListContainer.innerHTML = `
-            <div class="alert alert-info mb-0">
-                <i class="bi bi-info-circle me-2"></i>
-                <strong>رقم التشغيلة:</strong> ${batchNumber}<br>
-                <small>ستتم طباعة نفس رقم التشغيلة بعدد ${quantity} باركود</small>
-            </div>
-        `;
-    }
-
-    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-        const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-        modal.show();
+    
+    const isMobileDevice = isMobile();
+    
+    if (isMobileDevice) {
+        // على الموبايل: استخدام Card فقط
+        const card = document.getElementById('printBarcodesCard');
+        if (!card) {
+            console.error('printBarcodesCard not found');
+            const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
+            window.open(fallbackUrl, '_blank');
+            return;
+        }
+        
+        const productNameInput = document.getElementById('barcodeCardProductName');
+        if (productNameInput) {
+            productNameInput.value = productName || '';
+        }
+        
+        const quantityInput = document.getElementById('barcodeCardPrintQuantity');
+        if (quantityInput) {
+            quantityInput.value = quantity;
+        }
+        
+        const batchListContainer = document.getElementById('batchNumbersListCard');
+        if (batchListContainer) {
+            batchListContainer.innerHTML = `
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>رقم التشغيلة:</strong> ${batchNumber}<br>
+                    <small>ستتم طباعة نفس رقم التشغيلة بعدد ${quantity} باركود</small>
+                </div>
+            `;
+        }
+        
+        card.style.display = 'block';
+        setTimeout(function() {
+            scrollToElement(card);
+        }, 50);
     } else {
-        const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
-        window.open(fallbackUrl, '_blank');
+        // على الكمبيوتر: استخدام Modal
+        const modalElement = document.getElementById('printBarcodesModal');
+        if (!modalElement) {
+            console.error('Modal printBarcodesModal not found');
+            const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
+            window.open(fallbackUrl, '_blank');
+            return;
+        }
+
+        const productNameInput = document.getElementById('barcode_product_name');
+        if (productNameInput) {
+            productNameInput.value = productName || '';
+        }
+
+        const quantityInput = document.getElementById('barcode_print_quantity');
+        if (quantityInput) {
+            quantityInput.value = quantity;
+        }
+
+        const batchListContainer = document.getElementById('batch_numbers_list');
+        if (batchListContainer) {
+            batchListContainer.innerHTML = `
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>رقم التشغيلة:</strong> ${batchNumber}<br>
+                    <small>ستتم طباعة نفس رقم التشغيلة بعدد ${quantity} باركود</small>
+                </div>
+            `;
+        }
+
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+            modal.show();
+        } else {
+            const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
+            window.open(fallbackUrl, '_blank');
+        }
     }
 }
 
@@ -2400,6 +2477,195 @@ function renderBatchDetails(data) {
             </div>
         </div>
     `;
+}
+
+function renderBatchDetailsCard(data) {
+    const summarySection = document.getElementById('batchDetailsCardSummarySection');
+    const materialsSection = document.getElementById('batchDetailsCardMaterialsSection');
+    const rawMaterialsSection = document.getElementById('batchDetailsCardRawMaterialsSection');
+    const workersSection = document.getElementById('batchDetailsCardWorkersSection');
+
+    const batchNumber = data.batch_number ?? '—';
+    const summaryRows = [
+        ['رقم التشغيلة', batchNumber],
+        ['المنتج', data.product_name ?? '—'],
+        ['تاريخ الإنتاج', data.production_date ? data.production_date : '—'],
+        ['الكمية المنتجة', data.quantity_produced ?? data.quantity ?? '—']
+    ];
+
+    if (data.honey_supplier_name) {
+        summaryRows.push(['مورد العسل', data.honey_supplier_name]);
+    }
+    
+    let packagingSuppliersDisplay = '—';
+    if (data.packaging_suppliers_list && Array.isArray(data.packaging_suppliers_list) && data.packaging_suppliers_list.length > 0) {
+        packagingSuppliersDisplay = data.packaging_suppliers_list.join('، ');
+    } else if (data.packaging_supplier_name) {
+        packagingSuppliersDisplay = data.packaging_supplier_name;
+    }
+    
+    if (packagingSuppliersDisplay !== '—') {
+        summaryRows.push(['مورد أدوات التعبئة', packagingSuppliersDisplay]);
+    }
+    if (data.notes) {
+        summaryRows.push(['ملاحظات', data.notes]);
+    }
+
+    if (summarySection) {
+        summarySection.innerHTML = `
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>ملخص التشغيلة</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive dashboard-table-wrapper">
+                        <table class="table dashboard-table dashboard-table--compact align-middle mb-0">
+                            <tbody>
+                                ${summaryRows.map(([label, value]) => `
+                                    <tr>
+                                        <th class="w-25">${label}</th>
+                                        <td>${value}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    const packagingItems = Array.isArray(data.packaging_materials) 
+        ? data.packaging_materials 
+        : (Array.isArray(data.materials) ? data.materials : []);
+    if (materialsSection) {
+        materialsSection.innerHTML = `
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="bi bi-box-seam me-2"></i>مواد التعبئة</h6>
+                </div>
+                <div class="card-body">
+                    ${packagingItems.length > 0 ? `
+                        <div class="table-responsive dashboard-table-wrapper">
+                            <table class="table dashboard-table dashboard-table--compact align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>المادة</th>
+                                        <th>الكمية</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${packagingItems.map(item => {
+                                        const materialName = item.name ?? item.material_name ?? '—';
+                                        let quantityDisplay = '—';
+                                        
+                                        if (item.details) {
+                                            quantityDisplay = item.details;
+                                        } else {
+                                            const quantity = item.quantity_used ?? item.quantity ?? null;
+                                            const unit = item.unit ?? '';
+                                            quantityDisplay = quantity !== null && quantity !== undefined 
+                                                ? `${quantity} ${unit}`.trim() 
+                                                : '—';
+                                        }
+                                        
+                                        return `
+                                        <tr>
+                                            <td>${materialName}</td>
+                                            <td>${quantityDisplay}</td>
+                                        </tr>
+                                    `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : `
+                        <div class="text-center text-muted py-3">
+                            <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                            لا توجد مواد تعبئة مسجلة
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+    }
+
+    const rawMaterialsItems = Array.isArray(data.raw_materials) ? data.raw_materials : [];
+    if (rawMaterialsSection) {
+        rawMaterialsSection.innerHTML = `
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="bi bi-flower1 me-2"></i>الخامات</h6>
+                </div>
+                <div class="card-body">
+                    ${rawMaterialsItems.length > 0 ? `
+                        <div class="table-responsive dashboard-table-wrapper">
+                            <table class="table dashboard-table dashboard-table--compact align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>المادة</th>
+                                        <th>الكمية</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rawMaterialsItems.map(item => {
+                                        const materialName = item.name ?? item.material_name ?? '—';
+                                        const quantity = item.quantity_used ?? item.quantity ?? null;
+                                        const unit = item.unit ?? '';
+                                        const quantityDisplay = quantity !== null && quantity !== undefined 
+                                            ? `${quantity} ${unit}`.trim() 
+                                            : '—';
+                                        return `
+                                        <tr>
+                                            <td>${materialName}</td>
+                                            <td>${quantityDisplay}</td>
+                                        </tr>
+                                    `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : `
+                        <div class="text-center text-muted py-3">
+                            <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                            لا توجد خامات مسجلة
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+    }
+
+    const workers = Array.isArray(data.workers) ? data.workers : [];
+    if (workersSection) {
+        workersSection.innerHTML = `
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="bi bi-people me-2"></i>العمال</h6>
+                </div>
+                <div class="card-body">
+                    ${workers.length > 0 ? `
+                        <ul class="list-unstyled mb-0">
+                            ${workers.map(worker => {
+                                const workerName = worker.full_name ?? worker.name ?? '—';
+                                return `
+                                <li class="mb-2">
+                                    <i class="bi bi-person-circle me-2 text-primary"></i>
+                                    ${workerName}
+                                </li>
+                            `;
+                            }).join('')}
+                        </ul>
+                    ` : `
+                        <div class="text-center text-muted py-3">
+                            <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                            لا يوجد عمال مسجلون
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+    }
 }
 
 // دالة لمسح cache يدوياً

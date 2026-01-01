@@ -27,6 +27,45 @@
     let currentRepId = null; // لتخزين معرف المندوب الحالي
     
     /**
+     * التحقق من الموبايل
+     */
+    function isMobile() {
+        return window.innerWidth <= 768;
+    }
+    
+    /**
+     * الحصول على Container الصحيح (Modal أو Card) حسب الجهاز
+     */
+    function getExportContainer() {
+        if (isMobile()) {
+            // على الموبايل: البحث عن Card أولاً
+            const card = document.getElementById('customerExportCard');
+            if (card && card.style.display !== 'none') {
+                return card;
+            }
+        }
+        // على الكمبيوتر أو إذا لم تكن Card مرئية: البحث عن Modal
+        return document.getElementById('customerExportModal');
+    }
+    
+    /**
+     * الحصول على عنصر داخل Container الصحيح
+     * يبحث في Modal أو Card حسب الجهاز
+     */
+    function getExportElement(elementId) {
+        const container = getExportContainer();
+        if (container) {
+            // البحث داخل Container أولاً
+            const element = container.querySelector('#' + elementId);
+            if (element) {
+                return element;
+            }
+        }
+        // Fallback: البحث في كامل الصفحة
+        return document.getElementById(elementId);
+    }
+    
+    /**
      * حساب مسار API بناءً على موقع الصفحة الحالية
      * يستخدم CUSTOMER_EXPORT_CONFIG من PHP إذا كان متاحاً
      */
@@ -90,6 +129,23 @@
      */
     function initExportModal() {
         const exportModal = document.getElementById('customerExportModal');
+        const exportCard = document.getElementById('customerExportCard');
+        
+        // تهيئة Modal إذا كان موجوداً
+        if (exportModal) {
+            initModalEvents(exportModal);
+        }
+        
+        // تهيئة Card إذا كان موجوداً
+        if (exportCard) {
+            initCardEvents(exportCard);
+        }
+    }
+    
+    /**
+     * تهيئة أحداث Modal
+     */
+    function initModalEvents(exportModal) {
         if (!exportModal) {
             return;
         }

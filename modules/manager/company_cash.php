@@ -1360,7 +1360,7 @@ $typeColorMap = [
 
 <script>
 // ===== منع Bootstrap Modal على الموبايل - يجب تنفيذ هذا أولاً =====
-// هذا الكود يعمل فوراً قبل أي كود آخر
+// هذا الكود يعمل فوراً قبل تحميل Bootstrap
 (function() {
     'use strict';
     
@@ -1368,35 +1368,75 @@ $typeColorMap = [
         return window.innerWidth <= 768;
     }
     
-    // منع Bootstrap من تهيئة Modal على الموبايل
-    if (isMobileCheck()) {
-        // تعطيل show method لـ Bootstrap Modal
-        document.addEventListener('DOMContentLoaded', function() {
-            // إزالة Modal من DOM على الموبايل بعد تحميل الصفحة
-            setTimeout(function() {
-                const collectModal = document.getElementById('collectFromRepModal');
-                const reportModal = document.getElementById('generateReportModal');
-                
-                if (collectModal && isMobileCheck()) {
-                    collectModal.style.display = 'none';
-                    collectModal.style.visibility = 'hidden';
-                    collectModal.style.position = 'fixed';
-                    collectModal.style.left = '-9999px';
-                    collectModal.setAttribute('aria-hidden', 'true');
-                    collectModal.setAttribute('tabindex', '-1');
+    // منع Bootstrap من فتح Modal على الموبايل - يجب تنفيذ هذا قبل Bootstrap
+    function preventBootstrapModal() {
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            // حفظ الـ prototype الأصلي
+            const originalShow = bootstrap.Modal.prototype.show;
+            const originalConstructor = bootstrap.Modal;
+            
+            // Override Modal constructor لمنع إنشاء instance على الموبايل
+            bootstrap.Modal = function(element, config) {
+                if (isMobileCheck()) {
+                    const modalId = element ? (element.id || element.getAttribute('id') || '') : '';
+                    if (modalId === 'collectFromRepModal' || modalId === 'generateReportModal') {
+                        // إنشاء Modal instance وهمي بدون فتح
+                        this._element = element;
+                        this._config = config || {};
+                        this._isShown = false;
+                        this.show = function() {
+                            // لا تفعل شيء - منع فتح Modal
+                            return;
+                        };
+                        return this;
+                    }
+                }
+                return new originalConstructor(element, config);
+            };
+            
+            // نسخ جميع properties من الـ prototype الأصلي
+            Object.setPrototypeOf(bootstrap.Modal.prototype, originalConstructor.prototype);
+            Object.setPrototypeOf(bootstrap.Modal, originalConstructor);
+            Object.keys(originalConstructor).forEach(function(key) {
+                bootstrap.Modal[key] = originalConstructor[key];
+            });
+            
+            // Override show method أيضاً
+            bootstrap.Modal.prototype.show = function() {
+                if (!isMobileCheck()) {
+                    return originalShow.call(this);
                 }
                 
-                if (reportModal && isMobileCheck()) {
-                    reportModal.style.display = 'none';
-                    reportModal.style.visibility = 'hidden';
-                    reportModal.style.position = 'fixed';
-                    reportModal.style.left = '-9999px';
-                    reportModal.setAttribute('aria-hidden', 'true');
-                    reportModal.setAttribute('tabindex', '-1');
+                const element = this._element || this.element;
+                const modalId = element ? (element.id || element.getAttribute('id') || '') : '';
+                
+                if (modalId === 'collectFromRepModal' || modalId === 'generateReportModal') {
+                    // منع فتح Modal تماماً
+                    return;
                 }
-            }, 0);
-        }, { once: true });
+                
+                return originalShow.call(this);
+            };
+        }
     }
+    
+    // محاولة منع Bootstrap فوراً
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', preventBootstrapModal);
+    } else {
+        preventBootstrapModal();
+    }
+    
+    // محاولة مرة أخرى عند تحميل Bootstrap
+    window.addEventListener('load', preventBootstrapModal);
+    
+    // مراقبة متى يتم تحميل Bootstrap (كل 10ms)
+    const checkBootstrap = setInterval(function() {
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            preventBootstrapModal();
+            clearInterval(checkBootstrap);
+        }
+    }, 10);
 })();
 
 // ===== دوال أساسية للـ Modal/Card Dual System =====
@@ -1826,26 +1866,6 @@ function loadSalesRepBalance(salesRepId, repBalanceElement, collectAmountElement
     });
 }
 
-// معالجة تحصيل من مندوب
-// منع Bootstrap من تهيئة Modal على الموبايل - يجب تنفيذ هذا قبل Bootstrap
-(function() {
-    if (window.innerWidth <= 768) {
-        // تعطيل Bootstrap Modal على الموبايل تماماً
-        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-            const originalModalShow = bootstrap.Modal.prototype.show;
-            bootstrap.Modal.prototype.show = function() {
-                // إذا كان Modal خاص بـ collectFromRepModal أو generateReportModal على الموبايل، لا نفتحه
-                const modalId = this._element ? this._element.id : '';
-                if (modalId === 'collectFromRepModal' || modalId === 'generateReportModal') {
-                    // منع فتح Modal
-                    return;
-                }
-                return originalModalShow.call(this);
-            };
-        }
-    }
-})();
-
 document.addEventListener('DOMContentLoaded', function() {
     const collectFromRepModal = document.getElementById('collectFromRepModal');
     const generateReportModal = document.getElementById('generateReportModal');
@@ -1856,16 +1876,25 @@ document.addEventListener('DOMContentLoaded', function() {
         if (collectFromRepModal) {
             collectFromRepModal.classList.remove('modal', 'fade');
             collectFromRepModal.setAttribute('data-bs-no-modal', 'true');
-            // منع أي محاولة لفتح Modal
+            // منع أي محاولة لفتح Modal وفتح Card بدلاً منه
             collectFromRepModal.addEventListener('show.bs.modal', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 e.stopPropagation();
+                // فتح Card بدلاً من Modal
+                const card = document.getElementById('collectFromRepCard');
+                if (card) {
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        scrollToElement(card);
+                    }, 50);
+                }
                 return false;
             }, true);
             collectFromRepModal.addEventListener('shown.bs.modal', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
+                forceCloseModals();
                 return false;
             }, true);
         }
@@ -1873,16 +1902,25 @@ document.addEventListener('DOMContentLoaded', function() {
         if (generateReportModal) {
             generateReportModal.classList.remove('modal', 'fade');
             generateReportModal.setAttribute('data-bs-no-modal', 'true');
-            // منع أي محاولة لفتح Modal
+            // منع أي محاولة لفتح Modal وفتح Card بدلاً منه
             generateReportModal.addEventListener('show.bs.modal', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 e.stopPropagation();
+                // فتح Card بدلاً من Modal
+                const card = document.getElementById('generateReportCard');
+                if (card) {
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        scrollToElement(card);
+                    }, 50);
+                }
                 return false;
             }, true);
             generateReportModal.addEventListener('shown.bs.modal', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
+                forceCloseModals();
                 return false;
             }, true);
         }
@@ -1890,14 +1928,18 @@ document.addEventListener('DOMContentLoaded', function() {
         // دالة لإزالة backdrop وإغلاق Modal
         function forceCloseModals() {
             if (collectFromRepModal) {
-                collectFromRepModal.classList.remove('show');
+                collectFromRepModal.classList.remove('show', 'showing');
                 collectFromRepModal.style.display = 'none';
                 collectFromRepModal.style.visibility = 'hidden';
+                collectFromRepModal.style.opacity = '0';
+                collectFromRepModal.setAttribute('aria-hidden', 'true');
             }
             if (generateReportModal) {
-                generateReportModal.classList.remove('show');
+                generateReportModal.classList.remove('show', 'showing');
                 generateReportModal.style.display = 'none';
                 generateReportModal.style.visibility = 'hidden';
+                generateReportModal.style.opacity = '0';
+                generateReportModal.setAttribute('aria-hidden', 'true');
             }
             const backdrops = document.querySelectorAll('.modal-backdrop');
             backdrops.forEach(function(backdrop) {
@@ -1931,8 +1973,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
                     const target = mutation.target;
                     if (target && target.id && (target.id === 'collectFromRepModal' || target.id === 'generateReportModal')) {
-                        if (target.classList.contains('show')) {
-                            target.classList.remove('show');
+                        if (target.classList.contains('show') || target.classList.contains('showing')) {
+                            target.classList.remove('show', 'showing');
                             forceCloseModals();
                         }
                     }

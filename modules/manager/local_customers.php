@@ -2354,6 +2354,27 @@ function closeAllForms() {
     });
 }
 
+// دالة فتح نموذج استيراد العملاء المحليين
+function showImportLocalCustomersModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('importLocalCustomersCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('importLocalCustomersModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
 // دالة فتح نموذج تحصيل الديون
 function showCollectPaymentModal(button) {
     if (!button) return;
