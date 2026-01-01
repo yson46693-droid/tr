@@ -4231,7 +4231,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <?php endif; ?>
 
-<?php if ($userRole === 'manager'): ?>
+<?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
 <!-- Card للموبايل - إضافة منطقة -->
 <div class="card shadow-sm mb-4 d-md-none" id="addRegionFromLocalCustomerCard" style="display: none;">
     <div class="card-header bg-primary text-white">

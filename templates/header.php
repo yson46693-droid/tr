@@ -3406,16 +3406,22 @@ if (ob_get_level() > 0) {
                     <ul class="dropdown-menu dropdown-menu-end notifications-dropdown" aria-labelledby="notificationsDropdown" data-bs-auto-close="outside">
                         <li><h6 class="dropdown-header">
                             <?php echo isset($lang['notifications']) ? $lang['notifications'] : 'الإشعارات'; ?>
-                            <button type="button" 
-                                    class="btn btn-sm btn-link text-danger float-end p-0 ms-2" 
-                                    id="clearAllNotificationsBtn" 
-                                    title="مسح كل الإشعارات" 
-                                    aria-label="<?php echo isset($lang['clear_all_notifications']) ? $lang['clear_all_notifications'] : 'مسح كل الإشعارات'; ?>"
-                                    data-bs-auto-close="false"
-                                    style="font-size: 11px; text-decoration: none; pointer-events: auto; z-index: 1000; position: relative; cursor: pointer;">
-                                <i class="bi bi-trash" aria-hidden="true"></i> 
-                                <span>مسح الكل</span>
-                            </button>
+                            <form method="POST" 
+                                  action="<?php echo getRelativeUrl('api/notifications.php'); ?>" 
+                                  id="clearAllNotificationsForm"
+                                  style="display: inline-block; float: right; margin-left: 0.5rem;"
+                                  onsubmit="event.stopPropagation(); return handleClearAllNotifications(event);">
+                                <input type="hidden" name="action" value="delete_all">
+                                <button type="submit" 
+                                        class="btn btn-sm btn-link text-danger p-0" 
+                                        id="clearAllNotificationsBtn" 
+                                        title="مسح كل الإشعارات" 
+                                        aria-label="<?php echo isset($lang['clear_all_notifications']) ? $lang['clear_all_notifications'] : 'مسح كل الإشعارات'; ?>"
+                                        style="font-size: 11px; text-decoration: none; pointer-events: auto; z-index: 1000; position: relative; cursor: pointer; border: none; background: transparent; padding: 0;">
+                                    <i class="bi bi-trash" aria-hidden="true"></i> 
+                                    <span>مسح الكل</span>
+                                </button>
+                            </form>
                         </h6></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><div class="dropdown-item-text text-center" id="notificationsList">

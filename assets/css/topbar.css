@@ -749,6 +749,19 @@
 }
 
 /* إصلاح زر مسح كل الإشعارات */
+#clearAllNotificationsForm {
+    display: inline-block !important;
+    pointer-events: auto !important;
+    position: relative !important;
+    z-index: 1001 !important;
+    margin: 0 !important;
+}
+
+#clearAllNotificationsForm:active,
+#clearAllNotificationsForm:focus {
+    outline: none !important;
+}
+
 #clearAllNotificationsBtn {
     display: inline-block !important;
     visibility: visible !important;

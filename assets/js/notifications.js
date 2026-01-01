@@ -825,6 +825,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // إضافة event listener لزر مسح كل الإشعارات
     function setupClearAllButton() {
+        // تم تعطيل هذه الدالة - الزر الآن يستخدم form مباشر
+        const clearAllForm = document.getElementById('clearAllNotificationsForm');
+        if (clearAllForm) {
+            // إذا كان form موجوداً، لا نحتاج لإعداد button handler
+            return;
+        }
+        
         const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
         if (!clearAllBtn) {
             // إعادة المحاولة بعد قليل إذا لم يكن الزر موجوداً
@@ -986,23 +993,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }, { capture: true, passive: false });
     }
     
-    // إعداد الزر عند تحميل الصفحة
-    setupClearAllButton();
+    // تم تعطيل setupClearAllButton - الزر الآن يستخدم form مباشر
+    // إعداد الزر عند تحميل الصفحة (فقط إذا لم يكن form موجوداً)
+    // setupClearAllButton();
     
     // إعادة إعداد الزر بعد تحديث قائمة الإشعارات (في حالة dynamic loading)
     // استخدام MutationObserver لمراقبة تغييرات DOM
-    const notificationsList = document.getElementById('notificationsList');
-    if (notificationsList) {
-        const observer = new MutationObserver(function(mutations) {
-            // إعادة إعداد الزر بعد تحديث القائمة
-            setTimeout(setupClearAllButton, 50);
-        });
-        
-        observer.observe(notificationsList, {
-            childList: true,
-            subtree: true
-        });
-    }
+    // const notificationsList = document.getElementById('notificationsList');
+    // if (notificationsList) {
+    //     const observer = new MutationObserver(function(mutations) {
+    //         // إعادة إعداد الزر بعد تحديث القائمة
+    //         setTimeout(setupClearAllButton, 50);
+    //     });
+    //     
+    //     observer.observe(notificationsList, {
+    //         childList: true,
+    //         subtree: true
+    //     });
+    // }
 });
 
 // إيقاف التحديث عند مغادرة الصفحة

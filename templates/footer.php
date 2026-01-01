@@ -657,6 +657,71 @@ if (!defined('ACCESS_ALLOWED')) {
     <!-- Modal Mobile Fix JS - إصلاح النماذج على الهواتف المحمولة -->
     <script src="<?php echo $assetsUrl; ?>js/modal-mobile-fix.js?v=<?php echo $cacheVersion; ?>" defer></script>
     
+    <!-- معالجة زر مسح الكل - بدون تنبيهات -->
+    <script>
+    function handleClearAllNotifications(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        
+        // منع إغلاق الـ dropdown
+        const dropdown = document.querySelector('.notifications-dropdown');
+        if (dropdown) {
+            dropdown.classList.add('show');
+            dropdown.setAttribute('data-bs-auto-close', 'false');
+        }
+        
+        const form = event.target.closest('form');
+        if (!form) return false;
+        
+        const formData = new FormData(form);
+        const apiPath = form.action;
+        
+        // إظهار loading
+        const notificationsList = document.getElementById('notificationsList');
+        if (notificationsList) {
+            notificationsList.innerHTML = '<small class="text-muted">جاري حذف الإشعارات...</small>';
+        }
+        
+        // إرسال الطلب
+        fetch(apiPath, {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // تحديث القائمة
+                if (notificationsList) {
+                    notificationsList.innerHTML = '<small class="text-muted">لا توجد إشعارات</small>';
+                }
+                
+                // تحديث العداد
+                const badge = document.getElementById('notificationBadge');
+                if (badge) {
+                    badge.textContent = '0';
+                    badge.style.display = 'none';
+                }
+                
+                // إعادة تحميل الإشعارات
+                if (typeof loadNotifications === 'function') {
+                    loadNotifications();
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error deleting notifications:', error);
+            // إعادة تحميل الإشعارات في حالة الخطأ
+            if (typeof loadNotifications === 'function') {
+                loadNotifications();
+            }
+        });
+        
+        return false;
+    }
+    </script>
+    
     <!-- Medium Priority JS - تحميل مشروط -->
     <?php if ($isMobile): ?>
     <!-- Mobile: تحميل متأخر للـ JS غير الحرجة -->
