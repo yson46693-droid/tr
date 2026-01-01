@@ -57,10 +57,10 @@ foreach ($salesReps as $rep) {
 $totalSent = $sentCountLocal + $sentCountSalesReps;
 error_log("{$logPrefix} Total reminders sent: {$totalSent} (Local: {$sentCountLocal}, Sales Reps: {$sentCountSalesReps})");
 
-// إرسال إشعارات للمواعيد المتأخرة للمحاسبين والمديرين (للعملاء المحليين)
-error_log("{$logPrefix} Sending overdue notifications for managers/accountants...");
-$overdueNotificationsSent = notifyOverduePaymentSchedulesForManagers();
-error_log("{$logPrefix} Sent {$overdueNotificationsSent} overdue notifications for managers/accountants");
+// إرسال تقرير يومي واحد عبر Telegram للعملاء المحليين (بدلاً من الإشعارات الداخلية)
+error_log("{$logPrefix} Sending daily Telegram report for local customers...");
+$telegramReportSent = sendDailyLocalPaymentSchedulesTelegramReport();
+error_log("{$logPrefix} Daily Telegram report sent: " . ($telegramReportSent ? 'Yes' : 'No (already sent today or no data)'));
 
 // إنشاء تذكيرات تلقائية للجداول القادمة (3 أيام قبل الاستحقاق)
 error_log("{$logPrefix} Creating auto reminders for upcoming schedules (3 days before due date)...");
@@ -82,7 +82,7 @@ error_log("{$logPrefix} Created {$createdCount} new auto reminders");
 $endTime = microtime(true);
 $executionTime = round($endTime - $startTime, 2);
 
-error_log("{$logPrefix} ====== END ====== Execution time: {$executionTime}s | Total sent: {$totalSent} | Overdue notifications: {$overdueNotificationsSent} | Created: {$createdCount}");
+error_log("{$logPrefix} ====== END ====== Execution time: {$executionTime}s | Total sent: {$totalSent} | Telegram report: " . ($telegramReportSent ? 'Sent' : 'Not sent') . " | Created: {$createdCount}");
 
-echo "تم إرسال {$totalSent} تذكير (محلي: {$sentCountLocal}, مندوبين: {$sentCountSalesReps}) و {$overdueNotificationsSent} إشعار متأخر وإنشاء {$createdCount} تذكير جديد\n";
+echo "تم إرسال {$totalSent} تذكير (محلي: {$sentCountLocal}, مندوبين: {$sentCountSalesReps}) وإرسال تقرير Telegram يومي وإنشاء {$createdCount} تذكير جديد\n";
 

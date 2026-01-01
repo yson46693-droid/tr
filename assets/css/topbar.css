@@ -111,6 +111,13 @@
             display: block !important;
         }
         
+        /* إظهار زر القائمة السريعة على الشاشات الصغيرة جداً */
+        .quick-actions-toggle {
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        
         .topbar-left {
             min-width: auto;
         }
@@ -1284,6 +1291,13 @@
     /* إظهار القائمة المنسدلة على الهواتف */
     .quick-actions-dropdown {
         display: block !important;
+    }
+    
+    /* إظهار زر القائمة السريعة على الهواتف */
+    .quick-actions-toggle {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
     }
     
     /* إخفاء جميع الأزرار الفردية على الهواتف */

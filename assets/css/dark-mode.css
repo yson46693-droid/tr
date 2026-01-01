@@ -414,30 +414,362 @@
 
 /* ===== Tables (General) ===== */
 [data-theme="dark"] .table {
-    color: var(--gray-600);
+    color: var(--gray-600) !important;
+    background-color: transparent !important;
 }
 
 [data-theme="dark"] .table thead th {
-    background-color: var(--gray-100);
-    color: var(--gray-700);
-    border-bottom-color: var(--border-color);
+    background-color: var(--gray-100) !important;
+    color: var(--gray-700) !important;
+    border-bottom-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .table thead {
+    background-color: var(--gray-100) !important;
+}
+
+[data-theme="dark"] .table tbody {
+    background-color: transparent !important;
+}
+
+[data-theme="dark"] .table tbody tr {
+    background-color: transparent !important;
+    color: var(--gray-600) !important;
 }
 
 [data-theme="dark"] .table tbody td {
-    border-bottom-color: var(--border-color);
-    color: var(--gray-600);
+    border-bottom-color: var(--border-color) !important;
+    color: var(--gray-600) !important;
+    background-color: transparent !important;
 }
 
 [data-theme="dark"] .table tbody tr:hover {
-    background-color: var(--gray-50);
+    background-color: var(--gray-50) !important;
+}
+
+[data-theme="dark"] .table-striped tbody tr {
+    background-color: transparent !important;
 }
 
 [data-theme="dark"] .table-striped tbody tr:nth-of-type(odd) {
-    background-color: var(--gray-50);
+    background-color: var(--gray-50) !important;
+}
+
+[data-theme="dark"] .table-striped tbody tr:nth-of-type(odd) td {
+    background-color: var(--gray-50) !important;
+}
+
+[data-theme="dark"] .table-striped tbody tr:nth-of-type(even) {
+    background-color: transparent !important;
+}
+
+[data-theme="dark"] .table-striped tbody tr:nth-of-type(even) td {
+    background-color: transparent !important;
 }
 
 [data-theme="dark"] .table-hover tbody tr:hover {
-    background-color: var(--gray-50);
+    background-color: var(--gray-50) !important;
+}
+
+[data-theme="dark"] .table-hover tbody tr:hover td {
+    background-color: var(--gray-50) !important;
+}
+
+/* ===== Table Variants ===== */
+[data-theme="dark"] .table-success,
+[data-theme="dark"] .table-success tbody tr,
+[data-theme="dark"] .table-success tbody tr td,
+[data-theme="dark"] .table.table-success,
+[data-theme="dark"] .table.table-success tbody tr,
+[data-theme="dark"] .table.table-success tbody tr td {
+    background-color: rgba(52, 211, 153, 0.15) !important;
+    color: var(--accent-green) !important;
+}
+
+[data-theme="dark"] .table-success:hover,
+[data-theme="dark"] .table-success tbody tr:hover,
+[data-theme="dark"] .table-success tbody tr:hover td,
+[data-theme="dark"] .table.table-success:hover,
+[data-theme="dark"] .table.table-success tbody tr:hover,
+[data-theme="dark"] .table.table-success tbody tr:hover td {
+    background-color: rgba(52, 211, 153, 0.2) !important;
+    color: var(--accent-green) !important;
+}
+
+[data-theme="dark"] .table-warning,
+[data-theme="dark"] .table-warning tbody tr,
+[data-theme="dark"] .table-warning tbody tr td,
+[data-theme="dark"] .table.table-warning,
+[data-theme="dark"] .table.table-warning tbody tr,
+[data-theme="dark"] .table.table-warning tbody tr td {
+    background-color: rgba(251, 191, 36, 0.15) !important;
+    color: var(--accent-orange) !important;
+}
+
+[data-theme="dark"] .table-warning:hover,
+[data-theme="dark"] .table-warning tbody tr:hover,
+[data-theme="dark"] .table-warning tbody tr:hover td,
+[data-theme="dark"] .table.table-warning:hover,
+[data-theme="dark"] .table.table-warning tbody tr:hover,
+[data-theme="dark"] .table.table-warning tbody tr:hover td {
+    background-color: rgba(251, 191, 36, 0.2) !important;
+    color: var(--accent-orange) !important;
+}
+
+[data-theme="dark"] .table-danger,
+[data-theme="dark"] .table-danger tbody tr,
+[data-theme="dark"] .table-danger tbody tr td,
+[data-theme="dark"] .table.table-danger,
+[data-theme="dark"] .table.table-danger tbody tr,
+[data-theme="dark"] .table.table-danger tbody tr td {
+    background-color: rgba(248, 113, 113, 0.15) !important;
+    color: var(--accent-red) !important;
+}
+
+[data-theme="dark"] .table-danger:hover,
+[data-theme="dark"] .table-danger tbody tr:hover,
+[data-theme="dark"] .table-danger tbody tr:hover td,
+[data-theme="dark"] .table.table-danger:hover,
+[data-theme="dark"] .table.table-danger tbody tr:hover,
+[data-theme="dark"] .table.table-danger tbody tr:hover td {
+    background-color: rgba(248, 113, 113, 0.2) !important;
+    color: var(--accent-red) !important;
+}
+
+/* ===== Table Card Body ===== */
+[data-theme="dark"] .table-card-body {
+    background-color: transparent !important;
+}
+
+[data-theme="dark"] .table-card-body table {
+    background-color: transparent !important;
+}
+
+[data-theme="dark"] .table-card-body thead {
+    background-color: var(--gray-100) !important;
+}
+
+[data-theme="dark"] .table-card-body thead th {
+    background-color: var(--gray-100) !important;
+    color: var(--gray-700) !important;
+    border-bottom-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .table-card-body tbody {
+    background-color: transparent !important;
+}
+
+[data-theme="dark"] .table-card-body tbody tr {
+    background-color: transparent !important;
+}
+
+[data-theme="dark"] .table-card-body tbody tr td {
+    background-color: transparent !important;
+    color: var(--gray-600) !important;
+    border-bottom-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .table-card-body tbody tr:hover {
+    background-color: var(--gray-50) !important;
+}
+
+[data-theme="dark"] .table-card-body tbody tr:hover td {
+    background-color: var(--gray-50) !important;
+}
+
+/* ===== Table Responsive ===== */
+[data-theme="dark"] .table-responsive {
+    background-color: transparent !important;
+}
+
+[data-theme="dark"] .table-responsive::-webkit-scrollbar-track {
+    background: var(--bg-secondary) !important;
+}
+
+[data-theme="dark"] .table-responsive::-webkit-scrollbar-thumb {
+    background: var(--gray-300) !important;
+}
+
+[data-theme="dark"] .table-responsive::-webkit-scrollbar-thumb:hover {
+    background: var(--gray-400) !important;
+}
+
+/* ===== Text Colors in Tables ===== */
+[data-theme="dark"] .table .text-muted,
+[data-theme="dark"] .table td.text-muted,
+[data-theme="dark"] .table th.text-muted {
+    color: var(--gray-400) !important;
+}
+
+[data-theme="dark"] .table .text-success,
+[data-theme="dark"] .table td.text-success,
+[data-theme="dark"] .table th.text-success {
+    color: var(--accent-green) !important;
+}
+
+[data-theme="dark"] .table .text-danger,
+[data-theme="dark"] .table td.text-danger,
+[data-theme="dark"] .table th.text-danger {
+    color: var(--accent-red) !important;
+}
+
+[data-theme="dark"] .table .text-warning,
+[data-theme="dark"] .table td.text-warning,
+[data-theme="dark"] .table th.text-warning {
+    color: var(--accent-orange) !important;
+}
+
+[data-theme="dark"] .table .text-primary,
+[data-theme="dark"] .table td.text-primary,
+[data-theme="dark"] .table th.text-primary {
+    color: var(--accent-blue) !important;
+}
+
+/* ===== Badges in Tables ===== */
+[data-theme="dark"] .table .badge {
+    color: white !important;
+}
+
+[data-theme="dark"] .table .badge-success {
+    background-color: var(--accent-green) !important;
+    color: white !important;
+}
+
+[data-theme="dark"] .table .badge-danger {
+    background-color: var(--accent-red) !important;
+    color: white !important;
+}
+
+[data-theme="dark"] .table .badge-warning {
+    background-color: var(--accent-orange) !important;
+    color: var(--gray-900) !important;
+}
+
+[data-theme="dark"] .table .badge-primary {
+    background-color: var(--accent-blue) !important;
+    color: white !important;
+}
+
+[data-theme="dark"] .table .badge-secondary {
+    background-color: var(--gray-300) !important;
+    color: var(--gray-900) !important;
+}
+
+/* ===== Links in Tables ===== */
+[data-theme="dark"] .table a {
+    color: var(--accent-blue) !important;
+}
+
+[data-theme="dark"] .table a:hover {
+    color: var(--accent-blue) !important;
+    opacity: 0.8;
+}
+
+/* ===== Override Inline Styles in Tables ===== */
+[data-theme="dark"] .table tbody tr[style*="background"],
+[data-theme="dark"] .table tbody tr[style*="background-color"],
+[data-theme="dark"] .table tbody td[style*="background"],
+[data-theme="dark"] .table tbody td[style*="background-color"] {
+    background-color: var(--gray-50) !important;
+}
+
+[data-theme="dark"] .table tbody tr[style*="background-color: #d1e7dd"],
+[data-theme="dark"] .table tbody tr[style*="background-color:#d1e7dd"],
+[data-theme="dark"] .table tbody td[style*="background-color: #d1e7dd"],
+[data-theme="dark"] .table tbody td[style*="background-color:#d1e7dd"] {
+    background-color: rgba(52, 211, 153, 0.15) !important;
+}
+
+[data-theme="dark"] .table tbody tr[style*="background-color: #fff3cd"],
+[data-theme="dark"] .table tbody tr[style*="background-color:#fff3cd"],
+[data-theme="dark"] .table tbody td[style*="background-color: #fff3cd"],
+[data-theme="dark"] .table tbody td[style*="background-color:#fff3cd"] {
+    background-color: rgba(251, 191, 36, 0.15) !important;
+}
+
+[data-theme="dark"] .table tbody tr[style*="background-color: #f8d7da"],
+[data-theme="dark"] .table tbody tr[style*="background-color:#f8d7da"],
+[data-theme="dark"] .table tbody td[style*="background-color: #f8d7da"],
+[data-theme="dark"] .table tbody td[style*="background-color:#f8d7da"] {
+    background-color: rgba(248, 113, 113, 0.15) !important;
+}
+
+/* ===== Override Light Green Backgrounds in Tables ===== */
+[data-theme="dark"] .table tbody tr[style*="background-color: #d1e7dd"],
+[data-theme="dark"] .table tbody tr[style*="background-color:#d1e7dd"],
+[data-theme="dark"] .table tbody tr[style*="background: #d1e7dd"],
+[data-theme="dark"] .table tbody tr[style*="background:#d1e7dd"],
+[data-theme="dark"] .table tbody td[style*="background-color: #d1e7dd"],
+[data-theme="dark"] .table tbody td[style*="background-color:#d1e7dd"],
+[data-theme="dark"] .table tbody td[style*="background: #d1e7dd"],
+[data-theme="dark"] .table tbody td[style*="background:#d1e7dd"] {
+    background-color: rgba(52, 211, 153, 0.15) !important;
+    color: var(--accent-green) !important;
+}
+
+/* ===== Override Light Yellow Backgrounds in Tables ===== */
+[data-theme="dark"] .table tbody tr[style*="background-color: #fff3cd"],
+[data-theme="dark"] .table tbody tr[style*="background-color:#fff3cd"],
+[data-theme="dark"] .table tbody tr[style*="background: #fff3cd"],
+[data-theme="dark"] .table tbody tr[style*="background:#fff3cd"],
+[data-theme="dark"] .table tbody td[style*="background-color: #fff3cd"],
+[data-theme="dark"] .table tbody td[style*="background-color:#fff3cd"],
+[data-theme="dark"] .table tbody td[style*="background: #fff3cd"],
+[data-theme="dark"] .table tbody td[style*="background:#fff3cd"] {
+    background-color: rgba(251, 191, 36, 0.15) !important;
+    color: var(--accent-orange) !important;
+}
+
+/* ===== Override All Light Backgrounds in Tables ===== */
+[data-theme="dark"] .table tbody tr[style*="background-color: #"],
+[data-theme="dark"] .table tbody tr[style*="background:#"],
+[data-theme="dark"] .table tbody td[style*="background-color: #"],
+[data-theme="dark"] .table tbody td[style*="background:#"] {
+    /* Override any light colored backgrounds with dark theme colors */
+}
+
+/* ===== Text and Font Colors in Tables ===== */
+[data-theme="dark"] .table,
+[data-theme="dark"] .table * {
+    color: inherit;
+}
+
+[data-theme="dark"] .table tbody tr td,
+[data-theme="dark"] .table tbody tr th {
+    color: var(--gray-600) !important;
+}
+
+[data-theme="dark"] .table tbody tr td small,
+[data-theme="dark"] .table tbody tr td span,
+[data-theme="dark"] .table tbody tr td div {
+    color: var(--gray-600) !important;
+}
+
+/* ===== Specific Text Color Overrides ===== */
+[data-theme="dark"] .table tbody tr td[style*="color: #"],
+[data-theme="dark"] .table tbody tr td[style*="color:#"] {
+    /* Keep text readable but adjust if too light */
+}
+
+[data-theme="dark"] .table tbody tr td[style*="color: #28a745"],
+[data-theme="dark"] .table tbody tr td[style*="color:#28a745"],
+[data-theme="dark"] .table tbody tr td[style*="color: green"],
+[data-theme="dark"] .table tbody tr td[style*="color:green"] {
+    color: var(--accent-green) !important;
+}
+
+[data-theme="dark"] .table tbody tr td[style*="color: #dc3545"],
+[data-theme="dark"] .table tbody tr td[style*="color:#dc3545"],
+[data-theme="dark"] .table tbody tr td[style*="color: red"],
+[data-theme="dark"] .table tbody tr td[style*="color:red"] {
+    color: var(--accent-red) !important;
+}
+
+[data-theme="dark"] .table tbody tr td[style*="color: #ffc107"],
+[data-theme="dark"] .table tbody tr td[style*="color:#ffc107"],
+[data-theme="dark"] .table tbody tr td[style*="color: orange"],
+[data-theme="dark"] .table tbody tr td[style*="color:orange"] {
+    color: var(--accent-orange) !important;
 }
 
 /* ===== Text Colors ===== */
