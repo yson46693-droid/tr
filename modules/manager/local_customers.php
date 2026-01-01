@@ -2739,6 +2739,73 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+
+    // معالج الحصول على الموقع عند إضافة عميل جديد (للموبايل - Card)
+    var getLocationCardBtn = document.getElementById('getLocationCardBtn');
+    var addCustomerCardLatitudeInput = document.getElementById('addCustomerCardLatitude');
+    var addCustomerCardLongitudeInput = document.getElementById('addCustomerCardLongitude');
+    var addLocalCustomerCard = document.getElementById('addLocalCustomerCard');
+
+    if (getLocationCardBtn && addCustomerCardLatitudeInput && addCustomerCardLongitudeInput) {
+        getLocationCardBtn.addEventListener('click', function() {
+            if (!navigator.geolocation) {
+                showAlert('المتصفح لا يدعم تحديد الموقع الجغرافي.');
+                return;
+            }
+
+            var button = this;
+            var originalText = button.innerHTML;
+            
+            // التحقق من الصلاحيات قبل الطلب
+            function requestGeolocationForNewCustomerCard() {
+                button.disabled = true;
+                button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الحصول...';
+
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        addCustomerCardLatitudeInput.value = position.coords.latitude.toFixed(8);
+                        addCustomerCardLongitudeInput.value = position.coords.longitude.toFixed(8);
+                        button.disabled = false;
+                        button.innerHTML = originalText;
+                        showAlert('تم الحصول على الموقع بنجاح!');
+                    },
+                    function(error) {
+                        button.disabled = false;
+                        button.innerHTML = originalText;
+                        var errorMessage = 'تعذر الحصول على الموقع.';
+                        if (error.code === 1) {
+                            errorMessage = 'تم رفض طلب الحصول على الموقع. يرجى السماح بالوصول إلى الموقع في إعدادات المتصفح.';
+                        } else if (error.code === 2) {
+                            errorMessage = 'تعذر تحديد الموقع. يرجى المحاولة مرة أخرى.';
+                        } else if (error.code === 3) {
+                            errorMessage = 'انتهت مهلة طلب الموقع. يرجى المحاولة مرة أخرى.';
+                        }
+                        showAlert(errorMessage);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            }
+            
+            if (navigator.permissions && navigator.permissions.query) {
+                navigator.permissions.query({ name: 'geolocation' }).then(function(result) {
+                    if (result.state === 'denied') {
+                        showAlert('تم رفض إذن الموقع الجغرافي. يرجى السماح بالوصول في إعدادات المتصفح.');
+                        return;
+                    }
+                    requestGeolocationForNewCustomerCard();
+                }).catch(function() {
+                    // إذا فشل query، حاول مباشرة
+                    requestGeolocationForNewCustomerCard();
+                });
+            } else {
+                requestGeolocationForNewCustomerCard();
+            }
+        });
+    }
 });
 
 // إعادة تحميل الصفحة تلقائياً بعد أي رسالة
@@ -3992,6 +4059,39 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateRemoveButtons(phoneContainer);
             }
         });
+    }
+    
+    // للـ Card على الموبايل
+    const addCustomerCardPhoneBtn = document.getElementById('addCustomerCardPhoneBtn');
+    const cardPhoneContainer = document.getElementById('addCustomerCardPhoneNumbersContainer');
+    
+    if (addCustomerCardPhoneBtn && cardPhoneContainer) {
+        // إضافة رقم هاتف جديد
+        addCustomerCardPhoneBtn.addEventListener('click', function() {
+            const phoneInputGroup = document.createElement('div');
+            phoneInputGroup.className = 'input-group mb-2';
+            phoneInputGroup.innerHTML = `
+                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+            cardPhoneContainer.appendChild(phoneInputGroup);
+            
+            // إظهار أزرار الحذف
+            updateRemoveButtons(cardPhoneContainer);
+        });
+        
+        // حذف رقم هاتف
+        cardPhoneContainer.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-phone-btn')) {
+                e.target.closest('.input-group').remove();
+                updateRemoveButtons(cardPhoneContainer);
+            }
+        });
+        
+        // تحديث عند التحميل
+        updateRemoveButtons(cardPhoneContainer);
     }
     
     // للنموذج التعديل

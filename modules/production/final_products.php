@@ -5265,68 +5265,6 @@ if (!window.transferFormInitialized) {
         });
     }
 
-    function createBatchDetailsModal() {
-        let modalElement = document.getElementById('batchDetailsModal');
-        
-        // إذا كان Modal موجوداً، التحقق من وجود جميع العناصر الداخلية
-        if (modalElement) {
-            const loader = modalElement.querySelector('#batchDetailsLoading');
-            const errorAlert = modalElement.querySelector('#batchDetailsError');
-            const contentWrapper = modalElement.querySelector('#batchDetailsContent');
-            const summarySection = modalElement.querySelector('#batchSummarySection');
-            
-            // إذا كانت العناصر الأساسية موجودة، لا حاجة لإعادة الإنشاء
-            if (loader && errorAlert && contentWrapper && summarySection) {
-                return; // النموذج موجود بالفعل مع جميع العناصر
-            }
-            
-            // إذا كانت العناصر مفقودة، احذف Modal القديم وأنشئ واحداً جديداً
-            try {
-                const modalInstance = bootstrap.Modal.getInstance(modalElement);
-                if (modalInstance) {
-                    modalInstance.dispose();
-                }
-            } catch (e) {
-                // تجاهل الأخطاء عند التخلص من Modal
-            }
-            modalElement.remove();
-        }
-        
-        // إنشاء Modal جديد
-        const modal = document.createElement('div');
-        modal.id = 'batchDetailsModal';
-        modal.className = 'modal fade';
-        modal.setAttribute('tabindex', '-1');
-        modal.setAttribute('aria-hidden', 'true');
-        modal.innerHTML = `
-            <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">تفاصيل التشغيلة</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div id="batchDetailsLoading" class="text-center py-4">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">جارٍ التحميل...</span>
-                            </div>
-                        </div>
-                        <div id="batchDetailsError" class="alert alert-danger d-none"></div>
-                        <div id="batchDetailsContent" class="d-none">
-                            <div id="batchSummarySection" class="mb-4"></div>
-                            <div id="batchMaterialsSection" class="mb-4"></div>
-                            <div id="batchRawMaterialsSection" class="mb-4"></div>
-                            <div id="batchWorkersSection" class="mb-0"></div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-    }
 
     function formatDateValue(value) {
         return value ? value : '—';
@@ -5642,12 +5580,24 @@ if (!window.transferFormInitialized) {
         
         const isMobileDevice = (typeof window.isMobile === 'function' ? window.isMobile() : (typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768));
         
-        console.log('showBatchDetailsModal - isMobileDevice:', isMobileDevice, 'window.innerWidth:', window.innerWidth);
-        
+        // منع فتح Modal على الموبايل تماماً
         if (isMobileDevice) {
-            // على الموبايل: استخدام Card
+            // على الموبايل: استخدام Card فقط - منع فتح Modal
+            const modalElement = document.getElementById('batchDetailsModal');
+            if (modalElement) {
+                // إغلاق أي Modal مفتوح
+                try {
+                    const existingModal = bootstrap.Modal.getInstance(modalElement);
+                    if (existingModal) {
+                        existingModal.hide();
+                    }
+                } catch (e) {
+                    // تجاهل الأخطاء
+                }
+            }
+            
+            // استخدام Card فقط
             const card = document.getElementById('batchDetailsCard');
-            console.log('batchDetailsCard element:', card);
             if (!card) {
                 console.error('batchDetailsCard not found');
                 return;
@@ -5721,16 +5671,14 @@ if (!window.transferFormInitialized) {
             });
         } else {
             // على الكمبيوتر: استخدام Modal
-            if (typeof bootstrap === 'undefined' || typeof bootstrap.Modal === 'undefined') {
-                alert('تعذر فتح تفاصيل التشغيلة. يرجى تحديث الصفحة.');
+            const modalElement = document.getElementById('batchDetailsModal');
+            if (!modalElement) {
+                console.error('batchDetailsModal not found');
                 return;
             }
             
-            createBatchDetailsModal();
-            
-            const modalElement = document.getElementById('batchDetailsModal');
-            if (!modalElement) {
-                console.error('Failed to create batch details modal');
+            if (typeof bootstrap === 'undefined' || typeof bootstrap.Modal === 'undefined') {
+                alert('تعذر فتح تفاصيل التشغيلة. يرجى تحديث الصفحة.');
                 return;
             }
             
@@ -6139,12 +6087,24 @@ function showBarcodePrintModal(batchNumber, productName, defaultQuantity) {
     
     const isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : window.innerWidth <= 768;
     
-    console.log('showBarcodePrintModal - isMobileDevice:', isMobileDevice, 'window.innerWidth:', window.innerWidth);
-    
+    // منع فتح Modal على الموبايل تماماً
     if (isMobileDevice) {
-        // على الموبايل: استخدام Card
+        // على الموبايل: استخدام Card فقط - منع فتح Modal
+        const modalElement = document.getElementById('printBarcodesModal');
+        if (modalElement) {
+            // إغلاق أي Modal مفتوح
+            try {
+                const existingModal = bootstrap.Modal.getInstance(modalElement);
+                if (existingModal) {
+                    existingModal.hide();
+                }
+            } catch (e) {
+                // تجاهل الأخطاء
+            }
+        }
+        
+        // استخدام Card فقط
         const card = document.getElementById('printBarcodesCard');
-        console.log('printBarcodesCard element:', card);
         if (!card) {
             console.error('printBarcodesCard not found');
             const fallbackUrl = `${PRINT_BARCODE_URL}?batch=${encodeURIComponent(batchNumber)}&quantity=${quantity}&print=1`;
