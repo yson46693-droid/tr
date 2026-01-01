@@ -38,13 +38,13 @@
      */
     function getExportContainer() {
         if (isMobile()) {
-            // على الموبايل: البحث عن Card أولاً
+            // على الموبايل: البحث عن Card
             const card = document.getElementById('customerExportCard');
-            if (card && card.style.display !== 'none') {
+            if (card) {
                 return card;
             }
         }
-        // على الكمبيوتر أو إذا لم تكن Card مرئية: البحث عن Modal
+        // على الكمبيوتر: البحث عن Modal
         return document.getElementById('customerExportModal');
     }
     
@@ -358,8 +358,8 @@
                     selectEl.disabled = true;
                     
                     // إظهار loading فوراً
-                    const selectRepMessage = document.getElementById('selectRepMessage');
-                    const customersSection = document.getElementById('customersSection');
+                    const selectRepMessage = getExportElement('selectRepMessage');
+                    const customersSection = getExportElement('customersSection');
                     if (selectRepMessage) {
                         selectRepMessage.style.display = 'block';
                         selectRepMessage.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري تحميل عملاء المندوب...';
@@ -411,11 +411,75 @@
     }
     
     /**
+     * تهيئة أحداث Card (للموبايل)
+     */
+    function initCardEvents(exportCard) {
+        if (!exportCard) {
+            return;
+        }
+        
+        // ربط أحداث الأزرار - نفس الأحداث في Modal
+        const generateBtn = exportCard.querySelector('#generateExcelBtn');
+        const printBtn = exportCard.querySelector('#printExcelBtn');
+        const selectAllBtn = exportCard.querySelector('#selectAllCustomers');
+        const deselectAllBtn = exportCard.querySelector('#deselectAllCustomers');
+        
+        if (generateBtn) {
+            generateBtn.addEventListener('click', handleGenerateExcel);
+        }
+        
+        if (printBtn) {
+            printBtn.addEventListener('click', handlePrintExcel);
+        }
+        
+        if (selectAllBtn) {
+            selectAllBtn.addEventListener('click', function() {
+                selectAllCustomers(true);
+            });
+        }
+        
+        if (deselectAllBtn) {
+            deselectAllBtn.addEventListener('click', function() {
+                selectAllCustomers(false);
+            });
+        }
+        
+        // عند فتح Card (من خلال MutationObserver أو event مخصص)
+        // سنستخدم MutationObserver لمراقبة تغيير display style
+        const cardObserver = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                    const isVisible = exportCard.style.display !== 'none';
+                    if (isVisible) {
+                        // Card أصبح مرئياً - إعادة تعيين وتحويل البيانات
+                        resetExportModal();
+                        
+                        // تحديد القسم الحالي من data attribute
+                        const currentSection = exportCard.getAttribute('data-section') || 'local';
+                        
+                        // جلب العملاء بناءً على القسم
+                        if (currentSection === 'company') {
+                            loadCompanyCustomers();
+                        } else if (currentSection === 'local') {
+                            loadLocalCustomers();
+                        }
+                    }
+                }
+            });
+        });
+        
+        cardObserver.observe(exportCard, {
+            attributes: true,
+            attributeFilter: ['style']
+        });
+    }
+    
+    /**
      * دالة مساعدة لتحديث كلا زرين التوليد (في الـ header والـ footer)
      */
     function updateGenerateButtons(callback) {
-        const generateBtn = document.getElementById('generateExcelBtn');
-        const generateBtnHeader = document.getElementById('generateExcelBtnHeader');
+        const generateBtn = getExportElement('generateExcelBtn');
+        const generateBtnHeader = document.getElementById('generateExcelBtnHeader'); // Header موجود فقط في Modal
         
         if (generateBtn && callback) {
             callback(generateBtn);
@@ -454,23 +518,23 @@
         allRepCustomers = [];
         currentRepId = null;
         
-        const customersList = document.getElementById('exportCustomersList');
+        const customersList = getExportElement('exportCustomersList');
         if (customersList) {
             customersList.innerHTML = '';
         }
         
-        const customersSection = document.getElementById('customersSection');
+        const customersSection = getExportElement('customersSection');
         if (customersSection) {
             customersSection.style.display = 'none';
         }
         
-        const selectRepMessage = document.getElementById('selectRepMessage');
+        const selectRepMessage = getExportElement('selectRepMessage');
         if (selectRepMessage) {
             selectRepMessage.style.display = 'block';
         }
         
         // إخفاء أزرار الطباعة والتحميل والمشاركة
-        const actionButtons = document.getElementById('exportActionButtons');
+        const actionButtons = getExportElement('exportActionButtons');
         if (actionButtons) {
             actionButtons.style.display = 'none';
         }
@@ -495,8 +559,8 @@
      * إظهار رسالة اختيار المندوب
      */
     function showSelectRepMessage() {
-        const customersSection = document.getElementById('customersSection');
-        const selectRepMessage = document.getElementById('selectRepMessage');
+        const customersSection = getExportElement('customersSection');
+        const selectRepMessage = getExportElement('selectRepMessage');
         
         if (customersSection) {
             customersSection.style.display = 'none';
@@ -516,9 +580,9 @@
      * جلب العملاء المحليين عبر API مع pagination
      */
     async function loadLocalCustomers(page = 1) {
-        const customersList = document.getElementById('exportCustomersList');
-        const customersSection = document.getElementById('customersSection');
-        const selectRepMessage = document.getElementById('selectRepMessage');
+        const customersList = getExportElement('exportCustomersList');
+        const customersSection = getExportElement('customersSection');
+        const selectRepMessage = getExportElement('selectRepMessage');
         
         if (!customersList) {
             return;
@@ -576,9 +640,9 @@
      * جلب عملاء الشركة عبر API
      */
     async function loadCompanyCustomers() {
-        const customersList = document.getElementById('exportCustomersList');
-        const customersSection = document.getElementById('customersSection');
-        const selectRepMessage = document.getElementById('selectRepMessage');
+        const customersList = getExportElement('exportCustomersList');
+        const customersSection = getExportElement('customersSection');
+        const selectRepMessage = getExportElement('selectRepMessage');
         
         if (!customersList) {
             return;
@@ -628,9 +692,9 @@
      * جلب عملاء المندوب عبر API مع pagination
      */
     async function loadCustomersByRep(repId, page = 1) {
-        const customersList = document.getElementById('exportCustomersList');
-        const customersSection = document.getElementById('customersSection');
-        const selectRepMessage = document.getElementById('selectRepMessage');
+        const customersList = getExportElement('exportCustomersList');
+        const customersSection = getExportElement('customersSection');
+        const selectRepMessage = getExportElement('selectRepMessage');
         
         if (!customersList || !repId || repId <= 0) {
             return;
@@ -777,9 +841,9 @@
      * عرض قائمة العملاء في الجدول مع دعم pagination
      */
     function displayCustomersList(customers, paginationOptions = null) {
-        const customersList = document.getElementById('exportCustomersList');
-        const customersSection = document.getElementById('customersSection');
-        const selectRepMessage = document.getElementById('selectRepMessage');
+        const customersList = getExportElement('exportCustomersList');
+        const customersSection = getExportElement('customersSection');
+        const selectRepMessage = getExportElement('selectRepMessage');
         
         if (!customersList) {
             return;
@@ -1277,7 +1341,7 @@
             generatedFilePath = result.file_path || result.relative_path || null;
             
             // إظهار أزرار الإجراءات
-            const actionButtons = document.getElementById('exportActionButtons');
+            const actionButtons = getExportElement('exportActionButtons');
             if (actionButtons) {
                 actionButtons.style.display = 'block';
             }

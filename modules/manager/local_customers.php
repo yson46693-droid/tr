@@ -2281,6 +2281,39 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
     </div>
 </div>
 
+<!-- Card عرض موقع العميل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="viewLocationCard" style="display: none;">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="bi bi-geo-alt me-2"></i>موقع العميل المحلي</h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <div class="text-muted small fw-semibold">العميل</div>
+            <div class="fs-5 fw-bold location-customer-name-card">-</div>
+        </div>
+        <div class="ratio ratio-16x9">
+            <iframe
+                class="location-map-frame-card border rounded"
+                data-src=""
+                src="about:blank"
+                title="معاينة موقع العميل"
+                allowfullscreen
+                loading="lazy"
+                allow="geolocation; camera; microphone"
+            ></iframe>
+        </div>
+        <p class="mt-3 text-muted mb-0">
+            يمكنك متابعة الموقع داخل المعاينة أو فتحه في خرائط Google للحصول على اتجاهات دقيقة.
+        </p>
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-secondary flex-fill" onclick="closeViewLocationCard()">إغلاق</button>
+            <a href="#" target="_blank" rel="noopener" class="btn btn-primary flex-fill location-open-map-card">
+                <i class="bi bi-map"></i> فتح في الخرائط
+            </a>
+        </div>
+    </div>
+</div>
+
 <script>
 // ===== دوال النظام المزدوج (Modal للكمبيوتر / Card للموبايل) =====
 
@@ -2319,7 +2352,8 @@ function closeAllForms() {
         'addRegionFromLocalCustomerCard', 
         'importLocalCustomersCard', 
         'deleteLocalCustomerCard',
-        'customerExportCard'
+        'customerExportCard',
+        'viewLocationCard'
     ];
     
     cards.forEach(function(cardId) {
@@ -2342,7 +2376,8 @@ function closeAllForms() {
         'addRegionFromLocalCustomerModal', 
         'importLocalCustomersModal', 
         'deleteLocalCustomerModal',
-        'customerExportModal'
+        'customerExportModal',
+        'viewLocationModal'
     ];
     
     modals.forEach(function(modalId) {
@@ -2501,12 +2536,8 @@ function showCustomerExportModal(event) {
             card.style.display = 'block';
             setTimeout(function() {
                 scrollToElement(card);
-                // تشغيل loadCustomersList بعد فتح Card
-                // سيتم التعامل معه في customer_export.js عبر event delegation
-                if (typeof loadCustomersList === 'function') {
-                    loadCustomersList(section);
-                }
             }, 50);
+            // initCardEvents سيتعامل مع تحميل البيانات عبر MutationObserver
         }
     } else {
         // على الكمبيوتر: استخدام Modal
@@ -2524,6 +2555,20 @@ function closeCustomerExportCard() {
     const card = document.getElementById('customerExportCard');
     if (card) {
         card.style.display = 'none';
+    }
+}
+
+// دالة إغلاق Card عرض الموقع
+function closeViewLocationCard() {
+    const card = document.getElementById('viewLocationCard');
+    if (card) {
+        card.style.display = 'none';
+        // إعادة تعيين الخريطة
+        const mapFrame = card.querySelector('.location-map-frame-card');
+        if (mapFrame) {
+            mapFrame.src = 'about:blank';
+            mapFrame.removeAttribute('data-src');
+        }
     }
 }
 
@@ -2693,36 +2738,71 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    if (locationViewButtons && locationViewButtons.length > 0 && viewLocationModal) {
+    if (locationViewButtons && locationViewButtons.length > 0) {
         locationViewButtons.forEach(function (button) {
             button.addEventListener('click', function () {
                 var customerName = button.getAttribute('data-customer-name') || '-';
                 var latitude = button.getAttribute('data-latitude');
                 var longitude = button.getAttribute('data-longitude');
 
-                if (locationCustomerName) {
-                    locationCustomerName.textContent = customerName;
+                if (!latitude || !longitude) {
+                    return;
                 }
 
-                if (latitude && longitude && locationMapFrame) {
-                    var mapUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16&output=embed';
-                    // استخدام data-src للـ lazy loading
-                    locationMapFrame.setAttribute('data-src', mapUrl);
-                    // تحميل الخريطة فقط عند فتح الـ modal
-                    viewLocationModal.addEventListener('shown.bs.modal', function loadMap() {
-                        if (locationMapFrame.getAttribute('data-src')) {
-                            locationMapFrame.src = locationMapFrame.getAttribute('data-src');
-                            locationMapFrame.removeAttribute('data-src');
+                if (isMobile()) {
+                    // على الموبايل: استخدام Card
+                    var locationCard = document.getElementById('viewLocationCard');
+                    if (locationCard) {
+                        var locationCardCustomerName = locationCard.querySelector('.location-customer-name-card');
+                        var locationCardMapFrame = locationCard.querySelector('.location-map-frame-card');
+                        var locationCardExternalLink = locationCard.querySelector('.location-open-map-card');
+
+                        if (locationCardCustomerName) {
+                            locationCardCustomerName.textContent = customerName;
                         }
-                        viewLocationModal.removeEventListener('shown.bs.modal', loadMap);
-                    }, { once: true });
 
-                    if (locationExternalLink) {
-                        locationExternalLink.href = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16';
+                        if (locationCardMapFrame) {
+                            var mapUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16&output=embed';
+                            locationCardMapFrame.src = mapUrl;
+                        }
+
+                        if (locationCardExternalLink) {
+                            locationCardExternalLink.href = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16';
+                        }
+
+                        locationCard.style.display = 'block';
+                        setTimeout(function() {
+                            scrollToElement(locationCard);
+                        }, 50);
                     }
+                } else {
+                    // على الكمبيوتر: استخدام Modal
+                    if (viewLocationModal) {
+                        if (locationCustomerName) {
+                            locationCustomerName.textContent = customerName;
+                        }
 
-                    var modal = new bootstrap.Modal(viewLocationModal);
-                    modal.show();
+                        if (locationMapFrame) {
+                            var mapUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16&output=embed';
+                            // استخدام data-src للـ lazy loading
+                            locationMapFrame.setAttribute('data-src', mapUrl);
+                            // تحميل الخريطة فقط عند فتح الـ modal
+                            viewLocationModal.addEventListener('shown.bs.modal', function loadMap() {
+                                if (locationMapFrame.getAttribute('data-src')) {
+                                    locationMapFrame.src = locationMapFrame.getAttribute('data-src');
+                                    locationMapFrame.removeAttribute('data-src');
+                                }
+                                viewLocationModal.removeEventListener('shown.bs.modal', loadMap);
+                            }, { once: true });
+                        }
+
+                        if (locationExternalLink) {
+                            locationExternalLink.href = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16';
+                        }
+
+                        var modal = new bootstrap.Modal(viewLocationModal);
+                        modal.show();
+                    }
                 }
             });
         });
@@ -4790,17 +4870,6 @@ window.CUSTOMER_EXPORT_CONFIG = {
             </div>
             <form id="importLocalCustomersForm" enctype="multipart/form-data">
                 <div class="modal-body">
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        <strong>تعليمات الاستيراد:</strong>
-                        <ul class="mb-0 mt-2">
-                            <li>يجب أن يحتوي الملف على الأعمدة التالية في الصف الأول: <strong>اسم العميل</strong> (مطلوب)، <strong>رقم الهاتف</strong>، <strong>العنوان</strong>، <strong>الرصيد</strong>، <strong>المنطقة</strong></li>
-                            <li>يجب أن يكون الصف الأول هو رؤوس الأعمدة</li>
-                            <li><strong>الملفات المدعومة:</strong> <strong>.csv</strong> (مفضّل - بدون مكتبات)، .xlsx, .xls (يتطلب مكتبة إضافية)</li>
-                            <li>لتصدير Excel كـ CSV: في Excel اختر <strong>ملف > حفظ باسم > CSV UTF-8</strong></li>
-                            <li>سيتم تخطي العملاء المكررين (بناءً على الاسم ورقم الهاتف)</li>
-                        </ul>
-                    </div>
                     <div class="mb-3">
                         <label class="form-label">اختر ملف CSV أو Excel <span class="text-danger">*</span></label>
                         <input type="file" class="form-control" name="excel_file" id="localExcelFileInput" accept=".csv,.xlsx,.xls" required>
@@ -4856,7 +4925,8 @@ window.CUSTOMER_EXPORT_CONFIG = {
     #collectPaymentCard,
     #addLocalCustomerCard,
     #editLocalCustomerCard,
-    #customerExportCard {
+    #customerExportCard,
+    #viewLocationCard {
         display: none !important;
     }
 }
@@ -5615,17 +5685,6 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
     </div>
     <div class="card-body">
         <form id="importLocalCustomersCardForm" enctype="multipart/form-data">
-            <div class="alert alert-info">
-                <i class="bi bi-info-circle me-2"></i>
-                <strong>تعليمات الاستيراد:</strong>
-                <ul class="mb-0 mt-2">
-                    <li>يجب أن يحتوي الملف على الأعمدة التالية في الصف الأول: <strong>اسم العميل</strong> (مطلوب)، <strong>رقم الهاتف</strong>، <strong>العنوان</strong>، <strong>الرصيد</strong>، <strong>المنطقة</strong></li>
-                    <li>يجب أن يكون الصف الأول هو رؤوس الأعمدة</li>
-                    <li><strong>الملفات المدعومة:</strong> <strong>.csv</strong> (مفضّل - بدون مكتبات)، .xlsx, .xls (يتطلب مكتبة إضافية)</li>
-                    <li>لتصدير Excel كـ CSV: في Excel اختر <strong>ملف > حفظ باسم > CSV UTF-8</strong></li>
-                    <li>سيتم تخطي العملاء المكررين (بناءً على الاسم ورقم الهاتف)</li>
-                </ul>
-            </div>
             <div class="mb-3">
                 <label class="form-label">اختر ملف CSV أو Excel <span class="text-danger">*</span></label>
                 <input type="file" class="form-control" name="excel_file" id="localExcelCardFileInput" accept=".csv,.xlsx,.xls" required>

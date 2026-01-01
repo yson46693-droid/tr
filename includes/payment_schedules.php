@@ -529,6 +529,42 @@ function sendPaymentReminders($salesRepId = null) {
             'amount' => $reminder['amount'] ?? null
         ], JSON_UNESCAPED_UNICODE));
         
+        // التحقق من أن التذكير لم يُرسل من قبل في نفس اليوم
+        // هذا يضمن عدم إرسال نفس التذكير مرتين في نفس اليوم حتى لو تم استدعاء الدالة عدة مرات
+        $reminderCheck = $db->queryOne(
+            "SELECT sent_status, sent_at FROM payment_reminders 
+             WHERE id = ? 
+             LIMIT 1",
+            [$reminder['id']]
+        );
+        
+        // إذا كان التذكير قد أُرسل بالفعل في نفس اليوم، تخطيه
+        if ($reminderCheck && $reminderCheck['sent_status'] === 'sent' && 
+            !empty($reminderCheck['sent_at']) && 
+            date('Y-m-d', strtotime($reminderCheck['sent_at'])) === date('Y-m-d')) {
+            error_log('Reminder ID ' . $reminder['id'] . ' already sent today (sent_at: ' . $reminderCheck['sent_at'] . ') - skipping');
+            continue;
+        }
+        
+        // محاولة تحديث حالة التذكير إلى 'processing' لتجنب معالجته مرتين في نفس الوقت
+        // إذا فشل التحديث، يعني أن تذكيراً آخر يعالجه حالياً أو تم إرساله بالفعل
+        $updateResult = $db->execute(
+            "UPDATE payment_reminders 
+             SET sent_status = 'processing', sent_at = NOW() 
+             WHERE id = ? 
+               AND sent_status = 'pending'
+               AND reminder_date = CURDATE()
+             LIMIT 1",
+            [$reminder['id']]
+        );
+        
+        if (empty($updateResult) || ($updateResult['affected_rows'] ?? 0) === 0) {
+            error_log('Reminder ID ' . $reminder['id'] . ' is being processed by another request or already sent - skipping');
+            continue;
+        }
+        
+        error_log('Reminder ID ' . $reminder['id'] . ' locked for processing');
+        
         $message = "تذكير: موعد تحصيل مبلغ " . formatCurrency($reminder['amount']) . 
                   " من العميل " . $reminder['customer_name'] . 
                   " في تاريخ " . formatDate($reminder['due_date']);
@@ -555,7 +591,9 @@ function sendPaymentReminders($salesRepId = null) {
             );
             
             if ($existingNotification) {
-                error_log('Notification already exists for sales rep ' . $reminder['sales_rep_id'] . ' - skipping');
+                error_log('Notification already exists for sales rep ' . $reminder['sales_rep_id'] . ' - marking as sent');
+                // إذا كان هناك إشعار موجود بالفعل، نعتبر التذكير قد أُرسل
+                $notificationSent = true;
             } else {
                 try {
                     createNotification(
@@ -611,7 +649,9 @@ function sendPaymentReminders($salesRepId = null) {
                 );
                 
                 if ($existingNotification) {
-                    error_log('Notification already exists for user ' . $userId . ' - skipping');
+                    error_log('Notification already exists for user ' . $userId . ' - marking as sent');
+                    // إذا كان هناك إشعار موجود بالفعل، نعتبر التذكير قد أُرسل
+                    $notificationSent = true;
                 } else {
                     try {
                         createNotification(
@@ -656,7 +696,21 @@ function sendPaymentReminders($salesRepId = null) {
                 error_log('ERROR updating reminder status: ' . $e->getMessage());
             }
         } else {
-            error_log('WARNING: No notification was sent for reminder ID: ' . ($reminder['id'] ?? 'N/A') . ' - status not updated');
+            // إذا لم يتم إرسال إشعار، إعادة حالة التذكير إلى 'pending' للسماح بإعادة المحاولة لاحقاً
+            // لكن فقط إذا لم يكن هناك إشعار موجود بالفعل (لأن الفحص السابق قد منع الإرسال)
+            try {
+                $db->execute(
+                    "UPDATE payment_reminders 
+                     SET sent_status = 'pending', sent_at = NULL 
+                     WHERE id = ? 
+                       AND sent_status = 'processing'",
+                    [$reminder['id']]
+                );
+                error_log('Reminder status reset to pending for reminder ID: ' . $reminder['id'] . ' (no notification sent)');
+            } catch (Exception $e) {
+                error_log('ERROR resetting reminder status: ' . $e->getMessage());
+            }
+            error_log('WARNING: No notification was sent for reminder ID: ' . ($reminder['id'] ?? 'N/A') . ' - status reset to pending');
         }
     }
     

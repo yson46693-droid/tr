@@ -1359,7 +1359,7 @@ $typeColorMap = [
 </div>
 
 <script>
-// ===== منع Bootstrap Modal على الموبايل - يجب تنفيذ هذا أولاً =====
+// ===== الحل النهائي: منع Bootstrap Modal على الموبايل تماماً =====
 // هذا الكود يعمل فوراً قبل تحميل Bootstrap
 (function() {
     'use strict';
@@ -1368,50 +1368,65 @@ $typeColorMap = [
         return window.innerWidth <= 768;
     }
     
-    // منع Bootstrap من فتح Modal على الموبايل - يجب تنفيذ هذا قبل Bootstrap
+    // إزالة Modal من DOM على الموبايل - الحل النهائي
+    function removeModalsFromDOM() {
+        if (isMobileCheck()) {
+            const collectModal = document.getElementById('collectFromRepModal');
+            const reportModal = document.getElementById('generateReportModal');
+            
+            if (collectModal) {
+                // إزالة class "modal" لمنع Bootstrap من التعرف عليه
+                collectModal.classList.remove('modal', 'fade');
+                collectModal.style.display = 'none';
+                collectModal.style.visibility = 'hidden';
+                collectModal.setAttribute('data-bs-no-modal', 'true');
+                // نقل Modal خارج الشاشة
+                collectModal.style.position = 'fixed';
+                collectModal.style.left = '-9999px';
+                collectModal.style.top = '-9999px';
+                collectModal.style.zIndex = '-1';
+            }
+            
+            if (reportModal) {
+                // إزالة class "modal" لمنع Bootstrap من التعرف عليه
+                reportModal.classList.remove('modal', 'fade');
+                reportModal.style.display = 'none';
+                reportModal.style.visibility = 'hidden';
+                reportModal.setAttribute('data-bs-no-modal', 'true');
+                // نقل Modal خارج الشاشة
+                reportModal.style.position = 'fixed';
+                reportModal.style.left = '-9999px';
+                reportModal.style.top = '-9999px';
+                reportModal.style.zIndex = '-1';
+            }
+        }
+    }
+    
+    // تنفيذ فوراً
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', removeModalsFromDOM);
+    } else {
+        removeModalsFromDOM();
+    }
+    
+    // تنفيذ مرة أخرى بعد تحميل الصفحة
+    window.addEventListener('load', removeModalsFromDOM);
+    
+    // منع Bootstrap من فتح Modal على الموبايل
     function preventBootstrapModal() {
         if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-            // حفظ الـ prototype الأصلي
             const originalShow = bootstrap.Modal.prototype.show;
-            const originalConstructor = bootstrap.Modal;
             
-            // Override Modal constructor لمنع إنشاء instance على الموبايل
-            bootstrap.Modal = function(element, config) {
-                if (isMobileCheck()) {
-                    const modalId = element ? (element.id || element.getAttribute('id') || '') : '';
-                    if (modalId === 'collectFromRepModal' || modalId === 'generateReportModal') {
-                        // إنشاء Modal instance وهمي بدون فتح
-                        this._element = element;
-                        this._config = config || {};
-                        this._isShown = false;
-                        this.show = function() {
-                            // لا تفعل شيء - منع فتح Modal
-                            return;
-                        };
-                        return this;
-                    }
-                }
-                return new originalConstructor(element, config);
-            };
-            
-            // نسخ جميع properties من الـ prototype الأصلي
-            Object.setPrototypeOf(bootstrap.Modal.prototype, originalConstructor.prototype);
-            Object.setPrototypeOf(bootstrap.Modal, originalConstructor);
-            Object.keys(originalConstructor).forEach(function(key) {
-                bootstrap.Modal[key] = originalConstructor[key];
-            });
-            
-            // Override show method أيضاً
             bootstrap.Modal.prototype.show = function() {
                 if (!isMobileCheck()) {
                     return originalShow.call(this);
                 }
                 
-                const element = this._element || this.element;
-                const modalId = element ? (element.id || element.getAttribute('id') || '') : '';
+                const element = this._element || this.element || (this._config && this._config.element);
+                const modalId = element ? (element.id || '') : '';
                 
                 if (modalId === 'collectFromRepModal' || modalId === 'generateReportModal') {
-                    // منع فتح Modal تماماً
+                    // منع فتح Modal تماماً على الموبايل
                     return;
                 }
                 
@@ -1420,20 +1435,11 @@ $typeColorMap = [
         }
     }
     
-    // محاولة منع Bootstrap فوراً
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', preventBootstrapModal);
-    } else {
-        preventBootstrapModal();
-    }
-    
-    // محاولة مرة أخرى عند تحميل Bootstrap
-    window.addEventListener('load', preventBootstrapModal);
-    
-    // مراقبة متى يتم تحميل Bootstrap (كل 10ms)
+    // مراقبة متى يتم تحميل Bootstrap
     const checkBootstrap = setInterval(function() {
         if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
             preventBootstrapModal();
+            removeModalsFromDOM();
             clearInterval(checkBootstrap);
         }
     }, 10);
@@ -1505,16 +1511,24 @@ function showCollectFromRepModal() {
         const modal = document.getElementById('collectFromRepModal');
         if (modal) {
             // إغلاق Modal فوراً إذا كان مفتوحاً
-            modal.classList.remove('show', 'modal-open');
+            modal.classList.remove('show', 'showing', 'modal-open');
             modal.style.display = 'none';
             modal.style.visibility = 'hidden';
-            const modalInstance = bootstrap.Modal.getInstance(modal);
-            if (modalInstance) {
-                modalInstance.hide();
+            modal.style.position = 'fixed';
+            modal.style.left = '-9999px';
+            modal.style.zIndex = '-1';
+            // إزالة class "modal" لمنع Bootstrap من التعرف عليه
+            modal.classList.remove('modal', 'fade');
+            
+            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
             }
         }
         
-        // إزالة backdrop
+        // إزالة backdrop فوراً
         const backdrops = document.querySelectorAll('.modal-backdrop');
         backdrops.forEach(function(backdrop) {
             backdrop.remove();
@@ -1535,7 +1549,11 @@ function showCollectFromRepModal() {
     } else {
         // على الكمبيوتر: استخدام Modal فقط
         const modal = document.getElementById('collectFromRepModal');
-        if (modal) {
+        if (modal && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            // إعادة class "modal" على الكمبيوتر
+            if (!modal.classList.contains('modal')) {
+                modal.classList.add('modal', 'fade');
+            }
             const modalInstance = new bootstrap.Modal(modal);
             modalInstance.show();
         }
@@ -1551,16 +1569,24 @@ function showGenerateReportModal() {
         const modal = document.getElementById('generateReportModal');
         if (modal) {
             // إغلاق Modal فوراً إذا كان مفتوحاً
-            modal.classList.remove('show', 'modal-open');
+            modal.classList.remove('show', 'showing', 'modal-open');
             modal.style.display = 'none';
             modal.style.visibility = 'hidden';
-            const modalInstance = bootstrap.Modal.getInstance(modal);
-            if (modalInstance) {
-                modalInstance.hide();
+            modal.style.position = 'fixed';
+            modal.style.left = '-9999px';
+            modal.style.zIndex = '-1';
+            // إزالة class "modal" لمنع Bootstrap من التعرف عليه
+            modal.classList.remove('modal', 'fade');
+            
+            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
             }
         }
         
-        // إزالة backdrop
+        // إزالة backdrop فوراً
         const backdrops = document.querySelectorAll('.modal-backdrop');
         backdrops.forEach(function(backdrop) {
             backdrop.remove();
@@ -1581,7 +1607,11 @@ function showGenerateReportModal() {
     } else {
         // على الكمبيوتر: استخدام Modal فقط
         const modal = document.getElementById('generateReportModal');
-        if (modal) {
+        if (modal && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            // إعادة class "modal" على الكمبيوتر
+            if (!modal.classList.contains('modal')) {
+                modal.classList.add('modal', 'fade');
+            }
             const modalInstance = new bootstrap.Modal(modal);
             modalInstance.show();
         }
@@ -1870,17 +1900,53 @@ document.addEventListener('DOMContentLoaded', function() {
     const collectFromRepModal = document.getElementById('collectFromRepModal');
     const generateReportModal = document.getElementById('generateReportModal');
     
-    // منع Bootstrap من فتح Modal على الموبايل تماماً
+    // على الموبايل: منع Bootstrap من فتح Modal تماماً
     if (isMobile()) {
+        // دالة لإزالة backdrop وإغلاق Modal - يجب تعريفها أولاً
+        function forceCloseModals() {
+            if (collectFromRepModal) {
+                collectFromRepModal.classList.remove('show', 'showing');
+                collectFromRepModal.style.display = 'none';
+                collectFromRepModal.style.visibility = 'hidden';
+                collectFromRepModal.style.opacity = '0';
+                collectFromRepModal.style.position = 'fixed';
+                collectFromRepModal.style.left = '-9999px';
+                collectFromRepModal.style.zIndex = '-1';
+            }
+            if (generateReportModal) {
+                generateReportModal.classList.remove('show', 'showing');
+                generateReportModal.style.display = 'none';
+                generateReportModal.style.visibility = 'hidden';
+                generateReportModal.style.opacity = '0';
+                generateReportModal.style.position = 'fixed';
+                generateReportModal.style.left = '-9999px';
+                generateReportModal.style.zIndex = '-1';
+            }
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(function(backdrop) {
+                backdrop.remove();
+            });
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        }
+        
         // إزالة class "modal" من Modal على الموبايل لمنع Bootstrap من التعرف عليه
         if (collectFromRepModal) {
             collectFromRepModal.classList.remove('modal', 'fade');
             collectFromRepModal.setAttribute('data-bs-no-modal', 'true');
-            // منع أي محاولة لفتح Modal وفتح Card بدلاً منه
+            collectFromRepModal.style.display = 'none';
+            collectFromRepModal.style.visibility = 'hidden';
+            collectFromRepModal.style.position = 'fixed';
+            collectFromRepModal.style.left = '-9999px';
+            collectFromRepModal.style.zIndex = '-1';
+            
+            // منع Bootstrap من فتح Modal - Event listeners قوية
             collectFromRepModal.addEventListener('show.bs.modal', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 e.stopPropagation();
+                forceCloseModals();
                 // فتح Card بدلاً من Modal
                 const card = document.getElementById('collectFromRepCard');
                 if (card) {
@@ -1891,6 +1957,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 return false;
             }, true);
+            
             collectFromRepModal.addEventListener('shown.bs.modal', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
@@ -1902,11 +1969,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (generateReportModal) {
             generateReportModal.classList.remove('modal', 'fade');
             generateReportModal.setAttribute('data-bs-no-modal', 'true');
-            // منع أي محاولة لفتح Modal وفتح Card بدلاً منه
+            generateReportModal.style.display = 'none';
+            generateReportModal.style.visibility = 'hidden';
+            generateReportModal.style.position = 'fixed';
+            generateReportModal.style.left = '-9999px';
+            generateReportModal.style.zIndex = '-1';
+            
+            // منع Bootstrap من فتح Modal - Event listeners قوية
             generateReportModal.addEventListener('show.bs.modal', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 e.stopPropagation();
+                forceCloseModals();
                 // فتح Card بدلاً من Modal
                 const card = document.getElementById('generateReportCard');
                 if (card) {
@@ -1917,6 +1991,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 return false;
             }, true);
+            
             generateReportModal.addEventListener('shown.bs.modal', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
@@ -1925,33 +2000,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }, true);
         }
         
-        // دالة لإزالة backdrop وإغلاق Modal
-        function forceCloseModals() {
-            if (collectFromRepModal) {
-                collectFromRepModal.classList.remove('show', 'showing');
-                collectFromRepModal.style.display = 'none';
-                collectFromRepModal.style.visibility = 'hidden';
-                collectFromRepModal.style.opacity = '0';
-                collectFromRepModal.setAttribute('aria-hidden', 'true');
-            }
-            if (generateReportModal) {
-                generateReportModal.classList.remove('show', 'showing');
-                generateReportModal.style.display = 'none';
-                generateReportModal.style.visibility = 'hidden';
-                generateReportModal.style.opacity = '0';
-                generateReportModal.setAttribute('aria-hidden', 'true');
-            }
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            backdrops.forEach(function(backdrop) {
-                backdrop.remove();
-            });
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
-        }
-        
-        // مراقبة مستمرة لإزالة backdrop (كل 50ms - أسرع)
-        setInterval(forceCloseModals, 50);
+        // مراقبة مستمرة لإزالة backdrop (كل 20ms - أسرع)
+        setInterval(forceCloseModals, 20);
         
         // مراقبة DOM لإزالة backdrop فور إضافته
         const observer = new MutationObserver(function(mutations) {
