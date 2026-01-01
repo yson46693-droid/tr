@@ -97,8 +97,14 @@
     
     /* إخفاء بعض الأيقونات على الشاشات الصغيرة جداً */
     @media (max-width: 480px) {
-        .topbar-action:not(.mobile-menu-toggle):not(.topbar-user):not(:has(.badge)):not(.mobile-logout-btn):not(#fingerprintRegisterBtn) {
-            display: none;
+        /* إخفاء جميع الأزرار الفردية على الشاشات الصغيرة */
+        .topbar-action-desktop {
+            display: none !important;
+        }
+        
+        /* إظهار القائمة المنسدلة على الشاشات الصغيرة */
+        .quick-actions-dropdown {
+            display: block !important;
         }
         
         .topbar-left {
@@ -111,20 +117,6 @@
         
         .topbar-center {
             display: none; /* إخفاء البحث على الشاشات الصغيرة جداً */
-        }
-        
-        /* إظهار زر تسجيل الخروج على الهاتف */
-        .mobile-logout-btn {
-            display: flex !important;
-        }
-        
-        /* جعل أيقونة تسجيل الخروج حمراء على الهاتف */
-        .mobile-logout-btn i {
-            color: #dc3545 !important;
-        }
-        
-        .mobile-logout-btn:hover i {
-            color: #c82333 !important;
         }
     }
     

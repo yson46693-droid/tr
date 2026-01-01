@@ -8,18 +8,12 @@
 
     // Initialize dark mode
     function initDarkMode() {
-        const darkModeToggle = document.getElementById('darkModeToggle');
         const currentTheme = localStorage.getItem('theme') || 'light';
         
         // Set initial theme
         document.documentElement.setAttribute('data-theme', currentTheme);
         
-        // Update toggle state
-        if (darkModeToggle) {
-            darkModeToggle.checked = currentTheme === 'dark';
-        }
-        
-        // Update all toggles on the page
+        // Update all toggles on the page (including dropdown toggle)
         updateAllToggles(currentTheme === 'dark');
     }
 
@@ -43,7 +37,7 @@
 
     // Update all dark mode toggles on the page
     function updateAllToggles(isDark) {
-        const toggles = document.querySelectorAll('#darkModeToggle');
+        const toggles = document.querySelectorAll('#darkModeToggle, #darkModeToggleDropdown');
         toggles.forEach(toggle => {
             toggle.checked = isDark;
         });
@@ -58,7 +52,7 @@
 
     // Add event listeners to all dark mode toggles
     function attachDarkModeListeners() {
-        const darkModeToggles = document.querySelectorAll('#darkModeToggle');
+        const darkModeToggles = document.querySelectorAll('#darkModeToggle, #darkModeToggleDropdown');
         
         darkModeToggles.forEach(toggle => {
             if (!toggle || !toggle.parentNode) {

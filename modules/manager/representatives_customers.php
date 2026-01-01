@@ -1085,6 +1085,9 @@ $allCustomersSql = "SELECT c.*,
 
 $allCustomersCountSql = "SELECT COUNT(*) as total 
         FROM customers c
+        LEFT JOIN users rep1 ON c.rep_id = rep1.id AND rep1.role = 'sales'
+        LEFT JOIN users rep2 ON c.created_by = rep2.id AND rep2.role = 'sales'
+        LEFT JOIN regions r ON c.region_id = r.id
         WHERE (c.rep_id IS NOT NULL AND c.rep_id IN (SELECT id FROM users WHERE role = 'sales'))
            OR (c.created_by IS NOT NULL AND c.created_by IN (SELECT id FROM users WHERE role = 'sales'))";
 
@@ -1110,7 +1113,7 @@ if ($allCustomersRepFilter > 0) {
 
 if ($allCustomersSearch) {
     $allCustomersSql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR rep1.full_name LIKE ? OR rep2.full_name LIKE ?)";
-    $allCustomersCountSql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR c.region_id IN (SELECT id FROM regions WHERE name LIKE ?) OR c.rep_id IN (SELECT id FROM users WHERE role = 'sales' AND full_name LIKE ?) OR c.created_by IN (SELECT id FROM users WHERE role = 'sales' AND full_name LIKE ?))";
+    $allCustomersCountSql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR rep1.full_name LIKE ? OR rep2.full_name LIKE ?)";
     $searchParam = '%' . $allCustomersSearch . '%';
     $allCustomersParams[] = $searchParam;
     $allCustomersParams[] = $searchParam;

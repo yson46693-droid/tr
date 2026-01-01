@@ -554,14 +554,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // تحديث الحالات المتأخرة
 updateOverdueSchedules();
 
-// إرسال التذكيرات المعلقة - للعملاء المحليين (sales_rep_id = NULL)
-// يجب استدعاء sendPaymentReminders بدون salesRepId لإرسال تذكيرات العملاء المحليين
-error_log('=== company_payment_schedules.php: Calling sendPaymentReminders for LOCAL customers ===');
-error_log('Current User ID: ' . ($currentUser['id'] ?? 'null') . ', Role: ' . ($currentUser['role'] ?? 'null'));
-error_log('Current Date: ' . date('Y-m-d H:i:s'));
-error_log('NOTE: Calling with NULL salesRepId to send reminders for local customers (sales_rep_id = NULL)');
-$sentReminders = sendPaymentReminders(null); // null لإرسال تذكيرات العملاء المحليين
-error_log('sendPaymentReminders returned: ' . $sentReminders);
+// ملاحظة: إرسال التذكيرات يتم عبر cron job فقط (cron/payment_reminders.php)
+// لا يتم إرسال التذكيرات عند الدخول للصفحة لتجنب الإشعارات المكررة
 
 // إرسال إشعارات للمواعيد المتأخرة للمحاسبين والمديرين (للعملاء المحليين)
 error_log('=== company_payment_schedules.php: Calling notifyOverduePaymentSchedulesForManagers ===');

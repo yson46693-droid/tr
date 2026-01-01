@@ -542,7 +542,14 @@ function sendPaymentReminders($salesRepId = null) {
         if ($reminderCheck && $reminderCheck['sent_status'] === 'sent' && 
             !empty($reminderCheck['sent_at']) && 
             date('Y-m-d', strtotime($reminderCheck['sent_at'])) === date('Y-m-d')) {
-            error_log('Reminder ID ' . $reminder['id'] . ' already sent today (sent_at: ' . $reminderCheck['sent_at'] . ') - skipping');
+            $logMessage = sprintf(
+                "[PAYMENT_REMINDER_SKIPPED] Reminder ID: %d | Schedule ID: %d | Customer: %s | Reason: Already sent today at %s",
+                $reminder['id'],
+                $reminder['payment_schedule_id'],
+                $reminder['customer_name'] ?? 'N/A',
+                $reminderCheck['sent_at']
+            );
+            error_log($logMessage);
             continue;
         }
         
@@ -559,7 +566,13 @@ function sendPaymentReminders($salesRepId = null) {
         );
         
         if (empty($updateResult) || ($updateResult['affected_rows'] ?? 0) === 0) {
-            error_log('Reminder ID ' . $reminder['id'] . ' is being processed by another request or already sent - skipping');
+            $logMessage = sprintf(
+                "[PAYMENT_REMINDER_SKIPPED] Reminder ID: %d | Schedule ID: %d | Customer: %s | Reason: Being processed by another request or already sent",
+                $reminder['id'],
+                $reminder['payment_schedule_id'],
+                $reminder['customer_name'] ?? 'N/A'
+            );
+            error_log($logMessage);
             continue;
         }
         
@@ -591,7 +604,14 @@ function sendPaymentReminders($salesRepId = null) {
             );
             
             if ($existingNotification) {
-                error_log('Notification already exists for sales rep ' . $reminder['sales_rep_id'] . ' - marking as sent');
+                $logMessage = sprintf(
+                    "[PAYMENT_REMINDER_NOTIFICATION_EXISTS] Reminder ID: %d | Sales Rep ID: %d | Schedule ID: %d | Customer: %s | Reason: Notification already exists for today",
+                    $reminder['id'],
+                    $reminder['sales_rep_id'],
+                    $reminder['payment_schedule_id'],
+                    $reminder['customer_name'] ?? 'N/A'
+                );
+                error_log($logMessage);
                 // إذا كان هناك إشعار موجود بالفعل، نعتبر التذكير قد أُرسل
                 $notificationSent = true;
             } else {
@@ -649,7 +669,14 @@ function sendPaymentReminders($salesRepId = null) {
                 );
                 
                 if ($existingNotification) {
-                    error_log('Notification already exists for user ' . $userId . ' - marking as sent');
+                    $logMessage = sprintf(
+                        "[PAYMENT_REMINDER_NOTIFICATION_EXISTS] Reminder ID: %d | User ID: %d | Schedule ID: %d | Customer: %s | Reason: Notification already exists for today",
+                        $reminder['id'],
+                        $userId,
+                        $reminder['payment_schedule_id'],
+                        $reminder['customer_name'] ?? 'N/A'
+                    );
+                    error_log($logMessage);
                     // إذا كان هناك إشعار موجود بالفعل، نعتبر التذكير قد أُرسل
                     $notificationSent = true;
                 } else {
@@ -680,7 +707,19 @@ function sendPaymentReminders($salesRepId = null) {
                      WHERE id = ?",
                     [$reminder['id']]
                 );
-                error_log('Reminder status updated to sent for reminder ID: ' . $reminder['id']);
+                
+                // تسجيل مفصل في logs
+                $logMessage = sprintf(
+                    "[PAYMENT_REMINDER_SENT] Reminder ID: %d | Schedule ID: %d | Customer: %s | Amount: %s | Due Date: %s | Reminder Date: %s | Sent At: %s",
+                    $reminder['id'],
+                    $reminder['payment_schedule_id'],
+                    $reminder['customer_name'] ?? 'N/A',
+                    formatCurrency($reminder['amount'] ?? 0),
+                    $reminder['due_date'] ?? 'N/A',
+                    $reminder['reminder_date'] ?? 'N/A',
+                    date('Y-m-d H:i:s')
+                );
+                error_log($logMessage);
                 
                 // تحديث حالة الجدول الزمني
                 $db->execute(
@@ -689,7 +728,6 @@ function sendPaymentReminders($salesRepId = null) {
                      WHERE id = ?",
                     [$reminder['payment_schedule_id']]
                 );
-                error_log('Schedule reminder_sent updated for schedule ID: ' . $reminder['payment_schedule_id']);
                 
                 $sentCount++;
             } catch (Exception $e) {

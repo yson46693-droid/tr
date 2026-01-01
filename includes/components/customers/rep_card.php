@@ -44,7 +44,7 @@ if (!function_exists('renderRepresentativeCards')) {
                     $statusLabel = $status === 'active' ? 'نشط' : 'غير نشط';
                     $statusBadge = $status === 'active' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary';
                     ?>
-                    <div class="col-12 col-md-6 col-xl-4">
+                    <div class="col-12 col-md-6 col-xl-6">
                         <div 
                             class="card representative-card h-100 shadow-sm"
                             data-rep-id="<?php echo $repId; ?>"
@@ -97,18 +97,6 @@ if (!function_exists('renderRepresentativeCards')) {
                                         <?php endif; ?>
                                     </div>
                                     <?php endif; ?>
-                                    <div class="text-end">
-                                        <button 
-                                            type="button"
-                                            class="btn btn-outline-primary btn-sm"
-                                            onclick="event.stopPropagation(); loadRepDetails(<?php echo $repId; ?>, '<?php echo htmlspecialchars($repName, ENT_QUOTES); ?>');"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#repDetailsModal"
-                                        >
-                                            <i class="bi bi-people-fill me-1"></i>
-                                            عرض العملاء
-                                        </button>
-                                    </div>
                                 </div>
                             </div>
                     </div>
