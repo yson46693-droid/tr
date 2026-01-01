@@ -1421,16 +1421,14 @@ function showCollectFromRepModal() {
     closeAllForms();
     
     if (isMobile()) {
-        // على الموبايل: استخدام Card
         const card = document.getElementById('collectFromRepCard');
         if (card) {
-            card.style.setProperty('display', 'block', 'important');
+            card.style.display = 'block';
             setTimeout(function() {
                 scrollToElement(card);
             }, 50);
         }
     } else {
-        // على الكمبيوتر: استخدام Modal
         const modal = document.getElementById('collectFromRepModal');
         if (modal) {
             const modalInstance = new bootstrap.Modal(modal);
@@ -1444,16 +1442,14 @@ function showGenerateReportModal() {
     closeAllForms();
     
     if (isMobile()) {
-        // على الموبايل: استخدام Card
         const card = document.getElementById('generateReportCard');
         if (card) {
-            card.style.setProperty('display', 'block', 'important');
+            card.style.display = 'block';
             setTimeout(function() {
                 scrollToElement(card);
             }, 50);
         }
     } else {
-        // على الكمبيوتر: استخدام Modal
         const modal = document.getElementById('generateReportModal');
         if (modal) {
             const modalInstance = new bootstrap.Modal(modal);

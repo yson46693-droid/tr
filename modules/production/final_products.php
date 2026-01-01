@@ -3501,8 +3501,8 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     </div>
 </div>
 
-<!-- Modal نقل منتج خارجي -->
-<div class="modal fade" id="transferExternalProductModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+<!-- Modal نقل منتج خارجي - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="transferExternalProductModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog">
         <form class="modal-content" method="POST" id="transferExternalProductForm">
             <input type="hidden" name="action" value="transfer_external_product">
@@ -3572,6 +3572,76 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     </div>
 </div>
 
+<!-- Card نقل منتج خارجي - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="transferExternalProductCard" style="display: none;">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-arrow-left-right me-2"></i>نقل منتج خارجي
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="transferExternalProductCardForm">
+            <input type="hidden" name="action" value="transfer_external_product">
+            <input type="hidden" name="transfer_token" value="<?php echo htmlspecialchars($_SESSION['transfer_submission_token'] ?? ''); ?>">
+            <input type="hidden" name="product_id" id="transferExternalProductCardId" value="">
+            <div class="mb-3">
+                <label class="form-label">اسم المنتج</label>
+                <input type="text" class="form-control" id="transferExternalProductCardName" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية المتاحة</label>
+                <input type="text" class="form-control" id="transferExternalCardAvailableQty" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">المخزن الوجهة <span class="text-danger">*</span></label>
+                <select class="form-select" name="to_warehouse_id" required>
+                    <option value="">اختر المخزن الوجهة</option>
+                    <?php if (!empty($destinationWarehouses)): ?>
+                        <?php foreach ($destinationWarehouses as $warehouse): ?>
+                            <option value="<?php echo (int)$warehouse['id']; ?>">
+                                <?php if ($warehouse['warehouse_type'] === 'vehicle' && !empty($warehouse['rep_name'])): ?>
+                                    <?php 
+                                    $repName = htmlspecialchars($warehouse['rep_name'] ?? '');
+                                    $repUsername = htmlspecialchars($warehouse['rep_username'] ?? '');
+                                    $vehicleNumber = htmlspecialchars($warehouse['vehicle_number'] ?? '');
+                                    echo $repName . ' - ' . $repUsername . ' - ' . $vehicleNumber;
+                                    ?>
+                                <?php else: ?>
+                                    <?php echo htmlspecialchars($warehouse['name']); ?>
+                                    <?php if (!empty($warehouse['warehouse_type'])): ?>
+                                        (<?php echo htmlspecialchars($warehouse['warehouse_type']); ?>)
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                            </option>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية المراد نقلها <span class="text-danger">*</span></label>
+                <input type="number" class="form-control" name="quantity" id="transferExternalCardQuantity" step="0.01" min="0.01" required>
+                <small class="text-muted">الحد الأقصى: <span id="transferExternalCardMaxQty">0</span></small>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">تاريخ النقل</label>
+                <input type="date" class="form-control" name="transfer_date" value="<?php echo date('Y-m-d'); ?>">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" name="notes" rows="2" placeholder="ملاحظات إضافية (اختياري)"></textarea>
+            </div>
+            <div class="alert alert-warning mb-3">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                سيتم إرسال طلب النقل إلى المدير للموافقة عليه.
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">إرسال طلب النقل</button>
+                <button type="button" class="btn btn-secondary" onclick="closeTransferExternalProductCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 (function() {
     const transferButtons = document.querySelectorAll('.js-transfer-external-product');
@@ -3587,22 +3657,52 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
     
     transferButtons.forEach(function(button) {
         button.addEventListener('click', function() {
+            closeAllForms();
+            
             const productId = this.getAttribute('data-product-id');
             const productName = this.getAttribute('data-product-name');
             const availableQty = parseFloat(this.getAttribute('data-available-qty') || '0');
             const unit = this.getAttribute('data-unit') || 'قطعة';
             
-            if (productIdInput) productIdInput.value = productId;
-            if (productNameInput) productNameInput.value = productName;
-            if (availableQtyInput) availableQtyInput.value = availableQty.toFixed(2) + ' ' + unit;
-            if (maxQtySpan) maxQtySpan.textContent = availableQty.toFixed(2) + ' ' + unit;
-            if (quantityInput) {
-                quantityInput.value = '';
-                quantityInput.max = availableQty.toFixed(2);
+            if (isMobile()) {
+                // على الموبايل: استخدام Card
+                const card = document.getElementById('transferExternalProductCard');
+                const cardForm = document.getElementById('transferExternalProductCardForm');
+                const cardProductIdInput = document.getElementById('transferExternalProductCardId');
+                const cardProductNameInput = document.getElementById('transferExternalProductCardName');
+                const cardAvailableQtyInput = document.getElementById('transferExternalCardAvailableQty');
+                const cardQuantityInput = document.getElementById('transferExternalCardQuantity');
+                const cardMaxQtySpan = document.getElementById('transferExternalCardMaxQty');
+                
+                if (card && cardForm) {
+                    if (cardProductIdInput) cardProductIdInput.value = productId;
+                    if (cardProductNameInput) cardProductNameInput.value = productName;
+                    if (cardAvailableQtyInput) cardAvailableQtyInput.value = availableQty.toFixed(2) + ' ' + unit;
+                    if (cardMaxQtySpan) cardMaxQtySpan.textContent = availableQty.toFixed(2) + ' ' + unit;
+                    if (cardQuantityInput) {
+                        cardQuantityInput.value = '';
+                        cardQuantityInput.max = availableQty.toFixed(2);
+                    }
+                    
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        scrollToElement(card);
+                    }, 50);
+                }
+            } else {
+                // على الكمبيوتر: استخدام Modal
+                if (productIdInput) productIdInput.value = productId;
+                if (productNameInput) productNameInput.value = productName;
+                if (availableQtyInput) availableQtyInput.value = availableQty.toFixed(2) + ' ' + unit;
+                if (maxQtySpan) maxQtySpan.textContent = availableQty.toFixed(2) + ' ' + unit;
+                if (quantityInput) {
+                    quantityInput.value = '';
+                    quantityInput.max = availableQty.toFixed(2);
+                }
+                
+                const bsModal = new bootstrap.Modal(transferModal);
+                bsModal.show();
             }
-            
-            const bsModal = new bootstrap.Modal(transferModal);
-            bsModal.show();
         });
     });
     
@@ -3612,6 +3712,143 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
             const currentQty = parseFloat(this.value || '0');
             if (currentQty > maxQty) {
                 this.value = maxQty.toFixed(2);
+            }
+        });
+    }
+    
+    // معالج input للـ Card quantity
+    const cardQuantityInput = document.getElementById('transferExternalCardQuantity');
+    if (cardQuantityInput) {
+        cardQuantityInput.addEventListener('input', function() {
+            const maxQty = parseFloat(this.max || '0');
+            const currentQty = parseFloat(this.value || '0');
+            if (currentQty > maxQty) {
+                this.value = maxQty.toFixed(2);
+            }
+        });
+    }
+    
+    // دالة إغلاق Card نقل منتج خارجي
+    function closeTransferExternalProductCard() {
+        const card = document.getElementById('transferExternalProductCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+    
+    // معالج submit للـ Card form
+    const cardForm = document.getElementById('transferExternalProductCardForm');
+    if (cardForm) {
+        cardForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            
+            if (isSubmitting) {
+                return;
+            }
+            
+            const toWarehouseId = cardForm.querySelector('select[name="to_warehouse_id"]').value;
+            const quantity = parseFloat(cardQuantityInput ? cardQuantityInput.value : '0');
+            const maxQty = parseFloat(cardQuantityInput ? cardQuantityInput.max : '0');
+            
+            if (!toWarehouseId) {
+                showErrorMessage('يرجى اختيار المخزن الوجهة.');
+                return;
+            }
+            
+            if (quantity <= 0) {
+                showErrorMessage('يرجى إدخال كمية صالحة أكبر من الصفر.');
+                return;
+            }
+            
+            if (quantity > maxQty) {
+                showErrorMessage('الكمية المطلوبة تتجاوز الكمية المتاحة.');
+                return;
+            }
+            
+            isSubmitting = true;
+            const submitButton = cardForm.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton ? submitButton.innerHTML : 'إرسال طلب النقل';
+            
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جارٍ الإرسال...';
+            }
+            
+            try {
+                const formData = new FormData(cardForm);
+                
+                const response = await fetch(window.location.href, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData,
+                    credentials: 'same-origin'
+                });
+                
+                if (!response.ok && response.status !== 400 && response.status !== 500) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const contentType = response.headers.get('content-type') || '';
+                let result;
+                const responseText = await response.text();
+                
+                if (contentType.includes('application/json')) {
+                    try {
+                        const trimmedText = responseText.trim();
+                        const jsonMatch = trimmedText.match(/\{[\s\S]*\}/);
+                        const jsonText = jsonMatch ? jsonMatch[0] : trimmedText;
+                        result = JSON.parse(jsonText);
+                    } catch (parseError) {
+                        console.error('Error parsing JSON response:', parseError);
+                        throw new Error('خطأ في قراءة استجابة الخادم: ' + parseError.message);
+                    }
+                } else {
+                    if (response.ok) {
+                        showSuccessMessage('تم إرسال طلب النقل بنجاح! سيتم مراجعته والموافقة عليه.');
+                        closeTransferExternalProductCard();
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                        return;
+                    } else {
+                        throw new Error('حدث خطأ في الخادم');
+                    }
+                }
+                
+                if (result && result.success) {
+                    let successMsg = result.message || 'تم إرسال طلب النقل بنجاح!';
+                    if (result.transfer_number) {
+                        successMsg += '\nرقم الطلب: ' + result.transfer_number;
+                    }
+                    
+                    showSuccessMessage(successMsg);
+                    closeTransferExternalProductCard();
+                    
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    isSubmitting = false;
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalButtonText;
+                    }
+                    const errorMsg = result ? (result.message || result.error || 'حدث خطأ أثناء إرسال الطلب.') : 'حدث خطأ غير معروف.';
+                    showErrorMessage(errorMsg);
+                }
+            } catch (error) {
+                console.error('Error submitting transfer form:', error);
+                isSubmitting = false;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonText;
+                }
+                const errorMessage = error.message || 'حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.';
+                showErrorMessage(errorMessage);
             }
         });
     }
@@ -3832,7 +4069,8 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
 <?php endif; ?>
 
 <?php if ($isManager): ?>
-<div class="modal fade" id="addExternalProductModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+<!-- Modal إضافة منتج خارجي - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="addExternalProductModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog">
         <form class="modal-content" method="POST">
             <input type="hidden" name="action" value="create_external_product">
@@ -3881,6 +4119,56 @@ $filterProduct = isset($_GET['filter_product']) ? trim($_GET['filter_product']) 
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
                 <button type="submit" class="btn btn-success">حفظ المنتج</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card إضافة منتج خارجي - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="addExternalProductCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-plus-circle me-2"></i>إضافة منتج خارجي جديد
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="create_external_product">
+            <div class="mb-3">
+                <label class="form-label">اسم المنتج <span class="text-danger">*</span></label>
+                <input type="text" name="external_name" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع البيع <span class="text-danger">*</span></label>
+                <select name="external_channel" class="form-select" required>
+                    <option value="company">بيع داخل الشركة</option>
+                    <option value="delegate">مندوب المبيعات</option>
+                    <option value="other">أخرى</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية الابتدائية</label>
+                <input type="number" name="external_quantity" class="form-control" min="0" step="0.01" value="0">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الوحدة</label>
+                <input type="text" name="external_unit" class="form-control" value="قطعة">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">سعر البيع</label>
+                <input type="number" name="external_price" class="form-control" min="0" step="0.01" value="0.00">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">وصف مختصر</label>
+                <input type="text" name="external_description" class="form-control" placeholder="اختياري">
+            </div>
+            <div class="alert alert-info mb-3">
+                <i class="bi bi-info-circle me-2"></i>
+                هذه المنتجات لا تؤثر على مخزون الشركة وتُستخدم للمنتجات الخارجية التي يتم بيعها داخلياً أو عبر المناديب.
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success">حفظ المنتج</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddExternalProductCard()">إلغاء</button>
             </div>
         </form>
     </div>
@@ -5518,6 +5806,41 @@ if (!window.transferFormInitialized) {
     
     // جعل الدالة متاحة عالمياً
     window.showRequestTransferModal = showRequestTransferModal;
+    
+    // دالة فتح Modal/Card إضافة منتج خارجي
+    function showAddExternalProductModal() {
+        closeAllForms();
+        
+        if (isMobile()) {
+            const card = document.getElementById('addExternalProductCard');
+            if (card) {
+                card.style.display = 'block';
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+            }
+        } else {
+            const modalElement = document.getElementById('addExternalProductModal');
+            if (modalElement && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+                modal.show();
+            } else {
+                console.error('Modal addExternalProductModal not found');
+            }
+        }
+    }
+    
+    // دالة إغلاق Card إضافة منتج خارجي
+    function closeAddExternalProductCard() {
+        const card = document.getElementById('addExternalProductCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+    
+    window.showAddExternalProductModal = showAddExternalProductModal;
 
 
     // ========== ربط الأحداث للأزرار ==========
@@ -5580,22 +5903,16 @@ if (!window.transferFormInitialized) {
             if (addExternalBtn) {
                 event.preventDefault();
                 event.stopPropagation();
-                const modal = document.getElementById('addExternalProductModal');
-                if (modal) {
-                    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                if (typeof showAddExternalProductModal === 'function') {
+                    showAddExternalProductModal();
+                } else {
+                    const modal = document.getElementById('addExternalProductModal');
+                    if (modal && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
                         const modalInstance = bootstrap.Modal.getOrCreateInstance(modal);
                         modalInstance.show();
                     } else {
-                        // Fallback إذا لم يكن Bootstrap متاحاً
-                        modal.style.display = 'block';
-                        modal.classList.add('show');
-                        document.body.classList.add('modal-open');
-                        const backdrop = document.createElement('div');
-                        backdrop.className = 'modal-backdrop fade show';
-                        document.body.appendChild(backdrop);
+                        console.error('Modal addExternalProductModal not found');
                     }
-                } else {
-                    console.error('Modal addExternalProductModal not found');
                 }
                 return;
             }
