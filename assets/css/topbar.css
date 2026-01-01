@@ -147,6 +147,17 @@
     }
 }
 
+/* إظهار الأزرار الفردية على الشاشات الكبيرة */
+@media (min-width: 481px) {
+    .topbar-action-desktop {
+        display: flex !important;
+    }
+    
+    .quick-actions-dropdown {
+        display: none !important;
+    }
+}
+
 /* ===== Top Bar Sections ===== */
 .topbar-left,
 .topbar-center,
@@ -1164,3 +1175,115 @@
     }
 }
 
+/* ===== Quick Actions Dropdown ===== */
+.quick-actions-dropdown {
+    display: none; /* مخفي افتراضياً على الشاشات الكبيرة */
+}
+
+@media (max-width: 480px) {
+    .quick-actions-dropdown {
+        display: block !important;
+    }
+}
+
+.quick-actions-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.quick-actions-menu {
+    min-width: 220px;
+    padding: 0.5rem 0;
+}
+
+.quick-actions-menu .dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    color: var(--gray-700);
+    text-decoration: none;
+    transition: all var(--transition-base);
+}
+
+.quick-actions-menu .dropdown-item:hover {
+    background-color: var(--gray-100);
+    color: var(--gray-900);
+}
+
+.quick-actions-menu .dropdown-item.text-danger {
+    color: var(--accent-red);
+}
+
+.quick-actions-menu .dropdown-item.text-danger:hover {
+    background-color: rgba(220, 53, 69, 0.1);
+    color: #c82333;
+}
+
+.quick-actions-menu .dropdown-item i {
+    font-size: 1.1rem;
+    width: 20px;
+    text-align: center;
+}
+
+.quick-actions-menu .dropdown-item-text {
+    padding: 0.5rem 1rem;
+}
+
+.version-badge-container-inline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.version-badge-inline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-700);
+    background: var(--gray-100);
+    border: 1.5px solid var(--gray-300);
+    border-radius: 12px;
+    white-space: nowrap;
+    user-select: none;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 0.5px;
+}
+
+[data-theme="dark"] .version-badge-inline,
+.dark-mode .version-badge-inline {
+    color: var(--gray-300);
+    background: var(--gray-800);
+    border-color: var(--gray-600);
+}
+
+.quick-actions-menu .form-switch {
+    margin: 0;
+}
+
+.quick-actions-menu .form-switch .form-check-input {
+    cursor: pointer;
+    margin-top: 0;
+}
+
+/* Dark mode support for dropdown */
+[data-theme="dark"] .quick-actions-menu,
+.dark-mode .quick-actions-menu {
+    background: var(--gray-800);
+    border-color: var(--gray-700);
+}
+
+[data-theme="dark"] .quick-actions-menu .dropdown-item,
+.dark-mode .quick-actions-menu .dropdown-item {
+    color: var(--gray-300);
+}
+
+[data-theme="dark"] .quick-actions-menu .dropdown-item:hover,
+.dark-mode .quick-actions-menu .dropdown-item:hover {
+    background-color: var(--gray-700);
+    color: var(--gray-100);
+}
