@@ -777,6 +777,127 @@ if (!defined('ACCESS_ALLOWED')) {
         
         return false;
     }
+    
+    // إضافة event listener مباشر للزر لضمان عمله على الموبايل
+    (function() {
+        function setupClearAllButtonListener() {
+            const clearAllBtn = document.getElementById('clearAllNotificationsBtn');
+            if (!clearAllBtn) {
+                // إعادة المحاولة بعد قليل إذا لم يكن الزر موجوداً
+                setTimeout(setupClearAllButtonListener, 100);
+                return;
+            }
+            
+            // إزالة أي event listeners سابقة
+            const newBtn = clearAllBtn.cloneNode(true);
+            const form = clearAllBtn.closest('form');
+            if (form) {
+                form.replaceChild(newBtn, clearAllBtn);
+            }
+            
+            // إضافة event listeners للـ click و touch
+            ['click', 'touchend'].forEach(eventType => {
+                newBtn.addEventListener(eventType, function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    
+                    // منع إغلاق الـ dropdown
+                    const dropdown = document.querySelector('.notifications-dropdown');
+                    if (dropdown) {
+                        dropdown.classList.add('show');
+                        dropdown.setAttribute('data-bs-auto-close', 'false');
+                    }
+                    
+                    // استخدام getNotificationsApiPath بدلاً من form.action
+                    const apiPath = getNotificationsApiPath();
+                    const formData = new URLSearchParams();
+                    formData.append('action', 'delete_all');
+                    
+                    // إظهار loading
+                    const notificationsList = document.getElementById('notificationsList');
+                    if (notificationsList) {
+                        notificationsList.innerHTML = '<small class="text-muted">جاري حذف الإشعارات...</small>';
+                    }
+                    
+                    // إرسال الطلب
+                    fetch(apiPath, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: formData
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        const contentType = response.headers.get('content-type') || '';
+                        if (!contentType.includes('application/json')) {
+                            throw new Error('Invalid response type');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data && data.success) {
+                            if (notificationsList) {
+                                notificationsList.innerHTML = '<small class="text-muted">لا توجد إشعارات</small>';
+                            }
+                            
+                            const badge = document.getElementById('notificationBadge');
+                            if (badge) {
+                                badge.textContent = '0';
+                                badge.style.display = 'none';
+                            }
+                            
+                            setTimeout(() => {
+                                if (typeof loadNotifications === 'function') {
+                                    loadNotifications();
+                                } else if (typeof window.loadNotifications === 'function') {
+                                    window.loadNotifications();
+                                }
+                            }, 100);
+                        } else {
+                            throw new Error(data?.error || 'Unknown error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error deleting notifications:', error);
+                        if (notificationsList) {
+                            notificationsList.innerHTML = '<small class="text-muted">خطأ في حذف الإشعارات</small>';
+                        }
+                        setTimeout(() => {
+                            if (typeof loadNotifications === 'function') {
+                                loadNotifications();
+                            } else if (typeof window.loadNotifications === 'function') {
+                                window.loadNotifications();
+                            }
+                        }, 500);
+                    });
+                }, { capture: true, passive: false });
+            });
+        }
+        
+        // إعداد الزر عند تحميل الصفحة
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setupClearAllButtonListener);
+        } else {
+            setupClearAllButtonListener();
+        }
+        
+        // إعادة إعداد الزر بعد تحديث قائمة الإشعارات
+        const notificationsList = document.getElementById('notificationsList');
+        if (notificationsList) {
+            const observer = new MutationObserver(function() {
+                setTimeout(setupClearAllButtonListener, 50);
+            });
+            observer.observe(notificationsList, {
+                childList: true,
+                subtree: true
+            });
+        }
+    })();
     </script>
     
     <!-- Medium Priority JS - تحميل مشروط -->

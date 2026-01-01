@@ -3410,7 +3410,7 @@ if (ob_get_level() > 0) {
                                   action="<?php echo getRelativeUrl('api/notifications.php'); ?>" 
                                   id="clearAllNotificationsForm"
                                   style="display: inline-block; float: right; margin-left: 0.5rem;"
-                                  onsubmit="event.stopPropagation(); return handleClearAllNotifications(event);">
+                                  onsubmit="if(typeof handleClearAllNotifications === 'function') { event.preventDefault(); event.stopPropagation(); return handleClearAllNotifications(event); } return false;">
                                 <input type="hidden" name="action" value="delete_all">
                                 <button type="submit" 
                                         class="btn btn-sm btn-link text-danger p-0" 
