@@ -1742,72 +1742,91 @@ function loadSalesRepBalance(salesRepId, repBalanceElement, collectAmountElement
 
 // معالجة تحصيل من مندوب
 document.addEventListener('DOMContentLoaded', function() {
-    // منع Bootstrap من تهيئة Modal على الموبايل تماماً
+    const collectFromRepModal = document.getElementById('collectFromRepModal');
+    const generateReportModal = document.getElementById('generateReportModal');
+    
+    // منع Bootstrap من فتح Modal على الموبايل تماماً
     if (isMobile()) {
-        const collectFromRepModal = document.getElementById('collectFromRepModal');
-        const generateReportModal = document.getElementById('generateReportModal');
+        // دالة لإزالة backdrop وإغلاق Modal
+        function forceCloseModals() {
+            if (collectFromRepModal) {
+                collectFromRepModal.classList.remove('show');
+                collectFromRepModal.style.display = 'none';
+            }
+            if (generateReportModal) {
+                generateReportModal.classList.remove('show');
+                generateReportModal.style.display = 'none';
+            }
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(function(backdrop) {
+                backdrop.remove();
+            });
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        }
         
-        // منع Bootstrap من إنشاء Modal instance على الموبايل
+        // منع فتح Modal على الموبايل
         if (collectFromRepModal) {
-            // إزالة جميع event listeners من Modal
-            const newModal = collectFromRepModal.cloneNode(true);
-            collectFromRepModal.parentNode.replaceChild(newModal, collectFromRepModal);
-            
-            // إزالة backdrop فوراً إذا تم إنشاؤه
-            const removeBackdrop = function() {
-                const backdrops = document.querySelectorAll('.modal-backdrop');
-                backdrops.forEach(function(backdrop) {
-                    backdrop.remove();
-                });
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
-                document.body.style.paddingRight = '';
-            };
-            
-            // مراقبة مستمرة لإزالة backdrop
-            setInterval(removeBackdrop, 50);
-            
-            // منع فتح Modal تماماً
-            newModal.addEventListener('show.bs.modal', function(e) {
+            collectFromRepModal.addEventListener('show.bs.modal', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
-                removeBackdrop();
+                forceCloseModals();
+                // فتح Card بدلاً من Modal
+                const card = document.getElementById('collectFromRepCard');
+                if (card) {
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        scrollToElement(card);
+                    }, 50);
+                }
                 return false;
-            });
+            }, true); // useCapture = true لتنفيذ قبل أي listener آخر
         }
         
         if (generateReportModal) {
-            // إزالة جميع event listeners من Modal
-            const newModal = generateReportModal.cloneNode(true);
-            generateReportModal.parentNode.replaceChild(newModal, generateReportModal);
-            
-            // إزالة backdrop فوراً إذا تم إنشاؤه
-            const removeBackdrop = function() {
-                const backdrops = document.querySelectorAll('.modal-backdrop');
-                backdrops.forEach(function(backdrop) {
-                    backdrop.remove();
-                });
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
-                document.body.style.paddingRight = '';
-            };
-            
-            // مراقبة مستمرة لإزالة backdrop
-            setInterval(removeBackdrop, 50);
-            
-            // منع فتح Modal تماماً
-            newModal.addEventListener('show.bs.modal', function(e) {
+            generateReportModal.addEventListener('show.bs.modal', function(e) {
                 e.preventDefault();
                 e.stopImmediatePropagation();
-                removeBackdrop();
+                forceCloseModals();
+                // فتح Card بدلاً من Modal
+                const card = document.getElementById('generateReportCard');
+                if (card) {
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        scrollToElement(card);
+                    }, 50);
+                }
                 return false;
-            });
+            }, true); // useCapture = true لتنفيذ قبل أي listener آخر
         }
+        
+        // مراقبة مستمرة لإزالة backdrop (كل 100ms)
+        setInterval(forceCloseModals, 100);
+        
+        // مراقبة DOM لإزالة backdrop فور إضافته
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1 && node.classList && node.classList.contains('modal-backdrop')) {
+                        node.remove();
+                        forceCloseModals();
+                    }
+                    if (node.nodeType === 1 && node.querySelectorAll) {
+                        const backdrops = node.querySelectorAll('.modal-backdrop');
+                        backdrops.forEach(function(backdrop) {
+                            backdrop.remove();
+                            forceCloseModals();
+                        });
+                    }
+                });
+            });
+        });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
     }
-    
-    // Modal elements
-    const collectFromRepModal = document.getElementById('collectFromRepModal');
-    const generateReportModal = document.getElementById('generateReportModal');
     
     // Modal elements
     const salesRepSelect = document.getElementById('salesRepSelect');
