@@ -3017,15 +3017,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-            
-            if (maxBalance > 0 && amount > maxBalance) {
-                e.preventDefault();
-                alert('المبلغ المطلوب (' + amount.toLocaleString('ar-EG') + ' ج.م) أكبر من رصيد المندوب (' + maxBalance.toLocaleString('ar-EG') + ' ج.م)');
-                collectAmount.focus();
-                return false;
-            }
-        });
-    }
     
     // إعادة تعيين النموذج عند إغلاق Modal
     const collectModal = document.getElementById('collectFromRepModal');

@@ -574,8 +574,9 @@ $typeColorMap = [
 ];
 ?>
 
+<!-- ملخص الخزنة - صف مستقل -->
 <div class="row g-3 mt-4">
-    <div class="col-12 col-xxl-7">
+    <div class="col-12">
         <div class="card shadow-sm h-100">
             <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-graph-up-arrow me-2 text-primary"></i>ملخص الخزنة</span>
@@ -665,10 +666,12 @@ $typeColorMap = [
             </div>
         </div>
     </div>
-    <div class="col-12 col-xxl-5">
-        <div class="row g-3">
-            <!-- تسجيل مصروف سريع -->
-            <div class="col-12 col-md-4">
+</div>
+
+<!-- النماذج الثلاثة - صف مستقل -->
+<div class="row g-3 mt-4">
+    <!-- تسجيل مصروف سريع -->
+    <div class="col-12 col-md-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-header bg-light fw-bold">
                         <i class="bi bi-pencil-square me-2 text-success"></i>تسجيل مصروف سريع
@@ -839,8 +842,6 @@ $typeColorMap = [
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
 </div>
 
 <!-- جدول الحركات المالية -->
