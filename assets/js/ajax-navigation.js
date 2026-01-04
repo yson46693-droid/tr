@@ -232,7 +232,8 @@
                     'Accept': 'text/html'
                 },
                 cache: 'default',
-                signal: controller.signal
+                signal: controller.signal,
+                redirect: 'follow'
             });
 
             clearTimeout(timeoutId);
@@ -242,10 +243,29 @@
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
+            // التحقق من حدوث redirect إلى صفحة تسجيل الدخول
+            const responseUrl = response.url || url;
+            const isLoginPage = responseUrl.includes('index.php') || responseUrl.includes('/login');
+            
+            // إذا تم redirect إلى صفحة تسجيل الدخول، نعيد التوجيه الكامل للصفحة
+            if (isLoginPage && response.redirected) {
+                hideLoading();
+                isLoading = false;
+                window.location.href = responseUrl;
+                return false;
+            }
+
             const html = await response.text();
             const data = extractContent(html);
 
             if (!data) {
+                // إذا فشل استخراج المحتوى وكانت هناك redirect إلى صفحة تسجيل الدخول، نعيد التوجيه الكامل
+                if (response.redirected && isLoginPage) {
+                    hideLoading();
+                    isLoading = false;
+                    window.location.href = responseUrl;
+                    return false;
+                }
                 throw new Error('Failed to extract content from response');
             }
 
