@@ -146,13 +146,23 @@
         const currentPage = currentUrlObj.pathname.split('/').pop() || '';
         const currentPageParam = currentUrlObj.searchParams.get('page') || '';
         
-        // إزالة active من جميع الروابط
+        // إزالة active من جميع الروابط - استخدام selector أكثر تحديداً
         const allNavLinks = document.querySelectorAll('.homeline-sidebar .nav-link, .sidebar-nav .nav-link');
+        
+        // التأكد من أننا نجد الروابط فعلاً
+        if (allNavLinks.length === 0) {
+            // محاولة مرة أخرى بعد قليل إذا لم تكن الروابط جاهزة
+            setTimeout(updateSidebarActiveState, 50);
+            return;
+        }
+        
+        // إزالة active من جميع الروابط أولاً
         allNavLinks.forEach(link => {
             link.classList.remove('active');
         });
         
         // إضافة active للرابط المطابق
+        let foundActive = false;
         allNavLinks.forEach(link => {
             if (!link.href) return;
             
@@ -163,16 +173,20 @@
                 
                 // مطابقة الصفحة والمعامل
                 if (linkPage === currentPage) {
+                    // حالة الصفحة الرئيسية (بدون page parameter)
                     if (currentPageParam === '' && linkPageParam === '') {
-                        // الصفحة الرئيسية
                         link.classList.add('active');
-                    } else if (currentPageParam !== '' && linkPageParam === currentPageParam) {
-                        // نفس معامل page
+                        foundActive = true;
+                    } 
+                    // حالة الصفحات مع page parameter
+                    else if (currentPageParam !== '' && linkPageParam !== '' && currentPageParam === linkPageParam) {
                         link.classList.add('active');
+                        foundActive = true;
                     }
                 }
             } catch (e) {
                 // تجاهل أخطاء URL parsing
+                console.warn('Error parsing URL in updateSidebarActiveState:', e);
             }
         });
     }
@@ -195,8 +209,11 @@
         // تحديث المحتوى
         mainElement.innerHTML = data.content;
 
-        // تحديث حالة active في الشريط الجانبي
-        updateSidebarActiveState();
+        // تحديث حالة active في الشريط الجانبي - مع تأخير بسيط لضمان اكتمال تحديث DOM
+        // استخدام requestAnimationFrame لضمان تحديث DOM قبل تحديث حالة active
+        requestAnimationFrame(() => {
+            updateSidebarActiveState();
+        });
 
         // إعادة تهيئة الأحداث
         reinitializeEvents();
@@ -253,6 +270,8 @@
         // التحقق من Cache
         if (CONFIG.cacheEnabled && pageCache.has(url)) {
             const cachedData = pageCache.get(url);
+            // تحديث URL أولاً لتحديث حالة active بشكل صحيح
+            currentUrl = url;
             updatePageContent(cachedData);
             updateHistory(url);
             return true;
@@ -321,10 +340,11 @@
                 pageCache.set(url, data);
             }
 
+            // تحديث URL أولاً
+            currentUrl = url;
             // تحديث الصفحة
             updatePageContent(data);
             updateHistory(url);
-            currentUrl = url;
 
             return true;
         } catch (error) {
@@ -439,7 +459,10 @@
      */
     function init() {
         // تحديث حالة active في الشريط الجانبي عند التحميل الأولي
-        updateSidebarActiveState();
+        // استخدام setTimeout لضمان أن DOM جاهز بالكامل
+        setTimeout(() => {
+            updateSidebarActiveState();
+        }, 0);
 
         // إضافة معالج النقر على الروابط
         document.addEventListener('click', handleLinkClick, true);
