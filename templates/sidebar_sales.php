@@ -37,7 +37,8 @@ $baseUrl = getDashboardUrl();
             </li>
             
             <li class="nav-item">
-                <a class="nav-link" href="<?php echo $baseUrl; ?>sales.php?page=customers">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'customers') ? 'active' : ''; ?>" 
+                   href="<?php echo $baseUrl; ?>sales.php?page=customers">
                     <i class="bi bi-people"></i>
                     <span><?php echo $lang['customers']; ?></span>
                 </a>
@@ -83,7 +84,8 @@ $baseUrl = getDashboardUrl();
                 <div class="sidebar-section-title">Sales</div>
                 
                 <li class="nav-item">
-                    <a class="nav-link" href="<?php echo $baseUrl; ?>sales.php?page=orders">
+                    <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'orders') ? 'active' : ''; ?>" 
+                       href="<?php echo $baseUrl; ?>sales.php?page=orders">
                         <i class="bi bi-cart-check"></i>
                         <span>طلبات العملاء</span>
                         <?php
@@ -101,7 +103,8 @@ $baseUrl = getDashboardUrl();
                 </li>
                 
                 <li class="nav-item">
-                    <a class="nav-link" href="<?php echo $baseUrl; ?>sales.php?page=payment_schedules">
+                    <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'payment_schedules') ? 'active' : ''; ?>" 
+                       href="<?php echo $baseUrl; ?>sales.php?page=payment_schedules">
                         <i class="bi bi-calendar-check"></i>
                         <span>جداول التحصيل</span>
                     </a>
@@ -109,7 +112,8 @@ $baseUrl = getDashboardUrl();
             </div>
             
             <li class="nav-item">
-                <a class="nav-link" href="<?php echo $baseUrl; ?>sales.php?page=vehicle_inventory">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'vehicle_inventory') ? 'active' : ''; ?>" 
+                   href="<?php echo $baseUrl; ?>sales.php?page=vehicle_inventory">
                     <i class="bi bi-truck"></i>
                     <span>مخزن السيارة</span>
                 </a>
@@ -132,7 +136,8 @@ $baseUrl = getDashboardUrl();
             </li>
             
             <li class="nav-item">
-                <a class="nav-link" href="<?php echo $baseUrl; ?>sales.php?page=reports">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'reports') ? 'active' : ''; ?>" 
+                   href="<?php echo $baseUrl; ?>sales.php?page=reports">
                     <i class="bi bi-file-earmark-text"></i>
                     <span><?php echo $lang['menu_reports']; ?></span>
                 </a>
