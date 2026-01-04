@@ -4598,6 +4598,14 @@ function showAddOliveOilModal() {
         // على الموبايل: استخدام Card
         const card = document.getElementById('addOliveOilCard');
         if (card) {
+            // تحديث submit_token عند فتح النموذج
+            const form = card.querySelector('form');
+            if (form) {
+                const tokenInput = form.querySelector('input[name="submit_token"]');
+                if (tokenInput) {
+                    tokenInput.value = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                }
+            }
             card.style.display = 'block';
             setTimeout(function() {
                 scrollToElement(card);
@@ -4607,6 +4615,14 @@ function showAddOliveOilModal() {
         // على الكمبيوتر: استخدام Modal
         const modal = document.getElementById('addOliveOilModal');
         if (modal) {
+            // تحديث submit_token عند فتح النموذج
+            const form = modal.querySelector('form');
+            if (form) {
+                const tokenInput = form.querySelector('input[name="submit_token"]');
+                if (tokenInput) {
+                    tokenInput.value = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                }
+            }
             const modalInstance = new bootstrap.Modal(modal);
             modalInstance.show();
         }
@@ -6144,7 +6160,7 @@ if ($section === 'honey') {
             <div class="card shadow-sm">
                 <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #96e6a1 0%, #45b649 100%);">
                     <h5 class="mb-0"><i class="bi bi-cup-straw me-2"></i>مخزون زيت الزيتون</h5>
-                    <button class="btn btn-light btn-sm" onclick="showAddOliveOilModal()">
+                    <button class="btn btn-light btn-sm" id="addOliveOilBtn" onclick="showAddOliveOilModal()">
                         <i class="bi bi-plus-circle me-1"></i>إضافة
                     </button>
                 </div>
@@ -6703,6 +6719,29 @@ if ($section === 'honey') {
                 }
             }, { passive: false });
         });
+
+        // زر إضافة زيت الزيتون
+        const addOliveOilBtn = document.getElementById('addOliveOilBtn');
+        if (addOliveOilBtn) {
+            // إضافة event listener مع الاحتفاظ بـ onclick كبديل
+            addOliveOilBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof showAddOliveOilModal === 'function') {
+                    showAddOliveOilModal();
+                } else {
+                    // إذا لم تكن الدالة متاحة، استخدم onclick الأصلي
+                    const originalOnclick = addOliveOilBtn.getAttribute('onclick');
+                    if (originalOnclick) {
+                        try {
+                            eval(originalOnclick);
+                        } catch (err) {
+                            console.error('Error executing showAddOliveOilModal:', err);
+                        }
+                    }
+                }
+            }, { passive: false });
+        }
     });
 </script>
 
