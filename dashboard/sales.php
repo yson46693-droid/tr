@@ -1444,6 +1444,17 @@ if ($isCashRegisterAjax) {
     let tabsInitialized = false;
     let reportButtonsInitialized = false;
     
+    // دالة لإغلاق الشريط الجانبي على الموبايل
+    function closeSidebarOnMobile() {
+        if (window.innerWidth <= 768) {
+            const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+            if (dashboardWrapper && dashboardWrapper.classList.contains('sidebar-open')) {
+                dashboardWrapper.classList.remove('sidebar-open');
+                document.body.classList.remove('sidebar-open');
+            }
+        }
+    }
+    
     // تهيئة التبويبات
     function initTabs() {
         const tabButtons = document.querySelectorAll('#myRecordsTabs button[data-bs-toggle="tab"]');
@@ -1479,6 +1490,7 @@ if ($isCashRegisterAjax) {
                     const currentTabButtons = document.querySelectorAll('#myRecordsTabs button[data-bs-toggle="tab"]');
                     updateTabState(event.target, currentTabButtons);
                     updateURL(event.target);
+                    closeSidebarOnMobile();
                 });
             } else {
                 button.addEventListener('click', function(e) {
@@ -1504,6 +1516,7 @@ if ($isCashRegisterAjax) {
                         updateTabState(this, currentTabButtons);
                         updateURL(this);
                     }
+                    closeSidebarOnMobile();
                 });
             }
             
@@ -2090,6 +2103,17 @@ if ($isCashRegisterAjax) {
     let tabsInitialized = false;
     let reportButtonsInitialized = false;
     
+    // دالة لإغلاق الشريط الجانبي على الموبايل
+    function closeSidebarOnMobile() {
+        if (window.innerWidth <= 768) {
+            const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+            if (dashboardWrapper && dashboardWrapper.classList.contains('sidebar-open')) {
+                dashboardWrapper.classList.remove('sidebar-open');
+                document.body.classList.remove('sidebar-open');
+            }
+        }
+    }
+    
     // تهيئة التبويبات
     function initTabs() {
         const tabButtons = document.querySelectorAll('#salesRecordsTabs button[data-bs-toggle="tab"]');
@@ -2133,6 +2157,7 @@ if ($isCashRegisterAjax) {
                         updateTabState(event.target, currentTabButtons);
                         updateURL(event.target);
                     }
+                    closeSidebarOnMobile();
                 });
             } else {
                 // Fallback يدوي - معالج click فقط
@@ -2167,6 +2192,7 @@ if ($isCashRegisterAjax) {
                         updateTabState(this, currentTabButtons);
                         updateURL(this);
                     }
+                    closeSidebarOnMobile();
                 });
             }
             

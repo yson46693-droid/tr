@@ -2888,6 +2888,15 @@ try {
                 grid-template-columns: repeat(12, 1fr);
                 gap: 1.5rem;
             }
+            /* على سطح المكتب: المنتجات في اليمين والنماذج في اليسار */
+            @media (min-width: 993px) {
+                .pos-content > .pos-panel:has(.pos-product-grid) {
+                    grid-column: 6 / -1; /* المنتجات في العامود الأيمن */
+                }
+                .pos-content > .pos-checkout-panel {
+                    grid-column: 1 / 6; /* النماذج في العامود الأيسر */
+                }
+            }
             .pos-panel {
                 background: #fff;
                 border-radius: 18px;
@@ -3232,7 +3241,7 @@ try {
             </section>
 
             <section class="pos-content">
-                <div class="pos-panel" style="grid-column: span 7;">
+                <div class="pos-panel">
                     <div class="pos-panel-header">
                         <div>
                             <h4>مخزن الشركة الرئيسي</h4>
@@ -3285,7 +3294,7 @@ try {
                     </div>
                 </div>
 
-                <div class="pos-panel pos-checkout-panel" style="grid-column: span 7;">
+                <div class="pos-panel pos-checkout-panel">
                     <div class="pos-selected-product" id="posSelectedProduct">
                         <h5 class="mb-3">تفاصيل المنتج المختار</h5>
                         <div class="meta-row">
