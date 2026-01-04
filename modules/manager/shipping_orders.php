@@ -3031,18 +3031,24 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                                 <span class="text-muted">-</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td><?php echo $invoiceLink ?: '<span class="text-muted">لا توجد فاتورة</span>'; ?></td>
+                                        <td>
+                                            <?php if (!empty($invoiceLink)): ?>
+                                                <?php echo $invoiceLink; ?>
+                                            <?php else: ?>
+                                                <span class="text-muted">لا توجد فاتورة</span>
+                                            <?php endif; ?>
+                                        </td>
                                         <td>
                                             <div class="d-flex flex-wrap gap-2">
-                                                <form method="POST" class="d-inline" onsubmit="return confirm('هل ترغب في إلغاء هذا الطلب وإرجاع المنتجات إلى المخزن الرئيسي؟');">
+                                                <form method="POST" class="d-inline cancel-order-form" onsubmit="return handleCancelOrder(event, this);">
                                                     <input type="hidden" name="action" value="cancel_shipping_order">
                                                     <input type="hidden" name="order_id" value="<?php echo (int)$order['id']; ?>">
-                                                    <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm cancel-order-btn">
                                                         <i class="bi bi-x-circle me-1"></i>طلب ملغي
                                                     </button>
                                                 </form>
                                                 <button type="button" 
-                                                        class="btn btn-success btn-sm" 
+                                                        class="btn btn-success btn-sm delivery-btn" 
                                                         onclick="showDeliveryModal(this)"
                                                         data-order-id="<?php echo (int)$order['id']; ?>"
                                                         data-order-number="<?php echo htmlspecialchars($order['order_number'] ?? ''); ?>"
@@ -3113,7 +3119,13 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                                 <span class="text-muted">-</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td><?php echo $invoiceLink ?: '<span class="text-muted">لا توجد فاتورة</span>'; ?></td>
+                                        <td>
+                                            <?php if (!empty($invoiceLink)): ?>
+                                                <?php echo $invoiceLink; ?>
+                                            <?php else: ?>
+                                                <span class="text-muted">لا توجد فاتورة</span>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -3170,7 +3182,13 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                                 <span class="text-muted">-</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td><?php echo $invoiceLink ?: '<span class="text-muted">لا توجد فاتورة</span>'; ?></td>
+                                        <td>
+                                            <?php if (!empty($invoiceLink)): ?>
+                                                <?php echo $invoiceLink; ?>
+                                            <?php else: ?>
+                                                <span class="text-muted">لا توجد فاتورة</span>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -3866,6 +3884,46 @@ function closeAddLocalCustomerCard() {
         });
     }
 })();
+
+// دالة معالجة إلغاء الطلب
+function handleCancelOrder(event, form) {
+    if (!event) {
+        return false;
+    }
+    
+    // منع السلوك الافتراضي
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // التحقق من التأكيد
+    const confirmed = confirm('هل ترغب في إلغاء هذا الطلب وإرجاع المنتجات إلى المخزن الرئيسي؟');
+    
+    if (!confirmed) {
+        return false;
+    }
+    
+    // تعطيل الزر لمنع الإرسال المتكرر
+    const submitBtn = form.querySelector('.cancel-order-btn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري الإلغاء...';
+    }
+    
+    // إرسال النموذج
+    try {
+        form.submit();
+    } catch (error) {
+        console.error('Error submitting cancel order form:', error);
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>طلب ملغي';
+        }
+        alert('حدث خطأ أثناء إلغاء الطلب. يرجى المحاولة مرة أخرى.');
+        return false;
+    }
+    
+    return false;
+}
 </script>
 
 <!-- Modal لتسليم الطلب -->

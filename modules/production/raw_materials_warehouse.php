@@ -4916,7 +4916,7 @@ if ($section === 'honey') {
         <div class="card-header text-white d-flex flex-wrap gap-2 justify-content-between align-items-center" style="background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);">
             <h5 class="mb-0"><i class="bi bi-droplet me-2"></i>مخزون العسل</h5>
             <div class="d-flex flex-wrap gap-2 align-items-center">
-                <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addHoneyModal">
+                <button class="btn btn-light btn-sm" onclick="showAddHoneyModal()">
                     <i class="bi bi-plus-circle me-1"></i>إضافة عسل
                 </button>
             </div>
@@ -5795,6 +5795,33 @@ if ($section === 'honey') {
         }
     }
 
+    // دالة فتح نموذج إضافة عسل
+    function showAddHoneyModal() {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('addHoneyCard');
+            if (card) {
+                card.style.display = 'block';
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+            }
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const modal = document.getElementById('addHoneyModal');
+            if (modal) {
+                const modalInstance = new bootstrap.Modal(modal);
+                modalInstance.show();
+            }
+        }
+    }
+
     function updateHoneyDamageAvailable() {
         // للـ Modal
         const typeSelect = document.getElementById('damage_honey_type');
@@ -5908,7 +5935,7 @@ if ($section === 'honey') {
             <div class="card shadow-sm">
                 <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #96e6a1 0%, #45b649 100%);">
                     <h5 class="mb-0"><i class="bi bi-cup-straw me-2"></i>مخزون زيت الزيتون</h5>
-                    <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addOliveOilModal">
+                    <button class="btn btn-light btn-sm" onclick="showAddOliveOilModal()">
                         <i class="bi bi-plus-circle me-1"></i>إضافة
                     </button>
                 </div>
@@ -6290,7 +6317,7 @@ if ($section === 'honey') {
             <div class="card shadow-sm">
                 <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #ffc371 0%, #ff5f6d 100%);">
                     <h5 class="mb-0"><i class="bi bi-hexagon-fill me-2"></i>مخزون شمع العسل</h5>
-                    <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addBeeswaxModal">
+                    <button class="btn btn-light btn-sm" onclick="showAddBeeswaxModal()">
                         <i class="bi bi-plus-circle me-1"></i>إضافة
                     </button>
                 </div>
@@ -6496,6 +6523,33 @@ if ($section === 'honey') {
         }
     }
 
+    // دالة فتح نموذج إضافة زيت زيتون
+    function showAddOliveOilModal() {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('addOliveOilCard');
+            if (card) {
+                card.style.display = 'block';
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+            }
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const modal = document.getElementById('addOliveOilModal');
+            if (modal) {
+                const modalInstance = new bootstrap.Modal(modal);
+                modalInstance.show();
+            }
+        }
+    }
+
     function closeAddBeeswaxCard() {
         const card = document.getElementById('addBeeswaxCard');
         if (card) {
@@ -6511,6 +6565,33 @@ if ($section === 'honey') {
             card.style.display = 'none';
             const form = card.querySelector('form');
             if (form) form.reset();
+        }
+    }
+
+    // دالة فتح نموذج إضافة شمع عسل
+    function showAddBeeswaxModal() {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card
+            const card = document.getElementById('addBeeswaxCard');
+            if (card) {
+                card.style.display = 'block';
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+            }
+        } else {
+            // على الكمبيوتر: استخدام Modal
+            const modal = document.getElementById('addBeeswaxModal');
+            if (modal) {
+                const modalInstance = new bootstrap.Modal(modal);
+                modalInstance.show();
+            }
         }
     }
 </script>
