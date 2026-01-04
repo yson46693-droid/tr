@@ -1199,10 +1199,10 @@ if (isset($_GET['id'])) {
     <h2><i class="bi bi-arrow-left-right me-2"></i>طلبات النقل بين المخازن</h2>
     <div class="d-flex gap-2">
         <?php if ($isManager || $isAccountant): ?>
-            <button type="button" class="btn btn-primary rounded-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#transferFromCompanyModal">
+            <button type="button" class="btn btn-primary rounded-3 shadow-sm" onclick="showTransferFromCompanyModal()">
                 <i class="bi bi-box-arrow-right me-2"></i>نقل من منتجات الشركة
             </button>
-            <button type="button" class="btn btn-success rounded-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#transferFromSalesRepModal">
+            <button type="button" class="btn btn-success rounded-3 shadow-sm" onclick="showTransferFromSalesRepModal()">
                 <i class="bi bi-truck me-2"></i>نقل من بضاعة المندوب
             </button>
         <?php endif; ?>
@@ -1211,10 +1211,10 @@ if (isset($_GET['id'])) {
 <?php else: ?>
 <div class="d-flex justify-content-end mb-3 gap-2">
     <?php if ($isManager || $isAccountant): ?>
-        <button type="button" class="btn btn-primary rounded-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#transferFromCompanyModal">
+        <button type="button" class="btn btn-primary rounded-3 shadow-sm" onclick="showTransferFromCompanyModal()">
             <i class="bi bi-box-arrow-right me-2"></i>نقل من منتجات الشركة
         </button>
-        <button type="button" class="btn btn-success rounded-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#transferFromSalesRepModal">
+        <button type="button" class="btn btn-success rounded-3 shadow-sm" onclick="showTransferFromSalesRepModal()">
             <i class="bi bi-truck me-2"></i>نقل من بضاعة المندوب
         </button>
     <?php endif; ?>
@@ -1841,6 +1841,170 @@ if (isset($_GET['id'])) {
     </div>
 </div>
 
+<!-- Card نقل من مخزن الشركة إلى مخزن السيارة - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="transferFromCompanyCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-box-arrow-right me-2"></i>نقل منتجات من مخزن الشركة إلى مخزن السيارة</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="transferFromCompanyCardForm">
+            <input type="hidden" name="action" value="create_transfer_from_company">
+            <div class="mb-3">
+                <label class="form-label">إلى مخزن السيارة <span class="text-danger">*</span></label>
+                <select class="form-select" name="to_warehouse_id" id="to_warehouse_id_card" required>
+                    <option value="">-- اختر مخزن السيارة --</option>
+                    <?php foreach ($vehicleWarehouses as $vWarehouse): ?>
+                        <option value="<?php echo $vWarehouse['id']; ?>">
+                            <?php echo htmlspecialchars($vWarehouse['name']); ?>
+                            <?php if (!empty($vWarehouse['vehicle_number'])): ?>
+                                (<?php echo htmlspecialchars($vWarehouse['vehicle_number']); ?>)
+                            <?php endif; ?>
+                            <?php if (!empty($vWarehouse['driver_name'])): ?>
+                                - <?php echo htmlspecialchars($vWarehouse['driver_name']); ?>
+                            <?php endif; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">تاريخ النقل <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" name="transfer_date" value="<?php echo date('Y-m-d'); ?>" required>
+            </div>
+            <hr>
+            <h6 class="mb-3">المنتجات المراد نقلها:</h6>
+            
+            <!-- منتجات المصنع -->
+            <?php if (!empty($companyFactoryProducts)): ?>
+            <div class="mb-4">
+                <h6 class="text-primary mb-2"><i class="bi bi-building me-2"></i>منتجات المصنع</h6>
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th width="30px"></th>
+                                <th>رقم التشغيلة</th>
+                                <th>اسم المنتج</th>
+                                <th>المتاح</th>
+                                <th>الكمية</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($companyFactoryProducts as $product): ?>
+                                <?php
+                                $availableQty = floatval($product['quantity_produced'] ?? 0);
+                                // حساب الكمية المحجوزة في طلبات النقل المعلقة
+                                $pendingTransfers = $db->queryOne(
+                                    "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
+                                     FROM warehouse_transfer_items wti
+                                     INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
+                                     WHERE wti.batch_id = ? AND wt.status = 'pending'",
+                                    [$product['batch_id']]
+                                );
+                                $availableQty -= (float)($pendingTransfers['pending_quantity'] ?? 0);
+                                $availableQty = max(0, $availableQty);
+                                ?>
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input product-checkbox-card" 
+                                               data-type="factory" 
+                                               data-product-id="<?php echo $product['product_id'] ?? 0; ?>"
+                                               data-batch-id="<?php echo $product['batch_id']; ?>"
+                                               data-batch-number="<?php echo htmlspecialchars($product['batch_number'] ?? ''); ?>"
+                                               data-product-name="<?php echo htmlspecialchars($product['product_name'] ?? ''); ?>"
+                                               data-available="<?php echo $availableQty; ?>">
+                                    </td>
+                                    <td><?php echo htmlspecialchars($product['batch_number'] ?? '-'); ?></td>
+                                    <td><?php echo htmlspecialchars($product['product_name'] ?? 'غير محدد'); ?></td>
+                                    <td><?php echo number_format($availableQty, 2); ?> <?php echo htmlspecialchars($product['unit'] ?? 'قطعة'); ?></td>
+                                    <td>
+                                        <input type="number" step="0.01" min="0" max="<?php echo $availableQty; ?>" 
+                                               class="form-control form-control-sm quantity-input-card" 
+                                               data-type="factory"
+                                               data-batch-id="<?php echo $product['batch_id']; ?>"
+                                               disabled>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <?php endif; ?>
+            
+            <!-- المنتجات الخارجية -->
+            <?php if (!empty($companyExternalProducts)): ?>
+            <div class="mb-3">
+                <h6 class="text-success mb-2"><i class="bi bi-cart4 me-2"></i>المنتجات الخارجية</h6>
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th width="30px"></th>
+                                <th>اسم المنتج</th>
+                                <th>المتاح</th>
+                                <th>الكمية</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($companyExternalProducts as $product): ?>
+                                <?php
+                                $availableQty = floatval($product['quantity'] ?? 0);
+                                // حساب الكمية المحجوزة في طلبات النقل المعلقة
+                                $pendingTransfers = $db->queryOne(
+                                    "SELECT COALESCE(SUM(wti.quantity), 0) AS pending_quantity
+                                     FROM warehouse_transfer_items wti
+                                     INNER JOIN warehouse_transfers wt ON wt.id = wti.transfer_id
+                                     WHERE wti.product_id = ? AND wt.status = 'pending'",
+                                    [$product['id']]
+                                );
+                                $availableQty -= (float)($pendingTransfers['pending_quantity'] ?? 0);
+                                $availableQty = max(0, $availableQty);
+                                ?>
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input product-checkbox-card" 
+                                               data-type="external" 
+                                               data-product-id="<?php echo $product['id']; ?>"
+                                               data-product-name="<?php echo htmlspecialchars($product['name'] ?? ''); ?>"
+                                               data-available="<?php echo $availableQty; ?>">
+                                    </td>
+                                    <td><?php echo htmlspecialchars($product['name'] ?? ''); ?></td>
+                                    <td><?php echo number_format($availableQty, 2); ?> <?php echo htmlspecialchars($product['unit'] ?? 'قطعة'); ?></td>
+                                    <td>
+                                        <input type="number" step="1" min="0" max="<?php echo $availableQty; ?>" 
+                                               class="form-control form-control-sm quantity-input-card" 
+                                               data-type="external"
+                                               data-product-id="<?php echo $product['id']; ?>"
+                                               disabled>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <?php endif; ?>
+            
+            <?php if (empty($companyFactoryProducts) && empty($companyExternalProducts)): ?>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    لا توجد منتجات متاحة للنقل حالياً.
+                </div>
+            <?php endif; ?>
+            
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary" id="submitTransferCardBtn" disabled>
+                    <i class="bi bi-check-circle me-2"></i>إنشاء طلب النقل
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeTransferFromCompanyCard()">
+                    <i class="bi bi-x-circle me-2"></i>إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Modal نقل من بضاعة المندوب -->
 <!-- Modal للكمبيوتر فقط -->
 <div class="modal fade d-none d-md-block" id="transferFromSalesRepModal" tabindex="-1">
@@ -1897,6 +2061,61 @@ if (isset($_GET['id'])) {
                 </div>
             </form>
         </div>
+    </div>
+</div>
+
+<!-- Card نقل من بضاعة المندوب - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="transferFromSalesRepCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-truck me-2"></i>نقل منتجات من بضاعة المندوب إلى المخزن الرئيسي</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="transferFromSalesRepCardForm">
+            <input type="hidden" name="action" value="create_transfer_from_sales_rep">
+            <div class="mb-3">
+                <label class="form-label">المندوب <span class="text-danger">*</span></label>
+                <select class="form-select" name="sales_rep_id" id="sales_rep_id_card" required>
+                    <option value="">-- اختر المندوب --</option>
+                    <?php foreach ($salesReps as $rep): ?>
+                        <option value="<?php echo $rep['id']; ?>">
+                            <?php echo htmlspecialchars($rep['full_name'] ?? $rep['username']); ?>
+                            <?php if (!empty($rep['vehicle_number'])): ?>
+                                (<?php echo htmlspecialchars($rep['vehicle_number']); ?>)
+                            <?php endif; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">تاريخ النقل <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" name="transfer_date" value="<?php echo date('Y-m-d'); ?>" required>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" name="notes" rows="2" placeholder="ملاحظات إضافية (اختياري)"></textarea>
+            </div>
+            
+            <hr>
+            <h6 class="mb-3">المنتجات المراد نقلها:</h6>
+            
+            <div id="salesRepProductsCardContainer">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    يرجى اختيار المندوب أولاً لعرض المنتجات المتاحة في مخزن سيارته.
+                </div>
+            </div>
+            
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-success" id="submitSalesRepTransferCardBtn" disabled>
+                    <i class="bi bi-check-circle me-2"></i>إنشاء طلب النقل
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeTransferFromSalesRepCard()">
+                    <i class="bi bi-x-circle me-2"></i>إلغاء
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -1976,6 +2195,139 @@ if (isset($_GET['id'])) {
 </div>
 
 <script>
+// ===== دوال النظام المزدوج (Modal للكمبيوتر / Card للموبايل) =====
+
+// دالة للتحقق من الموبايل
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// دالة للـ scroll تلقائي محسّنة
+function scrollToElement(element) {
+    if (!element) return;
+    
+    setTimeout(function() {
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80;
+        const targetPosition = elementTop - offset;
+        
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, targetPosition),
+                behavior: 'smooth'
+            });
+        });
+    }, 200);
+}
+
+// دالة لإغلاق جميع النماذج المفتوحة
+function closeAllForms() {
+    // إغلاق جميع Cards على الموبايل
+    const cards = [
+        'transferFromCompanyCard',
+        'transferFromSalesRepCard'
+    ];
+    
+    cards.forEach(function(cardId) {
+        const card = document.getElementById(cardId);
+        if (card && card.style.display !== 'none') {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    });
+    
+    // إغلاق جميع Modals على الكمبيوتر
+    const modals = [
+        'transferFromCompanyModal',
+        'transferFromSalesRepModal',
+        'generalTransferModal',
+        'rejectModal'
+    ];
+    
+    modals.forEach(function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) modalInstance.hide();
+        }
+    });
+}
+
+// دالة فتح نموذج نقل من مخزن الشركة
+function showTransferFromCompanyModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('transferFromCompanyCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('transferFromCompanyModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة فتح نموذج نقل من بضاعة المندوب
+function showTransferFromSalesRepModal() {
+    closeAllForms();
+    
+    if (isMobile()) {
+        const card = document.getElementById('transferFromSalesRepCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        const modal = document.getElementById('transferFromSalesRepModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دوال إغلاق Cards
+function closeTransferFromCompanyCard() {
+    const card = document.getElementById('transferFromCompanyCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+        // إعادة تعيين جميع checkboxes
+        const checkboxes = card.querySelectorAll('.product-checkbox-card');
+        checkboxes.forEach(cb => {
+            cb.checked = false;
+            cb.dispatchEvent(new Event('change'));
+        });
+    }
+}
+
+function closeTransferFromSalesRepCard() {
+    const card = document.getElementById('transferFromSalesRepCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+        // إعادة تعيين container المنتجات
+        const container = document.getElementById('salesRepProductsCardContainer');
+        if (container) {
+            container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>يرجى اختيار المندوب أولاً لعرض المنتجات المتاحة في مخزن سيارته.</div>';
+        }
+    }
+}
+
 function showRejectModal(transferId) {
     const rejectTransferIdInput = document.getElementById('rejectTransferId');
     const rejectionReasonTextarea = document.getElementById('rejectionReason');
@@ -2177,6 +2529,144 @@ document.addEventListener('DOMContentLoaded', function() {
             cb.dispatchEvent(new Event('change'));
         });
         form.querySelectorAll('input[type="hidden"][name^="items"]').forEach(input => input.remove());
+    });
+});
+
+// معالجة Card نقل من مخزن الشركة (للموبايل)
+document.addEventListener('DOMContentLoaded', function() {
+    const transferCard = document.getElementById('transferFromCompanyCard');
+    if (!transferCard) return;
+    
+    const checkboxes = transferCard.querySelectorAll('.product-checkbox-card');
+    const quantityInputs = transferCard.querySelectorAll('.quantity-input-card');
+    const submitBtn = document.getElementById('submitTransferCardBtn');
+    const form = document.getElementById('transferFromCompanyCardForm');
+    
+    // تفعيل/تعطيل حقول الكمية عند اختيار المنتج
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const type = this.dataset.type;
+            const identifier = type === 'factory' ? this.dataset.batchId : this.dataset.productId;
+            const available = parseFloat(this.dataset.available || 0);
+            
+            // إيجاد حقول الكمية المرتبطة
+            quantityInputs.forEach(input => {
+                if (input.dataset.type === type && input.dataset[type === 'factory' ? 'batchId' : 'productId'] == identifier) {
+                    input.disabled = !this.checked;
+                    if (this.checked) {
+                        input.max = available;
+                        input.focus();
+                    } else {
+                        input.value = '';
+                    }
+                }
+            });
+            
+            updateSubmitButtonCard();
+        });
+    });
+    
+    // التحقق من صحة الكمية
+    quantityInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            const max = parseFloat(this.max || 0);
+            const value = parseFloat(this.value || 0);
+            if (value > max) {
+                this.value = max;
+                alert('الكمية المحددة تتجاوز الكمية المتاحة');
+            }
+            updateSubmitButtonCard();
+        });
+    });
+    
+    // تحديث حالة زر الإرسال
+    function updateSubmitButtonCard() {
+        let hasSelectedProducts = false;
+        let allQuantitiesValid = true;
+        
+        checkboxes.forEach(checkbox => {
+            if (checkbox.checked) {
+                hasSelectedProducts = true;
+                const type = checkbox.dataset.type;
+                const identifier = type === 'factory' ? checkbox.dataset.batchId : checkbox.dataset.productId;
+                const available = parseFloat(checkbox.dataset.available || 0);
+                
+                // التحقق من وجود كمية صحيحة
+                let quantityFound = false;
+                quantityInputs.forEach(input => {
+                    if (input.dataset.type === type && input.dataset[type === 'factory' ? 'batchId' : 'productId'] == identifier) {
+                        const qty = parseFloat(input.value || 0);
+                        if (qty > 0 && qty <= available) {
+                            quantityFound = true;
+                        } else if (qty > available) {
+                            allQuantitiesValid = false;
+                        }
+                    }
+                });
+                
+                if (!quantityFound) {
+                    allQuantitiesValid = false;
+                }
+            }
+        });
+        
+        if (submitBtn) {
+            submitBtn.disabled = !hasSelectedProducts || !allQuantitiesValid;
+        }
+    }
+    
+    // إعداد البيانات عند الإرسال
+    form.addEventListener('submit', function(e) {
+        const items = [];
+        
+        checkboxes.forEach(checkbox => {
+            if (checkbox.checked) {
+                const type = checkbox.dataset.type;
+                const identifier = type === 'factory' ? checkbox.dataset.batchId : checkbox.dataset.productId;
+                let quantity = 0;
+                
+                quantityInputs.forEach(input => {
+                    if (input.dataset.type === type && input.dataset[type === 'factory' ? 'batchId' : 'productId'] == identifier) {
+                        quantity = parseFloat(input.value || 0);
+                    }
+                });
+                
+                if (quantity > 0) {
+                    const item = {
+                        quantity: quantity
+                    };
+                    
+                    if (type === 'factory') {
+                        item.batch_id = checkbox.dataset.batchId;
+                        item.batch_number = checkbox.dataset.batchNumber;
+                        if (checkbox.dataset.productId && checkbox.dataset.productId != '0') {
+                            item.product_id = checkbox.dataset.productId;
+                        }
+                    } else {
+                        item.product_id = checkbox.dataset.productId;
+                    }
+                    
+                    items.push(item);
+                }
+            }
+        });
+        
+        if (items.length === 0) {
+            e.preventDefault();
+            alert('يرجى اختيار منتج واحد على الأقل وإدخال الكمية');
+            return false;
+        }
+        
+        // إضافة العناصر كحقول مخفية
+        items.forEach((item, index) => {
+            Object.keys(item).forEach(key => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = `items[${index}][${key}]`;
+                input.value = item[key];
+                form.appendChild(input);
+            });
+        });
     });
 });
 
@@ -2401,6 +2891,219 @@ document.addEventListener('DOMContentLoaded', function() {
                 salesRepForm.querySelectorAll('input[type="hidden"][name^="items"]').forEach(input => input.remove());
             });
         }
+    }
+});
+
+// معالجة Card نقل من بضاعة المندوب (للموبايل)
+document.addEventListener('DOMContentLoaded', function() {
+    const salesRepCardSelect = document.getElementById('sales_rep_id_card');
+    const productsCardContainer = document.getElementById('salesRepProductsCardContainer');
+    
+    if (salesRepCardSelect) {
+        salesRepCardSelect.addEventListener('change', function() {
+            const salesRepId = this.value;
+            productsCardContainer.innerHTML = '<div class="text-center py-3"><div class="spinner-border" role="status"><span class="visually-hidden">جاري التحميل...</span></div></div>';
+            
+            if (salesRepId) {
+                // جلب المنتجات من مخزن سيارة المندوب
+                const currentUrl = window.location.href.split('?')[0];
+                const urlParams = new URLSearchParams(window.location.search);
+                urlParams.set('ajax', 'get_vehicle_inventory');
+                urlParams.set('vehicle_id', salesRepId);
+                
+                fetch(currentUrl + '?' + urlParams.toString(), {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('Vehicle inventory data:', data);
+                        if (data.success && Array.isArray(data.products)) {
+                            if (data.products.length > 0) {
+                                displaySalesRepProductsCard(data.products);
+                            } else {
+                                productsCardContainer.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>لا توجد منتجات في مخزن سيارة هذا المندوب.</div>';
+                            }
+                        } else {
+                            productsCardContainer.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>' + (data.message || 'لا توجد منتجات في مخزن سيارة هذا المندوب.') + '</div>';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching vehicle inventory:', error);
+                        productsCardContainer.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-circle me-2"></i>حدث خطأ أثناء جلب المنتجات. يرجى المحاولة مرة أخرى.</div>';
+                    });
+            } else {
+                productsCardContainer.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle me-2"></i>يرجى اختيار المندوب أولاً.</div>';
+            }
+        });
+    }
+    
+    function displaySalesRepProductsCard(products) {
+        if (products.length === 0) {
+            productsCardContainer.innerHTML = '<div class="alert alert-info">لا توجد منتجات في مخزن سيارة هذا المندوب.</div>';
+            return;
+        }
+        
+        let html = '<div class="table-responsive" style="max-height: 400px; overflow-y: auto;">';
+        html += '<table class="table table-sm table-bordered">';
+        html += '<thead class="table-light sticky-top"><tr>';
+        html += '<th width="30px"></th>';
+        html += '<th>رقم التشغيلة</th>';
+        html += '<th>اسم المنتج</th>';
+        html += '<th>المتاح</th>';
+        html += '<th>الكمية</th>';
+        html += '</tr></thead><tbody>';
+        
+        products.forEach(product => {
+            const availableQty = parseFloat(product.quantity || 0);
+            const batchNumber = product.finished_batch_number || product.batch_number || '-';
+            const productName = product.product_name || 'غير محدد';
+            const unit = product.unit || product.product_unit || 'قطعة';
+            const productId = product.product_id || 0;
+            const batchId = product.finished_batch_id || product.batch_id || 0;
+            
+            html += '<tr>';
+            html += '<td><input type="checkbox" class="form-check-input product-checkbox-sales-card" ';
+            html += `data-product-id="${productId}" `;
+            html += `data-batch-id="${batchId}" `;
+            html += `data-batch-number="${batchNumber}" `;
+            html += `data-product-name="${productName.replace(/"/g, '&quot;')}" `;
+            html += `data-available="${availableQty}"></td>`;
+            html += `<td>${batchNumber}</td>`;
+            html += `<td>${productName}</td>`;
+            html += `<td>${availableQty.toFixed(2)} ${unit}</td>`;
+            html += `<td><input type="number" step="0.01" min="0" max="${availableQty}" `;
+            html += `class="form-control form-control-sm quantity-input-sales-card" `;
+            html += `data-product-id="${productId}" `;
+            html += `data-batch-id="${batchId}" disabled></td>`;
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table></div>';
+        productsCardContainer.innerHTML = html;
+        
+        // إضافة معالجات الأحداث
+        document.querySelectorAll('.product-checkbox-sales-card').forEach(cb => {
+            cb.addEventListener('change', function() {
+                const quantityInput = this.closest('tr').querySelector('.quantity-input-sales-card');
+                quantityInput.disabled = !this.checked;
+                if (!this.checked) {
+                    quantityInput.value = '';
+                }
+                updateSalesRepSubmitButtonCard();
+            });
+        });
+        
+        // إضافة معالجات للكميات
+        document.querySelectorAll('.quantity-input-sales-card').forEach(input => {
+            input.addEventListener('input', function() {
+                updateSalesRepSubmitButtonCard();
+            });
+        });
+        
+        updateSalesRepSubmitButtonCard();
+    }
+    
+    function updateSalesRepSubmitButtonCard() {
+        const submitBtn = document.getElementById('submitSalesRepTransferCardBtn');
+        if (!submitBtn) return;
+        
+        const checkedBoxes = document.querySelectorAll('.product-checkbox-sales-card:checked');
+        let hasValidQuantity = false;
+        
+        checkedBoxes.forEach(cb => {
+            const quantityInput = cb.closest('tr').querySelector('.quantity-input-sales-card');
+            const quantity = parseFloat(quantityInput.value) || 0;
+            if (quantity > 0) {
+                hasValidQuantity = true;
+            }
+        });
+        
+        submitBtn.disabled = checkedBoxes.length === 0 || !hasValidQuantity;
+    }
+    
+    const salesRepCardForm = document.getElementById('transferFromSalesRepCardForm');
+    if (salesRepCardForm) {
+        salesRepCardForm.addEventListener('submit', function(e) {
+            const checkedBoxes = this.querySelectorAll('.product-checkbox-sales-card:checked');
+            if (checkedBoxes.length === 0) {
+                e.preventDefault();
+                alert('يرجى اختيار منتج واحد على الأقل.');
+                return false;
+            }
+            
+            // إزالة أي حقول hidden سابقة قبل إضافة الجديدة
+            this.querySelectorAll('input[type="hidden"][name^="items"]').forEach(input => input.remove());
+            
+            let itemIndex = 0;
+            checkedBoxes.forEach((cb) => {
+                const quantityInput = cb.closest('tr').querySelector('.quantity-input-sales-card');
+                const quantity = parseFloat(quantityInput.value) || 0;
+                
+                if (quantity <= 0) {
+                    e.preventDefault();
+                    alert('يرجى إدخال كمية صحيحة للمنتج: ' + cb.dataset.productName);
+                    return false;
+                }
+                
+                const productId = parseInt(cb.dataset.productId) || 0;
+                const batchId = parseInt(cb.dataset.batchId) || 0;
+                const batchNumber = cb.dataset.batchNumber || '';
+                
+                // يجب أن يكون هناك product_id أو batch_id على الأقل
+                if (productId <= 0 && batchId <= 0) {
+                    e.preventDefault();
+                    alert('خطأ في بيانات المنتج: ' + cb.dataset.productName);
+                    return false;
+                }
+                
+                const itemPrefix = `items[${itemIndex}]`;
+                
+                // إضافة product_id فقط إذا كان موجوداً
+                if (productId > 0) {
+                    const productIdInput = document.createElement('input');
+                    productIdInput.type = 'hidden';
+                    productIdInput.name = `${itemPrefix}[product_id]`;
+                    productIdInput.value = productId;
+                    this.appendChild(productIdInput);
+                }
+                
+                // إضافة batch_id فقط إذا كان موجوداً
+                if (batchId > 0) {
+                    const batchIdInput = document.createElement('input');
+                    batchIdInput.type = 'hidden';
+                    batchIdInput.name = `${itemPrefix}[batch_id]`;
+                    batchIdInput.value = batchId;
+                    this.appendChild(batchIdInput);
+                }
+                
+                // إضافة batch_number إذا كان موجوداً
+                if (batchNumber) {
+                    const batchNumberInput = document.createElement('input');
+                    batchNumberInput.type = 'hidden';
+                    batchNumberInput.name = `${itemPrefix}[batch_number]`;
+                    batchNumberInput.value = batchNumber;
+                    this.appendChild(batchNumberInput);
+                }
+                
+                // إضافة الكمية (مطلوبة دائماً)
+                const quantityInputHidden = document.createElement('input');
+                quantityInputHidden.type = 'hidden';
+                quantityInputHidden.name = `${itemPrefix}[quantity]`;
+                quantityInputHidden.value = quantity;
+                this.appendChild(quantityInputHidden);
+                
+                itemIndex++;
+            });
+        });
     }
 });
 
@@ -2903,6 +3606,23 @@ document.addEventListener('DOMContentLoaded', function() {
     #rejectModal .modal-footer .btn {
         width: 100%;
         margin: 0.25rem 0;
+    }
+}
+/* ===== CSS للنظام المزدوج (Modal للكمبيوتر / Card للموبايل) ===== */
+
+/* إخفاء Modal على الموبايل */
+@media (max-width: 768px) {
+    #transferFromCompanyModal,
+    #transferFromSalesRepModal {
+        display: none !important;
+    }
+}
+
+/* إخفاء Card على الكمبيوتر */
+@media (min-width: 769px) {
+    #transferFromCompanyCard,
+    #transferFromSalesRepCard {
+        display: none !important;
     }
 }
 </style>
