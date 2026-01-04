@@ -7077,7 +7077,14 @@ $lang = isset($translations) ? $translations : [];
                 </div>
                 <div class="d-flex gap-2">
                     <?php
+                    // التأكد من إنشاء الرابط بشكل صحيح
                     $printUrl = getRelativeUrl('print_production_report.php');
+                    // إذا كان الرابط فارغاً أو غير صحيح، استخدم مسار مطلق
+                    if (empty($printUrl) || $printUrl === '#') {
+                        // الحصول على المسار الأساسي
+                        $basePath = getBasePath();
+                        $printUrl = ($basePath ? rtrim($basePath, '/') : '') . '/print_production_report.php';
+                    }
                     $printParams = [
                         'report_month' => $selectedMonth,
                         'report_day' => $selectedReportDay,
@@ -11095,36 +11102,83 @@ body.modal-open .modal-backdrop {
 </style>
 
 <script>
-// معالج زر طباعة التقرير الشامل
+// معالج زر طباعة التقرير الشامل - للتأكد من عمله بشكل صحيح
 document.addEventListener('DOMContentLoaded', function() {
     const printReportBtn = document.getElementById('printComprehensiveReportBtn');
     if (printReportBtn) {
-        // التأكد من أن الزر يعمل حتى لو كان هناك event listeners أخرى
-        printReportBtn.addEventListener('click', function(e) {
-            const href = this.getAttribute('href');
-            if (!href || href === '#' || href === '') {
+        // التأكد من أن الرابط موجود وصحيح
+        let href = printReportBtn.getAttribute('href');
+        
+        // تسجيل الرابط للتشخيص
+        console.log('رابط طباعة التقرير الشامل:', href);
+        
+        if (!href || href === '#' || href === '') {
+            console.error('رابط الطباعة غير موجود أو غير صحيح');
+            printReportBtn.style.opacity = '0.5';
+            printReportBtn.style.cursor = 'not-allowed';
+            printReportBtn.title = 'رابط الطباعة غير متاح';
+            printReportBtn.addEventListener('click', function(e) {
                 e.preventDefault();
-                console.error('رابط الطباعة غير صحيح:', href);
+                alert('عذراً، رابط الطباعة غير متاح حالياً. يرجى المحاولة لاحقاً.');
+                return false;
+            });
+            return;
+        }
+        
+        // إصلاح الرابط إذا كان نسبياً بدون / في البداية
+        if (href.startsWith('?') || (!href.startsWith('http') && !href.startsWith('/'))) {
+            // محاولة إصلاح الرابط
+            const baseUrl = window.location.origin + (window.location.pathname.split('/').slice(0, -2).join('/') || '');
+            if (!href.startsWith('/')) {
+                href = '/' + href;
+            }
+            const fullUrl = baseUrl + href;
+            console.log('تم إصلاح الرابط إلى:', fullUrl);
+            printReportBtn.setAttribute('href', fullUrl);
+        }
+        
+        // إضافة معالج للتأكد من فتح الرابط بشكل صحيح
+        printReportBtn.addEventListener('click', function(e) {
+            const hrefValue = this.getAttribute('href');
+            console.log('النقر على زر الطباعة - الرابط:', hrefValue);
+            
+            if (!hrefValue || hrefValue === '#' || hrefValue === '') {
+                e.preventDefault();
+                console.error('رابط الطباعة غير صحيح:', hrefValue);
                 alert('عذراً، حدث خطأ في رابط الطباعة. يرجى المحاولة مرة أخرى.');
                 return false;
             }
             
-            // فتح الرابط في تبويب جديد
+            // محاولة فتح الرابط
             try {
-                const url = new URL(href, window.location.origin);
-                window.open(url.toString(), '_blank', 'noopener,noreferrer');
-                // لا نمنع السلوك الافتراضي إذا كان الرابط صحيحاً
-                // لكن نتركه للسلوك الافتراضي للرابط
+                // إذا كان الرابط نسبياً، نحوله إلى رابط كامل
+                let targetUrl = hrefValue;
+                if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+                    if (targetUrl.startsWith('//')) {
+                        targetUrl = window.location.protocol + targetUrl;
+                    } else if (!targetUrl.startsWith('/')) {
+                        targetUrl = window.location.origin + '/' + targetUrl;
+                    } else {
+                        targetUrl = window.location.origin + targetUrl;
+                    }
+                }
+                
+                console.log('فتح رابط الطباعة:', targetUrl);
+                const newWindow = window.open(targetUrl, '_blank', 'noopener,noreferrer');
+                
+                if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                    // قد يكون حاجب النوافذ المنبثقة (popup blocker) منع فتح النافذة
+                    console.warn('تم منع فتح النافذة - قد يكون حاجب النوافذ المنبثقة مفعلاً');
+                    alert('تم منع فتح النافذة الجديدة. يرجى السماح بالنوافذ المنبثقة لهذا الموقع والمحاولة مرة أخرى.');
+                    // السماح للسلوك الافتراضي بالعمل كبديل
+                }
             } catch (error) {
                 console.error('خطأ في فتح رابط الطباعة:', error);
-                // إذا كان هناك خطأ في URL، نحاول فتحه مباشرة
-                window.open(href, '_blank', 'noopener,noreferrer');
+                // السماح للسلوك الافتراضي بالعمل كبديل
             }
         });
-        
-        // أيضاً، التأكد من أن الرابط يعمل بالطريقة التقليدية
-        printReportBtn.style.cursor = 'pointer';
-        printReportBtn.setAttribute('role', 'button');
+    } else {
+        console.warn('لم يتم العثور على زر طباعة التقرير الشامل');
     }
 });
 </script>
