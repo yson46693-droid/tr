@@ -3909,20 +3909,33 @@ if (!$error) {
         renderCart(); // renderCart() تستدعي updateSummary() تلقائياً
     }
 
-    if (elements.inventoryButtons && elements.inventoryButtons.length > 0) {
-        elements.inventoryButtons.forEach((button) => {
-            button.addEventListener('click', function (event) {
-                event.stopPropagation();
-                const uniqueId = this.dataset.uniqueId || this.dataset.productId;
-                if (uniqueId) {
-                    addToCart(uniqueId);
-                } else {
-                    console.warn('addToCart: Button clicked but uniqueId is missing', this);
-                }
-            });
+    // استخدام event delegation للتعامل مع أزرار إضافة المنتجات
+    const productGrid = document.getElementById('posProductGrid');
+    if (productGrid) {
+        productGrid.addEventListener('click', function (event) {
+            const button = event.target.closest('[data-select-product]');
+            if (!button) {
+                return;
+            }
+            event.stopPropagation();
+            const uniqueId = button.getAttribute('data-unique-id') || button.getAttribute('data-product-id');
+            if (uniqueId) {
+                addToCart(uniqueId);
+            }
         });
     } else {
-        console.warn('elements.inventoryButtons is empty or not found');
+        // Fallback: استخدام الطريقة القديمة إذا لم يتم العثور على productGrid
+        if (elements.inventoryButtons && elements.inventoryButtons.length > 0) {
+            elements.inventoryButtons.forEach((button) => {
+                button.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    const uniqueId = button.getAttribute('data-unique-id') || button.getAttribute('data-product-id');
+                    if (uniqueId) {
+                        addToCart(uniqueId);
+                    }
+                });
+            });
+        }
     }
 
     elements.inventoryCards.forEach((card) => {

@@ -2261,14 +2261,33 @@ function showTransferFromCompanyModal() {
     closeAllForms();
     
     if (isMobile()) {
+        // على الموبايل: استخدام Card فقط
         const card = document.getElementById('transferFromCompanyCard');
         if (card) {
+            // التأكد من إغلاق أي Modal مفتوح
+            const modal = document.getElementById('transferFromCompanyModal');
+            if (modal) {
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+                // إزالة backdrop إذا كان موجوداً
+                const backdrop = document.querySelector('.modal-backdrop');
+                if (backdrop) {
+                    backdrop.remove();
+                }
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }
+            
             card.style.display = 'block';
             setTimeout(function() {
                 scrollToElement(card);
             }, 50);
         }
     } else {
+        // على الكمبيوتر: استخدام Modal فقط
         const modal = document.getElementById('transferFromCompanyModal');
         if (modal) {
             const modalInstance = new bootstrap.Modal(modal);
@@ -2282,14 +2301,33 @@ function showTransferFromSalesRepModal() {
     closeAllForms();
     
     if (isMobile()) {
+        // على الموبايل: استخدام Card فقط
         const card = document.getElementById('transferFromSalesRepCard');
         if (card) {
+            // التأكد من إغلاق أي Modal مفتوح
+            const modal = document.getElementById('transferFromSalesRepModal');
+            if (modal) {
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+                // إزالة backdrop إذا كان موجوداً
+                const backdrop = document.querySelector('.modal-backdrop');
+                if (backdrop) {
+                    backdrop.remove();
+                }
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }
+            
             card.style.display = 'block';
             setTimeout(function() {
                 scrollToElement(card);
             }, 50);
         }
     } else {
+        // على الكمبيوتر: استخدام Modal فقط
         const modal = document.getElementById('transferFromSalesRepModal');
         if (modal) {
             const modalInstance = new bootstrap.Modal(modal);
@@ -2358,6 +2396,61 @@ function showRejectModal(transferId) {
         }, 500);
     }
 }
+
+// منع فتح Modal على الموبايل - إضافة event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // منع فتح Modal نقل من الشركة على الموبايل
+    const transferFromCompanyModal = document.getElementById('transferFromCompanyModal');
+    if (transferFromCompanyModal) {
+        transferFromCompanyModal.addEventListener('show.bs.modal', function(e) {
+            if (isMobile()) {
+                e.preventDefault();
+                e.stopPropagation();
+                // إغلاق Modal فوراً
+                const modalInstance = bootstrap.Modal.getInstance(transferFromCompanyModal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+                // إزالة backdrop
+                const backdrop = document.querySelector('.modal-backdrop');
+                if (backdrop) {
+                    backdrop.remove();
+                }
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+                // فتح Card بدلاً منه
+                showTransferFromCompanyModal();
+            }
+        });
+    }
+    
+    // منع فتح Modal نقل من المندوب على الموبايل
+    const transferFromSalesRepModal = document.getElementById('transferFromSalesRepModal');
+    if (transferFromSalesRepModal) {
+        transferFromSalesRepModal.addEventListener('show.bs.modal', function(e) {
+            if (isMobile()) {
+                e.preventDefault();
+                e.stopPropagation();
+                // إغلاق Modal فوراً
+                const modalInstance = bootstrap.Modal.getInstance(transferFromSalesRepModal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+                // إزالة backdrop
+                const backdrop = document.querySelector('.modal-backdrop');
+                if (backdrop) {
+                    backdrop.remove();
+                }
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+                // فتح Card بدلاً منه
+                showTransferFromSalesRepModal();
+            }
+        });
+    }
+});
 
 // التحقق من صحة النموذج قبل الإرسال
 document.addEventListener('DOMContentLoaded', function() {
@@ -3610,11 +3703,26 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 /* ===== CSS للنظام المزدوج (Modal للكمبيوتر / Card للموبايل) ===== */
 
-/* إخفاء Modal على الموبايل */
+/* إخفاء Modal على الموبايل - قواعد قوية */
 @media (max-width: 768px) {
     #transferFromCompanyModal,
     #transferFromSalesRepModal {
         display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+    
+    #transferFromCompanyModal .modal-backdrop,
+    #transferFromSalesRepModal .modal-backdrop {
+        display: none !important;
+    }
+    
+    /* منع ظهور Modal حتى لو تم استدعاؤه */
+    body.modal-open #transferFromCompanyModal,
+    body.modal-open #transferFromSalesRepModal {
+        display: none !important;
+        visibility: hidden !important;
     }
 }
 
