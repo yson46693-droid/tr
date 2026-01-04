@@ -6469,7 +6469,7 @@ if ($section === 'honey') {
             <div class="card shadow-sm">
                 <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #ffc371 0%, #ff5f6d 100%);">
                     <h5 class="mb-0"><i class="bi bi-hexagon-fill me-2"></i>مخزون شمع العسل</h5>
-                    <button class="btn btn-light btn-sm" onclick="showAddBeeswaxModal()">
+                    <button class="btn btn-light btn-sm" id="addBeeswaxBtn" onclick="showAddBeeswaxModal()">
                         <i class="bi bi-plus-circle me-1"></i>إضافة
                     </button>
                 </div>
@@ -6500,7 +6500,10 @@ if ($section === 'honey') {
                                             </td>
                                             <td class="text-center"><strong class="text-warning"><?php echo number_format($stock['weight'], 2); ?></strong></td>
                                             <td class="text-center">
-                                                <button class="btn btn-sm btn-danger"
+                                                <button class="btn btn-sm btn-danger damage-beeswax-btn"
+                                                        data-stock-id="<?php echo $stock['id']; ?>"
+                                                        data-supplier="<?php echo htmlspecialchars($stock['supplier_name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                        data-quantity="<?php echo $stock['weight']; ?>"
                                                         onclick="openBeeswaxDamageModal(<?php echo $stock['id']; ?>, '<?php echo htmlspecialchars($stock['supplier_name']); ?>', <?php echo $stock['weight']; ?>)"
                                                         <?php echo $stock['weight'] <= 0 ? 'disabled' : ''; ?>>
                                                     <i class="bi bi-exclamation-triangle"></i> تسجيل تالف
@@ -6635,6 +6638,72 @@ if ($section === 'honey') {
             if (form) form.reset();
         }
     }
+
+    // إضافة event listeners للأزرار في قسم شمع العسل لضمان عملها على الموبايل
+    document.addEventListener('DOMContentLoaded', function() {
+        // زر إضافة شمع العسل
+        const addBeeswaxBtn = document.getElementById('addBeeswaxBtn');
+        if (addBeeswaxBtn) {
+            // إضافة event listener مع الاحتفاظ بـ onclick كبديل
+            addBeeswaxBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof showAddBeeswaxModal === 'function') {
+                    showAddBeeswaxModal();
+                } else {
+                    // إذا لم تكن الدالة متاحة، استخدم onclick الأصلي
+                    const originalOnclick = addBeeswaxBtn.getAttribute('onclick');
+                    if (originalOnclick) {
+                        try {
+                            eval(originalOnclick);
+                        } catch (err) {
+                            console.error('Error executing showAddBeeswaxModal:', err);
+                        }
+                    }
+                }
+            }, { passive: false });
+        }
+
+        // أزرار تسجيل تالف شمع العسل
+        const damageBeeswaxBtns = document.querySelectorAll('.damage-beeswax-btn');
+        damageBeeswaxBtns.forEach(function(btn) {
+            // إضافة event listener مع استخدام data attributes
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (btn.disabled) {
+                    return false;
+                }
+                
+                if (typeof openBeeswaxDamageModal === 'function') {
+                    const stockId = btn.getAttribute('data-stock-id');
+                    const supplier = btn.getAttribute('data-supplier');
+                    const quantity = btn.getAttribute('data-quantity');
+                    
+                    if (stockId && supplier && quantity) {
+                        openBeeswaxDamageModal(
+                            parseInt(stockId), 
+                            supplier, 
+                            parseFloat(quantity)
+                        );
+                    } else {
+                        console.error('Missing data attributes for damage button');
+                    }
+                } else {
+                    // إذا لم تكن الدالة متاحة، استخدم onclick الأصلي
+                    const originalOnclick = btn.getAttribute('onclick');
+                    if (originalOnclick) {
+                        try {
+                            eval(originalOnclick);
+                        } catch (err) {
+                            console.error('Error executing openBeeswaxDamageModal:', err);
+                        }
+                    }
+                }
+            }, { passive: false });
+        });
+    });
 </script>
 
     <?php
