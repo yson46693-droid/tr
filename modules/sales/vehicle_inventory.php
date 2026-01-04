@@ -136,7 +136,6 @@ $filters = array_filter($filters, function($value) {
 });
 
 // إذا كان المستخدم مندوب مبيعات، عرض فقط سيارته
-$defaultFromWarehouseId = null; // مخزن افتراضي للمخزن المصدر في نموذج النقل
 $userVehicle = null;
 $hasNoVehicle = false;
 
@@ -144,29 +143,6 @@ if ($currentUser['role'] === 'sales') {
     $userVehicle = $db->queryOne("SELECT id FROM vehicles WHERE driver_id = ? AND status = 'active'", [$currentUser['id']]);
     if ($userVehicle) {
         $filters['vehicle_id'] = $userVehicle['id'];
-        
-        // الحصول على مخزن سيارة المندوب لاستخدامه كقيمة افتراضية في نموذج النقل (النشط فقط)
-        $userVehicleWarehouse = $db->queryOne(
-            "SELECT w.id, w.name 
-             FROM warehouses w 
-             INNER JOIN vehicles v ON w.vehicle_id = v.id
-             WHERE w.vehicle_id = ? 
-             AND w.warehouse_type = 'vehicle' 
-             AND w.status = 'active'
-             AND v.status = 'active'
-             LIMIT 1",
-            [$userVehicle['id']]
-        );
-        
-        if ($userVehicleWarehouse) {
-            $defaultFromWarehouseId = (int)$userVehicleWarehouse['id'];
-        } else {
-            // إنشاء مخزن السيارة إذا لم يكن موجوداً
-            $result = createVehicleWarehouse($userVehicle['id']);
-            if ($result['success']) {
-                $defaultFromWarehouseId = (int)$result['warehouse_id'];
-            }
-        }
     } else {
         // المندوب ليس له سيارة
         $hasNoVehicle = true;
@@ -177,80 +153,7 @@ if ($currentUser['role'] === 'sales') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
-    if ($action === 'create_transfer') {
-        $fromWarehouseId = intval($_POST['from_warehouse_id'] ?? 0);
-        $toWarehouseId = intval($_POST['to_warehouse_id'] ?? 0);
-        $transferDate = $_POST['transfer_date'] ?? date('Y-m-d');
-        $reason = trim($_POST['reason'] ?? '');
-        $notes = trim($_POST['notes'] ?? '');
-        
-            // معالجة العناصر
-            $items = [];
-            if (isset($_POST['items']) && is_array($_POST['items'])) {
-                foreach ($_POST['items'] as $item) {
-                    $productId = isset($item['product_id']) && $item['product_id'] !== '' ? intval($item['product_id']) : 0;
-                    $batchId = isset($item['batch_id']) && $item['batch_id'] !== '' ? intval($item['batch_id']) : 0;
-                    $quantity = isset($item['quantity']) ? floatval($item['quantity']) : 0;
-
-                    // يجب أن يكون هناك batch_id على الأقل (للمنتجات من finished_products)
-                    // أو product_id (للمنتجات الخارجية)
-                    if (($productId > 0 || $batchId > 0) && $quantity > 0) {
-                        $items[] = [
-                            'product_id' => $productId > 0 ? $productId : null,
-                            'batch_id' => $batchId > 0 ? $batchId : null,
-                            'batch_number' => !empty($item['batch_number']) ? trim($item['batch_number']) : null,
-                            'quantity' => $quantity,
-                            'notes' => trim($item['notes'] ?? '')
-                        ];
-                    }
-                }
-            }
-            
-            // تسجيل تفاصيل العناصر للمساعدة في التصحيح
-            if (empty($items)) {
-                error_log('No items found in POST data from sales. POST items: ' . json_encode($_POST['items'] ?? []));
-                error_log('POST data keys: ' . json_encode(array_keys($_POST)));
-                $error = 'يجب إضافة منتج واحد على الأقل مع تحديد الكمية.';
-            } elseif ($fromWarehouseId <= 0 || $toWarehouseId <= 0) {
-                $error = 'يجب تحديد المخزن المصدر والمخزن الهدف';
-            } else {
-                // التحقق من أن المخازن نشطة وأن السيارات المرتبطة نشطة أيضاً
-                $fromWarehouse = $db->queryOne(
-                    "SELECT w.id, w.name, w.warehouse_type, v.status as vehicle_status
-                     FROM warehouses w
-                     LEFT JOIN vehicles v ON w.vehicle_id = v.id AND w.warehouse_type = 'vehicle'
-                     WHERE w.id = ? 
-                     AND w.status = 'active'
-                     AND (w.warehouse_type != 'vehicle' OR (w.warehouse_type = 'vehicle' AND v.status = 'active' AND v.id IS NOT NULL))",
-                    [$fromWarehouseId]
-                );
-                
-                $toWarehouse = $db->queryOne(
-                    "SELECT w.id, w.name, w.warehouse_type, v.status as vehicle_status
-                     FROM warehouses w
-                     LEFT JOIN vehicles v ON w.vehicle_id = v.id AND w.warehouse_type = 'vehicle'
-                     WHERE w.id = ? 
-                     AND w.status = 'active'
-                     AND (w.warehouse_type != 'vehicle' OR (w.warehouse_type = 'vehicle' AND v.status = 'active' AND v.id IS NOT NULL))",
-                    [$toWarehouseId]
-                );
-                
-                if (!$fromWarehouse) {
-                    $error = 'المخزن المصدر غير موجود أو غير نشط أو السيارة المرتبطة غير نشطة.';
-                } elseif (!$toWarehouse) {
-                    $error = 'المخزن الهدف غير موجود أو غير نشط أو السيارة المرتبطة غير نشطة.';
-                } else {
-                    // تسجيل العناصر قبل الإرسال للمساعدة في التصحيح
-                    error_log('Transfer items from sales: ' . json_encode($items));
-                    $result = createWarehouseTransfer($fromWarehouseId, $toWarehouseId, $transferDate, $items, $reason, $notes);
-                    if ($result['success']) {
-                        $success = 'تم إنشاء طلب النقل بنجاح: ' . $result['transfer_number'];
-                    } else {
-                        $error = $result['message'];
-                    }
-                }
-            }
-    } elseif ($action === 'create_vehicle') {
+    if ($action === 'create_vehicle') {
         if (!$canManageVehicles) {
             $error = 'غير مصرح لك بإضافة سيارات جديدة.';
         } else {
@@ -366,8 +269,6 @@ if (isset($_GET['vehicle_id']) || !empty($filters['vehicle_id'])) {
     }
 }
 
-// تحميل المنتجات من المخزن المحدد (سيتم تحديثها عند اختيار المخزن المصدر)
-$finishedProductOptions = [];
 
 // إحصائيات المخزون
 $inventoryStats = [
@@ -412,10 +313,6 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
             <a href="<?php echo getDashboardUrl('manager'); ?>?page=vehicles" class="btn btn-secondary flex-fill flex-md-grow-0">
                 <i class="bi bi-arrow-right me-2"></i><span class="d-none d-sm-inline">الرجوع للخلف</span><span class="d-sm-none">رجوع</span>
             </a>
-        <?php else: ?>
-            <button class="btn btn-primary flex-fill flex-md-grow-0" onclick="showCreateTransferModal()">
-                <i class="bi bi-arrow-left-right me-2"></i><span class="d-none d-sm-inline">طلب نقل منتجات</span><span class="d-sm-none">نقل</span>
-            </button>
         <?php endif; ?>
     </div>
 </div>
@@ -832,8 +729,6 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
 
                 /* إصلاح ظهور الأزرار السفلية للمودالات على الهاتف */
                 @media (max-width: 767.98px) {
-                    /* Modal إنشاء طلب نقل */
-                    #createTransferModal .modal-dialog,
                     #addVehicleModal .modal-dialog {
                         margin: 0.5rem !important;
                         max-height: calc(100vh - 1rem) !important;
@@ -842,12 +737,10 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                         flex-direction: column !important;
                     }
                     
-                    #createTransferModal .modal-dialog.modal-dialog-scrollable,
                     #addVehicleModal .modal-dialog.modal-dialog-scrollable {
                         overflow: hidden !important;
                     }
                     
-                    #createTransferModal .modal-content,
                     #addVehicleModal .modal-content {
                         max-height: calc(100vh - 1rem) !important;
                         height: 100% !important;
@@ -856,14 +749,12 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                         overflow: hidden !important;
                     }
                     
-                    #createTransferModal .modal-header,
                     #addVehicleModal .modal-header {
                         flex-shrink: 0 !important;
                         flex-grow: 0 !important;
                         border-bottom: 1px solid rgba(0, 0, 0, 0.125);
                     }
                     
-                    #createTransferModal .modal-body,
                     #addVehicleModal .modal-body {
                         flex: 1 1 auto !important;
                         overflow-y: visible !important;
@@ -876,51 +767,10 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                         display: flex !important;
                         flex-direction: column !important;
                     }
-                    
-                    /* جعل قسم عناصر النقل قابل للتمرير الداخلي */
-                    #createTransferModal #transferItems {
-                        max-height: 40vh !important;
-                        min-height: 150px !important;
-                        overflow-y: auto !important;
-                        overflow-x: hidden !important;
-                        -webkit-overflow-scrolling: touch !important;
-                        padding: 0.5rem !important;
-                        margin-bottom: 0.5rem !important;
-                        border: 1px solid rgba(0, 0, 0, 0.1) !important;
-                        border-radius: 0.375rem !important;
-                        background-color: #f8f9fa !important;
-                        display: block !important;
-                        position: relative !important;
-                    }
-                    
-                    /* التأكد من أن العناصر داخل #transferItems لا تكسر التخطيط */
-                    #createTransferModal #transferItems .transfer-item {
-                        margin-bottom: 0.75rem !important;
-                    }
-                    
-                    #createTransferModal #transferItems .transfer-item:last-child {
-                        margin-bottom: 0 !important;
-                    }
                 }
                 
                 /* تطبيق نفس الإصلاح على الشاشات الكبيرة أيضاً */
                 @media (min-width: 768px) {
-                    #createTransferModal #transferItems {
-                        max-height: 50vh !important;
-                        min-height: 200px !important;
-                        overflow-y: auto !important;
-                        overflow-x: hidden !important;
-                        -webkit-overflow-scrolling: touch !important;
-                        padding: 0.75rem !important;
-                        margin-bottom: 0.75rem !important;
-                        border: 1px solid rgba(0, 0, 0, 0.1) !important;
-                        border-radius: 0.375rem !important;
-                        background-color: #f8f9fa !important;
-                        display: block !important;
-                        position: relative !important;
-                    }
-                    
-                    #createTransferModal .modal-footer,
                     #addVehicleModal .modal-footer {
                         flex-shrink: 0 !important;
                         flex-grow: 0 !important;
@@ -936,7 +786,6 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                         z-index: 1050 !important;
                     }
                     
-                    #createTransferModal .modal-footer .btn,
                     #addVehicleModal .modal-footer .btn {
                         width: 100% !important;
                         margin: 0 !important;
@@ -1216,610 +1065,11 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
 </div>
 <?php endif; ?>
 
-<!-- Modal إنشاء طلب نقل -->
-<!-- للكمبيوتر فقط -->
-<div class="modal fade d-none d-md-block" id="createTransferModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">طلب نقل منتجات بين المخازن</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" id="transferForm">
-                <input type="hidden" name="action" value="create_transfer">
-                <div class="modal-body">
-                    <div class="row g-3 mb-3">
-                        <div class="col-12 col-md-6">
-                            <label class="form-label">من المخزن <span class="text-danger">*</span></label>
-                            <?php if ($currentUser['role'] === 'sales' && $defaultFromWarehouseId): ?>
-                                <?php 
-                                // للمندوبين: إظهار فقط مخزن السيارة الخاص بهم كحقل ثابت
-                                $salesWarehouse = $db->queryOne(
-                                    "SELECT id, name, warehouse_type FROM warehouses WHERE id = ?",
-                                    [$defaultFromWarehouseId]
-                                );
-                                ?>
-                                <input type="hidden" name="from_warehouse_id" value="<?php echo $defaultFromWarehouseId; ?>">
-                                <input type="text" class="form-control" value="<?php echo htmlspecialchars($salesWarehouse['name'] ?? ''); ?> (<?php echo ($salesWarehouse['warehouse_type'] ?? '') === 'main' ? 'رئيسي' : 'سيارة'; ?>)" readonly disabled style="background-color: #e9ecef; cursor: not-allowed;">
-                            <?php else: ?>
-                                <select class="form-select" name="from_warehouse_id" id="fromWarehouse" required>
-                                    <option value="">اختر المخزن المصدر</option>
-                                    <?php foreach ($warehouses as $warehouse): ?>
-                                        <option value="<?php echo $warehouse['id']; ?>" 
-                                                data-type="<?php echo $warehouse['warehouse_type']; ?>"
-                                                <?php echo ($defaultFromWarehouseId && $warehouse['id'] == $defaultFromWarehouseId) ? 'selected' : ''; ?>>
-                                            <?php echo htmlspecialchars($warehouse['name']); ?> 
-                                            (<?php echo $warehouse['warehouse_type'] === 'main' ? 'رئيسي' : 'سيارة'; ?>)
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            <?php endif; ?>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label">إلى المخزن <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-lg" name="to_warehouse_id" id="toWarehouse" required>
-                                <option value="">اختر المخزن الوجهة</option>
-                                <?php foreach ($warehouses as $warehouse): ?>
-                                    <?php 
-                                    // استبعاد مخزن المندوب الحالي من قائمة "إلى المخزن" إذا كان المستخدم مندوب مبيعات
-                                    if ($currentUser['role'] === 'sales' && $defaultFromWarehouseId && $warehouse['id'] == $defaultFromWarehouseId) {
-                                        continue;
-                                    }
-                                    ?>
-                                    <option value="<?php echo $warehouse['id']; ?>" 
-                                            data-type="<?php echo $warehouse['warehouse_type']; ?>">
-                                        <?php echo htmlspecialchars($warehouse['name']); ?> 
-                                        (<?php echo $warehouse['warehouse_type'] === 'main' ? 'رئيسي' : 'سيارة'; ?>)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="row g-3 mb-3">
-                        <div class="col-12 col-md-6">
-                            <label class="form-label">تاريخ النقل <span class="text-danger">*</span></label>
-                            <input type="date" class="form-control form-control-lg" name="transfer_date" 
-                                   value="<?php echo date('Y-m-d'); ?>" required>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">عناصر النقل</label>
-                        <div class="alert alert-info d-flex align-items-center gap-2 mb-2">
-                            <i class="bi bi-info-circle"></i>
-                            <div>يرجى اختيار المخزن المصدر أولاً لعرض المنتجات المتاحة.</div>
-                        </div>
-                        <div id="transferItems">
-                            <div class="transfer-item row g-2 mb-3">
-                                <div class="col-12 col-md-5">
-                                    <select class="form-select form-select-lg product-select" required>
-                                        <option value="">اختر المنتج</option>
-                                    </select>
-                                </div>
-                                <div class="col-8 col-md-4">
-                                    <input type="number" step="0.01" class="form-control form-control-lg quantity" 
-                                           name="items[0][quantity]" placeholder="الكمية" required min="0.01">
-                                </div>
-                                <div class="col-4 col-md-3">
-                                    <button type="button" class="btn btn-danger btn-lg remove-item w-100">
-                                        <i class="bi bi-trash"></i> <span class="d-none d-md-inline">حذف</span>
-                                    </button>
-                                </div>
-                                <div class="col-12">
-                                    <small class="text-muted available-hint d-block mt-1"></small>
-                                    <input type="hidden" name="items[0][product_id]" class="selected-product-id">
-                                    <input type="hidden" name="items[0][batch_id]" class="selected-batch-id">
-                                    <input type="hidden" name="items[0][batch_number]" class="selected-batch-number">
-                                </div>
-                            </div>
-                        </div>
-                        <button type="button" class="btn btn-lg btn-outline-primary w-100 w-md-auto" id="addItemBtn" <?php echo empty($finishedProductOptions) ? 'disabled' : ''; ?>>
-                            <i class="bi bi-plus-circle me-2"></i>إضافة عنصر
-                        </button>
-                    </div>
-                    
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        سيتم إرسال طلب النقل للمدير للموافقة عليه قبل التنفيذ
-                    </div>
-                </div>
-                <div class="modal-footer d-flex flex-column flex-md-row gap-2">
-                    <button type="button" class="btn btn-secondary btn-lg flex-fill flex-md-grow-0" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-primary btn-lg flex-fill flex-md-grow-0" <?php echo empty($finishedProductOptions) ? 'disabled' : ''; ?>>إنشاء الطلب</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <script>
-let itemIndex = 1;
-let allFinishedProductOptions = <?php echo json_encode($finishedProductOptions); ?>;
-
-<?php if ($currentUser['role'] === 'sales' && $defaultFromWarehouseId): ?>
-// للمندوبين: تحميل المنتجات تلقائياً عند فتح النموذج
-document.addEventListener('DOMContentLoaded', function() {
-    const transferModal = document.getElementById('createTransferModal');
-    if (transferModal) {
-        transferModal.addEventListener('shown.bs.modal', function() {
-            // تحميل المنتجات من مخزن السيارة الخاص بالمندوب
-            const fromWarehouseId = <?php echo $defaultFromWarehouseId; ?>;
-            loadProductsFromWarehouse(fromWarehouseId);
-        });
-    }
-});
-<?php endif; ?>
-
-// دالة لتحميل المنتجات من المخزن
-function loadProductsFromWarehouse(fromWarehouseId) {
-    if (!fromWarehouseId) {
-        allFinishedProductOptions = [];
-        updateProductSelects();
-        return;
-    }
-    
-    // إظهار مؤشر التحميل
-    const addItemBtn = document.getElementById('addItemBtn');
-    const submitBtn = document.querySelector('#transferForm button[type="submit"]');
-    const originalAddBtnText = addItemBtn?.innerHTML;
-    const originalSubmitBtnText = submitBtn?.innerHTML;
-    
-    if (addItemBtn) {
-        addItemBtn.disabled = true;
-        addItemBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>جاري التحميل...';
-    }
-    if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>جاري التحميل...';
-    }
-    
-    // تحميل المنتجات من المخزن المحدد عبر AJAX
-    const currentUrl = new URL(window.location.href);
-    currentUrl.searchParams.set('ajax', 'load_products');
-    currentUrl.searchParams.set('warehouse_id', fromWarehouseId);
-    
-    fetch(currentUrl.toString())
-        .then(response => {
-            // التحقق من حالة الاستجابة
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(`HTTP ${response.status}: ${text.substring(0, 200)}`);
-                });
-            }
-            
-            // التحقق من نوع المحتوى
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                return response.text().then(text => {
-                    console.error('Non-JSON response:', text.substring(0, 500));
-                    throw new Error('Expected JSON but got: ' + contentType + ' - ' + text.substring(0, 100));
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (!data) {
-                throw new Error('لا توجد بيانات في الاستجابة');
-            }
-            
-            if (data.success && Array.isArray(data.products)) {
-                allFinishedProductOptions = data.products;
-                updateProductSelects();
-                
-                // تحديث حالة الأزرار
-                if (addItemBtn) {
-                    addItemBtn.disabled = allFinishedProductOptions.length === 0;
-                    addItemBtn.innerHTML = originalAddBtnText || '<i class="bi bi-plus-circle me-2"></i>إضافة عنصر';
-                }
-                if (submitBtn) {
-                    submitBtn.disabled = allFinishedProductOptions.length === 0;
-                    submitBtn.innerHTML = originalSubmitBtnText || 'إنشاء الطلب';
-                }
-                
-                // إظهار رسالة إذا لم توجد منتجات
-                const infoAlert = document.querySelector('#transferItems').previousElementSibling;
-                if (allFinishedProductOptions.length === 0) {
-                    if (infoAlert && infoAlert.classList.contains('alert-info')) {
-                        infoAlert.className = 'alert alert-warning d-flex align-items-center gap-2 mb-2';
-                        infoAlert.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i><div>لا توجد منتجات متاحة في هذا المخزن حالياً.</div>';
-                    }
-                } else {
-                    if (infoAlert && infoAlert.classList.contains('alert-warning')) {
-                        infoAlert.className = 'alert alert-info d-flex align-items-center gap-2 mb-2';
-                        infoAlert.innerHTML = '<i class="bi bi-info-circle"></i><div>تم تحميل ' + allFinishedProductOptions.length + ' منتج من المخزن المحدد.</div>';
-                    }
-                }
-            } else {
-                const errorMsg = data.message || 'خطأ غير معروف';
-                console.error('Error loading products:', data);
-                throw new Error(errorMsg);
-            }
-        })
-        .catch(error => {
-            console.error('Error loading products:', error);
-            let errorMessage = 'حدث خطأ أثناء تحميل المنتجات. يرجى المحاولة مرة أخرى.';
-            
-            if (error.message) {
-                if (error.message.includes('Expected JSON')) {
-                    errorMessage = 'حدث خطأ في استجابة الخادم. يرجى التأكد من الاتصال بالإنترنت والمحاولة مرة أخرى.';
-                } else if (error.message.includes('HTTP')) {
-                    errorMessage = 'حدث خطأ في الاتصال بالخادم. يرجى التحقق من الاتصال والمحاولة مرة أخرى.';
-                } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-                    errorMessage = 'فشل الاتصال بالخادم. يرجى التحقق من الاتصال بالإنترنت.';
-                } else {
-                    errorMessage = error.message;
-                }
-            }
-            
-            alert(errorMessage);
-            
-            // إعادة تعيين حالة الأزرار
-            if (addItemBtn) {
-                addItemBtn.disabled = false;
-                addItemBtn.innerHTML = originalAddBtnText || '<i class="bi bi-plus-circle me-2"></i>إضافة عنصر';
-            }
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalSubmitBtnText || 'إنشاء الطلب';
-            }
-            
-            // إظهار رسالة خطأ في التنبيه
-            const infoAlert = document.querySelector('#transferItems').previousElementSibling;
-            if (infoAlert) {
-                infoAlert.className = 'alert alert-danger d-flex align-items-center gap-2 mb-2';
-                infoAlert.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i><div>' + errorMessage + '</div>';
-            }
-        });
+function showAddVehicleModal() {
+    const modal = new bootstrap.Modal(document.getElementById('addVehicleModal'));
+    modal.show();
 }
-
-// تحميل المنتجات عند تغيير المخزن المصدر
-document.getElementById('fromWarehouse')?.addEventListener('change', function() {
-    const fromWarehouseId = this.value;
-    loadProductsFromWarehouse(fromWarehouseId);
-});
-
-// تحديث جميع قوائم المنتجات
-function updateProductSelects() {
-    const selects = document.querySelectorAll('.product-select');
-    selects.forEach(select => {
-        const currentValue = select.value;
-        const currentProductId = parseInt(currentValue || '0', 10);
-        
-        // حفظ القيمة المحددة
-        select.innerHTML = '<option value="">اختر المنتج</option>';
-        
-        allFinishedProductOptions.forEach(option => {
-            const optionElement = document.createElement('option');
-            // استخدام product_id كقيمة للخيار (مثل صفحة عمال الإنتاج)
-            const optionValue = parseInt(option.product_id || 0, 10);
-            optionElement.value = optionValue;
-            optionElement.dataset.productId = option.product_id || 0;
-            optionElement.dataset.batchId = option.batch_id || 0;
-            optionElement.dataset.batchNumber = option.batch_number || '';
-            optionElement.dataset.available = option.quantity_available || 0;
-            
-            // بناء نص الخيار
-            let optionText = option.product_name || 'غير محدد';
-            if (option.batch_number) {
-                optionText += ` - تشغيلة ${option.batch_number}`;
-            }
-            optionText += ` (متاح: ${parseFloat(option.quantity_available || 0).toFixed(2)})`;
-            optionElement.textContent = optionText;
-            
-            // استعادة الاختيار السابق إذا كان موجوداً
-            if (currentProductId > 0 && option.product_id == currentProductId) {
-                optionElement.selected = true;
-            }
-            
-            select.appendChild(optionElement);
-        });
-        
-        // إعادة تفعيل الأحداث
-        const item = select.closest('.transfer-item');
-        if (item) {
-            attachItemEvents(item);
-        }
-    });
-}
-
-// إضافة عنصر جديد
-document.getElementById('addItemBtn')?.addEventListener('click', function() {
-    const itemsDiv = document.getElementById('transferItems');
-    const newItem = document.createElement('div');
-    newItem.className = 'transfer-item row mb-2';
-    let optionsHtml = '<option value="">اختر المنتج</option>';
-    allFinishedProductOptions.forEach(option => {
-        // استخدام product_id كقيمة للخيار (مثل صفحة عمال الإنتاج)
-        const optionValue = parseInt(option.product_id || 0, 10);
-        let optionText = option.product_name || 'غير محدد';
-        if (option.batch_number) {
-            optionText += ` - تشغيلة ${option.batch_number}`;
-        }
-        optionText += ` (متاح: ${parseFloat(option.quantity_available || 0).toFixed(2)})`;
-        optionsHtml += `<option value="${optionValue}" 
-                data-product-id="${option.product_id || 0}"
-                data-batch-id="${option.batch_id || 0}"
-                data-batch-number="${option.batch_number || ''}"
-                data-available="${option.quantity_available || 0}">
-            ${optionText}
-        </option>`;
-    });
-    
-    newItem.innerHTML = `
-        <div class="col-12 col-md-5">
-            <select class="form-select form-select-lg product-select" required>
-                ${optionsHtml}
-            </select>
-        </div>
-        <div class="col-8 col-md-4">
-            <input type="number" step="0.01" class="form-control form-control-lg quantity" 
-                   name="items[${itemIndex}][quantity]" placeholder="الكمية" required min="0.01">
-        </div>
-        <div class="col-4 col-md-3">
-            <button type="button" class="btn btn-danger btn-lg remove-item w-100">
-                <i class="bi bi-trash"></i> <span class="d-none d-md-inline">حذف</span>
-            </button>
-        </div>
-        <div class="col-12">
-            <small class="text-muted available-hint d-block mt-1"></small>
-            <input type="hidden" name="items[${itemIndex}][product_id]" class="selected-product-id">
-            <input type="hidden" name="items[${itemIndex}][batch_id]" class="selected-batch-id">
-            <input type="hidden" name="items[${itemIndex}][batch_number]" class="selected-batch-number">
-        </div>
-    `;
-    itemsDiv.appendChild(newItem);
-    itemIndex++;
-    attachItemEvents(newItem);
-});
-
-// حذف عنصر
-document.addEventListener('click', function(e) {
-    if (e.target.closest('.remove-item')) {
-        e.target.closest('.transfer-item').remove();
-    }
-});
-
-// ربط أحداث العناصر - استخدام event delegation مثل صفحة عمال الإنتاج
-const transferItemsContainer = document.getElementById('transferItems');
-if (transferItemsContainer) {
-    // استخدام event delegation لتحديث الحقول المخفية عند تغيير المنتج
-    transferItemsContainer.addEventListener('change', function(e) {
-        if (e.target.classList.contains('product-select')) {
-            const select = e.target;
-            const row = select.closest('.transfer-item');
-            if (!row) {
-                console.warn('Transfer item row not found');
-                return;
-            }
-            
-            const selectedOption = select.options[select.selectedIndex];
-            if (!selectedOption || !selectedOption.value) {
-                // لا يوجد خيار محدد - مسح الحقول
-                const productIdInput = row.querySelector('.selected-product-id');
-                const batchIdInput = row.querySelector('.selected-batch-id');
-                const batchNumberInput = row.querySelector('.selected-batch-number');
-                const availableHint = row.querySelector('.available-hint');
-                const quantityInput = row.querySelector('.quantity');
-                
-                if (productIdInput) productIdInput.value = '';
-                if (batchIdInput) batchIdInput.value = '';
-                if (batchNumberInput) batchNumberInput.value = '';
-                if (availableHint) availableHint.textContent = '';
-                if (quantityInput) quantityInput.removeAttribute('max');
-                return;
-            }
-            
-            const available = parseFloat(selectedOption.dataset.available || '0');
-            const productId = parseInt(selectedOption.dataset.productId || '0', 10);
-            const batchId = parseInt(selectedOption.dataset.batchId || '0', 10);
-            const batchNumber = selectedOption.dataset.batchNumber || '';
-            
-            const productIdInput = row.querySelector('.selected-product-id');
-            const batchIdInput = row.querySelector('.selected-batch-id');
-            const batchNumberInput = row.querySelector('.selected-batch-number');
-            const availableHint = row.querySelector('.available-hint');
-            const quantityInput = row.querySelector('.quantity');
-            
-            // تحديث الحقول المخفية
-            if (productIdInput) {
-                productIdInput.value = productId > 0 ? productId : '';
-            }
-            if (batchIdInput) {
-                batchIdInput.value = batchId > 0 ? batchId : '';
-            }
-            if (batchNumberInput) {
-                batchNumberInput.value = batchNumber;
-            }
-            
-            // تسجيل للمساعدة في التصحيح
-            console.log('Product selected:', {
-                productId: productId,
-                batchId: batchId,
-                batchNumber: batchNumber,
-                available: available,
-                productIdInputValue: productIdInput?.value,
-                batchIdInputValue: batchIdInput?.value
-            });
-            
-            if (availableHint) {
-                if (selectedOption && selectedOption.value) {
-                    availableHint.textContent = `الكمية المتاحة: ${available.toLocaleString('ar-EG')} وحدة`;
-                } else {
-                    availableHint.textContent = '';
-                }
-            }
-            
-            if (quantityInput) {
-                if (available > 0) {
-                    quantityInput.setAttribute('max', available);
-                    if (parseFloat(quantityInput.value || '0') > available) {
-                        quantityInput.value = available;
-                    }
-                } else {
-                    quantityInput.removeAttribute('max');
-                }
-            }
-        }
-    });
-}
-
-// ربط أحداث العناصر (للتوافق مع الكود القديم)
-function attachItemEvents(item) {
-    const productSelect = item.querySelector('.product-select');
-    const quantityInput = item.querySelector('.quantity');
-    const productIdInput = item.querySelector('.selected-product-id');
-    const batchIdInput = item.querySelector('.selected-batch-id');
-    const batchNumberInput = item.querySelector('.selected-batch-number');
-    const availableHint = item.querySelector('.available-hint');
-
-    if (!productSelect || !quantityInput) {
-        return;
-    }
-
-    const updateAvailability = () => {
-        const selectedIndex = productSelect.selectedIndex;
-        const option = selectedIndex > 0 ? productSelect.options[selectedIndex] : null;
-        
-        if (!option || !option.value || option.value === '') {
-            // لا يوجد خيار محدد - مسح الحقول
-            if (productIdInput) productIdInput.value = '';
-            if (batchIdInput) batchIdInput.value = '';
-            if (batchNumberInput) batchNumberInput.value = '';
-            if (availableHint) availableHint.textContent = '';
-            if (quantityInput) quantityInput.removeAttribute('max');
-            return;
-        }
-        
-        const available = parseFloat(option.dataset.available || '0');
-        const selectedProductId = parseInt(option.dataset.productId || '0', 10);
-        const selectedBatchId = parseInt(option.dataset.batchId || '0', 10);
-        const selectedBatchNumber = option.dataset.batchNumber || '';
-
-        // تحديث الحقول المخفية
-        if (productIdInput) {
-            productIdInput.value = selectedProductId > 0 ? selectedProductId : '';
-        }
-        if (batchIdInput) {
-            batchIdInput.value = selectedBatchId > 0 ? selectedBatchId : '';
-        }
-        if (batchNumberInput) {
-            batchNumberInput.value = selectedBatchNumber;
-        }
-
-        if (availableHint) {
-            if (option && option.value) {
-                availableHint.textContent = `الكمية المتاحة: ${available.toLocaleString('ar-EG')} وحدة`;
-            } else {
-                availableHint.textContent = '';
-            }
-        }
-
-        if (available > 0) {
-            quantityInput.setAttribute('max', available);
-            if (parseFloat(quantityInput.value || '0') > available) {
-                quantityInput.value = available;
-            }
-        } else {
-            quantityInput.removeAttribute('max');
-        }
-    };
-
-    productSelect.addEventListener('change', updateAvailability);
-    updateAvailability();
-}
-
-// ربط الأحداث للعناصر الموجودة
-document.querySelectorAll('.transfer-item').forEach(item => {
-    attachItemEvents(item);
-});
-
-// تحميل المنتجات تلقائياً عند فتح النموذج إذا كان هناك مخزن محدد
-const createTransferModal = document.getElementById('createTransferModal');
-if (createTransferModal) {
-    createTransferModal.addEventListener('show.bs.modal', function() {
-        const fromWarehouseSelect = document.getElementById('fromWarehouse');
-        if (fromWarehouseSelect && fromWarehouseSelect.value) {
-            // تحميل المنتجات من المخزن المحدد (مخزن المندوب إذا كان محدداً)
-            fromWarehouseSelect.dispatchEvent(new Event('change'));
-        } else if (fromWarehouseSelect && allFinishedProductOptions.length === 0) {
-            // إذا لم يكن هناك مخزن محدد ولم تكن هناك منتجات، تحميل من المخزن الرئيسي
-            const mainWarehouseOption = fromWarehouseSelect.querySelector('option[data-type="main"]');
-            if (mainWarehouseOption) {
-                fromWarehouseSelect.value = mainWarehouseOption.value;
-                fromWarehouseSelect.dispatchEvent(new Event('change'));
-            }
-        }
-    });
-}
-
-// التحقق من عدم اختيار نفس المخزن
-document.getElementById('transferForm')?.addEventListener('submit', function(e) {
-    const fromWarehouse = document.getElementById('fromWarehouse').value;
-    const toWarehouse = document.getElementById('toWarehouse').value;
-    
-    if (fromWarehouse === toWarehouse) {
-        e.preventDefault();
-        alert('لا يمكن النقل من وإلى نفس المخزن');
-        return false;
-    }
-
-    const rows = document.querySelectorAll('#transferItems .transfer-item');
-    if (!rows.length) {
-        e.preventDefault();
-        alert('أضف منتجاً واحداً على الأقل.');
-        return false;
-    }
-
-        for (const row of rows) {
-        const select = row.querySelector('.product-select');
-        const quantityInput = row.querySelector('.quantity');
-        const productIdInput = row.querySelector('.selected-product-id');
-        const batchIdInput = row.querySelector('.selected-batch-id');
-        const max = quantityInput ? parseFloat(quantityInput.getAttribute('max') || '0') : 0;
-        const min = quantityInput ? parseFloat(quantityInput.getAttribute('min') || '0.01') : 0.01;
-        const value = quantityInput ? parseFloat(quantityInput.value || '0') : 0;
-        const productId = productIdInput ? parseInt(productIdInput.value || '0', 10) : 0;
-        const batchId = batchIdInput ? parseInt(batchIdInput.value || '0', 10) : 0;
-
-        if (!select || !quantityInput || !select.value) {
-            e.preventDefault();
-            alert('اختر منتجاً وتشغيلته لكل عنصر.');
-            return false;
-        }
-
-        // التحقق من أن batch_id أو product_id موجود
-        if (productId <= 0 && batchId <= 0) {
-            e.preventDefault();
-            console.error('Validation failed:', {
-                selectValue: select.value,
-                productId: productId,
-                batchId: batchId,
-                productIdInputValue: productIdInput?.value,
-                batchIdInputValue: batchIdInput?.value,
-                selectedOption: select.options[select.selectedIndex]?.dataset
-            });
-            alert('خطأ: لم يتم تحديد المنتج بشكل صحيح. يرجى إعادة اختيار المنتج.');
-            // إعادة تحديث الحقول
-            if (select) {
-                select.dispatchEvent(new Event('change'));
-            }
-            return false;
-        }
-
-        if (value < min) {
-            e.preventDefault();
-            alert('أدخل كمية صحيحة لكل منتج.');
-            return false;
-        }
-
-        if (max > 0 && value > max) {
-            e.preventDefault();
-            alert('الكمية المطلوبة تتجاوز المتاحة لإحدى التشغيلات.');
-            return false;
-        }
-    }
-});
 
 // إعادة تحميل الصفحة تلقائياً بعد أي رسالة (نجاح أو خطأ) لمنع تكرار الطلبات
 (function() {
@@ -1874,29 +1124,6 @@ document.getElementById('transferForm')?.addEventListener('submit', function(e) 
             modalBody.style.display = 'flex';
             modalBody.style.flexDirection = 'column';
             
-            // جعل قسم عناصر النقل قابل للتمرير الداخلي (للمودال createTransferModal فقط)
-            const transferItems = modalBody.querySelector('#transferItems');
-            if (transferItems && modalId === 'createTransferModal') {
-                // تحديد max-height بناءً على حجم الشاشة
-                const isMobile = window.innerWidth <= 767.98;
-                const maxHeight = isMobile ? '40vh' : '50vh';
-                const minHeight = isMobile ? '150px' : '200px';
-                const padding = isMobile ? '0.5rem' : '0.75rem';
-                
-                // تطبيق الأنماط بشكل مباشر وقوي
-                transferItems.style.setProperty('max-height', maxHeight, 'important');
-                transferItems.style.setProperty('min-height', minHeight, 'important');
-                transferItems.style.setProperty('overflow-y', 'auto', 'important');
-                transferItems.style.setProperty('overflow-x', 'hidden', 'important');
-                transferItems.style.setProperty('-webkit-overflow-scrolling', 'touch', 'important');
-                transferItems.style.setProperty('padding', padding, 'important');
-                transferItems.style.setProperty('margin-bottom', padding, 'important');
-                transferItems.style.setProperty('border', '1px solid rgba(0, 0, 0, 0.1)', 'important');
-                transferItems.style.setProperty('border-radius', '0.375rem', 'important');
-                transferItems.style.setProperty('background-color', '#f8f9fa', 'important');
-                transferItems.style.setProperty('display', 'block', 'important');
-                transferItems.style.setProperty('position', 'relative', 'important');
-            }
             
             // التأكد من أن modal-footer ثابت
             modalFooter.style.flexShrink = '0';
@@ -1907,23 +1134,6 @@ document.getElementById('transferForm')?.addEventListener('submit', function(e) 
         modal.addEventListener('shown.bs.modal', function() {
             ensureFooterVisible();
             
-            // إعادة تطبيق الأنماط على #transferItems بعد فتح المودال (للمودال createTransferModal فقط)
-            if (modalId === 'createTransferModal') {
-                setTimeout(function() {
-                    const transferItems = modalBody.querySelector('#transferItems');
-                    if (transferItems) {
-                        const isMobile = window.innerWidth <= 767.98;
-                        const maxHeight = isMobile ? '40vh' : '50vh';
-                        const minHeight = isMobile ? '150px' : '200px';
-                        
-                        transferItems.style.setProperty('max-height', maxHeight, 'important');
-                        transferItems.style.setProperty('min-height', minHeight, 'important');
-                        transferItems.style.setProperty('overflow-y', 'auto', 'important');
-                        transferItems.style.setProperty('overflow-x', 'hidden', 'important');
-                        transferItems.style.setProperty('-webkit-overflow-scrolling', 'touch', 'important');
-                    }
-                }, 150);
-            }
             
             // إضافة padding في الأسفل للمحتوى
             if (!modalBody.querySelector('.mb-footer-spacer')) {
@@ -1957,39 +1167,6 @@ document.getElementById('transferForm')?.addEventListener('submit', function(e) 
             }
         }, true);
         
-        // مراقبة إضافة عناصر جديدة في #transferItems
-        const transferItems = modalBody.querySelector('#transferItems');
-        if (transferItems && modalId === 'createTransferModal') {
-            const itemsObserver = new MutationObserver(function(mutations) {
-                let shouldScroll = false;
-                
-                mutations.forEach(function(mutation) {
-                    if (mutation.addedNodes.length > 0) {
-                        shouldScroll = true;
-                    }
-                });
-                
-                if (shouldScroll) {
-                    // التأكد من ظهور modal-footer بعد إضافة العناصر
-                    setTimeout(function() {
-                        ensureFooterVisible();
-                        
-                        // Scroll إلى آخر عنصر في #transferItems
-                        const lastItem = transferItems.lastElementChild;
-                        if (lastItem) {
-                            lastItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        }
-                    }, 100);
-                }
-            });
-            
-            itemsObserver.observe(transferItems, { childList: true, subtree: true });
-            
-            // تنظيف عند إغلاق المودال
-            modal.addEventListener('hidden.bs.modal', function() {
-                itemsObserver.disconnect();
-            });
-        }
         
         // عند فتح لوحة المفاتيح (visualViewport API)
         if (window.visualViewport) {
@@ -2013,7 +1190,7 @@ document.getElementById('transferForm')?.addEventListener('submit', function(e) 
     }
     
     // تطبيق الإصلاح على جميع المودالات
-    const modalsToFix = ['createTransferModal', 'addVehicleModal'];
+    const modalsToFix = ['addVehicleModal'];
     
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function() {

@@ -4585,6 +4585,178 @@ function scrollToElement(element) {
         });
     }, 200);
 }
+
+// ===== دوال زيت الزيتون - متاحة لجميع الأقسام =====
+function showAddOliveOilModal() {
+    if (typeof closeAllForms === 'function') {
+        closeAllForms();
+    }
+    
+    const isMobileDevice = isMobile();
+    
+    if (isMobileDevice) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('addOliveOilCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('addOliveOilModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+function openOliveOilDamageModal(id, supplier, quantity) {
+    if (typeof closeAllForms === 'function') {
+        closeAllForms();
+    }
+    
+    const qty = parseFloat(quantity) || 0;
+    const isMobileDevice = isMobile();
+    
+    if (isMobileDevice) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('damageOliveOilCard');
+        if (!card) return;
+        
+        const stockIdInput = document.getElementById('damage_oil_stock_id_card');
+        const supplierInput = document.getElementById('damage_oil_supplier_card');
+        const availableInput = document.getElementById('damage_oil_available_card');
+        const qtyInput = document.getElementById('damage_oil_quantity_card');
+        const reasonInput = document.getElementById('damage_oil_reason_card');
+        const submitBtn = document.getElementById('damage_oil_submit_card');
+        
+        if (stockIdInput) stockIdInput.value = id;
+        if (supplierInput) supplierInput.value = supplier;
+        if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
+        if (qtyInput) {
+            qtyInput.value = '';
+            qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
+            qtyInput.disabled = qty <= 0;
+        }
+        if (reasonInput) reasonInput.value = '';
+        if (submitBtn) submitBtn.disabled = qty <= 0;
+        
+        card.style.display = 'block';
+        setTimeout(function() {
+            scrollToElement(card);
+        }, 50);
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const stockIdInput = document.getElementById('damage_oil_stock_id');
+        const supplierInput = document.getElementById('damage_oil_supplier');
+        const availableInput = document.getElementById('damage_oil_available');
+        const qtyInput = document.getElementById('damage_oil_quantity');
+        const reasonInput = document.getElementById('damage_oil_reason');
+        const submitBtn = document.getElementById('damage_oil_submit');
+        
+        if (stockIdInput) stockIdInput.value = id;
+        if (supplierInput) supplierInput.value = supplier;
+        if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
+        if (qtyInput) {
+            qtyInput.value = '';
+            qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
+            qtyInput.disabled = qty <= 0;
+        }
+        if (reasonInput) reasonInput.value = '';
+        if (submitBtn) submitBtn.disabled = qty <= 0;
+        
+        new bootstrap.Modal(document.getElementById('damageOliveOilModal')).show();
+    }
+}
+
+// ===== دوال شمع العسل - متاحة لجميع الأقسام =====
+function showAddBeeswaxModal() {
+    if (typeof closeAllForms === 'function') {
+        closeAllForms();
+    }
+    
+    const isMobileDevice = isMobile();
+    
+    if (isMobileDevice) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('addBeeswaxCard');
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('addBeeswaxModal');
+        if (modal) {
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+function openBeeswaxDamageModal(id, supplier, quantity) {
+    if (typeof closeAllForms === 'function') {
+        closeAllForms();
+    }
+    
+    const qty = parseFloat(quantity) || 0;
+    const isMobileDevice = isMobile();
+    
+    if (isMobileDevice) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('damageBeeswaxCard');
+        if (!card) return;
+        
+        const stockIdInput = document.getElementById('damage_wax_stock_id_card');
+        const supplierInput = document.getElementById('damage_wax_supplier_card');
+        const availableInput = document.getElementById('damage_wax_available_card');
+        const qtyInput = document.getElementById('damage_wax_quantity_card');
+        const reasonInput = document.getElementById('damage_wax_reason_card');
+        const submitBtn = document.getElementById('damage_wax_submit_card');
+        
+        if (stockIdInput) stockIdInput.value = id;
+        if (supplierInput) supplierInput.value = supplier;
+        if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
+        if (qtyInput) {
+            qtyInput.value = '';
+            qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
+            qtyInput.disabled = qty <= 0;
+        }
+        if (reasonInput) reasonInput.value = '';
+        if (submitBtn) submitBtn.disabled = qty <= 0;
+        
+        card.style.display = 'block';
+        setTimeout(function() {
+            scrollToElement(card);
+        }, 50);
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const stockIdInput = document.getElementById('damage_wax_stock_id');
+        const supplierInput = document.getElementById('damage_wax_supplier');
+        const availableInput = document.getElementById('damage_wax_available');
+        const qtyInput = document.getElementById('damage_wax_quantity');
+        const reasonInput = document.getElementById('damage_wax_reason');
+        const submitBtn = document.getElementById('damage_wax_submit');
+        
+        if (stockIdInput) stockIdInput.value = id;
+        if (supplierInput) supplierInput.value = supplier;
+        if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
+        if (qtyInput) {
+            qtyInput.value = '';
+            qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
+            qtyInput.disabled = qty <= 0;
+        }
+        if (reasonInput) reasonInput.value = '';
+        if (submitBtn) submitBtn.disabled = qty <= 0;
+        
+        new bootstrap.Modal(document.getElementById('damageBeeswaxModal')).show();
+    }
+}
 </script>
 
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
@@ -5991,9 +6163,9 @@ if ($section === 'honey') {
                     <h5 class="modal-title">إضافة زيت زيتون</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <form method="POST">
+                <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
                     <input type="hidden" name="action" value="add_olive_oil">
-                    <input type="hidden" name="submit_token" value="">
+                    <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
                     <div class="modal-body scrollable-modal-body">
                         <div class="mb-3">
                             <label class="form-label">المورد <span class="text-danger">*</span></label>
@@ -6069,9 +6241,9 @@ if ($section === 'honey') {
         <h5 class="mb-0">إضافة زيت زيتون</h5>
     </div>
     <div class="card-body">
-        <form method="POST" id="addOliveOilFormCard">
+        <form method="POST" id="addOliveOilFormCard" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
             <input type="hidden" name="action" value="add_olive_oil">
-            <input type="hidden" name="submit_token" value="">
+            <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
             <div class="mb-3">
                 <label class="form-label">المورد <span class="text-danger">*</span></label>
                 <select class="form-select" name="supplier_id" required>
@@ -6202,64 +6374,7 @@ if ($section === 'honey') {
 </div>
 
 <script>
-    function openOliveOilDamageModal(id, supplier, quantity) {
-        if (typeof closeAllForms === 'function') {
-            closeAllForms();
-        }
-        
-        const qty = parseFloat(quantity) || 0;
-        const isMobileDevice = isMobile();
-        
-        if (isMobileDevice) {
-            // على الموبايل: استخدام Card
-            const card = document.getElementById('damageOliveOilCard');
-            if (!card) return;
-            
-            const stockIdInput = document.getElementById('damage_oil_stock_id_card');
-            const supplierInput = document.getElementById('damage_oil_supplier_card');
-            const availableInput = document.getElementById('damage_oil_available_card');
-            const qtyInput = document.getElementById('damage_oil_quantity_card');
-            const reasonInput = document.getElementById('damage_oil_reason_card');
-            const submitBtn = document.getElementById('damage_oil_submit_card');
-            
-            if (stockIdInput) stockIdInput.value = id;
-            if (supplierInput) supplierInput.value = supplier;
-            if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
-            if (qtyInput) {
-                qtyInput.value = '';
-                qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
-                qtyInput.disabled = qty <= 0;
-            }
-            if (reasonInput) reasonInput.value = '';
-            if (submitBtn) submitBtn.disabled = qty <= 0;
-            
-            card.style.display = 'block';
-            setTimeout(function() {
-                scrollToElement(card);
-            }, 50);
-        } else {
-            // على الكمبيوتر: استخدام Modal
-            const stockIdInput = document.getElementById('damage_oil_stock_id');
-            const supplierInput = document.getElementById('damage_oil_supplier');
-            const availableInput = document.getElementById('damage_oil_available');
-            const qtyInput = document.getElementById('damage_oil_quantity');
-            const reasonInput = document.getElementById('damage_oil_reason');
-            const submitBtn = document.getElementById('damage_oil_submit');
-            
-            if (stockIdInput) stockIdInput.value = id;
-            if (supplierInput) supplierInput.value = supplier;
-            if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
-            if (qtyInput) {
-                qtyInput.value = '';
-                qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
-                qtyInput.disabled = qty <= 0;
-            }
-            if (reasonInput) reasonInput.value = '';
-            if (submitBtn) submitBtn.disabled = qty <= 0;
-            
-            new bootstrap.Modal(document.getElementById('damageOliveOilModal')).show();
-        }
-    }
+    // ملاحظة: دوال openOliveOilDamageModal و showAddOliveOilModal معرّفة في المكان العام في بداية الصفحة
 </script>
 
     <?php
@@ -6445,66 +6560,9 @@ if ($section === 'honey') {
 </div>
 
 <script>
-    function openBeeswaxDamageModal(id, supplier, quantity) {
-        if (typeof closeAllForms === 'function') {
-            closeAllForms();
-        }
-        
-        const qty = parseFloat(quantity) || 0;
-        const isMobileDevice = isMobile();
-        
-        if (isMobileDevice) {
-            // على الموبايل: استخدام Card
-            const card = document.getElementById('damageBeeswaxCard');
-            if (!card) return;
-            
-            const stockIdInput = document.getElementById('damage_wax_stock_id_card');
-            const supplierInput = document.getElementById('damage_wax_supplier_card');
-            const availableInput = document.getElementById('damage_wax_available_card');
-            const qtyInput = document.getElementById('damage_wax_quantity_card');
-            const reasonInput = document.getElementById('damage_wax_reason_card');
-            const submitBtn = document.getElementById('damage_wax_submit_card');
-            
-            if (stockIdInput) stockIdInput.value = id;
-            if (supplierInput) supplierInput.value = supplier;
-            if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
-            if (qtyInput) {
-                qtyInput.value = '';
-                qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
-                qtyInput.disabled = qty <= 0;
-            }
-            if (reasonInput) reasonInput.value = '';
-            if (submitBtn) submitBtn.disabled = qty <= 0;
-            
-            card.style.display = 'block';
-            setTimeout(function() {
-                scrollToElement(card);
-            }, 50);
-        } else {
-            // على الكمبيوتر: استخدام Modal
-            const stockIdInput = document.getElementById('damage_wax_stock_id');
-            const supplierInput = document.getElementById('damage_wax_supplier');
-            const availableInput = document.getElementById('damage_wax_available');
-            const qtyInput = document.getElementById('damage_wax_quantity');
-            const reasonInput = document.getElementById('damage_wax_reason');
-            const submitBtn = document.getElementById('damage_wax_submit');
-            
-            if (stockIdInput) stockIdInput.value = id;
-            if (supplierInput) supplierInput.value = supplier;
-            if (availableInput) availableInput.value = qty.toFixed(2) + ' كجم';
-            if (qtyInput) {
-                qtyInput.value = '';
-                qtyInput.max = qty > 0 ? qty.toFixed(2) : null;
-                qtyInput.disabled = qty <= 0;
-            }
-            if (reasonInput) reasonInput.value = '';
-            if (submitBtn) submitBtn.disabled = qty <= 0;
-            
-            new bootstrap.Modal(document.getElementById('damageBeeswaxModal')).show();
-        }
-    }
-
     // ===== دوال إغلاق Cards - زيت الزيتون والشمع =====
+    // ملاحظة: دوال openBeeswaxDamageModal و showAddBeeswaxModal و showAddOliveOilModal و openOliveOilDamageModal معرّفة في المكان العام في بداية الصفحة
+    
     function closeAddOliveOilCard() {
         const card = document.getElementById('addOliveOilCard');
         if (card) {
@@ -6523,33 +6581,6 @@ if ($section === 'honey') {
         }
     }
 
-    // دالة فتح نموذج إضافة زيت زيتون
-    function showAddOliveOilModal() {
-        if (typeof closeAllForms === 'function') {
-            closeAllForms();
-        }
-        
-        const isMobileDevice = isMobile();
-        
-        if (isMobileDevice) {
-            // على الموبايل: استخدام Card
-            const card = document.getElementById('addOliveOilCard');
-            if (card) {
-                card.style.display = 'block';
-                setTimeout(function() {
-                    scrollToElement(card);
-                }, 50);
-            }
-        } else {
-            // على الكمبيوتر: استخدام Modal
-            const modal = document.getElementById('addOliveOilModal');
-            if (modal) {
-                const modalInstance = new bootstrap.Modal(modal);
-                modalInstance.show();
-            }
-        }
-    }
-
     function closeAddBeeswaxCard() {
         const card = document.getElementById('addBeeswaxCard');
         if (card) {
@@ -6565,33 +6596,6 @@ if ($section === 'honey') {
             card.style.display = 'none';
             const form = card.querySelector('form');
             if (form) form.reset();
-        }
-    }
-
-    // دالة فتح نموذج إضافة شمع عسل
-    function showAddBeeswaxModal() {
-        if (typeof closeAllForms === 'function') {
-            closeAllForms();
-        }
-        
-        const isMobileDevice = isMobile();
-        
-        if (isMobileDevice) {
-            // على الموبايل: استخدام Card
-            const card = document.getElementById('addBeeswaxCard');
-            if (card) {
-                card.style.display = 'block';
-                setTimeout(function() {
-                    scrollToElement(card);
-                }, 50);
-            }
-        } else {
-            // على الكمبيوتر: استخدام Modal
-            const modal = document.getElementById('addBeeswaxModal');
-            if (modal) {
-                const modalInstance = new bootstrap.Modal(modal);
-                modalInstance.show();
-            }
         }
     }
 </script>

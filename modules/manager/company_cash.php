@@ -575,23 +575,21 @@ $typeColorMap = [
 ?>
 
 <!-- صافي الرصيد المعتمد - بطاقة منفصلة -->
-<div class="row g-3 mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-graph-up-arrow me-2 text-primary"></i>صافي الرصيد المعتمد</span>
-                <span class="badge bg-primary text-white">محدّث</span>
-            </div>
-            <div class="card-body">
-                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
-                    <div>
-                        <span class="text-muted text-uppercase small">صافي الرصيد المعتمد</span>
-                        <div class="display-6 fw-bold mt-1"><?php echo formatCurrency($netApprovedBalance); ?></div>
-                    </div>
-                    <div class="text-end">
-                        <div class="badge bg-success text-white fw-semibold px-3 py-2">
-                            <?php echo formatCurrency($approvedIncome); ?> إيرادات
-                        </div>
+<div class="mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-graph-up-arrow me-2 text-primary"></i>صافي الرصيد المعتمد</span>
+            <span class="badge bg-primary text-white">محدّث</span>
+        </div>
+        <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                <div>
+                    <span class="text-muted text-uppercase small">صافي الرصيد المعتمد</span>
+                    <div class="display-6 fw-bold mt-1"><?php echo formatCurrency($netApprovedBalance); ?></div>
+                </div>
+                <div class="text-end">
+                    <div class="badge bg-success text-white fw-semibold px-3 py-2">
+                        <?php echo formatCurrency($approvedIncome); ?> إيرادات
                     </div>
                 </div>
             </div>
@@ -600,124 +598,113 @@ $typeColorMap = [
 </div>
 
 <!-- إيرادات معتمدة - بطاقة منفصلة -->
-<div class="row g-3 mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-arrow-up-right-circle text-success me-2"></i>إيرادات معتمدة</span>
-            </div>
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        <div class="h4 text-success fw-bold"><?php echo formatCurrency($approvedIncome); ?></div>
-                    </div>
-                    <i class="bi bi-arrow-up-right-circle text-success" style="font-size: 2rem;"></i>
+<div class="mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-arrow-up-right-circle text-success me-2"></i>إيرادات معتمدة</span>
+        </div>
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <div class="h4 text-success fw-bold"><?php echo formatCurrency($approvedIncome); ?></div>
                 </div>
-                <div class="progress" style="height: 8px;">
-                    <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo max(0, min(100, $incomeShare)); ?>%;"></div>
-                </div>
-                <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $incomeShare)); ?>% من إجمالي الحركة</small>
+                <i class="bi bi-arrow-up-right-circle text-success" style="font-size: 2rem;"></i>
             </div>
+            <div class="progress" style="height: 8px;">
+                <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo max(0, min(100, $incomeShare)); ?>%;"></div>
+            </div>
+            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $incomeShare)); ?>% من إجمالي الحركة</small>
         </div>
     </div>
 </div>
 
 <!-- مصروفات معتمدة - بطاقة منفصلة -->
-<div class="row g-3 mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-arrow-down-right-circle text-danger me-2"></i>مصروفات معتمدة</span>
-            </div>
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        <div class="h4 text-danger fw-bold"><?php echo formatCurrency($approvedExpense); ?></div>
-                    </div>
-                    <i class="bi bi-arrow-down-right-circle text-danger" style="font-size: 2rem;"></i>
+<div class="mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-arrow-down-right-circle text-danger me-2"></i>مصروفات معتمدة</span>
+        </div>
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <div class="h4 text-danger fw-bold"><?php echo formatCurrency($approvedExpense); ?></div>
                 </div>
-                <div class="progress" style="height: 8px;">
-                    <div class="progress-bar bg-danger" role="progressbar" style="width: <?php echo max(0, min(100, $expenseShare)); ?>%;"></div>
-                </div>
-                <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $expenseShare)); ?>% من إجمالي الحركة</small>
+                <i class="bi bi-arrow-down-right-circle text-danger" style="font-size: 2rem;"></i>
             </div>
+            <div class="progress" style="height: 8px;">
+                <div class="progress-bar bg-danger" role="progressbar" style="width: <?php echo max(0, min(100, $expenseShare)); ?>%;"></div>
+            </div>
+            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $expenseShare)); ?>% من إجمالي الحركة</small>
         </div>
     </div>
 </div>
 
 <!-- مدفوعات الموردين - بطاقة منفصلة -->
-<div class="row g-3 mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-credit-card-2-back text-warning me-2"></i>مدفوعات الموردين</span>
-            </div>
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        <div class="h4 text-warning fw-bold"><?php echo formatCurrency($approvedPayment); ?></div>
-                    </div>
-                    <i class="bi bi-credit-card-2-back text-warning" style="font-size: 2rem;"></i>
+<div class="mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-credit-card-2-back text-warning me-2"></i>مدفوعات الموردين</span>
+        </div>
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <div class="h4 text-warning fw-bold"><?php echo formatCurrency($approvedPayment); ?></div>
                 </div>
-                <div class="progress" style="height: 8px;">
-                    <div class="progress-bar bg-warning" role="progressbar" style="width: <?php echo max(0, min(100, $paymentShare)); ?>%;"></div>
-                </div>
-                <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $paymentShare)); ?>% من إجمالي الحركة</small>
+                <i class="bi bi-credit-card-2-back text-warning" style="font-size: 2rem;"></i>
             </div>
+            <div class="progress" style="height: 8px;">
+                <div class="progress-bar bg-warning" role="progressbar" style="width: <?php echo max(0, min(100, $paymentShare)); ?>%;"></div>
+            </div>
+            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $paymentShare)); ?>% من إجمالي الحركة</small>
         </div>
     </div>
 </div>
 
 <!-- تسويات المرتبات - بطاقة منفصلة -->
-<div class="row g-3 mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-currency-exchange text-info me-2"></i>تسويات المرتبات</span>
-            </div>
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        <div class="h4 text-info fw-bold"><?php echo formatCurrency($totalSalaryAdjustments); ?></div>
-                    </div>
-                    <i class="bi bi-currency-exchange text-info" style="font-size: 2rem;"></i>
+<div class="mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-currency-exchange text-info me-2"></i>تسويات المرتبات</span>
+        </div>
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <div class="h4 text-info fw-bold"><?php echo formatCurrency($totalSalaryAdjustments); ?></div>
                 </div>
-                <div class="progress" style="height: 8px;">
-                    <div class="progress-bar bg-info" role="progressbar" style="width: <?php echo max(0, min(100, $adjustmentsShare)); ?>%;"></div>
-                </div>
-                <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $adjustmentsShare)); ?>% من إجمالي الحركة</small>
+                <i class="bi bi-currency-exchange text-info" style="font-size: 2rem;"></i>
             </div>
+            <div class="progress" style="height: 8px;">
+                <div class="progress-bar bg-info" role="progressbar" style="width: <?php echo max(0, min(100, $adjustmentsShare)); ?>%;"></div>
+            </div>
+            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $adjustmentsShare)); ?>% من إجمالي الحركة</small>
         </div>
     </div>
 </div>
 
 <!-- تسويات أرصدة العملاء - بطاقة منفصلة -->
-<div class="row g-3 mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-wallet2 text-secondary me-2"></i>تسويات أرصدة العملاء</span>
-            </div>
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        <div class="h4 text-secondary fw-bold"><?php echo formatCurrency($totalCustomerCreditSettlements); ?></div>
-                    </div>
-                    <i class="bi bi-wallet2 text-secondary" style="font-size: 2rem;"></i>
+<div class="mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-wallet2 text-secondary me-2"></i>تسويات أرصدة العملاء</span>
+        </div>
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <div class="h4 text-secondary fw-bold"><?php echo formatCurrency($totalCustomerCreditSettlements); ?></div>
                 </div>
-                <div class="progress" style="height: 8px;">
-                    <div class="progress-bar bg-secondary" role="progressbar" style="width: <?php echo max(0, min(100, $customerSettlementsShare)); ?>%;"></div>
-                </div>
-                <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $customerSettlementsShare)); ?>% من إجمالي الحركة</small>
+                <i class="bi bi-wallet2 text-secondary" style="font-size: 2rem;"></i>
             </div>
+            <div class="progress" style="height: 8px;">
+                <div class="progress-bar bg-secondary" role="progressbar" style="width: <?php echo max(0, min(100, $customerSettlementsShare)); ?>%;"></div>
+            </div>
+            <small class="text-muted d-block mt-2"><?php echo max(0, min(100, $customerSettlementsShare)); ?>% من إجمالي الحركة</small>
         </div>
     </div>
 </div>
 
-<!-- تسجيل مصروف سريع - صف مستقل -->
-<div class="row g-3 mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm h-100">
+<!-- تسجيل مصروف سريع - بطاقة منفصلة -->
+<div class="mt-4">
+    <div class="card shadow-sm">
             <div class="card-header bg-light fw-bold">
                 <i class="bi bi-pencil-square me-2 text-success"></i>تسجيل مصروف سريع
             </div>
@@ -766,14 +753,12 @@ $typeColorMap = [
                     </div>
                 </form>
             </div>
-        </div>
     </div>
 </div>
 
-<!-- تحصيل من مندوب - صف مستقل -->
-<div class="row g-3 mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm h-100">
+<!-- تحصيل من مندوب - بطاقة منفصلة -->
+<div class="mt-4">
+    <div class="card shadow-sm">
             <div class="card-header bg-light fw-bold">
                 <i class="bi bi-cash-coin me-2 text-primary"></i>تحصيل من مندوب
             </div>
@@ -825,14 +810,12 @@ $typeColorMap = [
                     </div>
                 </form>
             </div>
-        </div>
     </div>
 </div>
 
-<!-- إنشاء تقرير تفصيلي - صف مستقل -->
-<div class="row g-3 mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm h-100">
+<!-- إنشاء تقرير تفصيلي - بطاقة منفصلة -->
+<div class="mt-4">
+    <div class="card shadow-sm">
             <div class="card-header bg-light fw-bold">
                 <i class="bi bi-file-earmark-text me-2 text-success"></i>إنشاء تقرير تفصيلي
             </div>
@@ -889,7 +872,6 @@ $typeColorMap = [
                     </div>
                 </form>
             </div>
-        </div>
     </div>
 </div>
 
