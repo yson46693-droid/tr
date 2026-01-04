@@ -1360,8 +1360,6 @@ try {
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-info set-credit-limit-btn"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#setCreditLimitModal"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-balance="<?php echo $rawBalance; ?>"
@@ -2543,32 +2541,64 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            const viewLocationModal = document.getElementById('repViewLocationModal');
-            if (viewLocationModal) {
-                const locationCustomerName = viewLocationModal.querySelector('.rep-location-customer-name');
-                const locationMapFrame = viewLocationModal.querySelector('.rep-location-map-frame');
-                const locationExternalLink = viewLocationModal.querySelector('.rep-location-open-map');
-                
-                if (locationCustomerName) {
-                    locationCustomerName.textContent = customerName;
+            closeAllForms();
+            
+            if (isMobile()) {
+                // على الموبايل: استخدام Card
+                const card = document.getElementById('repViewLocationCard');
+                if (card) {
+                    const locationCustomerName = card.querySelector('.rep-location-card-customer-name');
+                    const locationMapFrame = card.querySelector('.rep-location-card-map-frame');
+                    const locationExternalLink = card.querySelector('.rep-location-card-open-map');
+                    
+                    if (locationCustomerName) {
+                        locationCustomerName.textContent = customerName;
+                    }
+                    
+                    if (locationMapFrame) {
+                        const embedUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16&output=embed';
+                        locationMapFrame.src = embedUrl;
+                    }
+                    
+                    if (locationExternalLink) {
+                        const externalUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16';
+                        locationExternalLink.href = externalUrl;
+                    }
+                    
+                    card.style.display = 'block';
+                    setTimeout(function() {
+                        scrollToElement(card);
+                    }, 50);
                 }
-                
-                if (locationMapFrame) {
-                    const embedUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16&output=embed';
-                    locationMapFrame.src = embedUrl;
-                }
-                
-                if (locationExternalLink) {
-                    const externalUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16';
-                    locationExternalLink.href = externalUrl;
-                }
-                
-                const modalInstance = bootstrap.Modal.getOrCreateInstance(viewLocationModal);
-                modalInstance.show();
             } else {
-                // Fallback: فتح في نافذة جديدة إذا لم يوجد modal
-                const url = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16';
-                window.open(url, '_blank');
+                // على الكمبيوتر: استخدام Modal
+                const viewLocationModal = document.getElementById('repViewLocationModal');
+                if (viewLocationModal) {
+                    const locationCustomerName = viewLocationModal.querySelector('.rep-location-customer-name');
+                    const locationMapFrame = viewLocationModal.querySelector('.rep-location-map-frame');
+                    const locationExternalLink = viewLocationModal.querySelector('.rep-location-open-map');
+                    
+                    if (locationCustomerName) {
+                        locationCustomerName.textContent = customerName;
+                    }
+                    
+                    if (locationMapFrame) {
+                        const embedUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16&output=embed';
+                        locationMapFrame.src = embedUrl;
+                    }
+                    
+                    if (locationExternalLink) {
+                        const externalUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16';
+                        locationExternalLink.href = externalUrl;
+                    }
+                    
+                    const modalInstance = bootstrap.Modal.getOrCreateInstance(viewLocationModal);
+                    modalInstance.show();
+                } else {
+                    // Fallback: فتح في نافذة جديدة إذا لم يوجد modal
+                    const url = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16';
+                    window.open(url, '_blank');
+                }
             }
         }
         
@@ -2987,6 +3017,39 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i class="bi bi-map me-1"></i> فتح في الخرائط
                 </a>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Card عرض موقع العميل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="repViewLocationCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-geo-alt me-2"></i>موقع العميل
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <div class="text-muted small fw-semibold">العميل</div>
+            <div class="fs-5 fw-bold rep-location-card-customer-name">-</div>
+        </div>
+        <div class="ratio ratio-16x9">
+            <iframe
+                class="rep-location-card-map-frame border rounded"
+                src=""
+                title="معاينة موقع العميل"
+                allowfullscreen
+                loading="lazy"
+            ></iframe>
+        </div>
+        <p class="mt-3 text-muted mb-0">
+            يمكنك متابعة الموقع داخل المعاينة أو فتحه في خرائط Google للحصول على اتجاهات دقيقة.
+        </p>
+        <div class="d-flex gap-2 mt-3">
+            <a href="#" target="_blank" rel="noopener" class="btn btn-primary rep-location-card-open-map">
+                <i class="bi bi-map me-1"></i>فتح في الخرائط
+            </a>
+            <button type="button" class="btn btn-secondary" onclick="closeRepViewLocationCard()">إغلاق</button>
         </div>
     </div>
 </div>
@@ -3465,6 +3528,40 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
+<!-- Card عرض موقع العميل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="allCustomersViewLocationCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-geo-alt me-2"></i>موقع العميل
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <div class="text-muted small fw-semibold">العميل</div>
+            <div class="fs-5 fw-bold all-customers-location-card-customer-name">-</div>
+        </div>
+        <div class="ratio ratio-16x9">
+            <iframe
+                class="all-customers-location-card-map-frame border rounded"
+                src=""
+                title="معاينة موقع العميل"
+                allowfullscreen
+                loading="lazy"
+                allow="geolocation; camera; microphone"
+            ></iframe>
+        </div>
+        <p class="mt-3 text-muted mb-0">
+            يمكنك متابعة الموقع داخل المعاينة أو فتحه في خرائط Google للحصول على اتجاهات دقيقة.
+        </p>
+        <div class="d-flex gap-2 mt-3">
+            <a href="#" target="_blank" rel="noopener" class="btn btn-primary all-customers-location-card-open-map">
+                <i class="bi bi-map me-1"></i>فتح في الخرائط
+            </a>
+            <button type="button" class="btn btn-secondary" onclick="closeAllCustomersViewLocationCard()">إغلاق</button>
+        </div>
+    </div>
+</div>
+
 <!-- Card تحصيل ديون العميل - للموبايل فقط -->
 <div class="card shadow-sm mb-4 d-md-none" id="allCustomersCollectPaymentCard" style="display: none;">
     <div class="card-header bg-primary text-white">
@@ -3582,27 +3679,65 @@ document.addEventListener('DOMContentLoaded', function () {
     var locationCustomerName = viewLocationModal ? viewLocationModal.querySelector('.all-customers-location-customer-name') : null;
     var locationExternalLink = viewLocationModal ? viewLocationModal.querySelector('.all-customers-location-open-map') : null;
 
-    if (locationViewButtons && locationViewButtons.length > 0 && viewLocationModal) {
+    if (locationViewButtons && locationViewButtons.length > 0) {
         locationViewButtons.forEach(function (button) {
             button.addEventListener('click', function () {
                 var customerName = button.getAttribute('data-customer-name') || '-';
                 var latitude = button.getAttribute('data-latitude');
                 var longitude = button.getAttribute('data-longitude');
-
-                if (locationCustomerName) {
-                    locationCustomerName.textContent = customerName;
+                
+                if (!latitude || !longitude) {
+                    alert('لا يوجد موقع مسجل لهذا العميل.');
+                    return;
                 }
-
-                if (latitude && longitude && locationMapFrame) {
-                    var mapUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16&output=embed';
-                    locationMapFrame.src = mapUrl;
-
-                    if (locationExternalLink) {
-                        locationExternalLink.href = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16';
+                
+                closeAllForms();
+                
+                if (isMobile()) {
+                    // على الموبايل: استخدام Card
+                    var card = document.getElementById('allCustomersViewLocationCard');
+                    if (card) {
+                        var cardCustomerName = card.querySelector('.all-customers-location-card-customer-name');
+                        var cardMapFrame = card.querySelector('.all-customers-location-card-map-frame');
+                        var cardExternalLink = card.querySelector('.all-customers-location-card-open-map');
+                        
+                        if (cardCustomerName) {
+                            cardCustomerName.textContent = customerName;
+                        }
+                        
+                        if (cardMapFrame) {
+                            var mapUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16&output=embed';
+                            cardMapFrame.src = mapUrl;
+                        }
+                        
+                        if (cardExternalLink) {
+                            cardExternalLink.href = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16';
+                        }
+                        
+                        card.style.display = 'block';
+                        setTimeout(function() {
+                            scrollToElement(card);
+                        }, 50);
                     }
+                } else {
+                    // على الكمبيوتر: استخدام Modal
+                    if (viewLocationModal) {
+                        if (locationCustomerName) {
+                            locationCustomerName.textContent = customerName;
+                        }
 
-                    var modal = new bootstrap.Modal(viewLocationModal);
-                    modal.show();
+                        if (locationMapFrame) {
+                            var mapUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16&output=embed';
+                            locationMapFrame.src = mapUrl;
+                        }
+
+                        if (locationExternalLink) {
+                            locationExternalLink.href = 'https://www.google.com/maps?q=' + encodeURIComponent(latitude + ',' + longitude) + '&hl=ar&z=16';
+                        }
+
+                        var modal = new bootstrap.Modal(viewLocationModal);
+                        modal.show();
+                    }
                 }
             });
         });
@@ -4488,6 +4623,52 @@ try {
     </div>
 </div>
 
+<!-- Card تحديد الحد الائتماني - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="setCreditLimitCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-credit-card me-2"></i>تحديد الحد الائتماني
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>" id="setCreditLimitCardForm">
+            <input type="hidden" name="action" value="set_credit_limit">
+            <input type="hidden" name="customer_id" id="creditLimitCardCustomerId" value="">
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">العميل</div>
+                <div class="fs-5 credit-limit-card-customer-name">-</div>
+            </div>
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">الرصيد المدين الحالي</div>
+                <div class="fs-5 text-warning credit-limit-card-current-balance">-</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="creditLimitCardAmount">الحد الائتماني <span class="text-danger">*</span></label>
+                <input
+                    type="number"
+                    class="form-control"
+                    id="creditLimitCardAmount"
+                    name="credit_limit"
+                    step="0.01"
+                    min="0"
+                    required
+                    placeholder="0.00"
+                >
+                <div class="form-text">
+                    <strong>ملاحظة:</strong> إذا كان رصيد العميل المدين أكبر من أو يساوي الحد الائتماني، لن يتمكن المندوب من البيع بالأجل أو بتحصيل جزئي لهذا العميل.
+                    <br>ضع <strong>0</strong> لإلغاء الحد الائتماني (السماح بالبيع بالأجل بدون قيود).
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle me-1"></i>حفظ
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeSetCreditLimitCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Customer Export Script -->
 <script>
 // تمرير المسارات الأساسية من PHP إلى JavaScript
@@ -4613,6 +4794,72 @@ document.addEventListener('DOMContentLoaded', function() {
                 creditLimitInput.value = '';
             });
         }
+    }
+    
+    // معالج أزرار تحديد الحد الائتماني - دعم Modal/Card
+    var setCreditLimitButtons = document.querySelectorAll('.set-credit-limit-btn');
+    if (setCreditLimitButtons && setCreditLimitButtons.length > 0) {
+        setCreditLimitButtons.forEach(function(button) {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                closeAllForms();
+                
+                var customerId = button.getAttribute('data-customer-id') || '';
+                var customerName = button.getAttribute('data-customer-name') || '-';
+                var balanceRaw = button.getAttribute('data-customer-balance') || '0';
+                var creditLimitRaw = button.getAttribute('data-credit-limit') || '0';
+                
+                var numericBalance = parseFloat(balanceRaw);
+                if (!Number.isFinite(numericBalance)) {
+                    numericBalance = 0;
+                }
+                var displayBalance = numericBalance > 0 ? numericBalance : 0;
+                
+                var numericCreditLimit = parseFloat(creditLimitRaw);
+                if (!Number.isFinite(numericCreditLimit)) {
+                    numericCreditLimit = 0;
+                }
+                
+                if (isMobile()) {
+                    // على الموبايل: استخدام Card
+                    var card = document.getElementById('setCreditLimitCard');
+                    if (card) {
+                        var cardCustomerName = card.querySelector('.credit-limit-card-customer-name');
+                        var cardBalance = card.querySelector('.credit-limit-card-current-balance');
+                        var cardCustomerId = card.querySelector('#creditLimitCardCustomerId');
+                        var cardCreditLimit = card.querySelector('#creditLimitCardAmount');
+                        
+                        if (cardCustomerName) cardCustomerName.textContent = customerName;
+                        if (cardBalance) cardBalance.textContent = formatCurrency(displayBalance);
+                        if (cardCustomerId) cardCustomerId.value = customerId;
+                        if (cardCreditLimit) cardCreditLimit.value = numericCreditLimit.toFixed(2);
+                        
+                        card.style.display = 'block';
+                        setTimeout(function() {
+                            scrollToElement(card);
+                        }, 50);
+                    }
+                } else {
+                    // على الكمبيوتر: استخدام Modal
+                    if (creditLimitModal) {
+                        var modalNameElement = creditLimitModal.querySelector('.credit-limit-customer-name');
+                        var modalBalanceElement = creditLimitModal.querySelector('.credit-limit-current-balance');
+                        var modalCustomerIdInput = creditLimitModal.querySelector('#creditLimitCustomerId');
+                        var modalCreditLimitInput = creditLimitModal.querySelector('#creditLimitAmount');
+                        
+                        if (modalNameElement) modalNameElement.textContent = customerName;
+                        if (modalBalanceElement) modalBalanceElement.textContent = formatCurrency(displayBalance);
+                        if (modalCustomerIdInput) modalCustomerIdInput.value = customerId;
+                        if (modalCreditLimitInput) modalCreditLimitInput.value = numericCreditLimit.toFixed(2);
+                        
+                        var modalInstance = new bootstrap.Modal(creditLimitModal);
+                        modalInstance.show();
+                    }
+                }
+            });
+        });
     }
     
     // دالة formatCurrency (إذا لم تكن موجودة)
@@ -5074,6 +5321,50 @@ function closeAllCustomersCollectPaymentCard() {
         card.style.display = 'none';
         const form = card.querySelector('form');
         if (form) form.reset();
+    }
+}
+
+// دالة إغلاق Card عرض موقع العميل
+function closeRepViewLocationCard() {
+    const card = document.getElementById('repViewLocationCard');
+    if (card) {
+        card.style.display = 'none';
+        const mapFrame = card.querySelector('.rep-location-card-map-frame');
+        const customerNameEl = card.querySelector('.rep-location-card-customer-name');
+        const externalLink = card.querySelector('.rep-location-card-open-map');
+        if (mapFrame) mapFrame.src = '';
+        if (customerNameEl) customerNameEl.textContent = '-';
+        if (externalLink) externalLink.href = '#';
+    }
+}
+
+// دالة إغلاق Card عرض موقع العميل (لجميع العملاء)
+function closeAllCustomersViewLocationCard() {
+    const card = document.getElementById('allCustomersViewLocationCard');
+    if (card) {
+        card.style.display = 'none';
+        const mapFrame = card.querySelector('.all-customers-location-card-map-frame');
+        const customerNameEl = card.querySelector('.all-customers-location-card-customer-name');
+        const externalLink = card.querySelector('.all-customers-location-card-open-map');
+        if (mapFrame) mapFrame.src = '';
+        if (customerNameEl) customerNameEl.textContent = '-';
+        if (externalLink) externalLink.href = '#';
+    }
+}
+
+// دالة إغلاق Card تحديد الحد الائتماني
+function closeSetCreditLimitCard() {
+    const card = document.getElementById('setCreditLimitCard');
+    if (card) {
+        card.style.display = 'none';
+        const form = card.querySelector('form');
+        if (form) form.reset();
+        const customerNameEl = card.querySelector('.credit-limit-card-customer-name');
+        const balanceEl = card.querySelector('.credit-limit-card-current-balance');
+        const customerIdInput = card.querySelector('#creditLimitCardCustomerId');
+        if (customerNameEl) customerNameEl.textContent = '-';
+        if (balanceEl) balanceEl.textContent = '-';
+        if (customerIdInput) customerIdInput.value = '';
     }
 }
 </script>
