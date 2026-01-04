@@ -4569,6 +4569,7 @@ function scrollToElement(element) {
             data-print-url="<?php echo htmlspecialchars((string)$rawMaterialsReportAbsolutePrint, ENT_QUOTES, 'UTF-8'); ?>"
             data-report-ready="<?php echo $rawMaterialsReportViewUrl !== '' ? '1' : '0'; ?>"
             data-generated-at="<?php echo htmlspecialchars((string)$rawMaterialsReportGeneratedAt, ENT_QUOTES, 'UTF-8'); ?>"
+            data-api-url="<?php echo htmlspecialchars(getAbsoluteUrl('api/generate_raw_materials_report.php'), ENT_QUOTES, 'UTF-8'); ?>"
         >
             <i class="bi bi-file-bar-graph me-1"></i>
             انشاء تقرير المخزن
@@ -9119,16 +9120,46 @@ document.addEventListener('DOMContentLoaded', function () {
             reportButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>جاري التوليد...';
             
             try {
-                // Calculate API URL
-                const currentPath = window.location.pathname;
-                const pathParts = currentPath.split('/').filter(p => p);
-                const stopIndex = pathParts.findIndex(part => part === 'dashboard' || part === 'modules');
-                const baseParts = stopIndex === -1 ? pathParts : pathParts.slice(0, stopIndex);
-                let basePath = '/';
-                if (baseParts.length > 0) {
-                    basePath = '/' + baseParts.join('/') + '/';
+                // Get API URL from button data attribute (set by PHP)
+                let apiUrl = reportButton.getAttribute('data-api-url');
+                
+                // If not set, calculate it from current location
+                if (!apiUrl) {
+                    const origin = window.location.origin;
+                    const currentPath = window.location.pathname;
+                    
+                    // Find the base path by looking for common directories
+                    let basePath = '/';
+                    const pathParts = currentPath.split('/').filter(p => p);
+                    
+                    // If path contains 'dashboard' or 'modules', get everything before it
+                    const stopIndex = pathParts.findIndex(part => part === 'dashboard' || part === 'modules');
+                    if (stopIndex > 0) {
+                        basePath = '/' + pathParts.slice(0, stopIndex).join('/') + '/';
+                    } else {
+                        basePath = '/';
+                    }
+                    
+                    // Normalize path (remove duplicate slashes)
+                    basePath = basePath.replace(/\/+/g, '/');
+                    if (!basePath.endsWith('/')) {
+                        basePath += '/';
+                    }
+                    
+                    apiUrl = origin + basePath + 'api/generate_raw_materials_report.php';
+                } else {
+                    // If relative URL, make it absolute
+                    if (apiUrl.startsWith('http://') || apiUrl.startsWith('https://')) {
+                        // Already absolute URL, use as is
+                    } else if (apiUrl.startsWith('/')) {
+                        // Absolute path from root
+                        apiUrl = window.location.origin + apiUrl;
+                    } else {
+                        // Relative path, resolve from current location
+                        const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+                        apiUrl = new URL(apiUrl, baseUrl).href;
+                    }
                 }
-                const apiUrl = basePath + 'api/generate_raw_materials_report.php';
                 
                 // Call API to generate report
                 const response = await fetch(apiUrl, {
