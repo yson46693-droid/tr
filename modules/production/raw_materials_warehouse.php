@@ -6357,75 +6357,6 @@ if ($section === 'honey') {
     </div>
 </div>
 
-<!-- Card إضافة شمع عسل - للموبايل فقط -->
-<div class="card shadow-sm mb-4 d-md-none" id="addBeeswaxCard" style="display: none;">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">إضافة شمع عسل</h5>
-    </div>
-    <div class="card-body">
-        <form method="POST" id="addBeeswaxFormCard" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
-            <input type="hidden" name="action" value="add_beeswax">
-            <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
-            <div class="mb-3">
-                <label class="form-label">المورد <span class="text-danger">*</span></label>
-                <select class="form-select" name="supplier_id" required>
-                    <option value="">اختر المورد</option>
-                    <?php foreach ($waxSuppliers as $s): ?>
-                        <option value="<?php echo $s['id']; ?>"><?php echo htmlspecialchars($s['name']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">الوزن (كجم)</label>
-                <input type="number" class="form-control" name="weight" step="0.01" min="0.01" required>
-            </div>
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-warning">إضافة</button>
-                <button type="button" class="btn btn-secondary" onclick="closeAddBeeswaxCard()">إلغاء</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Card تسجيل تالف شمع العسل - للموبايل فقط -->
-<div class="card shadow-sm mb-4 d-md-none" id="damageBeeswaxCard" style="display: none;">
-    <div class="card-header bg-danger text-white">
-        <h5 class="mb-0"><i class="bi bi-exclamation-square me-2"></i>تسجيل تالف شمع العسل</h5>
-    </div>
-    <div class="card-body">
-        <form method="POST" id="damageBeeswaxFormCard" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
-            <input type="hidden" name="action" value="record_damage">
-            <input type="hidden" name="material_category" value="beeswax">
-            <input type="hidden" name="redirect_section" value="beeswax">
-            <input type="hidden" name="stock_id" id="damage_wax_stock_id_card">
-            <input type="hidden" name="damage_unit" value="كجم">
-            <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
-            <div class="mb-3">
-                <label class="form-label">المورد</label>
-                <input type="text" class="form-control" id="damage_wax_supplier_card" readonly>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">الكمية المتاحة</label>
-                <input type="text" class="form-control" id="damage_wax_available_card" readonly>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">الكمية التالفة (كجم)</label>
-                <input type="number" class="form-control" name="damage_quantity" id="damage_wax_quantity_card" step="0.01" min="0.01" required>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
-                <textarea class="form-control" name="damage_reason" id="damage_wax_reason_card" rows="3" required></textarea>
-            </div>
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-danger" id="damage_wax_submit_card">
-                    <i class="bi bi-check-circle me-1"></i>تسجيل
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="closeDamageBeeswaxCard()">إلغاء</button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script>
     // ملاحظة: دوال openOliveOilDamageModal و showAddOliveOilModal معرّفة في المكان العام في بداية الصفحة
 </script>
@@ -6615,6 +6546,76 @@ if ($section === 'honey') {
     </div>
 </div>
 
+<!-- Cards للموبايل - مودالات شمع العسل -->
+<!-- Card إضافة شمع عسل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="addBeeswaxCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">إضافة شمع عسل</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="addBeeswaxFormCard" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+            <input type="hidden" name="action" value="add_beeswax">
+            <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+            <div class="mb-3">
+                <label class="form-label">المورد <span class="text-danger">*</span></label>
+                <select class="form-select" name="supplier_id" required>
+                    <option value="">اختر المورد</option>
+                    <?php foreach ($waxSuppliers as $s): ?>
+                        <option value="<?php echo $s['id']; ?>"><?php echo htmlspecialchars($s['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية (كجم)</label>
+                <input type="number" class="form-control" name="weight" step="0.01" min="0.01" required>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success">إضافة</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAddBeeswaxCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card تسجيل تالف شمع العسل - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="damageBeeswaxCard" style="display: none;">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-square me-2"></i>تسجيل تالف شمع العسل</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="damageBeeswaxFormCard" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI']); ?>">
+            <input type="hidden" name="action" value="record_damage">
+            <input type="hidden" name="material_category" value="beeswax">
+            <input type="hidden" name="redirect_section" value="beeswax">
+            <input type="hidden" name="stock_id" id="damage_wax_stock_id_card">
+            <input type="hidden" name="damage_unit" value="كجم">
+            <input type="hidden" name="submit_token" value="<?php echo uniqid('tok_', true); ?>">
+            <div class="mb-3">
+                <label class="form-label">المورد</label>
+                <input type="text" class="form-control" id="damage_wax_supplier_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية المتاحة</label>
+                <input type="text" class="form-control" id="damage_wax_available_card" readonly>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الكمية التالفة (كجم)</label>
+                <input type="number" class="form-control" name="damage_quantity" id="damage_wax_quantity_card" step="0.01" min="0.01" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                <textarea class="form-control" name="damage_reason" id="damage_wax_reason_card" rows="3" required></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger" id="damage_wax_submit_card">
+                    <i class="bi bi-check-circle me-1"></i>تسجيل
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="closeDamageBeeswaxCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
     // ===== دوال إغلاق Cards - زيت الزيتون والشمع =====
     // ملاحظة: دوال openBeeswaxDamageModal و showAddBeeswaxModal و showAddOliveOilModal و openOliveOilDamageModal معرّفة في المكان العام في بداية الصفحة
@@ -6719,29 +6720,6 @@ if ($section === 'honey') {
                 }
             }, { passive: false });
         });
-
-        // زر إضافة زيت الزيتون
-        const addOliveOilBtn = document.getElementById('addOliveOilBtn');
-        if (addOliveOilBtn) {
-            // إضافة event listener مع الاحتفاظ بـ onclick كبديل
-            addOliveOilBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (typeof showAddOliveOilModal === 'function') {
-                    showAddOliveOilModal();
-                } else {
-                    // إذا لم تكن الدالة متاحة، استخدم onclick الأصلي
-                    const originalOnclick = addOliveOilBtn.getAttribute('onclick');
-                    if (originalOnclick) {
-                        try {
-                            eval(originalOnclick);
-                        } catch (err) {
-                            console.error('Error executing showAddOliveOilModal:', err);
-                        }
-                    }
-                }
-            }, { passive: false });
-        }
     });
 </script>
 
