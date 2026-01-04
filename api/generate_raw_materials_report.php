@@ -11,7 +11,7 @@ require_once __DIR__ . '/../includes/path_helper.php';
 require_once __DIR__ . '/../includes/production_helper.php';
 require_once __DIR__ . '/../includes/honey_varieties.php';
 
-requireRole(['production', 'manager']);
+requireRole(['production', 'manager', 'accountant']);
 
 header('Content-Type: application/json; charset=utf-8');
 
