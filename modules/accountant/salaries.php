@@ -4910,6 +4910,14 @@ let settleModalCalculatedValues = {
     salaryId: 0
 };
 
+// متغير لحفظ القيم الأصلية للراتب الحالي (الذي تم فتح النموذج به)
+// هذه القيم لا تتغير عند اختيار رواتب أخرى
+let originalSalaryValues = {
+    accumulated: 0,
+    remaining: 0,
+    salaryId: 0
+};
+
 // متغير لحفظ القيمة الفعلية للمتبقي (بدون تنسيق)
 let settleModalRemainingValue = 0;
 
@@ -4954,6 +4962,14 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
         remaining: remaining,
         salaryId: salaryId
     };
+    
+    // حفظ القيم الأصلية للراتب الحالي (لا تتغير عند اختيار رواتب أخرى)
+    originalSalaryValues = {
+        accumulated: accumulated,
+        remaining: remaining,
+        salaryId: salaryId
+    };
+    
     settleModalRemainingValue = remaining;
     
     if (isMobile()) {
@@ -5418,14 +5434,21 @@ function loadSelectedSalaryData() {
         return;
     }
     
-    // إذا كان الراتب المحدد هو نفس الراتب من بطاقة الموظف، استخدم القيم المحفوظة
-    if (settleModalCalculatedValues.salaryId > 0 && parseInt(salaryId) === settleModalCalculatedValues.salaryId) {
-        console.log('Using saved calculated values from employee card for salary ID:', salaryId);
-        const accumulated = settleModalCalculatedValues.accumulated;
-        const remaining = settleModalCalculatedValues.remaining;
+    // إذا كان الراتب المحدد هو نفس الراتب الأصلي من بطاقة الموظف، استخدم القيم الأصلية المحفوظة
+    if (originalSalaryValues.salaryId > 0 && parseInt(salaryId) === originalSalaryValues.salaryId) {
+        console.log('Using original saved calculated values from employee card for salary ID:', salaryId);
+        const accumulated = originalSalaryValues.accumulated;
+        const remaining = originalSalaryValues.remaining;
         
         // حفظ القيمة الفعلية للمتبقي
         settleModalRemainingValue = remaining;
+        
+        // تحديث settleModalCalculatedValues أيضاً لضمان التزامن
+        settleModalCalculatedValues = {
+            accumulated: accumulated,
+            remaining: remaining,
+            salaryId: parseInt(salaryId)
+        };
         
         settleSalaryIdEl.value = salaryId;
         if (settleAccumulatedAmountEl) settleAccumulatedAmountEl.textContent = formatCurrency(accumulated);
@@ -5709,13 +5732,20 @@ function loadSelectedSalaryDataCard() {
         return;
     }
     
-    // إذا كان الراتب المحدد هو نفس الراتب من بطاقة الموظف، استخدم القيم المحفوظة
-    if (settleModalCalculatedValues.salaryId > 0 && parseInt(salaryId) === settleModalCalculatedValues.salaryId) {
-        console.log('Using saved calculated values from employee card for salary ID (Card):', salaryId);
-        const accumulated = settleModalCalculatedValues.accumulated;
-        const remaining = settleModalCalculatedValues.remaining;
+    // إذا كان الراتب المحدد هو نفس الراتب الأصلي من بطاقة الموظف، استخدم القيم الأصلية المحفوظة
+    if (originalSalaryValues.salaryId > 0 && parseInt(salaryId) === originalSalaryValues.salaryId) {
+        console.log('Using original saved calculated values from employee card for salary ID (Card):', salaryId);
+        const accumulated = originalSalaryValues.accumulated;
+        const remaining = originalSalaryValues.remaining;
         
         settleModalRemainingValue = remaining;
+        
+        // تحديث settleModalCalculatedValues أيضاً لضمان التزامن
+        settleModalCalculatedValues = {
+            accumulated: accumulated,
+            remaining: remaining,
+            salaryId: parseInt(salaryId)
+        };
         
         settleSalaryIdEl.value = salaryId;
         if (settleAccumulatedAmountEl) settleAccumulatedAmountEl.textContent = formatCurrency(accumulated);
