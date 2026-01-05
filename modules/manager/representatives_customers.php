@@ -2380,7 +2380,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             closeAllForms();
             
-            if (isMobile()) {
+            var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    
+    if (isMobileDevice) {
                 // على الموبايل: استخدام Card
                 const card = document.getElementById('repCustomerHistoryCard');
                 if (card) {
@@ -2404,7 +2406,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     card.style.display = 'block';
                     setTimeout(function() {
-                        scrollToElement(card);
+                        if (typeof scrollToElement === 'function') {
+                            scrollToElement(card);
+                        } else {
+                            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
                     }, 50);
                     
                     // جلب بيانات سجل المشتريات من API endpoint
@@ -2620,7 +2626,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             closeAllForms();
             
-            if (isMobile()) {
+            var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    
+    if (isMobileDevice) {
                 // على الموبايل: استخدام Card
                 const card = document.getElementById('repViewLocationCard');
                 if (card) {
@@ -2644,7 +2652,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     card.style.display = 'block';
                     setTimeout(function() {
-                        scrollToElement(card);
+                        if (typeof scrollToElement === 'function') {
+                            scrollToElement(card);
+                        } else {
+                            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
                     }, 50);
                 }
             } else {
@@ -3473,7 +3485,9 @@ function repToggleAllItemsCard() {
 function openCustomerExport() {
     closeAllForms();
     
-    if (isMobile()) {
+    var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    
+    if (isMobileDevice) {
         // على الموبايل: استخدام Card
         const card = document.getElementById('customerExportCard');
         if (card) {
@@ -3956,7 +3970,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 closeAllForms();
                 
-                if (isMobile()) {
+                var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    
+    if (isMobileDevice) {
                     // على الموبايل: استخدام Card
                     var card = document.getElementById('allCustomersViewLocationCard');
                     if (card) {
@@ -4115,25 +4131,112 @@ document.addEventListener('DOMContentLoaded', function () {
         const button = e.target.closest('.js-all-customers-purchase-history');
         if (!button) return;
         
+        e.preventDefault();
+        e.stopPropagation();
+        
         const customerId = button.getAttribute('data-customer-id');
-        const customerName = button.getAttribute('data-customer-name');
+        const customerName = button.getAttribute('data-customer-name') || '-';
         
         if (!customerId) return;
         
-        // استخدام نفس modal سجل المشتريات الموجود
-        const historyButton = document.querySelector('.rep-history-btn.js-customer-history[data-customer-id="' + customerId + '"]');
-        if (!historyButton) {
-            // إنشاء زر مؤقت إذا لم يوجد
-            const tempButton = document.createElement('button');
-            tempButton.className = 'rep-history-btn js-customer-history';
-            tempButton.setAttribute('data-customer-id', customerId);
-            tempButton.setAttribute('data-customer-name', customerName);
-            tempButton.style.display = 'none';
-            document.body.appendChild(tempButton);
-            tempButton.click();
-            document.body.removeChild(tempButton);
+        closeAllForms();
+        
+        var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card مباشرة
+            const card = document.getElementById('repCustomerHistoryCard');
+            if (card) {
+                const nameElement = card.querySelector('.rep-history-card-customer-name');
+                const loadingElement = card.querySelector('.rep-history-card-loading');
+                const contentElement = card.querySelector('.rep-history-card-content');
+                const errorElement = card.querySelector('.rep-history-card-error');
+                const invoicesTableBody = card.querySelector('.rep-history-card-table tbody');
+                const returnsContainer = card.querySelector('.rep-history-card-returns');
+                const totalInvoicesEl = card.querySelector('.rep-history-card-total-invoices');
+                const totalInvoicedEl = card.querySelector('.rep-history-card-total-invoiced');
+                const totalReturnsEl = card.querySelector('.rep-history-card-total-returns');
+                const netTotalEl = card.querySelector('.rep-history-card-net-total');
+                
+                if (nameElement) nameElement.textContent = customerName;
+                if (loadingElement) loadingElement.classList.remove('d-none');
+                if (contentElement) contentElement.classList.add('d-none');
+                if (errorElement) errorElement.classList.add('d-none');
+                if (invoicesTableBody) invoicesTableBody.innerHTML = '';
+                if (returnsContainer) returnsContainer.innerHTML = '';
+                
+                card.style.display = 'block';
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+                
+                // جلب بيانات سجل المشتريات من API endpoint
+                const basePath = '<?php echo getBasePath(); ?>';
+                const historyUrl = basePath + '/api/customer_history_api.php?customer_id=' + encodeURIComponent(customerId);
+                
+                console.log('Fetching history from:', historyUrl);
+                
+                fetchJson(historyUrl)
+                .then(payload => {
+                    if (!payload || !payload.success) {
+                        throw new Error(payload?.message || 'فشل تحميل بيانات السجل.');
+                    }
+                    
+                    const history = payload.history || {};
+                    const totals = history.totals || {};
+                    
+                    // تحديث الإحصائيات
+                    if (totalInvoicesEl) {
+                        totalInvoicesEl.textContent = Number(totals.invoice_count || 0).toLocaleString('ar-EG');
+                    }
+                    if (totalInvoicedEl) {
+                        totalInvoicedEl.textContent = formatCurrencySimple(totals.total_invoiced || 0);
+                    }
+                    if (totalReturnsEl) {
+                        totalReturnsEl.textContent = formatCurrencySimple(totals.total_returns || 0);
+                    }
+                    if (netTotalEl) {
+                        netTotalEl.textContent = formatCurrencySimple(totals.net_total || 0);
+                    }
+                    
+                    // عرض البيانات - استخدام نفس الدوال مع Card
+                    if (invoicesTableBody) {
+                        renderRepInvoices(Array.isArray(history.invoices) ? history.invoices : [], invoicesTableBody);
+                    }
+                    if (returnsContainer) {
+                        renderRepReturns(Array.isArray(history.returns) ? history.returns : [], returnsContainer);
+                    }
+                    
+                    // إخفاء loading وإظهار المحتوى
+                    if (loadingElement) loadingElement.classList.add('d-none');
+                    if (contentElement) contentElement.classList.remove('d-none');
+                    if (errorElement) errorElement.classList.add('d-none');
+                })
+                .catch(error => {
+                    console.error('Error loading history:', error);
+                    if (loadingElement) loadingElement.classList.add('d-none');
+                    if (errorElement) {
+                        errorElement.textContent = error.message || 'حدث خطأ أثناء تحميل سجل المشتريات';
+                        errorElement.classList.remove('d-none');
+                    }
+                });
+            }
         } else {
-            historyButton.click();
+            // على الكمبيوتر: استخدام Modal
+            const historyButton = document.querySelector('.rep-history-btn.js-customer-history[data-customer-id="' + customerId + '"]');
+            if (!historyButton) {
+                // إنشاء زر مؤقت إذا لم يوجد
+                const tempButton = document.createElement('button');
+                tempButton.className = 'rep-history-btn js-customer-history';
+                tempButton.setAttribute('data-customer-id', customerId);
+                tempButton.setAttribute('data-customer-name', customerName);
+                tempButton.style.display = 'none';
+                document.body.appendChild(tempButton);
+                tempButton.click();
+                document.body.removeChild(tempButton);
+            } else {
+                historyButton.click();
+            }
         }
     });
 
@@ -4142,25 +4245,97 @@ document.addEventListener('DOMContentLoaded', function () {
         const button = e.target.closest('.js-all-customers-return-products');
         if (!button) return;
         
+        e.preventDefault();
+        e.stopPropagation();
+        
         const customerId = button.getAttribute('data-customer-id');
-        const customerName = button.getAttribute('data-customer-name');
+        const customerName = button.getAttribute('data-customer-name') || '-';
         
         if (!customerId) return;
         
-        // استخدام نفس modal الإرجاع الموجود
-        const returnButton = document.querySelector('.rep-return-btn.js-customer-purchase-history[data-customer-id="' + customerId + '"]');
-        if (!returnButton) {
-            // إنشاء زر مؤقت إذا لم يوجد
-            const tempButton = document.createElement('button');
-            tempButton.className = 'rep-return-btn js-customer-purchase-history';
-            tempButton.setAttribute('data-customer-id', customerId);
-            tempButton.setAttribute('data-customer-name', customerName);
-            tempButton.style.display = 'none';
-            document.body.appendChild(tempButton);
-            tempButton.click();
-            document.body.removeChild(tempButton);
+        closeAllForms();
+        
+        var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+        
+        if (isMobileDevice) {
+            // على الموبايل: استخدام Card مباشرة
+            const card = document.getElementById('repCustomerReturnCard');
+            if (card) {
+                const nameElement = card.querySelector('.rep-return-card-customer-name');
+                const loadingElement = card.querySelector('.rep-return-card-loading');
+                const contentElement = card.querySelector('.rep-return-card-content');
+                const errorElement = card.querySelector('.rep-return-card-error');
+                const tableBody = card.querySelector('.rep-return-card-table tbody');
+                const customerPhoneEl = card.querySelector('.rep-return-card-customer-phone');
+                const customerAddressEl = card.querySelector('.rep-return-card-customer-address');
+                
+                if (nameElement) nameElement.textContent = customerName;
+                if (loadingElement) loadingElement.classList.remove('d-none');
+                if (contentElement) contentElement.classList.add('d-none');
+                if (errorElement) errorElement.classList.add('d-none');
+                if (tableBody) tableBody.innerHTML = '';
+                
+                card.style.display = 'block';
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+                
+                // جلب بيانات سجل المشتريات للإرجاع من API
+                const basePath = '<?php echo getBasePath(); ?>';
+                const returnUrl = basePath + '/api/customer_purchase_history.php?action=get_history&customer_id=' + encodeURIComponent(customerId);
+                
+                fetchJson(returnUrl)
+                .then(data => {
+                    if (loadingElement) loadingElement.classList.add('d-none');
+                    
+                    if (data.success) {
+                        // تحديث معلومات العميل
+                        if (data.customer) {
+                            if (customerPhoneEl) customerPhoneEl.textContent = data.customer.phone || '-';
+                            if (customerAddressEl) customerAddressEl.textContent = data.customer.address || '-';
+                        }
+                        
+                        // عرض بيانات المشتريات
+                        const purchaseHistory = data.purchase_history || [];
+                        if (tableBody) {
+                            displayRepReturnHistory(purchaseHistory, tableBody);
+                        }
+                        
+                        if (contentElement) {
+                            contentElement.classList.remove('d-none');
+                        }
+                    } else {
+                        if (errorElement) {
+                            errorElement.textContent = data.message || 'حدث خطأ أثناء تحميل بيانات الإرجاع';
+                            errorElement.classList.remove('d-none');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading return data:', error);
+                    if (loadingElement) loadingElement.classList.add('d-none');
+                    if (errorElement) {
+                        errorElement.textContent = error.message || 'حدث خطأ أثناء تحميل بيانات الإرجاع';
+                        errorElement.classList.remove('d-none');
+                    }
+                });
+            }
         } else {
-            returnButton.click();
+            // على الكمبيوتر: استخدام Modal
+            const returnButton = document.querySelector('.rep-return-btn.js-customer-purchase-history[data-customer-id="' + customerId + '"]');
+            if (!returnButton) {
+                // إنشاء زر مؤقت إذا لم يوجد
+                const tempButton = document.createElement('button');
+                tempButton.className = 'rep-return-btn js-customer-purchase-history';
+                tempButton.setAttribute('data-customer-id', customerId);
+                tempButton.setAttribute('data-customer-name', customerName);
+                tempButton.style.display = 'none';
+                document.body.appendChild(tempButton);
+                tempButton.click();
+                document.body.removeChild(tempButton);
+            } else {
+                returnButton.click();
+            }
         }
     });
 });
@@ -4216,7 +4391,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // انتظار قليل لضمان إغلاق النماذج السابقة
                 setTimeout(function() {
-                    if (isMobile()) {
+                    var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    
+    if (isMobileDevice) {
                         // على الموبايل: استخدام Card
                         const card = document.getElementById('editRepCustomerCard');
                         if (card) {
@@ -5354,7 +5531,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     numericCreditLimit = 0;
                 }
                 
-                if (isMobile()) {
+                var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+                
+                if (isMobileDevice) {
                     // على الموبايل: استخدام Card
                     var card = document.getElementById('setCreditLimitCard');
                     if (card) {
@@ -5370,7 +5549,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         card.style.display = 'block';
                         setTimeout(function() {
-                            scrollToElement(card);
+                            if (typeof scrollToElement === 'function') {
+                                scrollToElement(card);
+                            } else {
+                                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
                         }, 50);
                     }
                 } else {
@@ -5568,7 +5751,9 @@ function openChangeSalesRepModal(button) {
     const currentRepId = button.getAttribute('data-current-rep-id');
     const currentRepName = button.getAttribute('data-current-rep-name');
     
-    if (isMobile()) {
+    var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    
+    if (isMobileDevice) {
         // على الموبايل: استخدام Card
         const card = document.getElementById('changeSalesRepCard');
         if (card) {
@@ -5831,7 +6016,9 @@ function showRepCollectPaymentModal(button) {
     }
     const debtAmount = numericBalance > 0 ? numericBalance : 0;
     
-    if (isMobile()) {
+    var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    
+    if (isMobileDevice) {
         // على الموبايل: استخدام Card
         const card = document.getElementById('repCollectPaymentCard');
         if (card) {
@@ -5919,7 +6106,9 @@ function showAllCustomersCollectPaymentModal(button) {
     }
     const debtAmount = numericBalance > 0 ? numericBalance : 0;
     
-    if (isMobile()) {
+    var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    
+    if (isMobileDevice) {
         // على الموبايل: استخدام Card
         const card = document.getElementById('allCustomersCollectPaymentCard');
         if (card) {

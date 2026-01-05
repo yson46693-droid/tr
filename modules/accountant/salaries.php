@@ -4667,21 +4667,25 @@ function scrollToElement(element) {
     }, 200);
 }
 
-function closeAllForms() {
+function closeAllForms(excludeCardId = null) {
     // إغلاق جميع Cards على الموبايل
     const cards = [
         'salaryDetailsCard', 'modifySalaryCard', 'requestAdvanceCard',
         'rejectCard', 'settleSalaryCard', 'salaryStatementCard'
     ];
     cards.forEach(function(cardId) {
+        // تخطي Card معين إذا كان سيتم فتحه مرة أخرى
+        if (excludeCardId && cardId === excludeCardId) {
+            return;
+        }
+        
         const card = document.getElementById(cardId);
         if (card && card.style.display !== 'none') {
             // إخفاء Card أولاً
             card.style.display = 'none';
-            // إعادة تعيين النموذج بعد إخفاء Card (لكن لا نمسح القيم المخفية)
+            // إعادة تعيين النموذج بعد إخفاء Card
             const form = card.querySelector('form');
             if (form) {
-                // إعادة تعيين النموذج لكن مع الحفاظ على العناصر المخفية
                 form.reset();
             }
         }
@@ -5051,16 +5055,18 @@ function openSettleModalMobile(salaryId, salaryData, remainingAmount, calculated
         return;
     }
     
-    // التحقق من وجود جميع العناصر المطلوبة مع تسجيل تفصيلي
-    const settleSalaryIdCard = document.getElementById('settleSalaryIdCard');
-    const settleUserIdCard = document.getElementById('settleUserIdCard');
-    const settleUserNameCard = document.getElementById('settleUserNameCard');
+    // التحقق من وجود جميع العناصر المطلوبة - البحث داخل Card مباشرة
+    // هذا يضمن أن العناصر موجودة حتى لو كان Card مخفياً
+    const settleSalaryIdCard = card.querySelector('#settleSalaryIdCard') || document.getElementById('settleSalaryIdCard');
+    const settleUserIdCard = card.querySelector('#settleUserIdCard') || document.getElementById('settleUserIdCard');
+    const settleUserNameCard = card.querySelector('#settleUserNameCard') || document.getElementById('settleUserNameCard');
     
     console.log('Checking required elements:', {
         settleSalaryIdCard: !!settleSalaryIdCard,
         settleUserIdCard: !!settleUserIdCard,
         settleUserNameCard: !!settleUserNameCard,
-        cardExists: !!card
+        cardExists: !!card,
+        cardDisplay: card.style.display
     });
     
     if (!settleSalaryIdCard || !settleUserIdCard || !settleUserNameCard) {
@@ -5068,19 +5074,28 @@ function openSettleModalMobile(salaryId, salaryData, remainingAmount, calculated
             settleSalaryIdCard: settleSalaryIdCard,
             settleUserIdCard: settleUserIdCard,
             settleUserNameCard: settleUserNameCard,
-            card: card
+            card: card,
+            cardHTML: card ? card.innerHTML.substring(0, 200) : 'card is null'
         });
         
-        // التحقق مرة أخرى بعد انتظار قصير (قد تكون العناصر لا تزال في حالة إعادة تعيين)
+        // التحقق مرة أخرى بعد انتظار قصير
         setTimeout(() => {
-            const retrySettleSalaryIdCard = document.getElementById('settleSalaryIdCard');
-            const retrySettleUserIdCard = document.getElementById('settleUserIdCard');
-            const retrySettleUserNameCard = document.getElementById('settleUserNameCard');
+            const retryCard = document.getElementById('settleSalaryCard');
+            if (!retryCard) {
+                console.error('Card not found on retry');
+                alert('خطأ: لم يتم العثور على نافذة التسوية. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
+                return;
+            }
+            
+            const retrySettleSalaryIdCard = retryCard.querySelector('#settleSalaryIdCard') || document.getElementById('settleSalaryIdCard');
+            const retrySettleUserIdCard = retryCard.querySelector('#settleUserIdCard') || document.getElementById('settleUserIdCard');
+            const retrySettleUserNameCard = retryCard.querySelector('#settleUserNameCard') || document.getElementById('settleUserNameCard');
             
             console.log('Retry check:', {
                 retrySettleSalaryIdCard: !!retrySettleSalaryIdCard,
                 retrySettleUserIdCard: !!retrySettleUserIdCard,
-                retrySettleUserNameCard: !!retrySettleUserNameCard
+                retrySettleUserNameCard: !!retrySettleUserNameCard,
+                retryCardExists: !!retryCard
             });
             
             if (retrySettleSalaryIdCard && retrySettleUserIdCard && retrySettleUserNameCard) {
@@ -5091,7 +5106,7 @@ function openSettleModalMobile(salaryId, salaryData, remainingAmount, calculated
                 console.error('Elements still not found after retry');
                 alert('خطأ: بعض العناصر المطلوبة غير موجودة. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
             }
-        }, 200);
+        }, 300);
         return;
     }
     
@@ -5146,8 +5161,13 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
     try {
         console.log('openSettleModal called - isMobile:', isMobile(), 'window width:', window.innerWidth);
         
-        // إغلاق النماذج المفتوحة أولاً (لكن على الموبايل، سنفتح Card بعد ذلك)
-        closeAllForms();
+        // إغلاق النماذج المفتوحة أولاً
+        // على الموبايل: لا نعيد تعيين settleSalaryCard لأنه سيتم فتحه مرة أخرى
+        if (isMobile()) {
+            closeAllForms('settleSalaryCard');
+        } else {
+            closeAllForms();
+        }
         
         
         // الحصول على user_id من البيانات - محاولة عدة مصادر
