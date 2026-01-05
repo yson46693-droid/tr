@@ -56,7 +56,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(0, 0, 0, 0.15);
             z-index: 9999;
             display: none;
             align-items: center;
@@ -930,6 +930,13 @@
                     padding: 2rem;
                     border-radius: 8px;
                     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                }
+                [data-theme="dark"] .ajax-loading-spinner {
+                    background: #374151;
+                    color: #f3f4f6;
+                }
+                [data-theme="dark"] .ajax-loading-spinner .text-muted {
+                    color: #9ca3af !important;
                 }
                 .ajax-loading-spinner .spinner-border {
                     width: 3rem;

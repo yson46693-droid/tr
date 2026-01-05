@@ -3212,6 +3212,137 @@ try {
                     grid-template-columns: 1fr;
                 }
             }
+            
+            /* إصلاح عرض ثابت على الموبايل */
+            @media (max-width: 768px) {
+                /* عرض ثابت لسلة المشتريات */
+                #posCartTableWrapper {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    overflow-x: auto !important;
+                    -webkit-overflow-scrolling: touch;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                }
+                
+                /* عرض ثابت للجدول */
+                .pos-cart-table {
+                    width: 100% !important;
+                    min-width: 100% !important;
+                    max-width: 100% !important;
+                    table-layout: fixed !important;
+                    box-sizing: border-box !important;
+                }
+                
+                /* عرض ثابت للأعمدة */
+                .pos-cart-table th,
+                .pos-cart-table td {
+                    box-sizing: border-box !important;
+                    word-wrap: break-word;
+                    overflow-wrap: break-word;
+                }
+                
+                /* عرض ثابت لنموذج المنتجات */
+                .pos-panel {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    box-sizing: border-box !important;
+                    margin: 0 !important;
+                }
+                
+                /* عرض ثابت لشبكة المنتجات */
+                .pos-product-grid {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    box-sizing: border-box !important;
+                    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+                }
+                
+                /* عرض ثابت لبطاقات المنتجات */
+                .pos-product-card {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    box-sizing: border-box !important;
+                }
+                
+                /* عرض ثابت لنموذج البيع */
+                .pos-checkout-panel {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    box-sizing: border-box !important;
+                }
+                
+                /* منع التوسع الأفقي */
+                .pos-content {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    overflow-x: hidden !important;
+                    box-sizing: border-box !important;
+                }
+                
+                /* عرض ثابت للحاوية الرئيسية */
+                .pos-wrapper {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    box-sizing: border-box !important;
+                    overflow-x: hidden !important;
+                }
+            }
+            
+            /* إصلاحات إضافية للهواتف الصغيرة */
+            @media (max-width: 576px) {
+                /* عرض ثابت لسلة المشتريات على الهواتف الصغيرة */
+                #posCartTableWrapper {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    overflow-x: auto !important;
+                    -webkit-overflow-scrolling: touch;
+                }
+                
+                /* تحويل الجدول إلى بطاقات على الهواتف الصغيرة */
+                .pos-cart-table {
+                    width: 100% !important;
+                    min-width: 100% !important;
+                }
+                
+                .pos-cart-table thead {
+                    display: none !important;
+                }
+                
+                .pos-cart-table tbody tr {
+                    display: block !important;
+                    width: 100% !important;
+                    margin-bottom: 1rem !important;
+                    border: 1px solid rgba(148, 163, 184, 0.35) !important;
+                    border-radius: 12px !important;
+                    padding: 1rem !important;
+                    background: #ffffff !important;
+                    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+                }
+                
+                .pos-cart-table tbody td {
+                    display: block !important;
+                    width: 100% !important;
+                    padding: 0.5rem 0 !important;
+                    border: none !important;
+                    text-align: right !important;
+                }
+                
+                .pos-cart-table tbody td::before {
+                    content: attr(data-label) !important;
+                    font-weight: 600 !important;
+                    color: #1f2937 !important;
+                    display: block !important;
+                    margin-bottom: 0.25rem !important;
+                }
+                
+                /* عرض ثابت لشبكة المنتجات على الهواتف الصغيرة */
+                .pos-product-grid {
+                    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
+                    gap: 0.75rem !important;
+                }
+            }
         </style>
 
         <div class="pos-wrapper">
@@ -3818,13 +3949,20 @@ try {
         if (!cart.length) {
             elements.cartBody.innerHTML = '';
             elements.cartTableWrapper.classList.add('d-none');
+            elements.cartTableWrapper.style.display = 'none';
             elements.cartEmpty.classList.remove('d-none');
+            elements.cartEmpty.style.display = 'block';
             updateSummary();
             return;
         }
 
+        // إزالة d-none وإظهار السلة مع الحفاظ على العرض الثابت
         elements.cartTableWrapper.classList.remove('d-none');
+        elements.cartTableWrapper.style.display = 'block';
+        elements.cartTableWrapper.style.width = '100%';
+        elements.cartTableWrapper.style.maxWidth = '100%';
         elements.cartEmpty.classList.add('d-none');
+        elements.cartEmpty.style.display = 'none';
 
         const rows = cart.map((item) => {
             const sanitizedQty = sanitizeNumber(item.quantity);

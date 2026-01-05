@@ -2935,12 +2935,15 @@ if (!$error) {
                 min-width: 44px;
                 height: 44px;
             }
+            /* إصلاح عرض ثابت على الموبايل */
             #posCartTableWrapper {
                 overflow-x: visible !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 width: 100% !important;
+                max-width: 100% !important;
                 display: block !important;
+                box-sizing: border-box !important;
             }
             #posCartTableWrapper.d-none {
                 display: none !important;
@@ -2951,7 +2954,65 @@ if (!$error) {
             #posCartTableWrapper .pos-cart-table {
                 margin: 0;
                 padding: 0;
-                width: 100%;
+                width: 100% !important;
+                min-width: 100% !important;
+                max-width: 100% !important;
+                table-layout: fixed !important;
+                box-sizing: border-box !important;
+            }
+            
+            /* عرض ثابت للأعمدة */
+            .pos-cart-table th,
+            .pos-cart-table td {
+                box-sizing: border-box !important;
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+            }
+            
+            /* عرض ثابت لنموذج المنتجات */
+            .pos-panel {
+                width: 100% !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+                margin: 0 !important;
+            }
+            
+            /* عرض ثابت لشبكة المنتجات */
+            .pos-product-grid {
+                width: 100% !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+            }
+            
+            /* عرض ثابت لبطاقات المنتجات */
+            .pos-product-card {
+                width: 100% !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+            }
+            
+            /* عرض ثابت لنموذج البيع */
+            .pos-checkout-panel {
+                width: 100% !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+            }
+            
+            /* منع التوسع الأفقي */
+            .pos-content {
+                width: 100% !important;
+                max-width: 100% !important;
+                overflow-x: hidden !important;
+                box-sizing: border-box !important;
+            }
+            
+            /* عرض ثابت للحاوية الرئيسية */
+            .pos-wrapper {
+                width: 100% !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+                overflow-x: hidden !important;
             }
             .pos-selected-product {
                 padding: 0.75rem;
@@ -3799,9 +3860,11 @@ if (!$error) {
             return;
         }
 
-        // إزالة d-none وإظهار السلة
+        // إزالة d-none وإظهار السلة مع الحفاظ على العرض الثابت
         elements.cartTableWrapper.classList.remove('d-none');
         elements.cartTableWrapper.style.display = 'block';
+        elements.cartTableWrapper.style.width = '100%';
+        elements.cartTableWrapper.style.maxWidth = '100%';
         elements.cartEmpty.classList.add('d-none');
         elements.cartEmpty.style.display = 'none';
 
