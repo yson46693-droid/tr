@@ -257,6 +257,53 @@
         if (typeof window.initDataTables === 'function') {
             window.initDataTables();
         }
+        
+        // إعادة تهيئة الباركودات (لصفحة مخزن السيارات وغيرها)
+        // البحث عن دالة generateAllBarcodes في scripts المحملة وتنفيذها
+        setTimeout(function() {
+            // محاولة استدعاء generateAllBarcodes إذا كانت موجودة كدالة عامة
+            if (typeof window.generateAllBarcodes === 'function') {
+                try {
+                    window.generateAllBarcodes();
+                } catch (e) {
+                    console.warn('Error calling generateAllBarcodes:', e);
+                }
+            }
+            
+            // أيضاً محاولة توليد الباركودات مباشرة إذا كانت مكتبة JsBarcode متاحة
+            if (typeof JsBarcode !== 'undefined') {
+                const barcodeContainers = document.querySelectorAll('.inventory-barcode-container[data-batch]');
+                if (barcodeContainers.length > 0) {
+                    barcodeContainers.forEach(function(container) {
+                        const batchNumber = container.getAttribute('data-batch');
+                        const svg = container.querySelector('svg.barcode-svg');
+                        
+                        if (svg && batchNumber && batchNumber.trim() !== '') {
+                            try {
+                                // التحقق من أن الباركود لم يتم توليده بعد
+                                if (svg.children.length === 0 || svg.querySelector('text')) {
+                                    svg.innerHTML = '';
+                                    JsBarcode(svg, batchNumber, {
+                                        format: "CODE128",
+                                        width: 2,
+                                        height: 50,
+                                        displayValue: false,
+                                        margin: 5,
+                                        background: "#ffffff",
+                                        lineColor: "#000000"
+                                    });
+                                }
+                            } catch (error) {
+                                console.error('Error generating barcode for ' + batchNumber + ':', error);
+                                if (svg.children.length === 0) {
+                                    svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" font-size="12" fill="#666" font-family="Arial">' + batchNumber + '</text>';
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        }, 300); // تأخير 300ms لضمان تحميل جميع المكتبات
     }
 
     /**

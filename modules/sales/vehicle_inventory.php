@@ -870,7 +870,8 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                     var maxRetries = 50;
                     var retryCount = 0;
                     
-                    function generateAllBarcodes() {
+                    // جعل الدالة عامة للاستدعاء من ajax-navigation.js
+                    window.generateAllBarcodes = function generateAllBarcodes() {
                         if (typeof JsBarcode === 'undefined') {
                             retryCount++;
                             if (retryCount < maxRetries) {
@@ -899,24 +900,30 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                             
                             if (svg && batchNumber && batchNumber.trim() !== '') {
                                 try {
-                                    svg.innerHTML = '';
-                                    JsBarcode(svg, batchNumber, {
-                                        format: "CODE128",
-                                        width: 2,
-                                        height: 50,
-                                        displayValue: false,
-                                        margin: 5,
-                                        background: "#ffffff",
-                                        lineColor: "#000000"
-                                    });
+                                    // التحقق من أن الباركود لم يتم توليده بعد (تجنب إعادة التوليد)
+                                    if (svg.children.length === 0 || svg.querySelector('text')) {
+                                        svg.innerHTML = '';
+                                        JsBarcode(svg, batchNumber, {
+                                            format: "CODE128",
+                                            width: 2,
+                                            height: 50,
+                                            displayValue: false,
+                                            margin: 5,
+                                            background: "#ffffff",
+                                            lineColor: "#000000"
+                                        });
+                                    }
                                 } catch (error) {
                                     console.error('Error generating barcode for ' + batchNumber + ':', error);
-                                    svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" font-size="12" fill="#666" font-family="Arial">' + batchNumber + '</text>';
+                                    if (svg.children.length === 0) {
+                                        svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" font-size="12" fill="#666" font-family="Arial">' + batchNumber + '</text>';
+                                    }
                                 }
                             }
                         });
-                    }
+                    };
                     
+                    // تنفيذ الدالة عند تحميل الصفحة
                     if (document.readyState === 'loading') {
                         document.addEventListener('DOMContentLoaded', function() {
                             setTimeout(generateAllBarcodes, 200);
@@ -924,6 +931,11 @@ if ($hasNoVehicle && $currentUser['role'] === 'sales'): ?>
                     } else {
                         setTimeout(generateAllBarcodes, 200);
                     }
+                    
+                    // أيضاً الاستماع لحدث ajaxNavigationComplete للتحميل عبر AJAX
+                    window.addEventListener('ajaxNavigationComplete', function() {
+                        setTimeout(generateAllBarcodes, 300);
+                    });
                 })();
                 </script>
             <?php endif; ?>
