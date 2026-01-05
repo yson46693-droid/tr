@@ -4882,6 +4882,7 @@ let settleModalCalculatedValues = {
 let settleModalRemainingValue = 0;
 
 function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumulated) {
+    // إغلاق النماذج المفتوحة أولاً
     closeAllForms();
     
     // الحصول على user_id من البيانات - محاولة عدة مصادر
@@ -4952,8 +4953,8 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
             submitBtn.disabled = true;
         }
         
-        // تحميل الرواتب للموظف (دالة Card سيتم إضافتها لاحقاً)
-        // loadUserSalariesForSettlementCard(userId, salaryId);
+        // تحميل الرواتب للموظف
+        loadUserSalariesForSettlementCard(userId, salaryId);
         
         card.style.display = 'block';
         setTimeout(() => scrollToElement(card), 50);
@@ -5019,52 +5020,55 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
         console.log('Submit button disabled (no remaining amount)');
     }
     
-    // إنشاء Modal instance إذا لم يكن موجوداً
-    let modalInstance = bootstrap.Modal.getInstance(settleModal);
-    if (!modalInstance) {
-        modalInstance = new bootstrap.Modal(settleModal);
-    }
-    
-    // إضافة مستمع لحدث shown.bs.modal قبل فتح Modal
-    const updateAfterModalShown = function() {
-        setTimeout(() => {
-            updateSettleRemaining();
-            
-            const submitBtn = document.getElementById('settleSubmitBtn');
-            if (submitBtn) {
-                const settleAmountEl = document.getElementById('settleAmount');
-                const remainingEl = document.getElementById('settleRemainingAmount');
-                if (settleAmountEl && remainingEl) {
-                    const settleAmount = parseFloat(settleAmountEl.value) || 0;
-                    const remainingText = remainingEl.textContent || remainingEl.innerText || '0';
-                    const remaining = parseFormattedCurrency(remainingText);
-                    
-                    console.log('Checking submit button after modal shown:', {
-                        settleAmount: settleAmount,
-                        remaining: remaining,
-                        shouldEnable: remaining > 0
-                    });
-                }
-            }
-        }, 300);
-        
-        console.log('Loading salaries for user_id:', userId, 'currentSalaryId:', salaryId);
-        loadUserSalariesForSettlement(userId, salaryId);
-        
-        if (salaryId > 0) {
-            setTimeout(() => {
-                const select = document.getElementById('settleSalarySelect');
-                if (select) {
-                    select.value = salaryId;
-                }
-            }, 500);
+    // انتظار قليل لضمان إغلاق النماذج السابقة
+    setTimeout(function() {
+        // إنشاء Modal instance إذا لم يكن موجوداً
+        let modalInstance = bootstrap.Modal.getInstance(settleModal);
+        if (!modalInstance) {
+            modalInstance = new bootstrap.Modal(settleModal);
         }
-    };
-    
-    settleModal.addEventListener('shown.bs.modal', updateAfterModalShown, { once: true });
-    
-    // فتح Modal
-    modalInstance.show();
+        
+        // إضافة مستمع لحدث shown.bs.modal قبل فتح Modal
+        const updateAfterModalShown = function() {
+            setTimeout(() => {
+                updateSettleRemaining();
+                
+                const submitBtn = document.getElementById('settleSubmitBtn');
+                if (submitBtn) {
+                    const settleAmountEl = document.getElementById('settleAmount');
+                    const remainingEl = document.getElementById('settleRemainingAmount');
+                    if (settleAmountEl && remainingEl) {
+                        const settleAmount = parseFloat(settleAmountEl.value) || 0;
+                        const remainingText = remainingEl.textContent || remainingEl.innerText || '0';
+                        const remaining = parseFormattedCurrency(remainingText);
+                        
+                        console.log('Checking submit button after modal shown:', {
+                            settleAmount: settleAmount,
+                            remaining: remaining,
+                            shouldEnable: remaining > 0
+                        });
+                    }
+                }
+            }, 300);
+            
+            console.log('Loading salaries for user_id:', userId, 'currentSalaryId:', salaryId);
+            loadUserSalariesForSettlement(userId, salaryId);
+            
+            if (salaryId > 0) {
+                setTimeout(() => {
+                    const select = document.getElementById('settleSalarySelect');
+                    if (select) {
+                        select.value = salaryId;
+                    }
+                }, 500);
+            }
+        };
+        
+        settleModal.addEventListener('shown.bs.modal', updateAfterModalShown, { once: true });
+        
+        // فتح Modal
+        modalInstance.show();
+    }, 150);
 }
 
 function loadUserSalariesForSettlement(userId, currentSalaryId) {
@@ -5217,6 +5221,103 @@ function loadUserSalariesForSettlement(userId, currentSalaryId) {
             
             // لا نعرض alert لأن هذا قد يكون مجرد مشكلة في تحميل القائمة
             // الراتب الحالي موجود بالفعل في Modal
+        });
+}
+
+// دالة Card لتحميل الرواتب
+function loadUserSalariesForSettlementCard(userId, currentSalaryId) {
+    // التحقق من صحة user_id
+    if (!userId || userId <= 0) {
+        console.error('Invalid user_id in loadUserSalariesForSettlementCard:', userId);
+        const select = document.getElementById('settleSalarySelectCard');
+        if (select) {
+            select.innerHTML = '<option value="">خطأ: معرف الموظف غير صحيح</option>';
+        }
+        return;
+    }
+    
+    const select = document.getElementById('settleSalarySelectCard');
+    if (!select) {
+        console.error('settleSalarySelectCard element not found');
+        return;
+    }
+    
+    // مسح الخيارات السابقة
+    select.innerHTML = '<option value="">-- جاري التحميل --</option>';
+    
+    const apiUrl = '<?php echo getBasePath(); ?>/api/get_user_salaries.php?user_id=' + userId;
+    console.log('Fetching salaries from Card:', apiUrl);
+    
+    // جلب الرواتب من API
+    fetch(apiUrl, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+        .then(response => {
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                return response.text().then(text => {
+                    console.error('Invalid response type. Expected JSON but got:', contentType);
+                    throw new Error('Invalid response type');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Salaries data received in Card:', data);
+            
+            if (!data) {
+                throw new Error('Empty response from server');
+            }
+            
+            select.innerHTML = '<option value="">-- اختر راتب للتسوية --</option>';
+            
+            if (data.success !== false) {
+                if (data.salaries && Array.isArray(data.salaries) && data.salaries.length > 0) {
+                    console.log('Processing ' + data.salaries.length + ' salaries in Card');
+                    data.salaries.forEach(function(salary) {
+                        const option = document.createElement('option');
+                        option.value = salary.id;
+                        const monthLabel = salary.month_name || 'شهر غير محدد';
+                        const remaining = parseFloat(salary.calculated_remaining || salary.remaining || 0);
+                        option.textContent = monthLabel + ' - المتبقي: ' + formatCurrency(remaining);
+                        if (salary.id == currentSalaryId) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+                    
+                    // تحميل بيانات الراتب المحدد
+                    if (currentSalaryId > 0) {
+                        setTimeout(() => {
+                            loadSelectedSalaryDataCard();
+                        }, 200);
+                    }
+                } else {
+                    console.warn('No salaries found in Card');
+                    const message = (data && data.message) ? data.message : 'لا توجد رواتب متاحة لهذا الموظف';
+                    if (currentSalaryId > 0) {
+                        select.innerHTML = '<option value="' + currentSalaryId + '">الراتب الحالي</option>';
+                    } else {
+                        select.innerHTML = '<option value="">' + message + '</option>';
+                    }
+                }
+            } else {
+                console.error('API returned success: false in Card', data);
+                const errorMessage = (data && data.message) ? data.message : 'حدث خطأ في جلب الرواتب';
+                select.innerHTML = '<option value="">' + errorMessage + '</option>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading salaries in Card:', error);
+            if (currentSalaryId > 0) {
+                select.innerHTML = '<option value="' + currentSalaryId + '">الراتب الحالي (لا يمكن تحميل الرواتب الأخرى)</option>';
+            } else {
+                select.innerHTML = '<option value="">خطأ في تحميل الرواتب</option>';
+            }
         });
 }
 
@@ -5510,6 +5611,215 @@ function updateSettleRemaining() {
         settleRemainingAmount2: settleRemainingAmount2El ? settleRemainingAmount2El.textContent : 'N/A',
         submitBtnDisabled: submitBtn ? submitBtn.disabled : 'N/A'
     });
+}
+
+// دالة Card لتحميل بيانات الراتب المحدد
+function loadSelectedSalaryDataCard() {
+    const select = document.getElementById('settleSalarySelectCard');
+    const salaryId = select ? select.value : '';
+    
+    // الحصول على جميع العناصر المطلوبة
+    const settleSalaryIdEl = document.getElementById('settleSalaryIdCard');
+    const settleAccumulatedAmountEl = document.getElementById('settleAccumulatedAmountCard');
+    const settleRemainingAmountEl = document.getElementById('settleRemainingAmountCard');
+    const settleRemainingAmount2El = document.getElementById('settleRemainingAmount2Card');
+    const settleAmountEl = document.getElementById('settleAmountCard');
+    
+    if (!salaryId || salaryId === '') {
+        // إعادة تعيين القيم
+        if (settleSalaryIdEl) settleSalaryIdEl.value = '';
+        if (settleAccumulatedAmountEl) settleAccumulatedAmountEl.textContent = formatCurrency(0);
+        if (settleRemainingAmountEl) settleRemainingAmountEl.textContent = formatCurrency(0);
+        if (settleRemainingAmount2El) settleRemainingAmount2El.textContent = formatCurrency(0);
+        if (settleAmountEl) {
+            settleAmountEl.value = '';
+            settleAmountEl.max = 0;
+        }
+        setTimeout(function() {
+            updateSettleRemainingCard();
+        }, 200);
+        return;
+    }
+    
+    if (!settleSalaryIdEl) {
+        console.error('settleSalaryIdCard element not found');
+        return;
+    }
+    
+    // إذا كان الراتب المحدد هو نفس الراتب من بطاقة الموظف، استخدم القيم المحفوظة
+    if (settleModalCalculatedValues.salaryId > 0 && parseInt(salaryId) === settleModalCalculatedValues.salaryId) {
+        console.log('Using saved calculated values from employee card for salary ID (Card):', salaryId);
+        const accumulated = settleModalCalculatedValues.accumulated;
+        const remaining = settleModalCalculatedValues.remaining;
+        
+        settleModalRemainingValue = remaining;
+        
+        settleSalaryIdEl.value = salaryId;
+        if (settleAccumulatedAmountEl) settleAccumulatedAmountEl.textContent = formatCurrency(accumulated);
+        if (settleRemainingAmountEl) settleRemainingAmountEl.textContent = formatCurrency(remaining);
+        if (settleRemainingAmount2El) settleRemainingAmount2El.textContent = formatCurrency(remaining);
+        if (settleAmountEl) {
+            settleAmountEl.value = '';
+            settleAmountEl.max = remaining;
+        }
+        
+        setTimeout(function() {
+            updateSettleRemainingCard();
+        }, 200);
+        return;
+    }
+    
+    // إذا كان راتب مختلف، جلب البيانات من API
+    settleSalaryIdEl.value = salaryId;
+    
+    // إظهار حالة التحميل
+    if (settleAccumulatedAmountEl) settleAccumulatedAmountEl.textContent = 'جاري التحميل...';
+    if (settleRemainingAmountEl) settleRemainingAmountEl.textContent = 'جاري التحميل...';
+    if (settleRemainingAmount2El) settleRemainingAmount2El.textContent = 'جاري التحميل...';
+    
+    // جلب بيانات الراتب المحدد
+    const apiUrl = '<?php echo getBasePath(); ?>/api/get_salary_details.php?salary_id=' + salaryId;
+    console.log('Fetching salary details from API for different salary (Card):', apiUrl);
+    
+    fetch(apiUrl, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+        .then(response => {
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                return response.text().then(text => {
+                    console.error('Invalid response type. Expected JSON but got:', contentType);
+                    throw new Error('Invalid response type');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Salary details received from API (Card):', data);
+            
+            if (!data) {
+                throw new Error('Empty response from server');
+            }
+            
+            if (data.success && data.salary) {
+                const salary = data.salary;
+                
+                const accumulated = parseFloat(salary.calculated_accumulated || salary.accumulated_amount || salary.total_amount || 0);
+                const remaining = parseFloat(salary.calculated_remaining || salary.remaining || 0);
+                
+                settleModalCalculatedValues = {
+                    accumulated: accumulated,
+                    remaining: remaining,
+                    salaryId: parseInt(salaryId)
+                };
+                
+                settleModalRemainingValue = remaining;
+                
+                // تحديث القيم
+                if (settleAccumulatedAmountEl) settleAccumulatedAmountEl.textContent = formatCurrency(accumulated);
+                if (settleRemainingAmountEl) settleRemainingAmountEl.textContent = formatCurrency(remaining);
+                if (settleRemainingAmount2El) settleRemainingAmount2El.textContent = formatCurrency(remaining);
+                if (settleAmountEl) {
+                    settleAmountEl.value = '';
+                    settleAmountEl.max = remaining;
+                    settleAmountEl.min = 0;
+                }
+                
+                // تحديث حالة الزر
+                const submitBtn = document.getElementById('settleSubmitBtnCard');
+                if (submitBtn) {
+                    submitBtn.disabled = remaining <= 0;
+                }
+                
+                setTimeout(function() {
+                    updateSettleRemainingCard();
+                }, 200);
+            } else {
+                const errorMsg = data && data.message ? data.message : 'خطأ في تحميل بيانات الراتب';
+                console.error('API Error (Card):', errorMsg);
+                
+                if (settleAccumulatedAmountEl) settleAccumulatedAmountEl.textContent = formatCurrency(0);
+                if (settleRemainingAmountEl) settleRemainingAmountEl.textContent = formatCurrency(0);
+                if (settleRemainingAmount2El) settleRemainingAmount2El.textContent = formatCurrency(0);
+                
+                alert(errorMsg);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading salary details (Card):', error);
+            const errorMsg = error.message || 'خطأ في تحميل بيانات الراتب';
+            
+            if (settleAccumulatedAmountEl) settleAccumulatedAmountEl.textContent = formatCurrency(0);
+            if (settleRemainingAmountEl) settleRemainingAmountEl.textContent = formatCurrency(0);
+            if (settleRemainingAmount2El) settleRemainingAmount2El.textContent = formatCurrency(0);
+            
+            alert('خطأ في تحميل بيانات الراتب: ' + errorMsg);
+        });
+}
+
+// دالة Card لتحديث المتبقي
+function updateSettleRemainingCard() {
+    const card = document.getElementById('settleSalaryCard');
+    if (!card || card.style.display === 'none') {
+        return;
+    }
+    
+    const remainingElement = document.getElementById('settleRemainingAmountCard');
+    const settleAmountElement = document.getElementById('settleAmountCard');
+    const settleNewRemainingElement = document.getElementById('settleNewRemainingCard');
+    const settleRemainingAmount2El = document.getElementById('settleRemainingAmount2Card');
+    
+    if (!remainingElement || !settleAmountElement) {
+        return;
+    }
+    
+    let remaining = settleModalRemainingValue;
+    let remainingText = '';
+    
+    if (remaining <= 0) {
+        remainingText = remainingElement.textContent || remainingElement.innerText || '0';
+        remaining = parseFormattedCurrency(remainingText);
+        settleModalRemainingValue = remaining;
+    } else {
+        remainingText = formatCurrency(remaining);
+    }
+    
+    const settleAmount = parseFloat(settleAmountElement.value) || 0;
+    const newRemaining = Math.max(0, remaining - settleAmount);
+    
+    if (settleNewRemainingElement) {
+        settleNewRemainingElement.textContent = formatCurrency(newRemaining);
+    }
+    
+    if (settleRemainingAmount2El) {
+        settleRemainingAmount2El.textContent = formatCurrency(remaining);
+    }
+    
+    if (settleAmountElement) {
+        settleAmountElement.max = remaining;
+        if (settleAmount > remaining) {
+            settleAmountElement.value = remaining;
+        }
+    }
+    
+    const submitBtn = document.getElementById('settleSubmitBtnCard');
+    if (submitBtn) {
+        const hasRemaining = remaining > 0;
+        const hasValidAmount = settleAmount > 0 && settleAmount <= remaining;
+        const shouldDisable = !hasRemaining || !hasValidAmount;
+        
+        submitBtn.disabled = shouldDisable;
+        
+        if (shouldDisable) {
+            submitBtn.classList.add('disabled');
+        } else {
+            submitBtn.classList.remove('disabled');
+        }
+    }
 }
 
 function openStatementModal(salaryId, userId, employeeName) {

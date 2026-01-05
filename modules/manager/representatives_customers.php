@@ -1402,8 +1402,7 @@ try {
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-primary change-sales-rep-btn"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#changeSalesRepModal"
+                                            onclick="openChangeSalesRepModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-current-rep-id="<?php echo (int)($customer['rep_id'] ?? $customer['created_by'] ?? 0); ?>"
@@ -3931,11 +3930,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    if (editRepCustomerModal && editRepCustomerButtons.length > 0) {
+    if (editRepCustomerButtons.length > 0) {
         editRepCustomerButtons.forEach(function(btn) {
             btn.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
+                
+                closeAllForms();
                 
                 var customerId = this.getAttribute('data-customer-id');
                 var customerName = this.getAttribute('data-customer-name');
@@ -3949,97 +3950,182 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 
-                var idInput = document.getElementById('editRepCustomerId');
-                var nameInput = document.getElementById('editRepCustomerName');
-                var phoneInput = document.getElementById('editRepCustomerPhone');
-                var addressInput = document.getElementById('editRepCustomerAddress');
-                var regionInput = document.getElementById('editRepCustomerRegionId');
-                var balanceInput = document.getElementById('editRepCustomerBalance');
-                var editPhoneContainer = document.getElementById('editRepPhoneNumbersContainer');
-                
-                if (idInput) idInput.value = customerId;
-                if (nameInput) nameInput.value = customerName || '';
-                if (addressInput) addressInput.value = customerAddress;
-                if (regionInput) regionInput.value = customerRegionId;
-                if (balanceInput) balanceInput.value = customerBalance;
-                
-                // تحميل أرقام الهواتف المتعددة
-                if (editPhoneContainer) {
-                    editPhoneContainer.innerHTML = '';
-                    // جلب أرقام الهواتف من قاعدة البيانات عبر AJAX
-                    fetch('?action=get_customer_phones&customer_id=' + customerId)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success && data.phones && data.phones.length > 0) {
-                                data.phones.forEach(function(phone, index) {
-                                    var phoneGroup = document.createElement('div');
-                                    phoneGroup.className = 'input-group mb-2';
-                                    phoneGroup.innerHTML = `
-                                        <input type="text" class="form-control phone-input" name="phones[]" value="${phone}" placeholder="مثال: 01234567890">
-                                        <button type="button" class="btn btn-outline-danger remove-phone-btn">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    `;
-                                    editPhoneContainer.appendChild(phoneGroup);
-                                });
-                            } else if (customerPhone) {
-                                // إذا لم تكن هناك أرقام في customer_phones، استخدم الرقم القديم
-                                var phoneGroup = document.createElement('div');
-                                phoneGroup.className = 'input-group mb-2';
-                                phoneGroup.innerHTML = `
-                                    <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
-                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                `;
-                                editPhoneContainer.appendChild(phoneGroup);
-                            } else {
-                                // إضافة حقل فارغ واحد
-                                var phoneGroup = document.createElement('div');
-                                phoneGroup.className = 'input-group mb-2';
-                                phoneGroup.innerHTML = `
-                                    <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
-                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                `;
-                                editPhoneContainer.appendChild(phoneGroup);
+                // انتظار قليل لضمان إغلاق النماذج السابقة
+                setTimeout(function() {
+                    if (isMobile()) {
+                        // على الموبايل: استخدام Card (سيتم إضافة Card لاحقاً - معقد)
+                        // حالياً: استخدام Modal حتى يتم إنشاء Card
+                        if (editRepCustomerModal) {
+                            var idInput = document.getElementById('editRepCustomerId');
+                            var nameInput = document.getElementById('editRepCustomerName');
+                            var addressInput = document.getElementById('editRepCustomerAddress');
+                            var regionInput = document.getElementById('editRepCustomerRegionId');
+                            var balanceInput = document.getElementById('editRepCustomerBalance');
+                            var editPhoneContainer = document.getElementById('editRepPhoneNumbersContainer');
+                            
+                            if (idInput) idInput.value = customerId;
+                            if (nameInput) nameInput.value = customerName || '';
+                            if (addressInput) addressInput.value = customerAddress;
+                            if (regionInput) regionInput.value = customerRegionId;
+                            if (balanceInput) balanceInput.value = customerBalance;
+                            
+                            // تحميل أرقام الهواتف
+                            if (editPhoneContainer) {
+                                editPhoneContainer.innerHTML = '';
+                                fetch('?action=get_customer_phones&customer_id=' + customerId)
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.success && data.phones && data.phones.length > 0) {
+                                            data.phones.forEach(function(phone) {
+                                                var phoneGroup = document.createElement('div');
+                                                phoneGroup.className = 'input-group mb-2';
+                                                phoneGroup.innerHTML = `
+                                                    <input type="text" class="form-control phone-input" name="phones[]" value="${phone}" placeholder="مثال: 01234567890">
+                                                    <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                `;
+                                                editPhoneContainer.appendChild(phoneGroup);
+                                            });
+                                        } else if (customerPhone) {
+                                            var phoneGroup = document.createElement('div');
+                                            phoneGroup.className = 'input-group mb-2';
+                                            phoneGroup.innerHTML = `
+                                                <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            `;
+                                            editPhoneContainer.appendChild(phoneGroup);
+                                        } else {
+                                            var phoneGroup = document.createElement('div');
+                                            phoneGroup.className = 'input-group mb-2';
+                                            phoneGroup.innerHTML = `
+                                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            `;
+                                            editPhoneContainer.appendChild(phoneGroup);
+                                        }
+                                        if (typeof updateEditRepRemoveButtons === 'function') {
+                                            updateEditRepRemoveButtons();
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error loading phones:', error);
+                                        if (customerPhone) {
+                                            var phoneGroup = document.createElement('div');
+                                            phoneGroup.className = 'input-group mb-2';
+                                            phoneGroup.innerHTML = `
+                                                <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            `;
+                                            editPhoneContainer.appendChild(phoneGroup);
+                                        }
+                                        if (typeof updateEditRepRemoveButtons === 'function') {
+                                            updateEditRepRemoveButtons();
+                                        }
+                                    });
                             }
-                            if (typeof updateEditRepRemoveButtons === 'function') {
-                                updateEditRepRemoveButtons();
+                            
+                            var modal = bootstrap.Modal.getOrCreateInstance(editRepCustomerModal);
+                            modal.show();
+                        }
+                    } else {
+                        // على الكمبيوتر: استخدام Modal
+                        if (editRepCustomerModal) {
+                            var idInput = document.getElementById('editRepCustomerId');
+                            var nameInput = document.getElementById('editRepCustomerName');
+                            var phoneInput = document.getElementById('editRepCustomerPhone');
+                            var addressInput = document.getElementById('editRepCustomerAddress');
+                            var regionInput = document.getElementById('editRepCustomerRegionId');
+                            var balanceInput = document.getElementById('editRepCustomerBalance');
+                            var editPhoneContainer = document.getElementById('editRepPhoneNumbersContainer');
+                            
+                            if (idInput) idInput.value = customerId;
+                            if (nameInput) nameInput.value = customerName || '';
+                            if (addressInput) addressInput.value = customerAddress;
+                            if (regionInput) regionInput.value = customerRegionId;
+                            if (balanceInput) balanceInput.value = customerBalance;
+                            
+                            // تحميل أرقام الهواتف المتعددة
+                            if (editPhoneContainer) {
+                                editPhoneContainer.innerHTML = '';
+                                fetch('?action=get_customer_phones&customer_id=' + customerId)
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.success && data.phones && data.phones.length > 0) {
+                                            data.phones.forEach(function(phone, index) {
+                                                var phoneGroup = document.createElement('div');
+                                                phoneGroup.className = 'input-group mb-2';
+                                                phoneGroup.innerHTML = `
+                                                    <input type="text" class="form-control phone-input" name="phones[]" value="${phone}" placeholder="مثال: 01234567890">
+                                                    <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                `;
+                                                editPhoneContainer.appendChild(phoneGroup);
+                                            });
+                                        } else if (customerPhone) {
+                                            var phoneGroup = document.createElement('div');
+                                            phoneGroup.className = 'input-group mb-2';
+                                            phoneGroup.innerHTML = `
+                                                <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            `;
+                                            editPhoneContainer.appendChild(phoneGroup);
+                                        } else {
+                                            var phoneGroup = document.createElement('div');
+                                            phoneGroup.className = 'input-group mb-2';
+                                            phoneGroup.innerHTML = `
+                                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            `;
+                                            editPhoneContainer.appendChild(phoneGroup);
+                                        }
+                                        if (typeof updateEditRepRemoveButtons === 'function') {
+                                            updateEditRepRemoveButtons();
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error loading phones:', error);
+                                        if (customerPhone) {
+                                            var phoneGroup = document.createElement('div');
+                                            phoneGroup.className = 'input-group mb-2';
+                                            phoneGroup.innerHTML = `
+                                                <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            `;
+                                            editPhoneContainer.appendChild(phoneGroup);
+                                        }
+                                        if (typeof updateEditRepRemoveButtons === 'function') {
+                                            updateEditRepRemoveButtons();
+                                        }
+                                    });
+                            } else if (phoneInput) {
+                                phoneInput.value = customerPhone;
                             }
-                        })
-                        .catch(error => {
-                            console.error('Error loading phones:', error);
-                            // في حالة الخطأ، استخدم الرقم القديم
-                            if (customerPhone) {
-                                var phoneGroup = document.createElement('div');
-                                phoneGroup.className = 'input-group mb-2';
-                                phoneGroup.innerHTML = `
-                                    <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
-                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                `;
-                                editPhoneContainer.appendChild(phoneGroup);
+                            
+                            try {
+                                var modal = bootstrap.Modal.getOrCreateInstance(editRepCustomerModal);
+                                modal.show();
+                            } catch (err) {
+                                console.error('Error showing modal:', err);
+                                var modal = new bootstrap.Modal(editRepCustomerModal);
+                                modal.show();
                             }
-                            if (typeof updateEditRepRemoveButtons === 'function') {
-                                updateEditRepRemoveButtons();
-                            }
-                        });
-                } else if (phoneInput) {
-                    phoneInput.value = customerPhone;
-                }
-                
-                try {
-                    var modal = bootstrap.Modal.getOrCreateInstance(editRepCustomerModal);
-                    modal.show();
-                } catch (err) {
-                    console.error('Error showing modal:', err);
-                    // Fallback
-                    var modal = new bootstrap.Modal(editRepCustomerModal);
-                    modal.show();
-                }
+                        }
+                    }
+                }, 100);
             });
         });
     } else {
@@ -4952,13 +5038,58 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <script>
+    // دالة فتح Modal تغيير المندوب
+function openChangeSalesRepModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const customerId = button.getAttribute('data-customer-id');
+    const customerName = button.getAttribute('data-customer-name');
+    const currentRepId = button.getAttribute('data-current-rep-id');
+    const currentRepName = button.getAttribute('data-current-rep-name');
+    
+    const changeSalesRepModal = document.getElementById('changeSalesRepModal');
+    const changeSalesRepCustomerId = document.getElementById('changeSalesRepCustomerId');
+    const changeSalesRepCustomerName = document.getElementById('changeSalesRepCustomerName');
+    const changeSalesRepCurrentRepName = document.getElementById('changeSalesRepCurrentRepName');
+    const newSalesRepSelect = document.getElementById('newSalesRepSelect');
+    
+    if (!changeSalesRepModal || !changeSalesRepCustomerId || !changeSalesRepCustomerName || !changeSalesRepCurrentRepName || !newSalesRepSelect) {
+        console.error('Change sales rep modal elements not found');
+        return;
+    }
+    
+    // انتظار قليل لضمان إغلاق النماذج السابقة
+    setTimeout(function() {
+        // تعيين القيم
+        changeSalesRepCustomerId.value = customerId;
+        changeSalesRepCustomerName.textContent = customerName;
+        changeSalesRepCurrentRepName.textContent = currentRepName;
+        
+        // إزالة التحديد السابق
+        newSalesRepSelect.value = '';
+        
+        // إخفاء المندوب الحالي من القائمة
+        const options = newSalesRepSelect.querySelectorAll('option');
+        options.forEach(option => {
+            if (option.value === currentRepId) {
+                option.style.display = 'none';
+            } else {
+                option.style.display = '';
+            }
+        });
+        
+        // فتح Modal
+        const modalInstance = bootstrap.Modal.getOrCreateInstance(changeSalesRepModal);
+        modalInstance.show();
+    }, 100);
+}
+
     // معالجة Modal تغيير المندوب
 (function() {
     const changeSalesRepModal = document.getElementById('changeSalesRepModal');
     const changeSalesRepForm = document.getElementById('changeSalesRepForm');
-    const changeSalesRepCustomerId = document.getElementById('changeSalesRepCustomerId');
-    const changeSalesRepCustomerName = document.getElementById('changeSalesRepCustomerName');
-    const changeSalesRepCurrentRepName = document.getElementById('changeSalesRepCurrentRepName');
     const newSalesRepSelect = document.getElementById('newSalesRepSelect');
     
     if (changeSalesRepModal) {
@@ -4982,42 +5113,15 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.classList.remove('modal-open');
             document.body.style.overflow = '';
             document.body.style.paddingRight = '';
-        });
-        // عند فتح Modal
-        changeSalesRepModal.addEventListener('show.bs.modal', function(event) {
-            const button = event.relatedTarget;
-            const customerId = button.getAttribute('data-customer-id');
-            const customerName = button.getAttribute('data-customer-name');
-            const currentRepId = button.getAttribute('data-current-rep-id');
-            const currentRepName = button.getAttribute('data-current-rep-name');
             
-            // تعيين القيم
-            changeSalesRepCustomerId.value = customerId;
-            changeSalesRepCustomerName.textContent = customerName;
-            changeSalesRepCurrentRepName.textContent = currentRepName;
-            
-            // إزالة التحديد السابق
-            newSalesRepSelect.value = '';
-            
-            // إخفاء المندوب الحالي من القائمة
-            const options = newSalesRepSelect.querySelectorAll('option');
-            options.forEach(option => {
-                if (option.value === currentRepId) {
-                    option.style.display = 'none';
-                } else {
-                    option.style.display = '';
-                }
-            });
-        });
-        
-        // عند إغلاق Modal
-        changeSalesRepModal.addEventListener('hidden.bs.modal', function() {
-            changeSalesRepForm.reset();
+            if (changeSalesRepForm) changeSalesRepForm.reset();
             // إظهار جميع الخيارات مرة أخرى
-            const options = newSalesRepSelect.querySelectorAll('option');
-            options.forEach(option => {
-                option.style.display = '';
-            });
+            if (newSalesRepSelect) {
+                const options = newSalesRepSelect.querySelectorAll('option');
+                options.forEach(option => {
+                    option.style.display = '';
+                });
+            }
         });
     }
     
