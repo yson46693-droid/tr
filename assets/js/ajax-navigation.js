@@ -132,9 +132,27 @@
         // استخراج العنوان
         const title = doc.querySelector('title')?.textContent || document.title;
 
+        // استخراج scripts من المحتوى
+        const scriptElements = Array.from(mainContent.querySelectorAll('script'));
+        const scripts = scriptElements.map(script => {
+            return {
+                text: script.textContent || script.innerHTML,
+                src: script.src,
+                type: script.type,
+                async: script.async,
+                defer: script.defer
+            };
+        });
+
+        // إزالة scripts من المحتوى (سيتم تنفيذها لاحقاً)
+        scriptElements.forEach(scriptElement => {
+            scriptElement.remove();
+        });
+
         return {
             content: mainContent.innerHTML,
-            title: title
+            title: title,
+            scripts: scripts
         };
     }
 
@@ -192,6 +210,40 @@
     }
 
     /**
+     * تنفيذ scripts المحملة
+     */
+    function executeScripts(scripts) {
+        if (!scripts || scripts.length === 0) {
+            return;
+        }
+
+        scripts.forEach(scriptData => {
+            try {
+                if (scriptData.src) {
+                    // Script خارجي - تحميله
+                    const script = document.createElement('script');
+                    script.src = scriptData.src;
+                    if (scriptData.async) script.async = true;
+                    if (scriptData.defer) script.defer = true;
+                    if (scriptData.type) script.type = scriptData.type;
+                    document.head.appendChild(script);
+                } else if (scriptData.text) {
+                    // Script مدمج - تنفيذه مباشرة
+                    // استخدام Function constructor لتجنب مشاكل scope
+                    const script = document.createElement('script');
+                    script.textContent = scriptData.text;
+                    if (scriptData.type) script.type = scriptData.type;
+                    document.head.appendChild(script);
+                    // إزالة script بعد التنفيذ
+                    script.remove();
+                }
+            } catch (e) {
+                console.error('Error executing script:', e);
+            }
+        });
+    }
+
+    /**
      * تحديث المحتوى في الصفحة
      */
     function updatePageContent(data) {
@@ -209,14 +261,24 @@
         // تحديث المحتوى
         mainElement.innerHTML = data.content;
 
+        // تنفيذ scripts إذا كانت موجودة
+        if (data.scripts && data.scripts.length > 0) {
+            // تنفيذ scripts بعد تحديث DOM
+            setTimeout(() => {
+                executeScripts(data.scripts);
+            }, 0);
+        }
+
         // تحديث حالة active في الشريط الجانبي - مع تأخير بسيط لضمان اكتمال تحديث DOM
         // استخدام requestAnimationFrame لضمان تحديث DOM قبل تحديث حالة active
         requestAnimationFrame(() => {
             updateSidebarActiveState();
         });
 
-        // إعادة تهيئة الأحداث
-        reinitializeEvents();
+        // إعادة تهيئة الأحداث - مع تأخير أكبر لضمان تنفيذ scripts
+        setTimeout(() => {
+            reinitializeEvents();
+        }, 100);
 
         // إطلاق حدث مخصص
         window.dispatchEvent(new CustomEvent('ajaxNavigationComplete', {
@@ -230,7 +292,7 @@
      * إعادة تهيئة الأحداث بعد تحديث المحتوى
      */
     function reinitializeEvents() {
-        // إعادة تهيئة Bootstrap tooltips و popovers
+        // إعادة تهيئة Bootstrap components
         if (typeof bootstrap !== 'undefined') {
             // إزالة tooltips القديمة
             const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -245,6 +307,31 @@
             const newTooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
             newTooltipTriggerList.map(function (tooltipTriggerEl) {
                 return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+            
+            // إعادة تهيئة popovers
+            const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+            popoverTriggerList.map(function (popoverTriggerEl) {
+                const popover = bootstrap.Popover.getInstance(popoverTriggerEl);
+                if (popover) {
+                    popover.dispose();
+                }
+                return new bootstrap.Popover(popoverTriggerEl);
+            });
+            
+            // ملاحظة: Modals و Dropdowns لا تحتاج إعادة تهيئة لأن Bootstrap يتعامل معها تلقائياً
+            // لكن يمكن إعادة تهيئة Dropdowns إذا لزم الأمر
+            const dropdownToggleList = [].slice.call(document.querySelectorAll('[data-bs-toggle="dropdown"]'));
+            dropdownToggleList.forEach(function (dropdownToggleEl) {
+                // Bootstrap يعيد تهيئة dropdowns تلقائياً، لكن يمكننا التأكد
+                try {
+                    const dropdown = bootstrap.Dropdown.getInstance(dropdownToggleEl);
+                    if (!dropdown) {
+                        new bootstrap.Dropdown(dropdownToggleEl);
+                    }
+                } catch (e) {
+                    // تجاهل الأخطاء
+                }
             });
         }
 
