@@ -613,9 +613,26 @@ $pageDescription = 'لوحة تحكم المدير - إدارة شاملة لل�
 
                 <div class="cards-grid mt-4">
                     <?php
+                    // جلب آخر نسخة احتياطية ناجحة
+                    // استخدام id DESC لضمان جلب آخر سجل تم إدراجه (id دائماً يتزايد)
+                    // ملاحظة: قاعدة البيانات تدعم فقط 'success' و 'failed'، لكن الكود قد يحاول استخدام 'completed'
                     $lastBackup = $db->queryOne(
-                        "SELECT created_at, DATE_FORMAT(created_at, '%d/%m/%Y') as formatted_date FROM backups WHERE status IN ('completed', 'success') ORDER BY created_at DESC LIMIT 1"
+                        "SELECT created_at, DATE_FORMAT(created_at, '%d/%m/%Y') as formatted_date 
+                         FROM backups 
+                         WHERE status = 'success' 
+                         ORDER BY id DESC 
+                         LIMIT 1"
                     );
+                    
+                    // إذا لم نجد نسخة بحالة success، نجلب آخر نسخة بغض النظر عن الحالة
+                    if (!$lastBackup) {
+                        $lastBackup = $db->queryOne(
+                            "SELECT created_at, DATE_FORMAT(created_at, '%d/%m/%Y') as formatted_date 
+                             FROM backups 
+                             ORDER BY id DESC 
+                             LIMIT 1"
+                        );
+                    }
                     $totalUsers = $db->queryOne("SELECT COUNT(*) as count FROM users WHERE status = 'active'");
                     
                     // حساب رصيد الخزنة من financial_transactions و accountant_transactions
