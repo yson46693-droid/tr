@@ -4546,24 +4546,63 @@ function isMobile() {
     return width <= 768;
 }
 
+// دالة آمنة لفتح النماذج - تتحقق من الموبايل أولاً
+function safeShowModal(modalId, cardId) {
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById(cardId);
+        if (card) {
+            card.style.display = 'block';
+            setTimeout(() => scrollToElement(card), 50);
+        }
+        return null;
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const modalInstance = bootstrap.Modal.getInstance(modal) || new bootstrap.Modal(modal);
+            modalInstance.show();
+            return modalInstance;
+        }
+    }
+    return null;
+}
+
 // التأكد من أن النماذج مخفية على الموبايل حتى لو تم فتحها
 (function() {
     function hideModalsOnMobile() {
         if (isMobile()) {
-            const modals = document.querySelectorAll('.modal.d-none.d-md-block');
+            // إخفاء جميع النماذج
+            const modals = document.querySelectorAll('.modal.d-none.d-md-block, .modal.show, .modal[class*="modal"]');
             modals.forEach(function(modal) {
                 modal.style.display = 'none';
+                modal.classList.remove('show');
                 // إغلاق أي modal instance مفتوح
                 const modalInstance = bootstrap.Modal.getInstance(modal);
                 if (modalInstance) {
                     modalInstance.hide();
                 }
             });
+            
+            // إزالة backdrop
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(function(backdrop) {
+                backdrop.remove();
+            });
+            
+            // تنظيف body classes
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
         }
     }
     
     // تشغيل عند تحميل الصفحة
-    hideModalsOnMobile();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', hideModalsOnMobile);
+    } else {
+        hideModalsOnMobile();
+    }
     
     // تشغيل عند تغيير حجم النافذة
     let resizeTimer;
@@ -4573,7 +4612,41 @@ function isMobile() {
     });
     
     // تشغيل بشكل دوري للتأكد (في حالة فتح modal بطريقة غير متوقعة)
-    setInterval(hideModalsOnMobile, 500);
+    setInterval(hideModalsOnMobile, 300);
+    
+    // مراقبة DOM للتغييرات (MutationObserver)
+    const observer = new MutationObserver(function(mutations) {
+        if (isMobile()) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    const target = mutation.target;
+                    if (target.classList && target.classList.contains('modal') && target.classList.contains('show')) {
+                        hideModalsOnMobile();
+                    }
+                }
+                if (mutation.addedNodes) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === 1) {
+                            if (node.classList && node.classList.contains('modal-backdrop')) {
+                                node.remove();
+                            }
+                            if (node.classList && node.classList.contains('modal') && node.classList.contains('show')) {
+                                hideModalsOnMobile();
+                            }
+                        }
+                    });
+                }
+            });
+        }
+    });
+    
+    // بدء المراقبة
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class']
+    });
 })();
 
 function scrollToElement(element) {
@@ -4740,7 +4813,21 @@ function viewSalaryDetails(salaryId) {
                 .then(response => response.text())
                 .then(html => {
                     content.innerHTML = html;
-                    new bootstrap.Modal(modal).show();
+                    // استخدام الدالة الآمنة لفتح النموذج
+                    if (!isMobile()) {
+                        new bootstrap.Modal(modal).show();
+                    } else {
+                        // على الموبايل: استخدام Card
+                        const card = document.getElementById('salaryDetailsCard');
+                        if (card) {
+                            const cardContent = document.getElementById('salaryDetailsContentCard');
+                            if (cardContent) {
+                                cardContent.innerHTML = html;
+                            }
+                            card.style.display = 'block';
+                            setTimeout(() => scrollToElement(card), 50);
+                        }
+                    }
                 })
                 .catch(error => {
                     content.innerHTML = '<div class="alert alert-danger">حدث خطأ أثناء تحميل التفاصيل</div>';
@@ -4795,10 +4882,8 @@ function openModifyModal(salaryId, salaryData) {
         document.getElementById('modifyCollectionsBonus').value = collectionsBonus;
         
         calculateNewTotal();
-        const modal = document.getElementById('modifySalaryModal');
-        if (modal) {
-            new bootstrap.Modal(modal).show();
-        }
+        // استخدام الدالة الآمنة لفتح النموذج
+        safeShowModal('modifySalaryModal', 'modifySalaryCard');
     }
 }
 
@@ -4892,8 +4977,8 @@ function openRejectModal(advanceId) {
         }
     } else {
         document.getElementById('rejectAdvanceId').value = advanceId;
-        const rejectModal = new bootstrap.Modal(document.getElementById('rejectModal'));
-        rejectModal.show();
+        // استخدام الدالة الآمنة لفتح النموذج
+        safeShowModal('rejectModal', 'rejectCard');
     }
 }
 
@@ -4921,11 +5006,9 @@ let originalSalaryValues = {
 // متغير لحفظ القيمة الفعلية للمتبقي (بدون تنسيق)
 let settleModalRemainingValue = 0;
 
-function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumulated) {
-    // إغلاق النماذج المفتوحة أولاً
-    closeAllForms();
-    
-    // الحصول على user_id من البيانات - محاولة عدة مصادر
+// دالة منفصلة لفتح نموذج التسوية على الموبايل
+function openSettleModalMobile(salaryId, salaryData, remainingAmount, calculatedAccumulated) {
+    // الحصول على user_id من البيانات
     let userId = null;
     if (salaryData.user_id !== undefined && salaryData.user_id !== null && salaryData.user_id > 0) {
         userId = parseInt(salaryData.user_id);
@@ -4935,14 +5018,118 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
         userId = 0;
     }
     
-    // تسجيل للتشخيص
-    console.log('openSettleModal called with:', {
-        salaryId: salaryId,
-        salaryData: salaryData,
-        userId: userId,
-        remainingAmount: remainingAmount,
-        calculatedAccumulated: calculatedAccumulated
-    });
+    // استخدام القيم المحسوبة مباشرة من بطاقة الموظف
+    const accumulated = parseFloat(calculatedAccumulated || salaryData.calculated_accumulated || salaryData.accumulated_amount || salaryData.total_amount || 0);
+    const remaining = parseFloat(remainingAmount || salaryData.calculated_remaining || 0);
+    
+    // حفظ القيم في متغير عام
+    settleModalCalculatedValues = {
+        accumulated: accumulated,
+        remaining: remaining,
+        salaryId: salaryId
+    };
+    
+    // حفظ القيم الأصلية للراتب الحالي
+    originalSalaryValues = {
+        accumulated: accumulated,
+        remaining: remaining,
+        salaryId: salaryId
+    };
+    
+    settleModalRemainingValue = remaining;
+    
+    // على الموبايل: استخدام Card
+    const card = document.getElementById('settleSalaryCard');
+    if (!card) {
+        console.error('settleSalaryCard element not found in DOM');
+        alert('خطأ: لم يتم العثور على نافذة التسوية. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
+        return;
+    }
+    
+    // التحقق من وجود جميع العناصر المطلوبة
+    const settleSalaryIdCard = document.getElementById('settleSalaryIdCard');
+    const settleUserIdCard = document.getElementById('settleUserIdCard');
+    const settleUserNameCard = document.getElementById('settleUserNameCard');
+    const settleAccumulatedAmountCard = document.getElementById('settleAccumulatedAmountCard');
+    const settleRemainingAmountCard = document.getElementById('settleRemainingAmountCard');
+    const settleRemainingAmount2Card = document.getElementById('settleRemainingAmount2Card');
+    const settleAmountCard = document.getElementById('settleAmountCard');
+    const settleSubmitBtnCard = document.getElementById('settleSubmitBtnCard');
+    
+    if (!settleSalaryIdCard || !settleUserIdCard || !settleUserNameCard) {
+        console.error('Required elements not found in settleSalaryCard');
+        alert('خطأ: بعض العناصر المطلوبة غير موجودة. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
+        return;
+    }
+    
+    try {
+        settleSalaryIdCard.value = salaryId;
+        settleUserIdCard.value = userId;
+        settleUserNameCard.textContent = salaryData.full_name || salaryData.username || 'غير محدد';
+        
+        if (settleAccumulatedAmountCard) {
+            settleAccumulatedAmountCard.textContent = formatCurrency(accumulated);
+        }
+        if (settleRemainingAmountCard) {
+            settleRemainingAmountCard.textContent = formatCurrency(remaining);
+        }
+        if (settleRemainingAmount2Card) {
+            settleRemainingAmount2Card.textContent = formatCurrency(remaining);
+        }
+        
+        if (settleAmountCard) {
+            settleAmountCard.value = '';
+            settleAmountCard.max = remaining;
+            settleAmountCard.min = 0;
+        }
+        
+        if (settleSubmitBtnCard) {
+            settleSubmitBtnCard.disabled = true;
+        }
+        
+        // تحميل الرواتب للموظف
+        loadUserSalariesForSettlementCard(userId, salaryId);
+        
+        // إظهار Card
+        card.style.display = 'block';
+        console.log('Settle card displayed on mobile');
+        setTimeout(() => {
+            scrollToElement(card);
+        }, 50);
+    } catch (error) {
+        console.error('Error in openSettleModalMobile:', error);
+        console.error('Error stack:', error.stack);
+        alert('حدث خطأ أثناء فتح نافذة التسوية: ' + error.message);
+    }
+}
+
+function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumulated) {
+    try {
+        console.log('openSettleModal called - isMobile:', isMobile(), 'window width:', window.innerWidth);
+        
+        // إغلاق النماذج المفتوحة أولاً (لكن على الموبايل، سنفتح Card بعد ذلك)
+        closeAllForms();
+        
+        
+        // الحصول على user_id من البيانات - محاولة عدة مصادر
+        let userId = null;
+        if (salaryData.user_id !== undefined && salaryData.user_id !== null && salaryData.user_id > 0) {
+            userId = parseInt(salaryData.user_id);
+        } else if (salaryData.userId !== undefined && salaryData.userId !== null && salaryData.userId > 0) {
+            userId = parseInt(salaryData.userId);
+        } else if (salaryData.user_id === 0 || salaryData.userId === 0) {
+            userId = 0;
+        }
+        
+        // تسجيل للتشخيص
+        console.log('openSettleModal called with:', {
+            salaryId: salaryId,
+            salaryData: salaryData,
+            userId: userId,
+            remainingAmount: remainingAmount,
+            calculatedAccumulated: calculatedAccumulated,
+            isMobile: isMobile()
+        });
     
     // التحقق من وجود user_id
     if (!userId || userId <= 0 || isNaN(userId)) {
@@ -4973,39 +5160,11 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
     settleModalRemainingValue = remaining;
     
     if (isMobile()) {
-        // على الموبايل: استخدام Card (سيتم إضافة دوال Card لاحقاً - معقدة)
-        const card = document.getElementById('settleSalaryCard');
-        if (!card) {
-            console.error('settleSalaryCard element not found in DOM');
-            alert('خطأ: لم يتم العثور على نافذة التسوية. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
-            return;
-        }
-        
-        document.getElementById('settleSalaryIdCard').value = salaryId;
-        document.getElementById('settleUserIdCard').value = userId;
-        document.getElementById('settleUserNameCard').textContent = salaryData.full_name || salaryData.username || 'غير محدد';
-        
-        document.getElementById('settleAccumulatedAmountCard').textContent = formatCurrency(accumulated);
-        document.getElementById('settleRemainingAmountCard').textContent = formatCurrency(remaining);
-        document.getElementById('settleRemainingAmount2Card').textContent = formatCurrency(remaining);
-        
-        const settleAmountEl = document.getElementById('settleAmountCard');
-        if (settleAmountEl) {
-            settleAmountEl.value = '';
-            settleAmountEl.max = remaining;
-            settleAmountEl.min = 0;
-        }
-        
-        const submitBtn = document.getElementById('settleSubmitBtnCard');
-        if (submitBtn) {
-            submitBtn.disabled = true;
-        }
-        
-        // تحميل الرواتب للموظف
-        loadUserSalariesForSettlementCard(userId, salaryId);
-        
-        card.style.display = 'block';
-        setTimeout(() => scrollToElement(card), 50);
+        // على الموبايل: استخدام دالة منفصلة لفتح Card
+        // انتظار قليل لضمان اكتمال إغلاق النماذج السابقة
+        setTimeout(() => {
+            openSettleModalMobile(salaryId, salaryData, remainingAmount, calculatedAccumulated);
+        }, 100);
         return;
     }
     
@@ -5115,8 +5274,13 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
         
         settleModal.addEventListener('shown.bs.modal', updateAfterModalShown, { once: true });
         
-        // فتح Modal
-        modalInstance.show();
+        // فتح Modal - التحقق من الموبايل أولاً
+        if (!isMobile()) {
+            modalInstance.show();
+        } else {
+            // على الموبايل: استخدام Card (تم فتحه مسبقاً في openSettleModal)
+            // لا حاجة لفعل شيء إضافي هنا
+        }
     };
     
     // إذا كان هناك modal مفتوح، ننتظر حتى يُغلق أولاً
@@ -5131,7 +5295,13 @@ function openSettleModal(salaryId, salaryData, remainingAmount, calculatedAccumu
         existingModalInstance.hide();
     } else {
         // لا يوجد modal مفتوح، يمكن فتحه مباشرة
+        console.log('No existing modal, opening new modal...');
         setTimeout(openNewModal, 150);
+    }
+    } catch (error) {
+        console.error('Error in openSettleModal:', error);
+        console.error('Error stack:', error.stack);
+        alert('حدث خطأ أثناء فتح نافذة التسوية: ' + error.message);
     }
 }
 
@@ -5949,10 +6119,8 @@ function openStatementModal(salaryId, userId, employeeName) {
         document.getElementById('statementYear').value = currentYear;
         
         updateStatementPeriodFields();
-        const modal = document.getElementById('salaryStatementModal');
-        if (modal) {
-            new bootstrap.Modal(modal).show();
-        }
+        // استخدام الدالة الآمنة لفتح النموذج
+        safeShowModal('salaryStatementModal', 'salaryStatementCard');
     }
 }
 
@@ -6646,7 +6814,33 @@ function updateTotalHours() {
         'salaryStatementModal': 'salaryStatementCard'
     };
     
-    // مستمع لحدث shown.bs.modal لإخفاء النماذج فوراً على الموبايل
+    // حماية قوية: منع فتح النماذج على الموبايل قبل أن تفتح
+    document.addEventListener('show.bs.modal', function(event) {
+        if (isMobile()) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            
+            const modal = event.target;
+            const modalId = modal.id;
+            
+            // إخفاء النموذج فوراً
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+            
+            // محاولة استخدام البطاقة المقابلة
+            const cardId = modalToCardMap[modalId];
+            if (cardId) {
+                const card = document.getElementById(cardId);
+                if (card) {
+                    card.style.display = 'block';
+                    setTimeout(() => scrollToElement(card), 50);
+                }
+            }
+            return false;
+        }
+    }, true);
+    
+    // مستمع لحدث shown.bs.modal لإخفاء النماذج فوراً على الموبايل (حماية إضافية)
     document.addEventListener('shown.bs.modal', function(event) {
         if (isMobile()) {
             const modal = event.target;
