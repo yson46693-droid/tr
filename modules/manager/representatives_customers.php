@@ -3587,7 +3587,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- CSS للجدول الجديد -->
 <style>
-/* الأزرار في عمود الإجراءات: 2×2 على جميع الشاشات */
+/* الأزرار في عمود الإجراءات: 2×2 على الشاشات الكبيرة */
 .dashboard-table tbody td:last-child .d-flex {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
@@ -3705,6 +3705,38 @@ document.addEventListener('DOMContentLoaded', function() {
         width: 100%;
         justify-content: center;
     }
+    
+    /* إصلاح تخطيط أزرار الإجراءات على الهاتف - استخدام 3 أعمدة */
+    .dashboard-table tbody td:last-child .d-flex {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 0.3rem !important;
+        width: 100% !important;
+    }
+    
+    .dashboard-table tbody td:last-child .btn {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        font-size: 0.65rem !important;
+        padding: 0.3rem 0.25rem !important;
+        white-space: normal !important;
+        line-height: 1.2 !important;
+        text-align: center !important;
+    }
+    
+    .dashboard-table tbody td:last-child .btn i {
+        font-size: 0.7rem !important;
+        margin-right: 0.2rem !important;
+    }
+    
+    .dashboard-table tbody td:last-child .badge {
+        grid-column: 1 / -1;
+        width: 100%;
+        text-align: center;
+        font-size: 0.6rem !important;
+        padding: 0.2rem 0.3rem !important;
+    }
 }
 
 @media (max-width: 575.98px) {
@@ -3780,6 +3812,17 @@ document.addEventListener('DOMContentLoaded', function() {
     .dashboard-table thead th:nth-child(8),
     .dashboard-table tbody td:nth-child(8) {
         min-width: 130px;
+    }
+    
+    /* تحسين أزرار الإجراءات على الشاشات الصغيرة جداً */
+    .dashboard-table tbody td:last-child .d-flex {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.25rem !important;
+    }
+    
+    .dashboard-table tbody td:last-child .btn {
+        font-size: 0.6rem !important;
+        padding: 0.25rem 0.2rem !important;
     }
 }
 </style>

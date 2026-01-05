@@ -91,11 +91,15 @@ function createDatabaseBackup($backupType = 'daily', $userId = null) {
             throw new Exception('حجم ملف النسخة الاحتياطية غير صحيح');
         }
 
-        $db->execute(
+        // إدراج السجل في قاعدة البيانات مع استخدام 'success' بدلاً من 'completed' لأن قاعدة البيانات تدعم فقط 'success' و 'failed'
+        $insertResult = $db->execute(
             "INSERT INTO backups (filename, file_path, file_size, backup_type, status, created_by) 
-             VALUES (?, ?, ?, ?, 'completed', ?)",
+             VALUES (?, ?, ?, ?, 'success', ?)",
             [$filename, $filePath, $finalFileSize, $backupType, $userId]
         );
+
+        // الحصول على معرف النسخة الاحتياطية المُنشأة
+        $backupId = $insertResult['insert_id'] ?? $db->getLastInsertId();
 
         $maxBackupsToKeep = 9;
         deleteOldBackups($backupType, $maxBackupsToKeep);
@@ -143,6 +147,7 @@ function createDatabaseBackup($backupType = 'daily', $userId = null) {
             'filename' => $filename,
             'file_path' => $filePath,
             'file_size' => $finalFileSize,
+            'backup_id' => $backupId ?? null,
             'message' => 'تم إنشاء النسخة الاحتياطية بنجاح'
         ];
     } catch (Exception $e) {

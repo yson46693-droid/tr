@@ -606,6 +606,7 @@ if (!function_exists('triggerDailyBackupDelivery')) {
 
             $backupFilePath = $creationResult['file_path'] ?? null;
             $backupFilename = $creationResult['filename'] ?? null;
+            $backupId = $creationResult['backup_id'] ?? null;
 
             if ($backupFilePath === null || !file_exists($backupFilePath)) {
                 $errorMessage = 'Backup file missing after creation';
@@ -617,16 +618,19 @@ if (!function_exists('triggerDailyBackupDelivery')) {
                 return;
             }
 
-            try {
-                $newBackupRecord = $db->queryOne(
-                    "SELECT id FROM backups WHERE filename = ? ORDER BY id DESC LIMIT 1",
-                    [$backupFilename]
-                );
-                if ($newBackupRecord && isset($newBackupRecord['id'])) {
-                    $backupId = (int) $newBackupRecord['id'];
+            // إذا لم نحصل على backup_id من النتيجة، نحاول البحث عنه
+            if (!$backupId && $backupFilename) {
+                try {
+                    $newBackupRecord = $db->queryOne(
+                        "SELECT id FROM backups WHERE filename = ? ORDER BY id DESC LIMIT 1",
+                        [$backupFilename]
+                    );
+                    if ($newBackupRecord && isset($newBackupRecord['id'])) {
+                        $backupId = (int) $newBackupRecord['id'];
+                    }
+                } catch (Throwable $idLookupError) {
+                    error_log('Daily Backup: failed retrieving backup id - ' . $idLookupError->getMessage());
                 }
-            } catch (Throwable $idLookupError) {
-                error_log('Daily Backup: failed retrieving backup id - ' . $idLookupError->getMessage());
             }
         }
 
