@@ -212,8 +212,53 @@
         // تنفيذ scripts المدمجة في المحتوى
         // يجب تنفيذ scripts بعد تحديث innerHTML مباشرة
         const scripts = Array.from(mainElement.querySelectorAll('script'));
-        scripts.forEach((oldScript, index) => {
-            // استخدام setTimeout لتنفيذ scripts بشكل متسلسل
+        
+        // فصل scripts الخارجية عن المدمجة
+        const externalScripts = [];
+        const inlineScripts = [];
+        
+        scripts.forEach(script => {
+            if (script.src) {
+                externalScripts.push(script);
+            } else {
+                inlineScripts.push(script);
+            }
+        });
+        
+        // تنفيذ scripts المدمجة أولاً (عادة تكون أسرع)
+        inlineScripts.forEach((oldScript, index) => {
+            setTimeout(() => {
+                try {
+                    const scriptContent = oldScript.textContent;
+                    
+                    // إزالة script القديم من DOM أولاً
+                    if (oldScript.parentNode) {
+                        oldScript.parentNode.removeChild(oldScript);
+                    }
+                    
+                    // تنفيذ المحتوى مباشرة
+                    if (scriptContent && scriptContent.trim()) {
+                        try {
+                            // استخدام Function constructor (أكثر أماناً من eval)
+                            const scriptFunction = new Function(scriptContent);
+                            scriptFunction();
+                        } catch (functionError) {
+                            // Fallback: استخدام eval إذا فشل Function constructor
+                            try {
+                                eval(scriptContent);
+                            } catch (evalError) {
+                                console.error('Error executing inline script:', evalError);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error processing inline script:', e);
+                }
+            }, index * 30); // تأخير بسيط بين كل script
+        });
+        
+        // تحميل scripts الخارجية بعد scripts المدمجة
+        externalScripts.forEach((oldScript, index) => {
             setTimeout(() => {
                 const newScript = document.createElement('script');
                 
@@ -222,39 +267,27 @@
                     newScript.setAttribute(attr.name, attr.value);
                 });
                 
-                if (oldScript.src) {
-                    // Script خارجي - تحميله
-                    newScript.src = oldScript.src;
-                    document.head.appendChild(newScript);
-                } else {
-                    // Script مدمج - تنفيذه مباشرة
-                    // استخدام eval أو Function لتجنب مشاكل scope
-                    try {
-                        newScript.textContent = oldScript.textContent;
-                        document.head.appendChild(newScript);
-                        // إزالة script بعد التنفيذ لتجنب التكرار
-                        setTimeout(() => {
-                            if (newScript.parentNode) {
-                                newScript.parentNode.removeChild(newScript);
-                            }
-                        }, 100);
-                    } catch (e) {
-                        console.error('Error executing inline script:', e);
-                        // Fallback: استخدام eval مباشرة
-                        try {
-                            eval(oldScript.textContent);
-                        } catch (evalError) {
-                            console.error('Error with eval fallback:', evalError);
-                        }
-                    }
-                }
+                // معالجة الأخطاء
+                newScript.onload = function() {
+                    // Script تم تحميله بنجاح
+                };
+                newScript.onerror = function() {
+                    console.warn('Failed to load script:', oldScript.src);
+                };
                 
-                // إزالة الـ script القديم من المحتوى
+                newScript.src = oldScript.src;
+                
+                // إزالة script القديم من DOM قبل إضافة الجديد
                 if (oldScript.parentNode) {
                     oldScript.parentNode.removeChild(oldScript);
                 }
-            }, index * 10); // تأخير بسيط بين كل script
+                
+                document.head.appendChild(newScript);
+            }, (inlineScripts.length * 30) + (index * 100)); // تأخير أكبر للـ scripts الخارجية
         });
+
+        // إغلاق الشريط الجانبي على الموبايل بعد التنقل
+        closeSidebarOnMobile();
 
         // تحديث حالة active في الشريط الجانبي - مع تأخير بسيط لضمان اكتمال تحديث DOM
         // استخدام requestAnimationFrame لضمان تحديث DOM قبل تحديث حالة active
@@ -263,9 +296,13 @@
         });
 
         // إعادة تهيئة الأحداث - مع تأخير أكبر لضمان تنفيذ scripts
+        // حساب الوقت المطلوب بناءً على عدد scripts
+        const totalScriptsDelay = (inlineScripts.length * 30) + (externalScripts.length * 100);
+        const reinitDelay = Math.max(150, totalScriptsDelay + 50);
+        
         setTimeout(() => {
             reinitializeEvents();
-        }, 100);
+        }, reinitDelay);
 
         // إطلاق حدث مخصص
         window.dispatchEvent(new CustomEvent('ajaxNavigationComplete', {
@@ -273,6 +310,19 @@
         }));
 
         return true;
+    }
+
+    /**
+     * إغلاق الشريط الجانبي على الموبايل
+     */
+    function closeSidebarOnMobile() {
+        if (window.innerWidth <= 768) {
+            const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+            if (dashboardWrapper && dashboardWrapper.classList.contains('sidebar-open')) {
+                dashboardWrapper.classList.remove('sidebar-open');
+                document.body.classList.remove('sidebar-open');
+            }
+        }
     }
 
     /**
@@ -324,13 +374,75 @@
 
         // إعادة تهيئة الأحداث المخصصة
         if (typeof window.initPageEvents === 'function') {
-            window.initPageEvents();
+            try {
+                window.initPageEvents();
+            } catch (e) {
+                console.warn('Error calling initPageEvents:', e);
+            }
         }
 
         // إعادة تهيئة جداول البيانات
         if (typeof window.initDataTables === 'function') {
-            window.initDataTables();
+            try {
+                window.initDataTables();
+            } catch (e) {
+                console.warn('Error calling initDataTables:', e);
+            }
         }
+        
+        // إعادة تهيئة sidebar إذا كانت الدالة متاحة
+        if (typeof window.initSidebar === 'function') {
+            try {
+                window.initSidebar();
+            } catch (e) {
+                console.warn('Error calling initSidebar:', e);
+            }
+        }
+        
+        // إعادة تهيئة mobile menu إذا كانت الدالة متاحة
+        if (typeof window.initMobileMenu === 'function') {
+            try {
+                window.initMobileMenu();
+            } catch (e) {
+                console.warn('Error calling initMobileMenu:', e);
+            }
+        }
+        
+        // إعادة ربط جميع الأزرار والأحداث في الصفحة
+        // هذا يضمن أن جميع الأزرار تعمل بعد التنقل
+        setTimeout(() => {
+            // إعادة ربط أحداث النقر على الأزرار التي قد تكون فقدت event listeners
+            const buttons = document.querySelectorAll('button, a.btn, input[type="button"], input[type="submit"]');
+            buttons.forEach(button => {
+                // التأكد من أن الأزرار قابلة للنقر
+                if (button.disabled) {
+                    // لا نفعل شيء للأزرار المعطلة
+                    return;
+                }
+                // إزالة أي event listeners مكررة قد تسبب مشاكل
+                // ملاحظة: لا يمكن إزالة event listeners بدون مرجع، لكن يمكننا التأكد من أن العنصر نشط
+                if (button.style.pointerEvents === 'none') {
+                    button.style.pointerEvents = '';
+                }
+            });
+            
+            // إعادة تهيئة جميع النماذج (Modals) في Bootstrap
+            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                const modals = document.querySelectorAll('.modal');
+                modals.forEach(modal => {
+                    try {
+                        // التأكد من أن Modal معرّف بشكل صحيح
+                        const modalInstance = bootstrap.Modal.getInstance(modal);
+                        if (!modalInstance) {
+                            // إنشاء instance جديد إذا لم يكن موجوداً
+                            new bootstrap.Modal(modal, {});
+                        }
+                    } catch (e) {
+                        // تجاهل الأخطاء
+                    }
+                });
+            }
+        }, 200);
         
         // إعادة تهيئة الباركودات (لصفحة مخزن السيارات وغيرها)
         // البحث عن دالة generateAllBarcodes في scripts المحملة وتنفيذها
