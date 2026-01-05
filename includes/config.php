@@ -944,6 +944,76 @@ if (ENABLE_DAILY_ATTENDANCE_PHOTOS_CLEANUP) {
 }
 
 /**
+ * تشغيل إرسال التذكيرات اليومية مرة واحدة كل يوم
+ * يتم تشغيله مع أول زائر لأي صفحة من صفحات الموقع
+ */
+$dailyRemindersFlagFile = PRIVATE_STORAGE_PATH . '/logs/daily_reminders_last_run.txt';
+$today = date('Y-m-d');
+$shouldRunReminders = false;
+
+// التحقق من آخر مرة تم فيها التشغيل
+if (file_exists($dailyRemindersFlagFile)) {
+    $lastRunDate = trim(@file_get_contents($dailyRemindersFlagFile));
+    if ($lastRunDate !== $today) {
+        $shouldRunReminders = true;
+    }
+} else {
+    // إذا لم يكن الملف موجوداً، قم بالتشغيل
+    $shouldRunReminders = true;
+}
+
+// تشغيل إرسال التذكيرات إذا لزم الأمر
+if ($shouldRunReminders) {
+    try {
+        // حفظ تاريخ اليوم في ملف العلم أولاً لمنع التشغيل المتكرر
+        $logsDir = dirname($dailyRemindersFlagFile);
+        if (!is_dir($logsDir)) {
+            @mkdir($logsDir, 0755, true);
+        }
+        @file_put_contents($dailyRemindersFlagFile, $today, LOCK_EX);
+        
+        // تعيين متغير لتجنب إعادة تحميل config.php من داخل test_daily_reminders.php
+        $GLOBALS['DAILY_REMINDERS_CALLED_FROM_CONFIG'] = true;
+        
+        // تعريف ACCESS_ALLOWED إذا لم يكن معرّفاً
+        if (!defined('ACCESS_ALLOWED')) {
+            define('ACCESS_ALLOWED', true);
+        }
+        
+        // استدعاء ملف الاختبار مع منع ظهور المخرجات
+        $testFile = dirname(__DIR__) . '/test_daily_reminders.php';
+        if (file_exists($testFile)) {
+            // استخدام output buffering لمنع ظهور المخرجات في الصفحة
+            ob_start();
+            include $testFile;
+            $output = ob_get_clean();
+            
+            // تسجيل المخرجات في error_log
+            error_log("Daily payment reminders executed on {$today} - تم الاستدعاء بنجاح:\n" . $output);
+        } else {
+            error_log("Daily payment reminders: test_daily_reminders.php file not found at {$testFile}");
+        }
+        
+        // إزالة المتغير بعد الانتهاء
+        unset($GLOBALS['DAILY_REMINDERS_CALLED_FROM_CONFIG']);
+    } catch (Exception $e) {
+        error_log('Daily payment reminders error: ' . $e->getMessage());
+        // في حالة الخطأ، احذف ملف العلم للسماح بإعادة المحاولة لاحقاً
+        if (file_exists($dailyRemindersFlagFile)) {
+            @unlink($dailyRemindersFlagFile);
+        }
+        unset($GLOBALS['DAILY_REMINDERS_CALLED_FROM_CONFIG']);
+    } catch (Throwable $e) {
+        error_log('Daily payment reminders error: ' . $e->getMessage());
+        // في حالة الخطأ، احذف ملف العلم للسماح بإعادة المحاولة لاحقاً
+        if (file_exists($dailyRemindersFlagFile)) {
+            @unlink($dailyRemindersFlagFile);
+        }
+        unset($GLOBALS['DAILY_REMINDERS_CALLED_FROM_CONFIG']);
+    }
+}
+
+/**
  * تشغيل إنشاء الرواتب التلقائي مرة واحدة كل يوم
  * يتم فحص قاعدة البيانات أولاً للتأكد من عدم التنفيذ اليوم
  * إذا لم يتم التنفيذ، ينفذ العملية ثم يسجل التاريخ

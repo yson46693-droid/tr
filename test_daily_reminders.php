@@ -7,8 +7,11 @@
  * php test_daily_reminders.php
  */
 
-define('ACCESS_ALLOWED', true);
-require_once __DIR__ . '/includes/config.php';
+// التحقق من أن الملف لم يتم استدعاؤه من داخل config.php
+if (!isset($GLOBALS['DAILY_REMINDERS_CALLED_FROM_CONFIG'])) {
+    define('ACCESS_ALLOWED', true);
+    require_once __DIR__ . '/includes/config.php';
+}
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/payment_schedules.php';
 
