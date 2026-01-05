@@ -298,16 +298,69 @@
         // إعادة تهيئة الأحداث - مع تأخير أكبر لضمان تنفيذ scripts
         // حساب الوقت المطلوب بناءً على عدد scripts
         const totalScriptsDelay = (inlineScripts.length * 30) + (externalScripts.length * 100);
-        const reinitDelay = Math.max(150, totalScriptsDelay + 50);
+        const reinitDelay = Math.max(200, totalScriptsDelay + 100);
         
+        // إعادة تهيئة الأحداث على مراحل لضمان اكتمال جميع العمليات
         setTimeout(() => {
             reinitializeEvents();
+            // إعادة تهيئة الشريط العلوي مرة أخرى بعد reinitializeEvents
+            reinitializeTopbarEvents();
         }, reinitDelay);
+        
+        // إعادة تهيئة إضافية بعد تأخير أكبر لضمان عمل جميع الأزرار
+        setTimeout(() => {
+            // إعادة تهيئة جميع Bootstrap components مرة أخرى
+            if (typeof bootstrap !== 'undefined') {
+                // إعادة تهيئة Dropdowns
+                const allDropdowns = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+                allDropdowns.forEach(dropdown => {
+                    try {
+                        const instance = bootstrap.Dropdown.getInstance(dropdown);
+                        if (!instance) {
+                            new bootstrap.Dropdown(dropdown);
+                        }
+                    } catch (e) {
+                        // تجاهل الأخطاء
+                    }
+                });
+                
+                // إعادة تهيئة Tooltips
+                const allTooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+                allTooltips.forEach(tooltipEl => {
+                    try {
+                        const instance = bootstrap.Tooltip.getInstance(tooltipEl);
+                        if (!instance) {
+                            new bootstrap.Tooltip(tooltipEl);
+                        }
+                    } catch (e) {
+                        // تجاهل الأخطاء
+                    }
+                });
+            }
+            
+            // التأكد من أن جميع الأزرار قابلة للنقر
+            const allClickableElements = document.querySelectorAll('button, a.btn, input[type="button"], input[type="submit"], .topbar-action, a[href], [onclick]');
+            allClickableElements.forEach(element => {
+                // إزالة أي قيود على النقر
+                if (element.style.pointerEvents === 'none') {
+                    element.style.pointerEvents = '';
+                }
+                if (element.style.cursor === 'not-allowed' && !element.disabled) {
+                    element.style.cursor = '';
+                }
+                // التأكد من أن العنصر ليس معطلاً بدون سبب
+                if (element.hasAttribute('disabled') && !element.classList.contains('disabled')) {
+                    // لا نفعل شيء - العنصر معطّل بشكل صحيح
+                }
+            });
+        }, reinitDelay + 300);
 
-        // إطلاق حدث مخصص
-        window.dispatchEvent(new CustomEvent('ajaxNavigationComplete', {
-            detail: { url: currentUrl }
-        }));
+        // إطلاق حدث مخصص - مع تأخير لضمان اكتمال جميع العمليات
+        setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('ajaxNavigationComplete', {
+                detail: { url: currentUrl }
+            }));
+        }, 100);
 
         return true;
     }
@@ -323,6 +376,118 @@
                 document.body.classList.remove('sidebar-open');
             }
         }
+    }
+
+    /**
+     * إعادة تهيئة الأحداث في الشريط العلوي (topbar)
+     */
+    function reinitializeTopbarEvents() {
+        // إعادة تهيئة Bootstrap Dropdowns في الشريط العلوي
+        if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
+            const topbarDropdowns = document.querySelectorAll('.homeline-topbar [data-bs-toggle="dropdown"]');
+            topbarDropdowns.forEach(dropdown => {
+                try {
+                    // إزالة instance القديم إن وجد
+                    const oldInstance = bootstrap.Dropdown.getInstance(dropdown);
+                    if (oldInstance) {
+                        oldInstance.dispose();
+                    }
+                    // إنشاء instance جديد
+                    new bootstrap.Dropdown(dropdown);
+                } catch (e) {
+                    console.warn('Error reinitializing topbar dropdown:', e);
+                }
+            });
+        }
+
+        // إعادة تهيئة Tooltips في الشريط العلوي
+        if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+            const topbarTooltips = document.querySelectorAll('.homeline-topbar [data-bs-toggle="tooltip"]');
+            topbarTooltips.forEach(tooltipEl => {
+                try {
+                    // إزالة instance القديم إن وجد
+                    const oldInstance = bootstrap.Tooltip.getInstance(tooltipEl);
+                    if (oldInstance) {
+                        oldInstance.dispose();
+                    }
+                    // إنشاء instance جديد
+                    new bootstrap.Tooltip(tooltipEl);
+                } catch (e) {
+                    console.warn('Error reinitializing topbar tooltip:', e);
+                }
+            });
+        }
+
+        // إعادة تهيئة زر إعادة التحميل على الموبايل
+        const mobileReloadBtn = document.getElementById('mobileReloadBtn');
+        if (mobileReloadBtn) {
+            // إزالة event listeners القديمة (إذا أمكن)
+            const newReloadBtn = mobileReloadBtn.cloneNode(true);
+            if (mobileReloadBtn.parentNode) {
+                mobileReloadBtn.parentNode.replaceChild(newReloadBtn, mobileReloadBtn);
+            }
+            // إعادة ربط event listener
+            newReloadBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                window.location.reload();
+            });
+        }
+
+        // إعادة تهيئة زر القائمة على الموبايل
+        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        if (mobileMenuToggle && typeof window.initMobileMenu === 'function') {
+            // إعادة تهيئة mobile menu
+            try {
+                window.initMobileMenu();
+            } catch (e) {
+                console.warn('Error reinitializing mobile menu:', e);
+            }
+        }
+
+        // إعادة تهيئة زر الوضع الداكن على الموبايل
+        const mobileDarkToggle = document.getElementById('mobileDarkToggle');
+        if (mobileDarkToggle) {
+            // إزالة event listeners القديمة
+            const newDarkToggle = mobileDarkToggle.cloneNode(true);
+            if (mobileDarkToggle.parentNode) {
+                mobileDarkToggle.parentNode.replaceChild(newDarkToggle, mobileDarkToggle);
+            }
+            // إعادة ربط event listener
+            newDarkToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                const currentTheme = localStorage.getItem('theme') || 'light';
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('theme', newTheme);
+                document.documentElement.setAttribute('data-theme', newTheme);
+                if (newTheme === 'dark') {
+                    document.documentElement.classList.add('dark-theme');
+                } else {
+                    document.documentElement.classList.remove('dark-theme');
+                }
+                window.dispatchEvent(new CustomEvent('themeChange', { detail: { theme: newTheme } }));
+            });
+        }
+
+        // إعادة تهيئة البحث العام
+        const globalSearch = document.getElementById('globalSearch');
+        if (globalSearch && typeof window.initGlobalSearch === 'function') {
+            try {
+                window.initGlobalSearch();
+            } catch (e) {
+                console.warn('Error reinitializing global search:', e);
+            }
+        }
+
+        // التأكد من أن جميع العناصر في الشريط العلوي قابلة للنقر
+        const topbarActions = document.querySelectorAll('.homeline-topbar .topbar-action, .homeline-topbar button, .homeline-topbar a');
+        topbarActions.forEach(action => {
+            if (action.style.pointerEvents === 'none') {
+                action.style.pointerEvents = '';
+            }
+            if (action.disabled) {
+                action.disabled = false;
+            }
+        });
     }
 
     /**
@@ -408,11 +573,14 @@
             }
         }
         
+        // إعادة تهيئة جميع الأحداث في الشريط العلوي (topbar)
+        reinitializeTopbarEvents();
+        
         // إعادة ربط جميع الأزرار والأحداث في الصفحة
         // هذا يضمن أن جميع الأزرار تعمل بعد التنقل
         setTimeout(() => {
             // إعادة ربط أحداث النقر على الأزرار التي قد تكون فقدت event listeners
-            const buttons = document.querySelectorAll('button, a.btn, input[type="button"], input[type="submit"]');
+            const buttons = document.querySelectorAll('button, a.btn, input[type="button"], input[type="submit"], .topbar-action, a[href]');
             buttons.forEach(button => {
                 // التأكد من أن الأزرار قابلة للنقر
                 if (button.disabled) {
@@ -423,6 +591,10 @@
                 // ملاحظة: لا يمكن إزالة event listeners بدون مرجع، لكن يمكننا التأكد من أن العنصر نشط
                 if (button.style.pointerEvents === 'none') {
                     button.style.pointerEvents = '';
+                }
+                // التأكد من أن العنصر قابل للنقر
+                if (button.style.cursor === 'not-allowed') {
+                    button.style.cursor = '';
                 }
             });
             
@@ -437,6 +609,24 @@
                             // إنشاء instance جديد إذا لم يكن موجوداً
                             new bootstrap.Modal(modal, {});
                         }
+                    } catch (e) {
+                        // تجاهل الأخطاء
+                    }
+                });
+            }
+            
+            // إعادة تهيئة جميع Dropdowns في Bootstrap (مهم للشريط العلوي)
+            if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
+                const dropdowns = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+                dropdowns.forEach(dropdown => {
+                    try {
+                        // إزالة instance القديم إن وجد
+                        const oldInstance = bootstrap.Dropdown.getInstance(dropdown);
+                        if (oldInstance) {
+                            oldInstance.dispose();
+                        }
+                        // إنشاء instance جديد
+                        new bootstrap.Dropdown(dropdown);
                     } catch (e) {
                         // تجاهل الأخطاء
                     }
@@ -743,11 +933,74 @@
         init();
     }
 
+    // الاستماع لحدث ajaxNavigationComplete لإعادة تهيئة الأحداث
+    // هذا يضمن أن جميع الأحداث تعمل بعد التنقل
+    window.addEventListener('ajaxNavigationComplete', function(event) {
+        // إعادة تهيئة الأحداث بعد تأخير بسيط لضمان اكتمال تحديث DOM
+        setTimeout(() => {
+            // إعادة تهيئة الشريط العلوي
+            reinitializeTopbarEvents();
+            
+            // إعادة تهيئة Bootstrap components
+            if (typeof bootstrap !== 'undefined') {
+                // إعادة تهيئة جميع Dropdowns
+                const dropdowns = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+                dropdowns.forEach(dropdown => {
+                    try {
+                        const oldInstance = bootstrap.Dropdown.getInstance(dropdown);
+                        if (oldInstance) {
+                            oldInstance.dispose();
+                        }
+                        new bootstrap.Dropdown(dropdown);
+                    } catch (e) {
+                        // تجاهل الأخطاء
+                    }
+                });
+                
+                // إعادة تهيئة جميع Tooltips
+                const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+                tooltips.forEach(tooltipEl => {
+                    try {
+                        const oldInstance = bootstrap.Tooltip.getInstance(tooltipEl);
+                        if (oldInstance) {
+                            oldInstance.dispose();
+                        }
+                        new bootstrap.Tooltip(tooltipEl);
+                    } catch (e) {
+                        // تجاهل الأخطاء
+                    }
+                });
+            }
+            
+            // إعادة تهيئة الأحداث المخصصة إذا كانت متاحة
+            if (typeof window.initPageEvents === 'function') {
+                try {
+                    window.initPageEvents();
+                } catch (e) {
+                    console.warn('Error calling initPageEvents after navigation:', e);
+                }
+            }
+            
+            // التأكد من أن جميع الأزرار قابلة للنقر
+            const allButtons = document.querySelectorAll('button, a.btn, input[type="button"], input[type="submit"], .topbar-action');
+            allButtons.forEach(button => {
+                if (button.style.pointerEvents === 'none') {
+                    button.style.pointerEvents = '';
+                }
+                if (button.style.cursor === 'not-allowed' && !button.disabled) {
+                    button.style.cursor = '';
+                }
+            });
+        }, 150);
+    });
+
     // تصدير API عام
     window.AjaxNavigation = {
         load: loadPage,
         clearCache: () => pageCache.clear(),
-        isEnabled: () => true
+        isEnabled: () => true,
+        reinitializeEvents: reinitializeEvents,
+        reinitializeTopbarEvents: reinitializeTopbarEvents
     };
 })();
 
