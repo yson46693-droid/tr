@@ -2011,10 +2011,14 @@ function renderRepInvoices(rows, tableBody) {
     if (!tableBody) return;
     tableBody.innerHTML = '';
     
+    // تحديد عدد الأعمدة بناءً على السياق (Card أو Modal)
+    const isCard = tableBody.closest('#repCustomerHistoryCard') !== null;
+    const colSpan = isCard ? 4 : 8;
+    
     if (!Array.isArray(rows) || rows.length === 0) {
         const emptyRow = document.createElement('tr');
         const emptyCell = document.createElement('td');
-        emptyCell.colSpan = 8;
+        emptyCell.colSpan = colSpan;
         emptyCell.className = 'text-center text-muted py-4';
         emptyCell.textContent = 'لا توجد فواتير خلال النافذة الزمنية.';
         emptyRow.appendChild(emptyCell);
@@ -2034,19 +2038,31 @@ function renderRepInvoices(rows, tableBody) {
             </a>
         ` : '<span class="text-muted">—</span>';
         
-        tr.innerHTML = `
-            <td>${row.invoice_number || '—'}</td>
-            <td>${row.invoice_date || '—'}</td>
-            <td>${formatCurrencySimple(row.invoice_total || 0)}</td>
-            <td>${formatCurrencySimple(row.paid_amount || 0)}</td>
-            <td>
-                <span class="text-danger fw-semibold">${formatCurrencySimple(row.return_total || 0)}</span>
-                <div class="text-muted small">${row.return_count || 0} مرتجع</div>
-            </td>
-            <td>${formatCurrencySimple(row.net_total || 0)}</td>
-            <td>${row.invoice_status || '—'}</td>
-            <td>${printButton}</td>
-        `;
+        if (isCard) {
+            // نسخة مبسطة للـ Card (4 أعمدة فقط)
+            tr.innerHTML = `
+                <td>${row.invoice_number || '—'}</td>
+                <td>${row.invoice_date || '—'}</td>
+                <td>${formatCurrencySimple(row.invoice_total || 0)}</td>
+                <td>${row.invoice_status || '—'}</td>
+            `;
+        } else {
+            // النسخة الكاملة للـ Modal (8 أعمدة)
+            tr.innerHTML = `
+                <td>${row.invoice_number || '—'}</td>
+                <td>${row.invoice_date || '—'}</td>
+                <td>${formatCurrencySimple(row.invoice_total || 0)}</td>
+                <td>${formatCurrencySimple(row.paid_amount || 0)}</td>
+                <td>
+                    <span class="text-danger fw-semibold">${formatCurrencySimple(row.return_total || 0)}</span>
+                    <div class="text-muted small">${row.return_count || 0} مرتجع</div>
+                </td>
+                <td>${formatCurrencySimple(row.net_total || 0)}</td>
+                <td>${row.invoice_status || '—'}</td>
+                <td>${printButton}</td>
+            `;
+        }
+        
         tableBody.appendChild(tr);
     });
 }
@@ -2092,9 +2108,16 @@ function displayRepReturnHistory(history, tableBody) {
     tableBody.innerHTML = '';
     
     if (!Array.isArray(history) || history.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">لا توجد مشتريات متاحة للإرجاع</td></tr>';
+        // تحديد عدد الأعمدة بناءً على السياق (Card أو Modal)
+        const isCard = tableBody.closest('#repCustomerReturnCard') !== null;
+        const colSpan = isCard ? 6 : 11;
+        tableBody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center text-muted">لا توجد مشتريات متاحة للإرجاع</td></tr>`;
         return;
     }
+    
+    // تحديد نوع checkbox بناءً على السياق
+    const isCard = tableBody.closest('#repCustomerReturnCard') !== null;
+    const checkboxClass = isCard ? 'rep-return-card-item-checkbox' : 'rep-return-item-checkbox';
     
     history.forEach(function(item) {
         if (!item.can_return) {
@@ -2102,32 +2125,60 @@ function displayRepReturnHistory(history, tableBody) {
         }
         
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>
-                <input type="checkbox" class="form-check-input rep-return-item-checkbox" 
-                       data-invoice-id="${item.invoice_id}"
-                       data-invoice-item-id="${item.invoice_item_id}"
-                       data-product-id="${item.product_id}"
-                       data-product-name="${escapeHtml(item.product_name || '')}"
-                       data-unit-price="${item.unit_price || 0}"
-                       data-batch-number-ids='${JSON.stringify(item.batch_number_ids || [])}'
-                       data-batch-numbers='${JSON.stringify(item.batch_numbers || [])}'>
-            </td>
-            <td>${item.invoice_number || '-'}</td>
-            <td>${(item.batch_numbers || []).join(', ') || '-'}</td>
-            <td>${escapeHtml(item.product_name || '-')}</td>
-            <td>${parseFloat(item.quantity || 0).toFixed(2)}</td>
-            <td>${parseFloat(item.returned_quantity || 0).toFixed(2)}</td>
-            <td><strong>${parseFloat(item.available_to_return || 0).toFixed(2)}</strong></td>
-            <td>${parseFloat(item.unit_price || 0).toFixed(2)} ج.م</td>
-            <td>${parseFloat(item.total_price || 0).toFixed(2)} ج.م</td>
-            <td>${item.purchase_date || '-'}</td>
-            <td>
-                <button type="button" class="btn btn-sm btn-outline-primary" onclick="viewRepReturnItemDetails(${item.invoice_item_id})">
-                    <i class="bi bi-eye"></i>
-                </button>
-            </td>
-        `;
+        
+        if (isCard) {
+            // نسخة مبسطة للـ Card (أعمدة أقل)
+            row.innerHTML = `
+                <td>
+                    <input type="checkbox" class="form-check-input ${checkboxClass}" 
+                           data-invoice-id="${item.invoice_id}"
+                           data-invoice-item-id="${item.invoice_item_id}"
+                           data-product-id="${item.product_id}"
+                           data-product-name="${escapeHtml(item.product_name || '')}"
+                           data-unit-price="${item.unit_price || 0}"
+                           data-batch-number-ids='${JSON.stringify(item.batch_number_ids || [])}'
+                           data-batch-numbers='${JSON.stringify(item.batch_numbers || [])}'>
+                </td>
+                <td>${item.invoice_number || '-'}</td>
+                <td>${escapeHtml(item.product_name || '-')}</td>
+                <td><strong>${parseFloat(item.available_to_return || 0).toFixed(2)}</strong></td>
+                <td>${parseFloat(item.unit_price || 0).toFixed(2)} ج.م</td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="viewRepReturnItemDetails(${item.invoice_item_id})">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </td>
+            `;
+        } else {
+            // النسخة الكاملة للـ Modal
+            row.innerHTML = `
+                <td>
+                    <input type="checkbox" class="form-check-input ${checkboxClass}" 
+                           data-invoice-id="${item.invoice_id}"
+                           data-invoice-item-id="${item.invoice_item_id}"
+                           data-product-id="${item.product_id}"
+                           data-product-name="${escapeHtml(item.product_name || '')}"
+                           data-unit-price="${item.unit_price || 0}"
+                           data-batch-number-ids='${JSON.stringify(item.batch_number_ids || [])}'
+                           data-batch-numbers='${JSON.stringify(item.batch_numbers || [])}'>
+                </td>
+                <td>${item.invoice_number || '-'}</td>
+                <td>${(item.batch_numbers || []).join(', ') || '-'}</td>
+                <td>${escapeHtml(item.product_name || '-')}</td>
+                <td>${parseFloat(item.quantity || 0).toFixed(2)}</td>
+                <td>${parseFloat(item.returned_quantity || 0).toFixed(2)}</td>
+                <td><strong>${parseFloat(item.available_to_return || 0).toFixed(2)}</strong></td>
+                <td>${parseFloat(item.unit_price || 0).toFixed(2)} ج.م</td>
+                <td>${parseFloat(item.total_price || 0).toFixed(2)} ج.م</td>
+                <td>${item.purchase_date || '-'}</td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="viewRepReturnItemDetails(${item.invoice_item_id})">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </td>
+            `;
+        }
+        
         tableBody.appendChild(row);
     });
 }
@@ -2442,9 +2493,13 @@ document.addEventListener('DOMContentLoaded', function() {
                             netTotalEl.textContent = formatCurrencySimple(totals.net_total || 0);
                         }
                         
-                        // عرض البيانات
-                        renderRepInvoicesCard(Array.isArray(history.invoices) ? history.invoices : [], invoicesTableBody);
-                        renderRepReturnsCard(Array.isArray(history.returns) ? history.returns : [], returnsContainer);
+                        // عرض البيانات - استخدام نفس الدوال
+                        if (invoicesTableBody) {
+                            renderRepInvoices(Array.isArray(history.invoices) ? history.invoices : [], invoicesTableBody);
+                        }
+                        if (returnsContainer) {
+                            renderRepReturns(Array.isArray(history.returns) ? history.returns : [], returnsContainer);
+                        }
                         
                         // إخفاء loading وإظهار المحتوى
                         if (loadingElement) loadingElement.classList.add('d-none');
@@ -3475,7 +3530,12 @@ function repToggleAllItems() {
 
 function repToggleAllItemsCard() {
     const selectAll = document.getElementById('repSelectAllItemsCard');
-    const checkboxes = document.querySelectorAll('.rep-return-card-item-checkbox');
+    if (!selectAll) return;
+    
+    const card = document.getElementById('repCustomerReturnCard');
+    if (!card) return;
+    
+    const checkboxes = card.querySelectorAll('.rep-return-card-item-checkbox');
     checkboxes.forEach(cb => {
         cb.checked = selectAll.checked;
     });
