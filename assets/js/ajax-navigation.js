@@ -265,15 +265,40 @@
                             return;
                         }
                         
-                        // تخطي المحتوى الذي يحتوي على HTML tags
-                        if (/<[a-z][\s\S]*>/i.test(trimmedContent)) {
-                            console.warn('Skipping script with HTML tags');
+                        // دالة ذكية للتحقق من HTML tags - تتحقق من أن HTML tags ليست داخل strings أو comments
+                        function hasRealHTMLTags(content) {
+                            // إزالة strings (single quotes, double quotes, template literals)
+                            let withoutStrings = content
+                                .replace(/`[^`]*`/g, '') // template literals
+                                .replace(/'[^']*'/g, '') // single quotes
+                                .replace(/"[^"]*"/g, ''); // double quotes
+                            
+                            // إزالة comments
+                            withoutStrings = withoutStrings
+                                .replace(/\/\/[^\n]*/g, '') // single line comments
+                                .replace(/\/\*[\s\S]*?\*\//g, ''); // multi-line comments
+                            
+                            // التحقق من وجود HTML tags في الكود المتبقي (خارج strings و comments)
+                            const htmlTagPattern = /<[a-z][a-z0-9]*[\s\S]*?>/i;
+                            return htmlTagPattern.test(withoutStrings);
+                        }
+                        
+                        // تخطي المحتوى الذي يحتوي على HTML tags (فقط إذا كانت خارج strings و comments)
+                        if (hasRealHTMLTags(trimmedContent)) {
+                            console.warn('Skipping script with HTML tags in code (not in strings/comments)');
                             return;
                         }
                         
-                        // تخطي المحتوى الذي يحتوي على PHP tags
-                        if (trimmedContent.includes('<?php') || trimmedContent.includes('<?=')) {
-                            console.warn('Skipping script with PHP tags');
+                        // تخطي المحتوى الذي يحتوي على PHP tags (فقط إذا كانت خارج strings و comments)
+                        const withoutStrings = trimmedContent
+                            .replace(/`[^`]*`/g, '')
+                            .replace(/'[^']*'/g, '')
+                            .replace(/"[^"]*"/g, '')
+                            .replace(/\/\/[^\n]*/g, '')
+                            .replace(/\/\*[\s\S]*?\*\//g, '');
+                        
+                        if (withoutStrings.includes('<?php') || withoutStrings.includes('<?=')) {
+                            console.warn('Skipping script with PHP tags in code (not in strings/comments)');
                             return;
                         }
                         
