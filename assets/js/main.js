@@ -695,7 +695,12 @@ window.addEventListener('pagehide', function() {
 
 // معالجة Refresh لمنع Error Code: -2
 // مع منع refresh loop - تم تحسينه لمنع الشاشة البيضاء عند العودة للتبويبة
-let mainPageshowHandled = false;
+// التحقق من وجود mainPageshowHandled قبل الإعلان لتجنب إعادة الإعلان عند تحميل الملف عدة مرات
+if (typeof window.mainPageshowHandled === 'undefined') {
+    window.mainPageshowHandled = false;
+}
+// استخدام var للسماح بإعادة الإعلان (مع التحقق أعلاه لمنع ذلك)
+var mainPageshowHandled = window.mainPageshowHandled;
 window.addEventListener('pageshow', function(event) {
     // منع refresh loop - فقط معالجة مرة واحدة لكل صفحة
     if (mainPageshowHandled) {
@@ -722,10 +727,12 @@ window.addEventListener('pageshow', function(event) {
         }
         
         mainPageshowHandled = true;
+        window.mainPageshowHandled = true;
     } catch (e) {
         // تجاهل الأخطاء
         console.warn('Error in pageshow handler:', e);
         mainPageshowHandled = true;
+        window.mainPageshowHandled = true;
     }
 });
 
