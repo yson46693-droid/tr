@@ -8,9 +8,22 @@ if (typeof window.notificationCheckInterval === 'undefined') {
 }
 // استخدام var للسماح بإعادة الإعلان (مع التحقق أعلاه لمنع ذلك)
 var notificationCheckInterval = window.notificationCheckInterval;
-const seenNotificationIds = new Set();
-const NOTIFICATION_DEFAULT_LIMIT = 10;
-const CANCELLATION_KEYWORDS = ['تم إلغاء المهمة', 'المهمة الملغية'];
+// التحقق من وجود seenNotificationIds قبل الإعلان لتجنب إعادة الإعلان عند تحميل الملف عدة مرات
+if (typeof window.seenNotificationIds === 'undefined') {
+    window.seenNotificationIds = new Set();
+}
+// استخدام var للسماح بإعادة الإعلان (مع التحقق أعلاه لمنع ذلك)
+var seenNotificationIds = window.seenNotificationIds;
+// ثوابت - التحقق قبل الإعلان لتجنب إعادة الإعلان عند تحميل الملف عدة مرات
+if (typeof window.NOTIFICATION_DEFAULT_LIMIT === 'undefined') {
+    window.NOTIFICATION_DEFAULT_LIMIT = 10;
+}
+if (typeof window.CANCELLATION_KEYWORDS === 'undefined') {
+    window.CANCELLATION_KEYWORDS = ['تم إلغاء المهمة', 'المهمة الملغية'];
+}
+// استخدام var للسماح بإعادة الإعلان (مع التحقق أعلاه لمنع ذلك)
+var NOTIFICATION_DEFAULT_LIMIT = window.NOTIFICATION_DEFAULT_LIMIT;
+var CANCELLATION_KEYWORDS = window.CANCELLATION_KEYWORDS;
 
 function filterDisplayableNotifications(notifications) {
     if (!Array.isArray(notifications)) {

@@ -654,7 +654,12 @@ function formatDateTime(date) {
 }
 
 // تحديث تلقائي للبيانات
-let autoRefreshInterval = null;
+// التحقق من وجود autoRefreshInterval قبل الإعلان لتجنب إعادة الإعلان عند تحميل الملف عدة مرات
+if (typeof window.autoRefreshInterval === 'undefined') {
+    window.autoRefreshInterval = null;
+}
+// استخدام var للسماح بإعادة الإعلان (مع التحقق أعلاه لمنع ذلك)
+var autoRefreshInterval = window.autoRefreshInterval;
 
 function startAutoRefresh(callback, interval = 30000) {
     if (autoRefreshInterval) {
@@ -662,12 +667,14 @@ function startAutoRefresh(callback, interval = 30000) {
     }
     
     autoRefreshInterval = setInterval(callback, interval);
+    window.autoRefreshInterval = autoRefreshInterval;
 }
 
 function stopAutoRefresh() {
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
         autoRefreshInterval = null;
+        window.autoRefreshInterval = null;
     }
 }
 
