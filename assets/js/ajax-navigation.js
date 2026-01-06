@@ -228,6 +228,12 @@
         // تحديث المحتوى
         mainElement.innerHTML = data.content;
 
+        // إعادة تهيئة الشريط العلوي فوراً بعد تحديث المحتوى - مهم جداً
+        // استخدام setTimeout(0) لضمان تنفيذها بعد اكتمال تحديث DOM
+        setTimeout(() => {
+            reinitializeTopbarEvents();
+        }, 0);
+
         // تنفيذ scripts المدمجة في المحتوى
         // يجب تنفيذ scripts بعد تحديث innerHTML مباشرة
         const scripts = Array.from(mainElement.querySelectorAll('script'));
@@ -446,6 +452,12 @@
             updateSidebarActiveState();
         });
 
+        // إعادة تهيئة الشريط العلوي فوراً - مهم جداً لضمان عمل الأزرار
+        // استخدام requestAnimationFrame لضمان اكتمال تحديث DOM
+        requestAnimationFrame(() => {
+            reinitializeTopbarEvents();
+        });
+
         // إعادة تهيئة الأحداث - مع تأخير أكبر لضمان تنفيذ scripts
         // حساب الوقت المطلوب بناءً على عدد scripts
         const totalScriptsDelay = (inlineScripts.length * 30) + (externalScripts.length * 100);
@@ -456,6 +468,8 @@
             reinitializeEvents();
             // إعادة تهيئة جميع الأحداث بشكل شامل
             reinitializeAllEvents();
+            // إعادة تهيئة الشريط العلوي مرة أخرى للتأكد
+            reinitializeTopbarEvents();
         }, reinitDelay);
         
         // إعادة تهيئة إضافية بعد تأخير أكبر لضمان عمل جميع الأزرار
@@ -660,23 +674,45 @@
                     // إزالة instance القديم إن وجد
                     const oldInstance = bootstrap.Dropdown.getInstance(dropdown);
                     if (oldInstance) {
-                        oldInstance.dispose();
+                        try {
+                            oldInstance.dispose();
+                        } catch (disposeError) {
+                            // تجاهل أخطاء dispose
+                        }
                     }
                     
                     // إزالة جميع event listeners القديمة عن طريق clone وإعادة الإدراج
+                    // هذا مهم جداً لضمان إزالة جميع event listeners القديمة
                     const parent = dropdown.parentNode;
+                    if (!parent) {
+                        // إذا لم يكن هناك parent، استخدم طريقة بسيطة
+                        new bootstrap.Dropdown(dropdown, {
+                            boundary: 'viewport',
+                            popperConfig: {
+                                modifiers: [
+                                    {
+                                        name: 'preventOverflow',
+                                        options: {
+                                            boundary: document.body
+                                        }
+                                    }
+                                ]
+                            }
+                        });
+                        return;
+                    }
+                    
                     const nextSibling = dropdown.nextSibling;
                     const newDropdown = dropdown.cloneNode(true);
                     
                     // إزالة العنصر القديم
-                    if (parent) {
-                        parent.removeChild(dropdown);
-                        // إدراج العنصر الجديد في نفس المكان
-                        if (nextSibling) {
-                            parent.insertBefore(newDropdown, nextSibling);
-                        } else {
-                            parent.appendChild(newDropdown);
-                        }
+                    parent.removeChild(dropdown);
+                    
+                    // إدراج العنصر الجديد في نفس المكان
+                    if (nextSibling) {
+                        parent.insertBefore(newDropdown, nextSibling);
+                    } else {
+                        parent.appendChild(newDropdown);
                     }
                     
                     // إنشاء instance جديد على العنصر الجديد
@@ -697,11 +733,30 @@
                     console.warn('Error reinitializing topbar dropdown:', e);
                     // محاولة بديلة: إعادة تهيئة بدون clone
                     try {
-                        const oldInstance = bootstrap.Dropdown.getInstance(dropdown);
+                        const dropdownElement = document.querySelector(`[data-bs-toggle="dropdown"][id="${dropdown.id}"]`) || 
+                                               document.querySelector(`[data-bs-toggle="dropdown"][href="${dropdown.href}"]`) ||
+                                               dropdown;
+                        const oldInstance = bootstrap.Dropdown.getInstance(dropdownElement);
                         if (oldInstance) {
-                            oldInstance.dispose();
+                            try {
+                                oldInstance.dispose();
+                            } catch (disposeError) {
+                                // تجاهل أخطاء dispose
+                            }
                         }
-                        new bootstrap.Dropdown(dropdown);
+                        new bootstrap.Dropdown(dropdownElement, {
+                            boundary: 'viewport',
+                            popperConfig: {
+                                modifiers: [
+                                    {
+                                        name: 'preventOverflow',
+                                        options: {
+                                            boundary: document.body
+                                        }
+                                    }
+                                ]
+                            }
+                        });
                     } catch (e2) {
                         console.warn('Error in fallback reinitialization:', e2);
                     }
@@ -1650,17 +1705,20 @@
     // الاستماع لحدث ajaxNavigationComplete لإعادة تهيئة الأحداث
     // هذا يضمن أن جميع الأحداث تعمل بعد التنقل
     window.addEventListener('ajaxNavigationComplete', function(event) {
+        // إعادة تهيئة فورية للشريط العلوي - مهم جداً
+        reinitializeTopbarEvents();
+        
         // إعادة تهيئة الأحداث بعد تأخير بسيط لضمان اكتمال تحديث DOM
         setTimeout(() => {
             reinitializeAllEvents();
             reinitializeTopbarEvents(); // إعادة تهيئة خاصة للتوب بار
-        }, 100);
+        }, 50);
         
         // إعادة تهيئة إضافية بعد تأخير أكبر لضمان اكتمال جميع العمليات
         setTimeout(() => {
             reinitializeAllEvents();
             reinitializeTopbarEvents(); // إعادة تهيئة خاصة للتوب بار
-        }, 500);
+        }, 200);
         
         // إعادة تهيئة نهائية بعد تأخير أكبر لضمان عمل جميع الأزرار
         setTimeout(() => {
@@ -1670,14 +1728,18 @@
                 try {
                     const oldInstance = bootstrap.Dropdown.getInstance(quickActionsDropdown);
                     if (oldInstance) {
-                        oldInstance.dispose();
+                        try {
+                            oldInstance.dispose();
+                        } catch (disposeError) {
+                            // تجاهل أخطاء dispose
+                        }
                     }
                     
                     const parent = quickActionsDropdown.parentNode;
-                    const nextSibling = quickActionsDropdown.nextSibling;
-                    const newQuickActions = quickActionsDropdown.cloneNode(true);
-                    
                     if (parent) {
+                        const nextSibling = quickActionsDropdown.nextSibling;
+                        const newQuickActions = quickActionsDropdown.cloneNode(true);
+                        
                         parent.removeChild(quickActionsDropdown);
                         if (nextSibling) {
                             parent.insertBefore(newQuickActions, nextSibling);
@@ -1698,7 +1760,19 @@
                             }
                         });
                     } else {
-                        new bootstrap.Dropdown(quickActionsDropdown);
+                        new bootstrap.Dropdown(quickActionsDropdown, {
+                            boundary: 'viewport',
+                            popperConfig: {
+                                modifiers: [
+                                    {
+                                        name: 'preventOverflow',
+                                        options: {
+                                            boundary: document.body
+                                        }
+                                    }
+                                ]
+                            }
+                        });
                     }
                 } catch (e) {
                     console.warn('Error in final quick actions dropdown reinitialization:', e);
@@ -1707,7 +1781,7 @@
             
             // إعادة تهيئة جميع Dropdowns في التوب بار
             reinitializeTopbarEvents();
-        }, 1000);
+        }, 500);
     });
 
     // تصدير API عام
