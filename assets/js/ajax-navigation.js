@@ -1080,22 +1080,67 @@
 
             // التحقق من حدوث redirect إلى صفحة تسجيل الدخول
             const responseUrl = response.url || url;
-            const isLoginPage = responseUrl.includes('index.php') || responseUrl.includes('/login');
             
-            // إذا تم redirect إلى صفحة تسجيل الدخول، نعيد التوجيه الكامل للصفحة
-            if (isLoginPage && response.redirected) {
+            // قراءة HTML أولاً للتحقق من المحتوى
+            const html = await response.text();
+            
+            // التحقق من أن المحتوى يحتوي على <main> (صفحات dashboard تحتوي على <main>)
+            const hasMainContent = html.includes('<main') || html.includes('<main>');
+            
+            // تحقق أكثر دقة: يجب أن ينتهي URL بـ index.php أو يحتوي على /index.php في نهاية المسار
+            // وليس فقط وجود index.php في أي مكان
+            const urlPath = new URL(responseUrl, window.location.origin).pathname;
+            const isLoginPageUrl = urlPath.endsWith('/index.php') || 
+                                  urlPath.endsWith('index.php') || 
+                                  urlPath.includes('/index.php?') ||
+                                  urlPath.includes('/index.php#') ||
+                                  (urlPath === '/' && responseUrl.includes('index.php'));
+            
+            // التحقق من محتوى HTML للتأكد من أنه صفحة تسجيل دخول فعلاً
+            // يجب أن يحتوي على عناصر تسجيل الدخول ولا يحتوي على <main>
+            const isLoginPageContent = !hasMainContent && (
+                                      html.includes('تسجيل الدخول') || 
+                                      html.includes('اسم المستخدم') ||
+                                      (html.includes('form') && html.includes('password') && html.includes('username'))
+            );
+            
+            // إذا تم redirect إلى صفحة تسجيل الدخول وكان المحتوى يؤكد ذلك، نعيد التوجيه الكامل
+            // لكن فقط إذا كان URL يشير فعلاً إلى index.php والمحتوى يؤكد أنه صفحة تسجيل دخول
+            if (response.redirected && isLoginPageUrl && isLoginPageContent) {
                 hideLoading();
                 isLoading = false;
                 window.location.href = responseUrl;
                 return false;
             }
+            
+            // إذا كان المحتوى يشير إلى صفحة تسجيل دخول (حتى بدون redirect)، نعيد التوجيه
+            // لكن فقط إذا كان URL يشير فعلاً إلى index.php
+            if (isLoginPageContent && isLoginPageUrl && !hasMainContent) {
+                hideLoading();
+                isLoading = false;
+                window.location.href = responseUrl;
+                return false;
+            }
+            
+            // إذا كان المحتوى لا يحتوي على <main> وليس صفحة تسجيل دخول، قد تكون هناك مشكلة
+            // لكن لا نعيد التوجيه إلا إذا كان URL يشير فعلاً إلى index.php
+            if (!hasMainContent && isLoginPageUrl && !isLoginPageContent) {
+                // قد تكون صفحة خطأ أو صفحة فارغة - نترك الكود يستمر
+                console.warn('Page content missing <main> tag but URL suggests login page');
+            }
 
-            const html = await response.text();
             const data = extractContent(html);
 
             if (!data) {
                 // إذا فشل استخراج المحتوى وكانت هناك redirect إلى صفحة تسجيل الدخول، نعيد التوجيه الكامل
-                if (response.redirected && isLoginPage) {
+                if (response.redirected && isLoginPageUrl && isLoginPageContent) {
+                    hideLoading();
+                    isLoading = false;
+                    window.location.href = responseUrl;
+                    return false;
+                }
+                // إذا كان المحتوى لا يحتوي على <main> وURL يشير إلى index.php، قد تكون صفحة تسجيل دخول
+                if (!hasMainContent && isLoginPageUrl) {
                     hideLoading();
                     isLoading = false;
                     window.location.href = responseUrl;
