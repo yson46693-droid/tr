@@ -414,6 +414,24 @@
                     return;
                 }
                 
+                // التحقق من flags التحميل للـ scripts المعروفة
+                const scriptName = scriptSrc.split('/').pop().split('?')[0];
+                const loadFlags = {
+                    'main.js': '__mainJsLoaded',
+                    'notifications.js': '__notificationsJsLoaded',
+                    'pwa-install.js': '__pwaInstallJsLoaded'
+                };
+                
+                if (loadFlags[scriptName] && window[loadFlags[scriptName]]) {
+                    // الـ script تم تحميله مسبقاً - تخطي إعادة التحميل
+                    console.log('Script already loaded (flag check), skipping:', scriptSrc);
+                    // إزالة script القديم من DOM فقط
+                    if (oldScript.parentNode) {
+                        oldScript.parentNode.removeChild(oldScript);
+                    }
+                    return;
+                }
+                
                 const newScript = document.createElement('script');
                 
                 // نسخ جميع attributes

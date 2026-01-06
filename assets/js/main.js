@@ -2,6 +2,22 @@
  * JavaScript الرئيسي
  */
 
+// التحقق من أن الملف لم يتم تحميله مسبقاً
+if (window.__mainJsLoaded) {
+    // الملف تم تحميله مسبقاً - تحديث المتغيرات فقط ثم خروج
+    if (typeof window.DEBUG !== 'undefined' && typeof DEBUG === 'undefined') {
+        var DEBUG = window.DEBUG;
+    }
+    // خروج فوري لمنع إعادة تنفيذ الكود - استخدام IIFE wrapper
+    (function() {
+        return; // خروج فوري
+    })();
+    // إذا لم ينجح IIFE، نستخدم void 0
+    void 0;
+} else {
+    // وضع flag للتحقق من أن الملف تم تحميله
+    window.__mainJsLoaded = true;
+
 // ========== إعدادات التطوير/الإنتاج ==========
 // تعيين DEBUG = false في الإنتاج لإزالة console.log
 // التحقق من وجود DEBUG قبل الإعلان لتجنب إعادة الإعلان عند تحميل الملف عدة مرات
@@ -1703,3 +1719,4 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 })();
 
+} // إغلاق if statement للتحقق من __mainJsLoaded

@@ -2,6 +2,25 @@
  * PWA Install Handler
  */
 
+// التحقق من أن الملف لم يتم تحميله مسبقاً
+if (window.__pwaInstallJsLoaded) {
+    // الملف تم تحميله مسبقاً - تحديث المتغيرات فقط ثم خروج
+    if (typeof window.pwaInstallHandler === 'undefined') {
+        window.pwaInstallHandler = {};
+    }
+    if (typeof window.deferredPrompt !== 'undefined' && typeof deferredPrompt === 'undefined') {
+        var deferredPrompt = window.deferredPrompt;
+    }
+    // خروج فوري لمنع إعادة تنفيذ الكود - استخدام IIFE wrapper
+    (function() {
+        return; // خروج فوري
+    })();
+    // إذا لم ينجح IIFE، نستخدم void 0
+    void 0;
+} else {
+    // وضع flag للتحقق من أن الملف تم تحميله
+    window.__pwaInstallJsLoaded = true;
+
 // استخدام نطاق عام للتأكد من توفر المتغير
 if (typeof window.pwaInstallHandler === 'undefined') {
     window.pwaInstallHandler = {};
@@ -688,3 +707,4 @@ window.pwaInstallHandler = {
     isFirefoxAndroid: isFirefoxAndroid
 };
 
+} // إغلاق if statement للتحقق من __pwaInstallJsLoaded

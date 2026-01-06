@@ -2,6 +2,25 @@
  * JavaScript للإشعارات
  */
 
+// التحقق من أن الملف لم يتم تحميله مسبقاً
+if (window.__notificationsJsLoaded) {
+    // الملف تم تحميله مسبقاً - تحديث المتغيرات فقط ثم خروج
+    if (typeof window.notificationCheckInterval !== 'undefined' && typeof notificationCheckInterval === 'undefined') {
+        var notificationCheckInterval = window.notificationCheckInterval;
+    }
+    if (typeof window.seenNotificationIds !== 'undefined' && typeof seenNotificationIds === 'undefined') {
+        var seenNotificationIds = window.seenNotificationIds;
+    }
+    // خروج فوري لمنع إعادة تنفيذ الكود - استخدام IIFE wrapper
+    (function() {
+        return; // خروج فوري
+    })();
+    // إذا لم ينجح IIFE، نستخدم void 0
+    void 0;
+} else {
+    // وضع flag للتحقق من أن الملف تم تحميله
+    window.__notificationsJsLoaded = true;
+
 // التحقق من وجود notificationCheckInterval قبل الإعلان لتجنب إعادة الإعلان عند تحميل الملف عدة مرات
 if (typeof window.notificationCheckInterval === 'undefined') {
     window.notificationCheckInterval = null;
@@ -1047,3 +1066,4 @@ window.addEventListener('beforeunload', function() {
     }
 });
 
+} // إغلاق if statement للتحقق من __notificationsJsLoaded
