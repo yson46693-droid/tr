@@ -655,6 +655,10 @@ if (!defined('ACCESS_ALLOWED')) {
     <script src="<?php echo $assetsUrl; ?>js/main.js?v=<?php echo $cacheVersion; ?>" defer></script>
     <script src="<?php echo $assetsUrl; ?>js/sidebar.js?v=<?php echo $cacheVersion; ?>" defer></script>
     
+    <!-- Auto Refresh Navigation - إعادة تحميل تلقائي للتنقل (مدير، مندوب مبيعات، عامل إنتاج) -->
+    <!-- يجب تحميل هذا السكريبت قبل ajax-navigation.js لاعتراض النقرات أولاً -->
+    <script src="<?php echo $assetsUrl; ?>js/auto-refresh-navigation.js?v=<?php echo $cacheVersion; ?>" defer></script>
+    
     <!-- AJAX Navigation - تحسين الأداء على الموبايل -->
     <script src="<?php echo $assetsUrl; ?>js/ajax-navigation.js?v=<?php echo $cacheVersion; ?>" defer></script>
     

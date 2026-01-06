@@ -1,0 +1,308 @@
+/**
+ * Auto Refresh Navigation Script
+ * سكريبت إعادة التحميل التلقائي للتنقل
+ * 
+ * يعمل هذا السكريبت مع حسابات: مدير، مندوب مبيعات، عامل إنتاج
+ * عند النقر على أي رابط في الشريط الجانبي، يتم إعادة تحميل الصفحة تلقائياً
+ * مع إظهار تنبيه للمستخدم
+ */
+
+(function() {
+    'use strict';
+    
+    // الأدوار المطلوبة لهذه الوظيفة
+    const TARGET_ROLES = ['manager', 'sales', 'production'];
+    
+    // مفتاح للتخزين المحلي لتتبع حالة إعادة التحميل
+    const REFRESH_FLAG_KEY = 'auto_refresh_navigation_flag';
+    
+    /**
+     * الحصول على دور المستخدم من data attribute
+     */
+    function getUserRole() {
+        const body = document.body;
+        if (!body) return null;
+        
+        const role = body.getAttribute('data-user-role');
+        return role ? role.toLowerCase().trim() : null;
+    }
+    
+    /**
+     * التحقق من أن المستخدم من الأدوار المستهدفة
+     */
+    function shouldApplyRefresh() {
+        const userRole = getUserRole();
+        if (!userRole) return false;
+        
+        return TARGET_ROLES.includes(userRole);
+    }
+    
+    /**
+     * إنشاء وإظهار تنبيه على الشاشة
+     */
+    function showRefreshNotification() {
+        // إزالة أي تنبيه سابق
+        const existingNotification = document.getElementById('auto-refresh-notification');
+        if (existingNotification) {
+            existingNotification.remove();
+        }
+        
+        // إنشاء عنصر التنبيه
+        const notification = document.createElement('div');
+        notification.id = 'auto-refresh-notification';
+        notification.innerHTML = `
+            <div class="auto-refresh-notification-content">
+                <i class="bi bi-arrow-clockwise spin-animation"></i>
+                <span>جاري إعادة تحميل الصفحة للتأكد من تحميل جميع العناصر</span>
+            </div>
+        `;
+        
+        // إضافة الأنماط المطلوبة
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideDown 0.3s ease-out;
+        `;
+        
+        // إضافة الأنماط للأيقونة
+        const style = document.createElement('style');
+        style.id = 'auto-refresh-notification-styles';
+        style.textContent = `
+            @keyframes slideDown {
+                from {
+                    opacity: 0;
+                    transform: translateX(-50%) translateY(-20px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateX(-50%) translateY(0);
+                }
+            }
+            
+            @keyframes spin {
+                from {
+                    transform: rotate(0deg);
+                }
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+            
+            .spin-animation {
+                animation: spin 1s linear infinite;
+            }
+            
+            .auto-refresh-notification-content {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            
+            .auto-refresh-notification-content i {
+                font-size: 18px;
+            }
+        `;
+        
+        // إضافة الأنماط إذا لم تكن موجودة
+        if (!document.getElementById('auto-refresh-notification-styles')) {
+            document.head.appendChild(style);
+        }
+        
+        // إضافة التنبيه إلى الصفحة
+        document.body.appendChild(notification);
+        
+        return notification;
+    }
+    
+    /**
+     * إخفاء التنبيه
+     */
+    function hideRefreshNotification() {
+        const notification = document.getElementById('auto-refresh-notification');
+        if (notification) {
+            notification.style.animation = 'slideDown 0.3s ease-out reverse';
+            setTimeout(() => {
+                notification.remove();
+            }, 300);
+        }
+    }
+    
+    /**
+     * إعادة تحميل الصفحة
+     */
+    function refreshPage() {
+        // إظهار التنبيه
+        showRefreshNotification();
+        
+        // تعيين علامة في sessionStorage لتتبع أننا أجرينا إعادة تحميل
+        sessionStorage.setItem(REFRESH_FLAG_KEY, 'true');
+        
+        // إعادة التحميل بعد تأخير بسيط لإظهار التنبيه
+        setTimeout(() => {
+            window.location.reload();
+        }, 500);
+    }
+    
+    /**
+     * التحقق من حالة إعادة التحميل بعد تحميل الصفحة
+     */
+    function checkRefreshState() {
+        const wasRefreshed = sessionStorage.getItem(REFRESH_FLAG_KEY);
+        const isSidebarNavigation = sessionStorage.getItem('sidebar_navigation');
+        
+        if (isSidebarNavigation === 'true' && wasRefreshed !== 'true') {
+            // هذا تحميل جديد للصفحة من الشريط الجانبي - نحتاج لإعادة التحميل
+            // إظهار التنبيه أولاً
+            showRefreshNotification();
+            
+            // ثم إعادة التحميل بعد تأخير قصير
+            setTimeout(() => {
+                sessionStorage.setItem(REFRESH_FLAG_KEY, 'true');
+                window.location.reload();
+            }, 800);
+            return;
+        }
+        
+        if (wasRefreshed === 'true') {
+            // تم إعادة التحميل - إخفاء التنبيه وإزالة العلامات
+            sessionStorage.removeItem(REFRESH_FLAG_KEY);
+            sessionStorage.removeItem('sidebar_navigation');
+            sessionStorage.removeItem('sidebar_navigation_url');
+            
+            // إخفاء أي تنبيه موجود بعد تحميل الصفحة
+            setTimeout(() => {
+                hideRefreshNotification();
+            }, 500);
+        }
+    }
+    
+    /**
+     * معالجة النقر على روابط الشريط الجانبي
+     */
+    function handleSidebarLinkClick(event) {
+        const link = event.currentTarget;
+        
+        // التحقق من أن الرابط موجود وأنه رابط تنقل
+        if (!link || !link.href) return;
+        
+        // منع التنقل الافتراضي وإيقاف انتشار الحدث لمنع ajax-navigation من اعتراضه
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        
+        // الحصول على URL الهدف
+        const targetUrl = link.href;
+        
+        // إذا كان الرابط هو نفس الصفحة الحالية، لا تفعل شيء
+        const currentUrl = window.location.href.split('?')[0];
+        const newUrl = targetUrl.split('?')[0];
+        
+        if (newUrl === currentUrl) {
+            // نفس الصفحة - فقط إعادة تحميل
+            refreshPage();
+            return;
+        }
+        
+        // تعيين علامة في sessionStorage للإشارة إلى أننا ننتقل من الشريط الجانبي
+        sessionStorage.setItem('sidebar_navigation', 'true');
+        sessionStorage.setItem('sidebar_navigation_url', targetUrl);
+        // إزالة علامة إعادة التحميل السابقة
+        sessionStorage.removeItem(REFRESH_FLAG_KEY);
+        
+        // الانتقال إلى الصفحة الجديدة (سيتم إظهار التنبيه وإعادة التحميل في الصفحة الجديدة)
+        window.location.href = targetUrl;
+    }
+    
+    /**
+     * تهيئة السكريبت
+     */
+    function init() {
+        // التحقق من أن المستخدم من الأدوار المستهدفة
+        if (!shouldApplyRefresh()) {
+            return;
+        }
+        
+        // التحقق من حالة إعادة التحميل بعد تحميل الصفحة
+        checkRefreshState();
+        
+        // الانتظار حتى يتم تحميل DOM بالكامل
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', attachEventListeners);
+        } else {
+            attachEventListeners();
+        }
+    }
+    
+    /**
+     * إرفاق مستمعي الأحداث
+     */
+    function attachEventListeners() {
+        // البحث عن جميع روابط الشريط الجانبي
+        const sidebarLinks = document.querySelectorAll('.homeline-sidebar .nav-link, .sidebar .nav-link');
+        
+        if (sidebarLinks.length === 0) {
+            // محاولة مرة أخرى بعد تأخير قصير
+            setTimeout(attachEventListeners, 100);
+            return;
+        }
+        
+        // إضافة مستمع الأحداث لكل رابط
+        sidebarLinks.forEach(link => {
+            // التحقق من أن الرابط ليس للتنقل الخارجي أو خاص
+            const href = link.getAttribute('href');
+            if (!href || href === '#' || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+                return;
+            }
+            
+            // إضافة مستمع الأحداث في مرحلة الالتقاط (capture) لضمان التنفيذ قبل ajax-navigation
+            link.addEventListener('click', handleSidebarLinkClick, true);
+        });
+        
+        // معالجة النقر على شعار الشريط الجانبي أيضاً
+        const sidebarLogo = document.querySelector('.homeline-sidebar .sidebar-logo, .sidebar .sidebar-logo');
+        if (sidebarLogo) {
+            sidebarLogo.addEventListener('click', function(event) {
+                // التحقق من أن الرابط موجود
+                const href = this.getAttribute('href');
+                if (href && href !== '#' && !href.startsWith('javascript:')) {
+                    const currentUrl = window.location.href.split('?')[0];
+                    const newUrl = href.split('?')[0];
+                    
+                    if (newUrl === currentUrl) {
+                        // نفس الصفحة - فقط إعادة تحميل
+                        event.preventDefault();
+                        event.stopPropagation();
+                        event.stopImmediatePropagation();
+                        refreshPage();
+                    } else {
+                        // صفحة جديدة - نفس منطق روابط الشريط الجانبي
+                        event.preventDefault();
+                        event.stopPropagation();
+                        event.stopImmediatePropagation();
+                        sessionStorage.setItem('sidebar_navigation', 'true');
+                        sessionStorage.setItem('sidebar_navigation_url', href);
+                        sessionStorage.removeItem(REFRESH_FLAG_KEY);
+                        window.location.href = href;
+                    }
+                }
+            });
+        }
+    }
+    
+    // تشغيل السكريبت
+    init();
+    
+})();
