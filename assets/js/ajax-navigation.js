@@ -248,25 +248,55 @@
         inlineScripts.forEach((oldScript, index) => {
             setTimeout(() => {
                 try {
-                    const scriptContent = oldScript.textContent;
+                    const scriptContent = oldScript.textContent || oldScript.innerHTML;
                     
                     // إزالة script القديم من DOM أولاً
                     if (oldScript.parentNode) {
                         oldScript.parentNode.removeChild(oldScript);
                     }
                     
-                    // تنفيذ المحتوى مباشرة
+                    // التحقق من أن المحتوى صالح للتنفيذ (ليس HTML أو PHP)
                     if (scriptContent && scriptContent.trim()) {
+                        const trimmedContent = scriptContent.trim();
+                        
+                        // تخطي المحتوى الذي يبدأ بـ < (HTML) أو <? (PHP)
+                        if (trimmedContent.startsWith('<') || trimmedContent.startsWith('<?')) {
+                            console.warn('Skipping script with HTML/PHP content:', trimmedContent.substring(0, 50));
+                            return;
+                        }
+                        
+                        // تخطي المحتوى الذي يحتوي على HTML tags
+                        if (/<[a-z][\s\S]*>/i.test(trimmedContent)) {
+                            console.warn('Skipping script with HTML tags');
+                            return;
+                        }
+                        
+                        // تخطي المحتوى الذي يحتوي على PHP tags
+                        if (trimmedContent.includes('<?php') || trimmedContent.includes('<?=')) {
+                            console.warn('Skipping script with PHP tags');
+                            return;
+                        }
+                        
                         try {
                             // استخدام Function constructor (أكثر أماناً من eval)
-                            const scriptFunction = new Function(scriptContent);
+                            const scriptFunction = new Function(trimmedContent);
                             scriptFunction();
                         } catch (functionError) {
                             // Fallback: استخدام eval إذا فشل Function constructor
+                            // فقط إذا لم يكن الخطأ بسبب HTML/PHP
+                            if (functionError.message && functionError.message.includes('Unexpected token')) {
+                                console.warn('Skipping script with syntax error (likely HTML/PHP):', functionError.message);
+                                return;
+                            }
                             try {
-                                eval(scriptContent);
+                                eval(trimmedContent);
                             } catch (evalError) {
-                                console.error('Error executing inline script:', evalError);
+                                // فقط تسجيل الخطأ إذا لم يكن بسبب HTML/PHP
+                                if (!evalError.message || !evalError.message.includes('Unexpected token')) {
+                                    console.error('Error executing inline script:', evalError);
+                                } else {
+                                    console.warn('Skipping script with syntax error:', evalError.message);
+                                }
                             }
                         }
                     }
