@@ -1084,41 +1084,6 @@ function resetPassword(userId, username) {
         modal.show();
     }
 }
-    document.getElementById('editUserId').value = user.id;
-    document.getElementById('editUsername').value = user.username;
-    
-    // تعيين الدور في الحقل المخفي
-    document.getElementById('editRole').value = user.role;
-    
-    // عرض الدور في حقل العرض فقط
-    const roleNames = {
-        'manager': 'مدير',
-        'accountant': 'محاسب',
-        'sales': 'مندوب مبيعات',
-        'production': 'عامل إنتاج'
-    };
-    document.getElementById('editRoleDisplay').value = roleNames[user.role] || user.role;
-    
-    document.getElementById('editStatus').value = user.status;
-    document.getElementById('editFullName').value = user.full_name || '';
-    document.getElementById('editPhone').value = user.phone || '';
-    let hourlyRate = parseFloat(user.hourly_rate) || 0;
-    if (isNaN(hourlyRate) || hourlyRate > 100000) {
-        hourlyRate = 0;
-    }
-    document.getElementById('editHourlyRate').value = hourlyRate;
-    
-    const modal = new bootstrap.Modal(document.getElementById('editUserModal'));
-    modal.show();
-}
-
-function resetPassword(userId, username) {
-    document.getElementById('resetUserId').value = userId;
-    document.getElementById('resetUsername').value = username;
-    
-    const modal = new bootstrap.Modal(document.getElementById('resetPasswordModal'));
-    modal.show();
-}
 
 function deleteUser(userId, username) {
     closeAllForms();
