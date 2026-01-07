@@ -702,6 +702,7 @@ if (!function_exists('triggerDailyBackupDelivery')) {
         }
 
         // إرسال النسخة الاحتياطية عبر Telegram فقط إذا كان Telegram مُعداً
+        $backupStatusUpdated = false;
         if ($telegramConfigured && function_exists('sendTelegramFile')) {
             $sendResult = sendTelegramFile($backupFilePath, $caption);
 
@@ -720,6 +721,8 @@ if (!function_exists('triggerDailyBackupDelivery')) {
                             "UPDATE backups SET status = 'failed', error_message = ? WHERE id = ?",
                             [$errorMessage, $backupId]
                         );
+                        $backupStatusUpdated = true;
+                        error_log('Daily Backup: Updated backup status to failed for backup ID: ' . $backupId);
                     } catch (Throwable $updateError) {
                         error_log('Daily Backup: failed updating backup status to failed - ' . $updateError->getMessage());
                     }
@@ -759,10 +762,12 @@ if (!function_exists('triggerDailyBackupDelivery')) {
                 // عند نجاح الإرسال، التأكد من أن حالة النسخة الاحتياطية في جدول backups هي success
                 if ($backupId) {
                     try {
-                        $db->execute(
+                        $updateResult = $db->execute(
                             "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ?",
                             [$backupId]
                         );
+                        $backupStatusUpdated = true;
+                        error_log('Daily Backup: Updated backup status to success for backup ID: ' . $backupId . ' (Telegram sent successfully)');
                     } catch (Throwable $updateError) {
                         error_log('Daily Backup: failed updating backup status to success - ' . $updateError->getMessage());
                     }
@@ -774,13 +779,28 @@ if (!function_exists('triggerDailyBackupDelivery')) {
             // التأكد من أن حالة النسخة الاحتياطية في جدول backups هي success حتى لو لم يتم الإرسال
             if ($backupId) {
                 try {
-                    $db->execute(
+                    $updateResult = $db->execute(
                         "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ?",
                         [$backupId]
                     );
+                    $backupStatusUpdated = true;
+                    error_log('Daily Backup: Updated backup status to success for backup ID: ' . $backupId . ' (Telegram not configured)');
                 } catch (Throwable $updateError) {
                     error_log('Daily Backup: failed updating backup status to success - ' . $updateError->getMessage());
                 }
+            }
+        }
+        
+        // التأكد من تحديث الحالة إلى success في جميع الحالات (بعد نجاح إنشاء النسخة الاحتياطية)
+        if (!$backupStatusUpdated && $backupId) {
+            try {
+                $db->execute(
+                    "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ?",
+                    [$backupId]
+                );
+                error_log('Daily Backup: Final update - Set backup status to success for backup ID: ' . $backupId);
+            } catch (Throwable $updateError) {
+                error_log('Daily Backup: failed final update of backup status to success - ' . $updateError->getMessage());
             }
         }
 

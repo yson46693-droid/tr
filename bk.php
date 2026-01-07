@@ -282,15 +282,66 @@ if (!function_exists('createBackupUsingBkScript')) {
             fwrite($fh, "SET NAMES utf8mb4;\n");
             fwrite($fh, "SET FOREIGN_KEY_CHECKS=0;\n\n");
         
-        // جلب قائمة الجداول
+        // جلب قائمة الجداول - استخدام SHOW FULL TABLES لضمان جلب جميع الجداول
         $tables = [];
-        $result = $dbQuery("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'");
-        while ($row = $dbFetch($result, $pdo ? PDO::FETCH_NUM : 'NUM')) {
-            $tables[] = $row[0];
+        try {
+            // استخدام SHOW FULL TABLES للحصول على جميع الجداول مع نوعها
+            $result = $dbQuery("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'");
+            while ($row = $dbFetch($result, $pdo ? PDO::FETCH_NUM : 'NUM')) {
+                $tables[] = $row[0];
+            }
+            if ($mysqli) {
+                $result->free();
+            }
+            
+            // التحقق من وجود جداول إضافية قد لا تظهر في SHOW FULL TABLES
+            // (بعض الخوادم قد لا تدعم Table_type بشكل صحيح)
+            $allTablesResult = $dbQuery("SHOW TABLES");
+            $allTables = [];
+            while ($row = $dbFetch($allTablesResult, $pdo ? PDO::FETCH_NUM : 'NUM')) {
+                $allTables[] = $row[0];
+            }
+            if ($mysqli && $allTablesResult) {
+                $allTablesResult->free();
+            }
+            
+            // إضافة أي جداول مفقودة (ليست views)
+            foreach ($allTables as $tableName) {
+                if (!in_array($tableName, $tables)) {
+                    // التحقق من أن الجدول ليس view
+                    try {
+                        $checkResult = $dbQuery("SHOW CREATE TABLE `{$tableName}`");
+                        $checkRow = $dbFetch($checkResult);
+                        if ($mysqli && $checkResult) {
+                            $checkResult->free();
+                        }
+                        // إذا كان لدينا CREATE TABLE (وليس CREATE VIEW)، أضفه
+                        if ($checkRow && isset($checkRow['Create Table'])) {
+                            $tables[] = $tableName;
+                        }
+                    } catch (Exception $e) {
+                        // تجاهل الأخطاء في التحقق من الجدول
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            // في حالة الفشل، استخدام الطريقة البديلة
+            error_log("Backup: Error getting tables list, using fallback method: " . $e->getMessage());
+            try {
+                $result = $dbQuery("SHOW TABLES");
+                while ($row = $dbFetch($result, $pdo ? PDO::FETCH_NUM : 'NUM')) {
+                    $tables[] = $row[0];
+                }
+                if ($mysqli) {
+                    $result->free();
+                }
+            } catch (Exception $e2) {
+                error_log("Backup: Fallback method also failed: " . $e2->getMessage());
+            }
         }
-        if ($mysqli) {
-            $result->free();
-        }
+        
+        // تسجيل عدد الجداول التي سيتم تصديرها
+        error_log("Backup: Found " . count($tables) . " tables to export: " . implode(', ', $tables));
         
         // أيضاً جلب views
         $views = [];
@@ -304,21 +355,36 @@ if (!function_exists('createBackupUsingBkScript')) {
         
         // تصدير كل جدول (CREATE + بيانات)
         foreach ($tables as $table) {
-            $result = $dbQuery("SHOW CREATE TABLE `{$table}`");
-            $cr = $dbFetch($result);
-            if ($mysqli) {
-                $result->free();
-            }
-            $createSql = $cr['Create Table'] ?? $cr['Create View'] ?? null;
-            if ($createSql) {
+            try {
+                $result = $dbQuery("SHOW CREATE TABLE `{$table}`");
+                $cr = $dbFetch($result);
+                if ($mysqli) {
+                    $result->free();
+                }
+                $createSql = $cr['Create Table'] ?? $cr['Create View'] ?? null;
+                if ($createSql) {
+                    fwrite($fh, "-- --------------------------------------------------------\n");
+                    fwrite($fh, "-- Table structure for table `{$table}`\n");
+                    fwrite($fh, "-- --------------------------------------------------------\n\n");
+                    fwrite($fh, "DROP TABLE IF EXISTS `{$table}`;\n");
+                    fwrite($fh, $createSql . ";\n\n");
+                } else {
+                    error_log("Backup: Warning - Could not get CREATE statement for table: {$table}");
+                    // الاستمرار في التصدير حتى لو فشل الحصول على CREATE statement
+                    fwrite($fh, "-- --------------------------------------------------------\n");
+                    fwrite($fh, "-- Table structure for table `{$table}` (CREATE statement not available)\n");
+                    fwrite($fh, "-- --------------------------------------------------------\n\n");
+                }
+            } catch (Exception $e) {
+                error_log("Backup: Error exporting structure for table {$table}: " . $e->getMessage());
+                // الاستمرار في التصدير حتى لو فشل تصدير هيكل جدول واحد
                 fwrite($fh, "-- --------------------------------------------------------\n");
-                fwrite($fh, "-- Table structure for table `{$table}`\n");
+                fwrite($fh, "-- Error exporting structure for table `{$table}`: " . $e->getMessage() . "\n");
                 fwrite($fh, "-- --------------------------------------------------------\n\n");
-                fwrite($fh, "DROP TABLE IF EXISTS `{$table}`;\n");
-                fwrite($fh, $createSql . ";\n\n");
             }
             
             if (!$exportStructureOnly) {
+                try {
                 // تصدير البيانات (INSERTs)
                 $colResult = $dbQuery("DESCRIBE `{$table}`");
                 $cols = [];
@@ -382,6 +448,11 @@ if (!function_exists('createBackupUsingBkScript')) {
                     fwrite($fh, "UNLOCK TABLES;\n\n");
                     
                     $offset += $batchSize;
+                }
+                } catch (Exception $e) {
+                    error_log("Backup: Error exporting data for table {$table}: " . $e->getMessage());
+                    // الاستمرار في التصدير حتى لو فشل تصدير بيانات جدول واحد
+                    fwrite($fh, "-- Error exporting data for table `{$table}`: " . $e->getMessage() . "\n\n");
                 }
             }
         }

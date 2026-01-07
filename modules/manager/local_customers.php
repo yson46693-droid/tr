@@ -1370,21 +1370,6 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 <link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
 
 <!-- تعريف الدوال الأساسية للأزرار مبكراً -->
-<script>
-// دوال مؤقتة للأزرار - سيتم استبدالها بالدوال الكاملة لاحقاً
-window.showImportLocalCustomersModal = window.showImportLocalCustomersModal || function() {
-    // سيتم تعريف الدالة الكاملة لاحقاً
-    console.log('Loading showImportLocalCustomersModal...');
-};
-window.showCustomerExportModal = window.showCustomerExportModal || function() {
-    // سيتم تعريف الدالة الكاملة لاحقاً
-    console.log('Loading showCustomerExportModal...');
-};
-window.showAddLocalCustomerModal = window.showAddLocalCustomerModal || function() {
-    // سيتم تعريف الدالة الكاملة لاحقاً
-    console.log('Loading showAddLocalCustomerModal...');
-};
-</script>
 
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
     <h2 class="mb-2 mb-md-0">
@@ -6094,48 +6079,6 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
                 </div>
             </form>
         </div>
-    </div>
-</div>
-
-<!-- Card للموبايل - استيراد العملاء -->
-<div class="card shadow-sm mb-4 d-md-none" id="importLocalCustomersCard" style="display: none;">
-    <div class="card-header bg-success text-white">
-        <h5 class="mb-0">
-            <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد العملاء المحليين من ملف CSV
-        </h5>
-    </div>
-    <div class="card-body">
-        <form id="importLocalCustomersCardForm" enctype="multipart/form-data">
-            <div class="mb-3">
-                <label class="form-label">اختر ملف CSV أو Excel <span class="text-danger">*</span></label>
-                <input type="file" class="form-control" name="excel_file" id="localExcelCardFileInput" accept=".csv,.xlsx,.xls" required>
-                <small class="text-muted">الحجم الأقصى: 10 ميجابايت | يُفضل استخدام ملف CSV</small>
-            </div>
-            <div id="localImportCardProgress" class="d-none">
-                <div class="progress mb-3">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
-                </div>
-                <div id="localImportCardStatus" class="text-center"></div>
-            </div>
-            <div id="localImportCardResults" class="d-none">
-                <div class="alert alert-success">
-                    <h6><i class="bi bi-check-circle me-2"></i>تم الاستيراد بنجاح</h6>
-                    <div id="localImportCardResultsContent"></div>
-                </div>
-            </div>
-            <div id="localImportCardErrors" class="d-none">
-                <div class="alert alert-danger">
-                    <h6><i class="bi bi-exclamation-triangle me-2"></i>أخطاء أثناء الاستيراد</h6>
-                    <div id="localImportCardErrorsContent"></div>
-                </div>
-            </div>
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-success" id="localImportCardSubmitBtn">
-                    <i class="bi bi-upload me-2"></i>استيراد
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="closeImportLocalCustomersCard()">إلغاء</button>
-            </div>
-        </form>
     </div>
 </div>
 
