@@ -356,6 +356,7 @@ function getRelativeUrl($path) {
 
 /**
  * Get absolute URL (for use in templates)
+ * يحصل على الدومين الحالي ديناميكياً من مصادر متعددة
  */
 function getAbsoluteUrl($path) {
     // التحقق من HTTPS - إجبار استخدام HTTPS في الإنتاج
@@ -366,17 +367,62 @@ function getAbsoluteUrl($path) {
         (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] === 'on')
     );
     
-    // استخدام HTTPS دائماً في الإنتاج (على الاستضافة)
-    // فقط في localhost يمكن استخدام HTTP
+    // محاولة الحصول على الدومين من مصادر متعددة (بترتيب الأولوية)
+    $host = null;
+    
+    // 1. محاولة من HTTP_HOST (الأولوية الأولى)
+    if (isset($_SERVER['HTTP_HOST']) && !empty($_SERVER['HTTP_HOST'])) {
+        $host = $_SERVER['HTTP_HOST'];
+        // إزالة المنفذ إذا كان موجوداً (مثل: domain.com:8080 -> domain.com)
+        if (strpos($host, ':') !== false) {
+            $hostParts = explode(':', $host);
+            $host = $hostParts[0];
+        }
+    }
+    
+    // 2. إذا لم يكن متاحاً، محاولة من HTTP_X_FORWARDED_HOST (للمواقع خلف proxy)
+    if (empty($host) && isset($_SERVER['HTTP_X_FORWARDED_HOST']) && !empty($_SERVER['HTTP_X_FORWARDED_HOST'])) {
+        $host = $_SERVER['HTTP_X_FORWARDED_HOST'];
+        // قد يحتوي على قائمة مفصولة بفواصل، نأخذ الأول
+        if (strpos($host, ',') !== false) {
+            $hostParts = explode(',', $host);
+            $host = trim($hostParts[0]);
+        }
+        // إزالة المنفذ
+        if (strpos($host, ':') !== false) {
+            $hostParts = explode(':', $host);
+            $host = $hostParts[0];
+        }
+    }
+    
+    // 3. إذا لم يكن متاحاً، محاولة من SERVER_NAME
+    if (empty($host) && isset($_SERVER['SERVER_NAME']) && !empty($_SERVER['SERVER_NAME'])) {
+        $host = $_SERVER['SERVER_NAME'];
+    }
+    
+    // 4. إذا لم يكن متاحاً، محاولة من HTTP_REFERER (كحل أخير)
+    if (empty($host) && isset($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_REFERER'])) {
+        $refererParts = parse_url($_SERVER['HTTP_REFERER']);
+        if (isset($refererParts['host']) && !empty($refererParts['host'])) {
+            $host = $refererParts['host'];
+        }
+    }
+    
+    // 5. إذا لم يكن متاحاً نهائياً، استخدام localhost كقيمة افتراضية
+    if (empty($host)) {
+        $host = 'localhost';
+        error_log('getAbsoluteUrl: Could not determine host from any source, using localhost fallback');
+    }
+    
+    // التحقق من localhost لتحديد البروتوكول
     $isLocalhost = (
-        $_SERVER['HTTP_HOST'] === 'localhost' ||
-        strpos($_SERVER['HTTP_HOST'], 'localhost:') === 0 ||
-        $_SERVER['HTTP_HOST'] === '127.0.0.1' ||
-        strpos($_SERVER['HTTP_HOST'], '127.0.0.1:') === 0
+        $host === 'localhost' ||
+        strpos($host, 'localhost:') === 0 ||
+        $host === '127.0.0.1' ||
+        strpos($host, '127.0.0.1:') === 0
     );
     
     $protocol = ($isHttps || !$isLocalhost) ? "https://" : "http://";
-    $host = $_SERVER['HTTP_HOST'];
     $base = getBasePath();
     
     // Remove leading slash if present

@@ -1624,6 +1624,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-warning edit-local-customer-btn"
+                                            onclick="showEditLocalCustomerModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
@@ -1649,6 +1650,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-info js-local-customer-purchase-history"
+                                            onclick="showLocalCustomerPurchaseHistoryModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
@@ -1660,8 +1662,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-danger delete-local-customer-btn"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#deleteLocalCustomerModal"
+                                            onclick="showDeleteLocalCustomerModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                         >
@@ -1671,8 +1672,11 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-warning js-local-customer-return-products"
+                                            onclick="showLocalCustomerPurchaseHistoryModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
+                                            data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
+                                            data-customer-address="<?php echo htmlspecialchars($customer['address'] ?? ''); ?>"
                                         >
                                             <i class="bi bi-arrow-return-left me-1"></i>مرتجع
                                         </button>
@@ -2099,6 +2103,108 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
     </div>
 </div>
 
+<!-- Card سجل مشتريات العميل المحلي - للموبايل فقط -->
+<div class="card shadow-sm mb-4 d-md-none" id="localCustomerPurchaseHistoryCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-receipt me-2"></i>
+            سجل مشتريات العميل المحلي
+        </h5>
+    </div>
+    <div class="card-body">
+        <!-- Customer Info -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-12 mb-2">
+                        <div class="text-muted small">العميل</div>
+                        <div class="fs-5 fw-bold" id="localPurchaseHistoryCardCustomerName">-</div>
+                    </div>
+                    <div class="col-6 mb-2">
+                        <div class="text-muted small">الهاتف</div>
+                        <div id="localPurchaseHistoryCardCustomerPhone">-</div>
+                    </div>
+                    <div class="col-6 mb-2">
+                        <div class="text-muted small">العنوان</div>
+                        <div id="localPurchaseHistoryCardCustomerAddress">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-12">
+                        <input type="text" class="form-control form-control-sm" 
+                               id="localPurchaseHistoryCardSearchProduct" 
+                               placeholder="البحث باسم المنتج">
+                    </div>
+                    <div class="col-12">
+                        <input type="text" class="form-control form-control-sm" 
+                               id="localPurchaseHistoryCardSearchBatch" 
+                               placeholder="البحث برقم التشغيلة">
+                    </div>
+                    <div class="col-12">
+                        <button type="button" class="btn btn-primary btn-sm w-100" 
+                                onclick="loadLocalCustomerPurchaseHistory()">
+                            <i class="bi bi-search me-1"></i>بحث
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="text-center py-4" id="localPurchaseHistoryCardLoading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">جاري التحميل...</span>
+            </div>
+        </div>
+
+        <!-- Error -->
+        <div class="alert alert-danger d-none" id="localPurchaseHistoryCardError"></div>
+
+        <!-- Purchase History Table -->
+        <div id="localPurchaseHistoryCardTable" class="d-none">
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 50px;">
+                                <input type="checkbox" id="localSelectAllItemsCard" onchange="localToggleAllItems()">
+                            </th>
+                            <th>رقم الفاتورة</th>
+                            <th>رقم التشغيلة</th>
+                            <th>اسم المنتج</th>
+                            <th>الكمية المشتراة</th>
+                            <th>الكمية المرتجعة</th>
+                            <th>المتاح للإرجاع</th>
+                            <th>سعر الوحدة</th>
+                            <th>السعر الإجمالي</th>
+                            <th>تاريخ الشراء</th>
+                            <th style="width: 100px;">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="localPurchaseHistoryCardTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-primary" id="printLocalCustomerStatementCardBtn" onclick="printLocalCustomerStatement()" style="display: none;">
+                <i class="bi bi-printer me-1"></i>طباعة كشف الحساب
+            </button>
+            <button type="button" class="btn btn-success" id="localCustomerReturnCardBtn" onclick="openLocalCustomerReturnModal()" style="display: none;">
+                <i class="bi bi-arrow-return-left me-1"></i>إرجاع منتجات
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="closeLocalCustomerPurchaseHistoryCard()">إغلاق</button>
+        </div>
+    </div>
+</div>
+
 <!-- Modal إرجاع منتجات العميل المحلي - للكمبيوتر فقط -->
 <div class="modal fade d-none d-md-block" id="localCustomerReturnModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
@@ -2348,7 +2454,8 @@ function closeAllForms() {
         'importLocalCustomersCard', 
         'deleteLocalCustomerCard',
         'customerExportCard',
-        'viewLocationCard'
+        'viewLocationCard',
+        'localCustomerPurchaseHistoryCard'
     ];
     
     cards.forEach(function(cardId) {
@@ -2465,6 +2572,317 @@ function showCollectPaymentModal(button) {
     }
 }
 
+// دالة فتح نموذج تعديل عميل محلي
+function showEditLocalCustomerModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const customerId = button.getAttribute('data-customer-id') || '';
+    const customerName = button.getAttribute('data-customer-name') || '';
+    const customerPhone = button.getAttribute('data-customer-phone') || '';
+    const customerAddress = button.getAttribute('data-customer-address') || '';
+    const customerRegionId = button.getAttribute('data-customer-region-id') || '';
+    const customerBalance = button.getAttribute('data-customer-balance') || '0';
+    
+    if (!customerId) {
+        console.error('Customer ID not found');
+        return;
+    }
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('editLocalCustomerCard');
+        if (card) {
+            const idInput = document.getElementById('editLocalCustomerCardId');
+            const nameInput = document.getElementById('editLocalCustomerCardName');
+            const addressInput = document.getElementById('editLocalCustomerCardAddress');
+            const regionInput = document.getElementById('editLocalCustomerCardRegionId');
+            const balanceInput = document.getElementById('editLocalCustomerCardBalance');
+            const editPhoneContainer = document.getElementById('editLocalCustomerCardPhoneNumbersContainer');
+            
+            if (idInput) idInput.value = customerId;
+            if (nameInput) nameInput.value = customerName || '';
+            if (addressInput) addressInput.value = customerAddress;
+            if (regionInput) regionInput.value = customerRegionId;
+            if (balanceInput) balanceInput.value = customerBalance;
+            
+            // تحميل أرقام الهواتف المتعددة
+            if (editPhoneContainer) {
+                editPhoneContainer.innerHTML = '';
+                fetch('?action=get_local_customer_phones&customer_id=' + customerId)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.phones && data.phones.length > 0) {
+                            data.phones.forEach(function(phone) {
+                                const phoneGroup = document.createElement('div');
+                                phoneGroup.className = 'input-group mb-2';
+                                phoneGroup.innerHTML = `
+                                    <input type="text" class="form-control phone-input" name="phones[]" value="${phone}" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                `;
+                                editPhoneContainer.appendChild(phoneGroup);
+                            });
+                        } else if (customerPhone) {
+                            const phoneGroup = document.createElement('div');
+                            phoneGroup.className = 'input-group mb-2';
+                            phoneGroup.innerHTML = `
+                                <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            `;
+                            editPhoneContainer.appendChild(phoneGroup);
+                        } else {
+                            const phoneGroup = document.createElement('div');
+                            phoneGroup.className = 'input-group mb-2';
+                            phoneGroup.innerHTML = `
+                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            `;
+                            editPhoneContainer.appendChild(phoneGroup);
+                        }
+                        if (typeof updateEditRemoveButtons === 'function') {
+                            updateEditRemoveButtons();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading phones:', error);
+                        if (customerPhone) {
+                            const phoneGroup = document.createElement('div');
+                            phoneGroup.className = 'input-group mb-2';
+                            phoneGroup.innerHTML = `
+                                <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            `;
+                            editPhoneContainer.appendChild(phoneGroup);
+                        }
+                        if (typeof updateEditRemoveButtons === 'function') {
+                            updateEditRemoveButtons();
+                        }
+                    });
+            }
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('editLocalCustomerModal');
+        if (modal) {
+            const idInput = document.getElementById('editLocalCustomerId');
+            const nameInput = document.getElementById('editLocalCustomerName');
+            const addressInput = document.getElementById('editLocalCustomerAddress');
+            const regionInput = document.getElementById('editLocalCustomerRegionId');
+            const balanceInput = document.getElementById('editLocalCustomerBalance');
+            const editPhoneContainer = document.getElementById('editPhoneNumbersContainer');
+            
+            if (idInput) idInput.value = customerId;
+            if (nameInput) nameInput.value = customerName || '';
+            if (addressInput) addressInput.value = customerAddress;
+            if (regionInput) regionInput.value = customerRegionId;
+            if (balanceInput) balanceInput.value = customerBalance;
+            
+            // تحميل أرقام الهواتف المتعددة
+            if (editPhoneContainer) {
+                editPhoneContainer.innerHTML = '';
+                fetch('?action=get_local_customer_phones&customer_id=' + customerId)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.phones && data.phones.length > 0) {
+                            data.phones.forEach(function(phone) {
+                                const phoneGroup = document.createElement('div');
+                                phoneGroup.className = 'input-group mb-2';
+                                phoneGroup.innerHTML = `
+                                    <input type="text" class="form-control phone-input" name="phones[]" value="${phone}" placeholder="مثال: 01234567890">
+                                    <button type="button" class="btn btn-outline-danger remove-phone-btn">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                `;
+                                editPhoneContainer.appendChild(phoneGroup);
+                            });
+                        } else if (customerPhone) {
+                            const phoneGroup = document.createElement('div');
+                            phoneGroup.className = 'input-group mb-2';
+                            phoneGroup.innerHTML = `
+                                <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            `;
+                            editPhoneContainer.appendChild(phoneGroup);
+                        } else {
+                            const phoneGroup = document.createElement('div');
+                            phoneGroup.className = 'input-group mb-2';
+                            phoneGroup.innerHTML = `
+                                <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            `;
+                            editPhoneContainer.appendChild(phoneGroup);
+                        }
+                        if (typeof updateEditRemoveButtons === 'function') {
+                            updateEditRemoveButtons();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading phones:', error);
+                        if (customerPhone) {
+                            const phoneGroup = document.createElement('div');
+                            phoneGroup.className = 'input-group mb-2';
+                            phoneGroup.innerHTML = `
+                                <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
+                                <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            `;
+                            editPhoneContainer.appendChild(phoneGroup);
+                        }
+                        if (typeof updateEditRemoveButtons === 'function') {
+                            updateEditRemoveButtons();
+                        }
+                    });
+            }
+            
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+// دالة فتح نموذج سجل مشتريات العميل المحلي
+function showLocalCustomerPurchaseHistoryModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const customerId = button.getAttribute('data-customer-id');
+    const customerName = button.getAttribute('data-customer-name');
+    const customerPhone = button.getAttribute('data-customer-phone') || '-';
+    const customerAddress = button.getAttribute('data-customer-address') || '-';
+    
+    if (!customerId) return;
+    
+    // تحويل customerId إلى رقم للتأكد من صحته
+    const customerIdNum = parseInt(customerId, 10);
+    if (isNaN(customerIdNum) || customerIdNum <= 0) {
+        console.error('Invalid customer ID:', customerId);
+        return;
+    }
+    
+    // تعيين المتغيرات العامة
+    if (typeof currentLocalCustomerId !== 'undefined') {
+        currentLocalCustomerId = customerIdNum;
+    }
+    if (typeof currentLocalCustomerName !== 'undefined') {
+        currentLocalCustomerName = customerName;
+    }
+    
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('localCustomerPurchaseHistoryCard');
+        if (card) {
+            const nameElement = card.querySelector('#localPurchaseHistoryCardCustomerName');
+            const phoneElement = card.querySelector('#localPurchaseHistoryCardCustomerPhone');
+            const addressElement = card.querySelector('#localPurchaseHistoryCardCustomerAddress');
+            
+            if (nameElement) nameElement.textContent = customerName || '-';
+            if (phoneElement) phoneElement.textContent = customerPhone || '-';
+            if (addressElement) addressElement.textContent = customerAddress || '-';
+            
+            // إظهار loading وإخفاء المحتوى
+            const loadingElement = card.querySelector('#localPurchaseHistoryCardLoading');
+            const contentElement = card.querySelector('#localPurchaseHistoryCardTable');
+            const errorElement = card.querySelector('#localPurchaseHistoryCardError');
+            
+            if (loadingElement) loadingElement.classList.remove('d-none');
+            if (contentElement) contentElement.classList.add('d-none');
+            if (errorElement) {
+                errorElement.classList.add('d-none');
+                errorElement.textContent = '';
+            }
+            
+            // إخفاء الأزرار مؤقتاً
+            const printBtn = card.querySelector('#printLocalCustomerStatementCardBtn');
+            const returnBtn = card.querySelector('#localCustomerReturnCardBtn');
+            if (printBtn) printBtn.style.display = 'none';
+            if (returnBtn) returnBtn.style.display = 'none';
+            
+            // إعادة تعيين العناصر المحددة
+            if (typeof localSelectedItemsForReturn !== 'undefined') {
+                localSelectedItemsForReturn = [];
+            }
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+            
+            // تحميل البيانات بعد إظهار الـ card
+            setTimeout(function() {
+                if (typeof loadLocalCustomerPurchaseHistory === 'function') {
+                    loadLocalCustomerPurchaseHistory();
+                }
+            }, 100);
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modal = document.getElementById('localCustomerPurchaseHistoryModal');
+        if (modal) {
+            const nameElement = document.getElementById('localPurchaseHistoryCustomerName');
+            const phoneElement = document.getElementById('localPurchaseHistoryCustomerPhone');
+            const addressElement = document.getElementById('localPurchaseHistoryCustomerAddress');
+            
+            if (nameElement) nameElement.textContent = customerName || '-';
+            if (phoneElement) phoneElement.textContent = customerPhone || '-';
+            if (addressElement) addressElement.textContent = customerAddress || '-';
+            
+            // إظهار loading وإخفاء المحتوى
+            const loadingElement = document.getElementById('localPurchaseHistoryLoading');
+            const contentElement = document.getElementById('localPurchaseHistoryTable');
+            const errorElement = document.getElementById('localPurchaseHistoryError');
+            
+            if (loadingElement) loadingElement.classList.remove('d-none');
+            if (contentElement) contentElement.classList.add('d-none');
+            if (errorElement) {
+                errorElement.classList.add('d-none');
+                errorElement.textContent = '';
+            }
+            
+            // إخفاء الأزرار مؤقتاً
+            const printBtn = document.getElementById('printLocalCustomerStatementBtn');
+            const returnBtn = document.getElementById('localCustomerReturnBtn');
+            if (printBtn) printBtn.style.display = 'none';
+            if (returnBtn) returnBtn.style.display = 'none';
+            
+            // إعادة تعيين العناصر المحددة
+            if (typeof localSelectedItemsForReturn !== 'undefined') {
+                localSelectedItemsForReturn = [];
+            }
+            
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+            
+            // تحميل البيانات بعد إظهار الـ modal
+            modal.addEventListener('shown.bs.modal', function loadData() {
+                modal.removeEventListener('shown.bs.modal', loadData);
+                if (typeof loadLocalCustomerPurchaseHistory === 'function') {
+                    loadLocalCustomerPurchaseHistory();
+                }
+            }, { once: true });
+        }
+    }
+}
+
 // دالة فتح نموذج إضافة عميل
 function showAddLocalCustomerModal() {
     closeAllForms();
@@ -2511,6 +2929,26 @@ function closeEditLocalCustomerCard() {
         card.style.display = 'none';
         const form = card.querySelector('form');
         if (form) form.reset();
+    }
+}
+
+function closeLocalCustomerPurchaseHistoryCard() {
+    const card = document.getElementById('localCustomerPurchaseHistoryCard');
+    if (card) {
+        card.style.display = 'none';
+        // إعادة تعيين المتغيرات
+        if (typeof currentLocalCustomerId !== 'undefined') {
+            currentLocalCustomerId = null;
+        }
+        if (typeof currentLocalCustomerName !== 'undefined') {
+            currentLocalCustomerName = null;
+        }
+        if (typeof localSelectedItemsForReturn !== 'undefined') {
+            localSelectedItemsForReturn = [];
+        }
+        if (typeof localPurchaseHistoryData !== 'undefined') {
+            localPurchaseHistoryData = [];
+        }
     }
 }
 
@@ -3445,10 +3883,21 @@ function loadLocalCustomerPurchaseHistory() {
     }
     
     const basePath = '<?php echo getBasePath(); ?>';
-    const loadingElement = document.getElementById('localPurchaseHistoryLoading');
-    const contentElement = document.getElementById('localPurchaseHistoryTable');
-    const errorElement = document.getElementById('localPurchaseHistoryError');
-    const tableBody = document.getElementById('localPurchaseHistoryTableBody');
+    const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    
+    // تحديد العناصر حسب نوع الجهاز
+    const loadingElement = isMobileDevice 
+        ? document.getElementById('localPurchaseHistoryCardLoading')
+        : document.getElementById('localPurchaseHistoryLoading');
+    const contentElement = isMobileDevice
+        ? document.getElementById('localPurchaseHistoryCardTable')
+        : document.getElementById('localPurchaseHistoryTable');
+    const errorElement = isMobileDevice
+        ? document.getElementById('localPurchaseHistoryCardError')
+        : document.getElementById('localPurchaseHistoryError');
+    const tableBody = isMobileDevice
+        ? document.getElementById('localPurchaseHistoryCardTableBody')
+        : document.getElementById('localPurchaseHistoryTableBody');
     
     // إظهار loading وإخفاء المحتوى
     if (loadingElement) loadingElement.classList.remove('d-none');
@@ -3502,7 +3951,9 @@ function loadLocalCustomerPurchaseHistory() {
             if (contentElement) contentElement.classList.remove('d-none');
             
             // إظهار زر الطباعة
-            const printBtn = document.getElementById('printLocalCustomerStatementBtn');
+            const printBtn = isMobileDevice
+                ? document.getElementById('printLocalCustomerStatementCardBtn')
+                : document.getElementById('printLocalCustomerStatementBtn');
             if (printBtn) printBtn.style.display = 'inline-block';
         } else {
             if (errorElement) {
@@ -3523,10 +3974,13 @@ function loadLocalCustomerPurchaseHistory() {
 
 // دالة عرض سجل المشتريات
 function displayLocalPurchaseHistory(history) {
-    const tableBody = document.getElementById('localPurchaseHistoryTableBody');
+    const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    const tableBody = isMobileDevice
+        ? document.getElementById('localPurchaseHistoryCardTableBody')
+        : document.getElementById('localPurchaseHistoryTableBody');
     
     if (!tableBody) {
-        console.error('localPurchaseHistoryTableBody element not found');
+        console.error('Purchase history table body element not found');
         return;
     }
     
@@ -3574,12 +4028,17 @@ function displayLocalPurchaseHistory(history) {
 
 // دوال مساعدة
 function localToggleAllItems() {
-    const selectAll = document.getElementById('localSelectAllItems');
+    const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    const selectAll = isMobileDevice
+        ? document.getElementById('localSelectAllItemsCard')
+        : document.getElementById('localSelectAllItems');
     const checkboxes = document.querySelectorAll('.local-item-checkbox');
     
-    checkboxes.forEach(function(checkbox) {
-        checkbox.checked = selectAll.checked;
-    });
+    if (selectAll) {
+        checkboxes.forEach(function(checkbox) {
+            checkbox.checked = selectAll.checked;
+        });
+    }
     
     localUpdateSelectedItems();
 }
@@ -3620,7 +4079,10 @@ function localUpdateSelectedItems() {
         }
     });
     
-    const returnBtn = document.getElementById('localCustomerReturnBtn');
+    const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
+    const returnBtn = isMobileDevice
+        ? document.getElementById('localCustomerReturnCardBtn')
+        : document.getElementById('localCustomerReturnBtn');
     if (returnBtn) {
         returnBtn.style.display = localSelectedItemsForReturn.length > 0 ? 'inline-block' : 'none';
     }
@@ -3635,269 +4097,28 @@ function localSelectItemForReturn(invoiceItemId, productId) {
     }
 }
 
-// معالج فتح modal سجل المشتريات
+// إعادة تعيين المتغيرات عند إغلاق الـ modal
 document.addEventListener('DOMContentLoaded', function() {
     const purchaseHistoryModal = document.getElementById('localCustomerPurchaseHistoryModal');
-    
-    // استخدام event delegation للتعامل مع الأزرار الديناميكية
-    document.addEventListener('click', function(e) {
-        const button = e.target.closest('.js-local-customer-purchase-history');
-        if (!button) return;
-        
-        const customerId = button.getAttribute('data-customer-id');
-        const customerName = button.getAttribute('data-customer-name');
-        const customerPhone = button.getAttribute('data-customer-phone') || '-';
-        const customerAddress = button.getAttribute('data-customer-address') || '-';
-        
-        if (!customerId) return;
-        
-        // تحويل customerId إلى رقم للتأكد من صحته
-        const customerIdNum = parseInt(customerId, 10);
-        if (isNaN(customerIdNum) || customerIdNum <= 0) {
-            console.error('Invalid customer ID:', customerId);
-            return;
-        }
-        
-        currentLocalCustomerId = customerIdNum;
-        currentLocalCustomerName = customerName;
-        
-        // تعيين معلومات العميل في الـ modal
-        const nameElement = document.getElementById('localPurchaseHistoryCustomerName');
-        const phoneElement = document.getElementById('localPurchaseHistoryCustomerPhone');
-        const addressElement = document.getElementById('localPurchaseHistoryCustomerAddress');
-        
-        if (nameElement) nameElement.textContent = customerName || '-';
-        if (phoneElement) phoneElement.textContent = customerPhone || '-';
-        if (addressElement) addressElement.textContent = customerAddress || '-';
-        
-        // إظهار loading وإخفاء المحتوى
-        const loadingElement = document.getElementById('localPurchaseHistoryLoading');
-        const contentElement = document.getElementById('localPurchaseHistoryTable');
-        const errorElement = document.getElementById('localPurchaseHistoryError');
-        
-        if (loadingElement) loadingElement.classList.remove('d-none');
-        if (contentElement) contentElement.classList.add('d-none');
-        if (errorElement) {
-            errorElement.classList.add('d-none');
-            errorElement.textContent = '';
-        }
-        
-        // إخفاء الأزرار مؤقتاً
-        const printBtn = document.getElementById('printLocalCustomerStatementBtn');
-        const returnBtn = document.getElementById('localCustomerReturnBtn');
-        if (printBtn) printBtn.style.display = 'none';
-        if (returnBtn) returnBtn.style.display = 'none';
-        
-        // إعادة تعيين العناصر المحددة
-        localSelectedItemsForReturn = [];
-        
-        // إغلاق جميع النماذج المفتوحة أولاً
-        if (typeof closeAllForms === 'function') {
-            closeAllForms();
-        }
-        
-        // إظهار الـ modal
-        if (purchaseHistoryModal) {
-            const modal = new bootstrap.Modal(purchaseHistoryModal);
-            modal.show();
-            
-            // تحميل البيانات بعد إظهار الـ modal
-            purchaseHistoryModal.addEventListener('shown.bs.modal', function loadData() {
-                purchaseHistoryModal.removeEventListener('shown.bs.modal', loadData);
-                
-                // تحميل سجل المشتريات
-                loadLocalCustomerPurchaseHistory();
-            }, { once: true });
-        }
-    });
-    
-    // معالج زر إرجاع المنتجات - يفتح modal سجل المشتريات مباشرة
-    document.addEventListener('click', function(e) {
-        const button = e.target.closest('.js-local-customer-return-products');
-        if (!button) return;
-        
-        const customerId = button.getAttribute('data-customer-id');
-        const customerName = button.getAttribute('data-customer-name');
-        
-        if (!customerId) return;
-        
-        // استخدام نفس معالج زر سجل المشتريات
-        const purchaseHistoryButton = document.querySelector('.js-local-customer-purchase-history[data-customer-id="' + customerId + '"]');
-        if (purchaseHistoryButton) {
-            purchaseHistoryButton.click();
-        }
-    });
-    
-    // إعادة تعيين المتغيرات عند إغلاق الـ modal
     if (purchaseHistoryModal) {
         purchaseHistoryModal.addEventListener('hidden.bs.modal', function() {
-            currentLocalCustomerId = null;
-            currentLocalCustomerName = null;
-            localSelectedItemsForReturn = [];
-            localPurchaseHistoryData = [];
+            if (typeof currentLocalCustomerId !== 'undefined') {
+                currentLocalCustomerId = null;
+            }
+            if (typeof currentLocalCustomerName !== 'undefined') {
+                currentLocalCustomerName = null;
+            }
+            if (typeof localSelectedItemsForReturn !== 'undefined') {
+                localSelectedItemsForReturn = [];
+            }
+            if (typeof localPurchaseHistoryData !== 'undefined') {
+                localPurchaseHistoryData = [];
+            }
         });
     }
 });
 
-// معالج تعديل العميل المحلي
-document.addEventListener('DOMContentLoaded', function() {
-    var editLocalCustomerButtons = document.querySelectorAll('.edit-local-customer-btn');
-    var editLocalCustomerModal = document.getElementById('editLocalCustomerModal');
-    
-    if (editLocalCustomerModal && editLocalCustomerButtons.length > 0) {
-        editLocalCustomerButtons.forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                // إغلاق جميع النماذج المفتوحة أولاً
-                if (typeof closeAllForms === 'function') {
-                    closeAllForms();
-                }
-                
-                var customerId = this.getAttribute('data-customer-id');
-                var customerName = this.getAttribute('data-customer-name');
-                var customerPhone = this.getAttribute('data-customer-phone') || '';
-                var customerAddress = this.getAttribute('data-customer-address') || '';
-                var customerRegionId = this.getAttribute('data-customer-region-id') || '';
-                var customerBalance = this.getAttribute('data-customer-balance') || '0';
-                
-                if (!customerId) {
-                    console.error('Customer ID not found');
-                    return;
-                }
-                
-                var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
-                
-                // تحديد العناصر حسب نوع الجهاز
-                var idInput, nameInput, phoneInput, addressInput, regionInput, balanceInput, editPhoneContainer;
-                
-                if (isMobileDevice) {
-                    // على الموبايل: استخدام Card
-                    idInput = document.getElementById('editLocalCustomerCardId');
-                    nameInput = document.getElementById('editLocalCustomerCardName');
-                    phoneInput = document.getElementById('editLocalCustomerCardPhone');
-                    addressInput = document.getElementById('editLocalCustomerCardAddress');
-                    regionInput = document.getElementById('editLocalCustomerCardRegionId');
-                    balanceInput = document.getElementById('editLocalCustomerCardBalance');
-                    editPhoneContainer = document.getElementById('editLocalCustomerCardPhoneNumbersContainer');
-                } else {
-                    // على الكمبيوتر: استخدام Modal
-                    idInput = document.getElementById('editLocalCustomerId');
-                    nameInput = document.getElementById('editLocalCustomerName');
-                    phoneInput = document.getElementById('editLocalCustomerPhone');
-                    addressInput = document.getElementById('editLocalCustomerAddress');
-                    regionInput = document.getElementById('editLocalCustomerRegionId');
-                    balanceInput = document.getElementById('editLocalCustomerBalance');
-                    editPhoneContainer = document.getElementById('editPhoneNumbersContainer');
-                }
-                
-                if (idInput) idInput.value = customerId;
-                if (nameInput) nameInput.value = customerName || '';
-                if (addressInput) addressInput.value = customerAddress;
-                if (regionInput) regionInput.value = customerRegionId;
-                if (balanceInput) balanceInput.value = customerBalance;
-                
-                // تحميل أرقام الهواتف المتعددة
-                if (editPhoneContainer) {
-                    editPhoneContainer.innerHTML = '';
-                    // جلب أرقام الهواتف من قاعدة البيانات عبر AJAX
-                    fetch('?action=get_local_customer_phones&customer_id=' + customerId)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success && data.phones && data.phones.length > 0) {
-                                data.phones.forEach(function(phone, index) {
-                                    var phoneGroup = document.createElement('div');
-                                    phoneGroup.className = 'input-group mb-2';
-                                    phoneGroup.innerHTML = `
-                                        <input type="text" class="form-control phone-input" name="phones[]" value="${phone}" placeholder="مثال: 01234567890">
-                                        <button type="button" class="btn btn-outline-danger remove-phone-btn">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    `;
-                                    editPhoneContainer.appendChild(phoneGroup);
-                                });
-                            } else if (customerPhone) {
-                                // إذا لم تكن هناك أرقام في local_customer_phones، استخدم الرقم القديم
-                                var phoneGroup = document.createElement('div');
-                                phoneGroup.className = 'input-group mb-2';
-                                phoneGroup.innerHTML = `
-                                    <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
-                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                `;
-                                editPhoneContainer.appendChild(phoneGroup);
-                            } else {
-                                // إضافة حقل فارغ واحد
-                                var phoneGroup = document.createElement('div');
-                                phoneGroup.className = 'input-group mb-2';
-                                phoneGroup.innerHTML = `
-                                    <input type="text" class="form-control phone-input" name="phones[]" placeholder="مثال: 01234567890">
-                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                `;
-                                editPhoneContainer.appendChild(phoneGroup);
-                            }
-                            if (typeof updateEditRemoveButtons === 'function') {
-                                updateEditRemoveButtons();
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error loading phones:', error);
-                            // في حالة الخطأ، استخدم الرقم القديم
-                            if (customerPhone) {
-                                var phoneGroup = document.createElement('div');
-                                phoneGroup.className = 'input-group mb-2';
-                                phoneGroup.innerHTML = `
-                                    <input type="text" class="form-control phone-input" name="phones[]" value="${customerPhone}" placeholder="مثال: 01234567890">
-                                    <button type="button" class="btn btn-outline-danger remove-phone-btn" style="display: none;">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                `;
-                                editPhoneContainer.appendChild(phoneGroup);
-                            }
-                            if (typeof updateEditRemoveButtons === 'function') {
-                                updateEditRemoveButtons();
-                            }
-                        });
-                } else if (phoneInput) {
-                    phoneInput.value = customerPhone;
-                }
-                
-                if (isMobileDevice) {
-                    // على الموبايل: إظهار Card
-                    var card = document.getElementById('editLocalCustomerCard');
-                    if (card) {
-                        card.style.display = 'block';
-                        if (typeof scrollToElement === 'function') {
-                            setTimeout(function() {
-                                scrollToElement(card);
-                            }, 50);
-                        }
-                    }
-                } else {
-                    // على الكمبيوتر: إظهار Modal
-                    try {
-                        var modal = bootstrap.Modal.getOrCreateInstance(editLocalCustomerModal);
-                        modal.show();
-                    } catch (err) {
-                        console.error('Error showing modal:', err);
-                        var modal = new bootstrap.Modal(editLocalCustomerModal);
-                        modal.show();
-                    }
-                }
-            });
-        });
-    } else {
-        if (!editLocalCustomerModal) {
-            console.warn('Edit local customer modal not found');
-        }
-        if (editLocalCustomerButtons.length === 0) {
-            console.warn('Edit local customer buttons not found');
-        }
-    }
+// معالج تعديل العميل المحلي - تم نقله إلى دالة showEditLocalCustomerModal
     
     // معالج إضافة منطقة جديدة من نموذج العميل المحلي (للمدير فقط)
     var addRegionFromLocalCustomerForm = document.getElementById('addRegionFromLocalCustomerForm');
