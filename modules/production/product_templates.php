@@ -2732,8 +2732,8 @@ if (file_exists($specificationsModulePath)) {
     </div>
 </div>
 
-<!-- Modal تفاصيل القالب -->
-<div class="modal fade" id="templateDetailsModal" tabindex="-1">
+<!-- Modal تفاصيل القالب - للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="templateDetailsModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-light">
@@ -2782,6 +2782,55 @@ if (file_exists($specificationsModulePath)) {
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Card تفاصيل القالب - للموبايل -->
+<div class="card shadow-sm mb-4 d-md-none" id="templateDetailsCard" style="display: none;">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="bi bi-info-circle me-2"></i>
+            <span id="templateDetailsCardTitle">تفاصيل القالب</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="template-details-meta mb-3">
+            <span class="badge rounded-pill px-3 py-2" id="templateDetailsCardStatusBadge">-</span>
+            <span class="template-details-meta-item">
+                <i class="bi bi-calendar-event me-1"></i>
+                <span id="templateDetailsCardCreatedAt">-</span>
+            </span>
+            <span class="template-details-meta-item">
+                <i class="bi bi-person-circle me-1"></i>
+                <span id="templateDetailsCardCreator">-</span>
+            </span>
+            <span class="template-details-meta-item">
+                <i class="bi bi-diagram-3 me-1"></i>
+                <span id="templateDetailsCardType">-</span>
+            </span>
+            <span class="template-details-meta-item">
+                <i class="bi bi-droplet-half me-1"></i>
+                <span id="templateDetailsCardHoney">-</span>
+            </span>
+        </div>
+        <div id="templateDetailsCardNotes" class="template-details-notes mb-4 d-none"></div>
+        <div class="row g-4">
+            <div class="col-12">
+                <h6 class="details-section-title">
+                    <i class="bi bi-diagram-3 me-2"></i>المواد الخام
+                </h6>
+                <div id="templateDetailsCardRawMaterials" class="details-list-wrapper"></div>
+            </div>
+            <div class="col-12">
+                <h6 class="details-section-title">
+                    <i class="bi bi-box2-heart me-2"></i>أدوات التعبئة
+                </h6>
+                <div id="templateDetailsCardPackaging" class="details-list-wrapper"></div>
+            </div>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-secondary" onclick="closeTemplateDetailsCard()">إغلاق</button>
         </div>
     </div>
 </div>
@@ -3539,88 +3588,110 @@ function showTemplateDetails(triggerButton) {
         return;
     }
 
-    const modalElement = document.getElementById('templateDetailsModal');
-    if (!modalElement) {
-        alert('لا يمكن فتح تفاصيل القالب حالياً.');
-        return;
+    // دالة مساعدة لتعبئة البيانات في العناصر
+    function populateDetails(isCard) {
+        const prefix = isCard ? 'templateDetailsCard' : 'templateDetails';
+        
+        const titleEl = document.getElementById(prefix + (isCard ? 'Title' : 'Title'));
+        if (titleEl) {
+            titleEl.textContent = data.product_name || 'تفاصيل القالب';
+        }
+
+        const statusBadge = document.getElementById(prefix + 'StatusBadge');
+        if (statusBadge) {
+            const statusClass = (data.status === 'active') ? 'bg-success' : (data.status === 'inactive' ? 'bg-secondary' : 'bg-warning');
+            statusBadge.className = 'badge rounded-pill px-3 py-2 ' + statusClass;
+            statusBadge.textContent = data.status_label || 'غير محدد';
+        }
+
+        const createdAtEl = document.getElementById(prefix + 'CreatedAt');
+        if (createdAtEl) {
+            createdAtEl.textContent = data.created_at_label || '-';
+        }
+
+        const creatorEl = document.getElementById(prefix + 'Creator');
+        if (creatorEl) {
+            creatorEl.textContent = (data.creator_name && data.creator_name.trim() !== '') ? data.creator_name : 'غير محدد';
+        }
+
+        const typeEl = document.getElementById(prefix + 'Type');
+        if (typeEl) {
+            const typeLabels = {
+                honey: 'قالب عسل',
+                honey_filtered: 'قالب عسل مفلتر',
+                honey_raw: 'قالب عسل خام',
+                olive_oil: 'قالب زيت زيتون',
+                beeswax: 'قالب شمع عسل',
+                derivatives: 'قالب مشتقات',
+                nuts: 'قالب مكسرات',
+                unified: 'قالب موحد',
+                legacy: 'قالب سابق',
+                general: 'قالب عام'
+            };
+            const templateType = typeof data.template_type === 'string' ? data.template_type : 'general';
+            typeEl.textContent = typeLabels[templateType] || templateType;
+        }
+
+        const honeyEl = document.getElementById(prefix + 'Honey');
+        if (honeyEl) {
+            const honeyQuantity = Number(data.honey_quantity);
+            if (Number.isFinite(honeyQuantity) && honeyQuantity > 0) {
+                honeyEl.textContent = formatTemplateQuantity(honeyQuantity) + ' جرام';
+            } else {
+                honeyEl.textContent = 'لا توجد كمية عسل محددة';
+            }
+        }
+
+        const notesEl = document.getElementById(prefix + 'Notes');
+        if (notesEl) {
+            const notes = typeof data.notes === 'string' ? data.notes.trim() : '';
+            if (notes !== '') {
+                notesEl.textContent = notes;
+                notesEl.classList.remove('d-none');
+            } else {
+                notesEl.textContent = '';
+                notesEl.classList.add('d-none');
+            }
+        }
+
+        renderTemplateDetailsList(
+            document.getElementById(prefix + 'RawMaterials'),
+            data.raw_materials,
+            'لا توجد مواد خام مسجلة.'
+        );
+
+        renderTemplateDetailsList(
+            document.getElementById(prefix + 'Packaging'),
+            data.packaging,
+            'لا توجد أدوات تعبئة مسجلة.'
+        );
     }
 
-    const titleEl = document.getElementById('templateDetailsTitle');
-    if (titleEl) {
-        titleEl.textContent = data.product_name || 'تفاصيل القالب';
-    }
+    closeAllForms();
 
-    const statusBadge = document.getElementById('templateDetailsStatusBadge');
-    if (statusBadge) {
-        const statusClass = (data.status === 'active') ? 'bg-success' : (data.status === 'inactive' ? 'bg-secondary' : 'bg-warning');
-        statusBadge.className = 'badge rounded-pill px-3 py-2 ' + statusClass;
-        statusBadge.textContent = data.status_label || 'غير محدد';
-    }
-
-    const createdAtEl = document.getElementById('templateDetailsCreatedAt');
-    if (createdAtEl) {
-        createdAtEl.textContent = data.created_at_label || '-';
-    }
-
-    const creatorEl = document.getElementById('templateDetailsCreator');
-    if (creatorEl) {
-        creatorEl.textContent = (data.creator_name && data.creator_name.trim() !== '') ? data.creator_name : 'غير محدد';
-    }
-
-    const typeEl = document.getElementById('templateDetailsType');
-    if (typeEl) {
-        const typeLabels = {
-            honey: 'قالب عسل',
-            honey_filtered: 'قالب عسل مفلتر',
-            honey_raw: 'قالب عسل خام',
-            olive_oil: 'قالب زيت زيتون',
-            beeswax: 'قالب شمع عسل',
-            derivatives: 'قالب مشتقات',
-            nuts: 'قالب مكسرات',
-            unified: 'قالب موحد',
-            legacy: 'قالب سابق',
-            general: 'قالب عام'
-        };
-        const templateType = typeof data.template_type === 'string' ? data.template_type : 'general';
-        typeEl.textContent = typeLabels[templateType] || templateType;
-    }
-
-    const honeyEl = document.getElementById('templateDetailsHoney');
-    if (honeyEl) {
-        const honeyQuantity = Number(data.honey_quantity);
-        if (Number.isFinite(honeyQuantity) && honeyQuantity > 0) {
-            honeyEl.textContent = formatTemplateQuantity(honeyQuantity) + ' جرام';
+    if (isMobile()) {
+        // على الموبايل: استخدام Card
+        const card = document.getElementById('templateDetailsCard');
+        if (card) {
+            populateDetails(true);
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
         } else {
-            honeyEl.textContent = 'لا توجد كمية عسل محددة';
+            alert('لا يمكن فتح تفاصيل القالب حالياً.');
+        }
+    } else {
+        // على الكمبيوتر: استخدام Modal
+        const modalElement = document.getElementById('templateDetailsModal');
+        if (modalElement) {
+            populateDetails(false);
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(modalElement);
+            modalInstance.show();
+        } else {
+            alert('لا يمكن فتح تفاصيل القالب حالياً.');
         }
     }
-
-    const notesEl = document.getElementById('templateDetailsNotes');
-    if (notesEl) {
-        const notes = typeof data.notes === 'string' ? data.notes.trim() : '';
-        if (notes !== '') {
-            notesEl.textContent = notes;
-            notesEl.classList.remove('d-none');
-        } else {
-            notesEl.textContent = '';
-            notesEl.classList.add('d-none');
-        }
-    }
-
-    renderTemplateDetailsList(
-        document.getElementById('templateDetailsRawMaterials'),
-        data.raw_materials,
-        'لا توجد مواد خام مسجلة.'
-    );
-
-    renderTemplateDetailsList(
-        document.getElementById('templateDetailsPackaging'),
-        data.packaging,
-        'لا توجد أدوات تعبئة مسجلة.'
-    );
-
-    const modalInstance = bootstrap.Modal.getOrCreateInstance(modalElement);
-    modalInstance.show();
 }
 
 function createBatch(templateId, templateName, triggerButton) {
@@ -4527,7 +4598,7 @@ function scrollToElement(element) {
 function closeAllForms() {
     // إغلاق جميع Cards على الموبايل
     const cards = [
-        'createTemplateCard', 'editTemplateCard', 'deleteTemplateCard'
+        'createTemplateCard', 'editTemplateCard', 'deleteTemplateCard', 'templateDetailsCard'
     ];
     cards.forEach(function(cardId) {
         const card = document.getElementById(cardId);
@@ -4571,6 +4642,20 @@ function closeEditTemplateCard() {
 
 function closeDeleteTemplateCard() {
     const card = document.getElementById('deleteTemplateCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
+function closeTemplateDetailsCard() {
+    const card = document.getElementById('templateDetailsCard');
+    if (card) {
+        card.style.display = 'none';
+    }
+}
+
+function closeTemplateDetailsCard() {
+    const card = document.getElementById('templateDetailsCard');
     if (card) {
         card.style.display = 'none';
     }
