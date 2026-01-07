@@ -1369,6 +1369,23 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 <!-- Responsive Modals CSS - يجب أن يكون في البداية قبل أي محتوى -->
 <link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
 
+<!-- تعريف الدوال الأساسية للأزرار مبكراً -->
+<script>
+// دوال مؤقتة للأزرار - سيتم استبدالها بالدوال الكاملة لاحقاً
+window.showImportLocalCustomersModal = window.showImportLocalCustomersModal || function() {
+    // سيتم تعريف الدالة الكاملة لاحقاً
+    console.log('Loading showImportLocalCustomersModal...');
+};
+window.showCustomerExportModal = window.showCustomerExportModal || function() {
+    // سيتم تعريف الدالة الكاملة لاحقاً
+    console.log('Loading showCustomerExportModal...');
+};
+window.showAddLocalCustomerModal = window.showAddLocalCustomerModal || function() {
+    // سيتم تعريف الدالة الكاملة لاحقاً
+    console.log('Loading showAddLocalCustomerModal...');
+};
+</script>
+
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
     <h2 class="mb-2 mb-md-0">
         <i class="bi bi-people me-2"></i>العملاء المحليين
@@ -2492,7 +2509,7 @@ function closeAllForms() {
 }
 
 // دالة فتح نموذج استيراد العملاء المحليين
-function showImportLocalCustomersModal() {
+window.showImportLocalCustomersModal = function() {
     closeAllForms();
     
     if (isMobile()) {
@@ -2510,7 +2527,7 @@ function showImportLocalCustomersModal() {
             modalInstance.show();
         }
     }
-}
+};
 
 // دالة فتح نموذج تحصيل الديون
 function showCollectPaymentModal(button) {
@@ -2884,7 +2901,7 @@ function showLocalCustomerPurchaseHistoryModal(button) {
 }
 
 // دالة فتح نموذج إضافة عميل
-function showAddLocalCustomerModal() {
+window.showAddLocalCustomerModal = function() {
     closeAllForms();
     
     if (isMobile()) {
@@ -2902,7 +2919,7 @@ function showAddLocalCustomerModal() {
             modalInstance.show();
         }
     }
-}
+};
 
 // دوال إغلاق Cards
 function closeCollectPaymentCard() {
@@ -2953,7 +2970,7 @@ function closeLocalCustomerPurchaseHistoryCard() {
 }
 
 // دالة فتح نموذج تصدير العملاء
-function showCustomerExportModal(event) {
+window.showCustomerExportModal = function(event) {
     closeAllForms();
     
     // الحصول على section من الزر إذا كان موجوداً
@@ -2981,7 +2998,7 @@ function showCustomerExportModal(event) {
             modalInstance.show();
         }
     }
-}
+};
 
 // دالة إغلاق Card تصدير العملاء
 function closeCustomerExportCard() {
@@ -6170,26 +6187,6 @@ function showAddRegionFromLocalCustomerModal() {
         }
     } else {
         const modal = document.getElementById('addRegionFromLocalCustomerModal');
-        if (modal) {
-            const modalInstance = new bootstrap.Modal(modal);
-            modalInstance.show();
-        }
-    }
-}
-
-function showImportLocalCustomersModal() {
-    closeAllForms();
-    
-    if (isMobile()) {
-        const card = document.getElementById('importLocalCustomersCard');
-        if (card) {
-            card.style.display = 'block';
-            setTimeout(function() {
-                scrollToElement(card);
-            }, 50);
-        }
-    } else {
-        const modal = document.getElementById('importLocalCustomersModal');
         if (modal) {
             const modalInstance = new bootstrap.Modal(modal);
             modalInstance.show();
