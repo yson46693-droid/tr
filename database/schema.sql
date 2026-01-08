@@ -348,7 +348,7 @@ CREATE TABLE IF NOT EXISTS `backups` (
   `file_path` varchar(500) NOT NULL,
   `file_size` bigint(20) DEFAULT 0,
   `backup_type` enum('daily','weekly','monthly','manual') DEFAULT 'daily',
-  `status` enum('success','failed') DEFAULT 'success',
+  `status` enum('success','failed','completed') DEFAULT 'success',
   `error_message` text DEFAULT NULL,
   `created_by` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
