@@ -4969,6 +4969,8 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 </div>
+</script>
+
 <?php endif; ?>
 
 <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
@@ -5104,8 +5106,6 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 </div>
-
-</script>
 
 <style>
 /* تحسينات responsive للمودال - متوافقة مع responsive-modals.css */
