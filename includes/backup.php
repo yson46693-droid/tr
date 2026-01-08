@@ -146,12 +146,65 @@ function createDatabaseBackup($backupType = 'daily', $userId = null) {
                         $sendResult = sendTelegramFile($filePath, $caption);
                         if ($sendResult === false) {
                             error_log('Failed to send manual backup to Telegram: ' . $filename);
+                            // إضافة رسالة الخطأ في error_message ولكن الحالة تبقى 'success'
+                            if ($backupId) {
+                                try {
+                                    $db->execute(
+                                        "UPDATE backups SET status = 'success', error_message = ? WHERE id = ?",
+                                        ['فشل إرسال النسخة الاحتياطية إلى Telegram', $backupId]
+                                    );
+                                    error_log("Backup: Updated error message for manual backup ID: $backupId");
+                                } catch (Exception $updateError) {
+                                    error_log("Backup: Failed to update error message - " . $updateError->getMessage());
+                                }
+                            }
+                        } else {
+                            // عند نجاح الإرسال، تأكد من أن الحالة هي 'success' و error_message فارغ
+                            if ($backupId) {
+                                try {
+                                    $db->execute(
+                                        "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ?",
+                                        [$backupId]
+                                    );
+                                    error_log("Backup: Ensured status is 'success' after successful Telegram send for backup ID: $backupId");
+                                } catch (Exception $updateError) {
+                                    error_log("Backup: Failed to ensure status after Telegram send - " . $updateError->getMessage());
+                                }
+                            }
                         }
                     }
                 }
             } catch (Exception $telegramError) {
                 // لا نريد أن نفشل إنشاء النسخة الاحتياطية إذا فشل الإرسال عبر تليجرام
                 error_log('Error sending manual backup to Telegram: ' . $telegramError->getMessage());
+                // التأكد من أن الحالة تبقى 'success' حتى لو فشل الإرسال
+                if ($backupId) {
+                    try {
+                        $db->execute(
+                            "UPDATE backups SET status = 'success', error_message = ? WHERE id = ?",
+                            ['خطأ في إرسال النسخة الاحتياطية إلى Telegram: ' . $telegramError->getMessage(), $backupId]
+                        );
+                        error_log("Backup: Ensured status is 'success' after Telegram error for backup ID: $backupId");
+                    } catch (Exception $updateError) {
+                        error_log("Backup: Failed to ensure status after Telegram error - " . $updateError->getMessage());
+                    }
+                }
+            }
+        }
+        
+        // تحديث نهائي للتأكد من أن الحالة هي 'success' دائماً بعد نجاح إنشاء النسخة الاحتياطية
+        if ($backupId) {
+            try {
+                $currentStatus = $db->queryOne("SELECT status FROM backups WHERE id = ?", [$backupId]);
+                if ($currentStatus && ($currentStatus['status'] ?? '') !== 'success') {
+                    $db->execute(
+                        "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ?",
+                        [$backupId]
+                    );
+                    error_log("Backup: Final check - Fixed status from '" . ($currentStatus['status'] ?? 'unknown') . "' to 'success' for backup ID: $backupId");
+                }
+            } catch (Exception $finalError) {
+                error_log("Backup: Failed final status check - " . $finalError->getMessage());
             }
         }
 

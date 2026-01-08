@@ -36,6 +36,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'type' => $backupType,
                     'filename' => $result['filename'] ?? ''
                 ]);
+                
+                // التأكد من أن الحالة هي 'success' في قاعدة البيانات
+                if (isset($result['backup_id']) && $result['backup_id']) {
+                    try {
+                        $db = db();
+                        $currentStatus = $db->queryOne(
+                            "SELECT status FROM backups WHERE id = ?",
+                            [$result['backup_id']]
+                        );
+                        
+                        if ($currentStatus && ($currentStatus['status'] ?? '') !== 'success') {
+                            $db->execute(
+                                "UPDATE backups SET status = 'success', error_message = NULL WHERE id = ?",
+                                [$result['backup_id']]
+                            );
+                            error_log("API Backup: Fixed status from '" . ($currentStatus['status'] ?? 'unknown') . "' to 'success' for backup ID: " . $result['backup_id']);
+                        }
+                    } catch (Exception $statusError) {
+                        error_log("API Backup: Failed to verify/update backup status - " . $statusError->getMessage());
+                    }
+                }
             }
             
             echo json_encode($result);
