@@ -6251,6 +6251,49 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
     </div>
 </div>
 
+<!-- Modal سجل مشتريات العميل المحلي -->
+<div class="modal fade" id="localCustomerPurchaseHistoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-clock-history me-2"></i>
+                    سجل مشتريات العميل: <span class="purchase-history-customer-name text-primary">-</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped align-middle">
+                        <thead class="table-primary">
+                            <tr>
+                                <th>رقم الفاتورة</th>
+                                <th>التاريخ</th>
+                                <th>المنتج</th>
+                                <th>الكمية</th>
+                                <th>سعر الوحدة</th>
+                                <th>الإجمالي</th>
+                                <th>رقم التشغيلة</th>
+                            </tr>
+                        </thead>
+                        <tbody id="purchaseHistoryTableBody">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">
+                                    <div class="spinner-border spinner-border-sm me-2"></div>
+                                    جاري التحميل...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // ===== دوال فتح النماذج =====
 
@@ -6502,8 +6545,49 @@ document.addEventListener('DOMContentLoaded', function() {
             var nameEl = modal.querySelector('.purchase-history-customer-name');
             if (nameEl) nameEl.textContent = customerName || '';
             
-            // تحميل سجل المشتريات (يمكن إضافة AJAX هنا)
-            console.log('Loading purchase history for customer:', customerId);
+            // عرض حالة التحميل
+            var tableBody = modal.querySelector('#purchaseHistoryTableBody');
+            if (tableBody) {
+                tableBody.innerHTML = '<tr><td colspan="7" class="text-center"><div class="spinner-border spinner-border-sm me-2"></div>جاري تحميل سجل المشتريات...</td></tr>';
+            }
+            
+            // جلب سجل المشتريات عبر AJAX
+            if (customerId) {
+                fetch('/api/customer_purchase_history.php?action=get_history&customer_id=' + customerId + '&type=local')
+                    .then(function(response) {
+                        if (!response.ok) {
+                            throw new Error('فشل تحميل البيانات');
+                        }
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        if (data.success && data.purchase_history && data.purchase_history.length > 0) {
+                            var html = '';
+                            data.purchase_history.forEach(function(item) {
+                                var batchNumbers = item.batch_numbers && item.batch_numbers.length > 0 
+                                    ? item.batch_numbers.join(', ') 
+                                    : '-';
+                                
+                                html += '<tr>';
+                                html += '<td>' + (item.invoice_number || '-') + '</td>';
+                                html += '<td>' + (item.invoice_date || '-') + '</td>';
+                                html += '<td>' + (item.product_name || 'غير معروف') + '</td>';
+                                html += '<td>' + item.quantity.toFixed(2) + ' ' + (item.unit || 'قطعة') + '</td>';
+                                html += '<td>' + item.unit_price.toFixed(2) + '</td>';
+                                html += '<td>' + item.total_price.toFixed(2) + '</td>';
+                                html += '<td>' + batchNumbers + '</td>';
+                                html += '</tr>';
+                            });
+                            tableBody.innerHTML = html;
+                        } else {
+                            tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">لا توجد مشتريات مسجلة لهذا العميل</td></tr>';
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Error loading purchase history:', error);
+                        tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-danger"><i class="bi bi-exclamation-triangle me-2"></i>حدث خطأ أثناء تحميل سجل المشتريات</td></tr>';
+                    });
+            }
         });
     }
     
@@ -6541,6 +6625,68 @@ document.addEventListener('DOMContentLoaded', function() {
             if (nameEl) nameEl.textContent = customerName || '';
             
             console.log('Loading returns for customer:', customerId);
+        });
+    }
+    
+    // ===== زر الحصول على الموقع الجغرافي =====
+    
+    // زر الموقع في Modal
+    var getLocationBtn = document.getElementById('getLocationBtn');
+    if (getLocationBtn) {
+        getLocationBtn.addEventListener('click', function() {
+            if (navigator.geolocation) {
+                this.disabled = true;
+                this.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحصول على الموقع...';
+                
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        document.getElementById('addCustomerLatitude').value = position.coords.latitude.toFixed(6);
+                        document.getElementById('addCustomerLongitude').value = position.coords.longitude.toFixed(6);
+                        getLocationBtn.disabled = false;
+                        getLocationBtn.innerHTML = '<i class="bi bi-check-circle"></i> تم الحصول على الموقع';
+                        setTimeout(function() {
+                            getLocationBtn.innerHTML = '<i class="bi bi-geo-alt"></i> الحصول على الموقع الحالي';
+                        }, 2000);
+                    },
+                    function(error) {
+                        getLocationBtn.disabled = false;
+                        getLocationBtn.innerHTML = '<i class="bi bi-geo-alt"></i> الحصول على الموقع الحالي';
+                        alert('خطأ في الحصول على الموقع: ' + error.message);
+                    }
+                );
+            } else {
+                alert('المتصفح لا يدعم خاصية تحديد الموقع الجغرافي');
+            }
+        });
+    }
+    
+    // زر الموقع في Card
+    var getLocationCardBtn = document.getElementById('getLocationCardBtn');
+    if (getLocationCardBtn) {
+        getLocationCardBtn.addEventListener('click', function() {
+            if (navigator.geolocation) {
+                this.disabled = true;
+                this.innerHTML = '<i class="bi bi-hourglass-split"></i> جاري الحصول...';
+                
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        document.getElementById('addCustomerCardLatitude').value = position.coords.latitude.toFixed(6);
+                        document.getElementById('addCustomerCardLongitude').value = position.coords.longitude.toFixed(6);
+                        getLocationCardBtn.disabled = false;
+                        getLocationCardBtn.innerHTML = '<i class="bi bi-check-circle"></i> تم';
+                        setTimeout(function() {
+                            getLocationCardBtn.innerHTML = '<i class="bi bi-geo-alt"></i> الحصول على الموقع';
+                        }, 2000);
+                    },
+                    function(error) {
+                        getLocationCardBtn.disabled = false;
+                        getLocationCardBtn.innerHTML = '<i class="bi bi-geo-alt"></i> الحصول على الموقع';
+                        alert('خطأ: ' + error.message);
+                    }
+                );
+            } else {
+                alert('المتصفح لا يدعم تحديد الموقع');
+            }
         });
     }
     
