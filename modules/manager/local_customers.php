@@ -5105,6 +5105,8 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
+</script>
+
 <style>
 /* تحسينات responsive للمودال - متوافقة مع responsive-modals.css */
 @media (max-width: 768px) {
