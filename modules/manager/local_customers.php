@@ -2880,7 +2880,7 @@ function showEditLocalCustomerModal(button) {
 }
 
 // دالة فتح نموذج سجل مشتريات العميل المحلي
-function showLocalCustomerPurchaseHistoryModal(button) {
+window.showLocalCustomerPurchaseHistoryModal = function(button) {
     if (!button) return;
     
     closeAllForms();
@@ -3001,7 +3001,7 @@ function showLocalCustomerPurchaseHistoryModal(button) {
             }, { once: true });
         }
     }
-}
+};
 
 // دالة فتح نموذج إضافة عميل
 window.showAddLocalCustomerModal = function() {
