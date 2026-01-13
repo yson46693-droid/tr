@@ -2022,7 +2022,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                 </div>
                                 <div class="col-6">
                                     <input type="text" class="form-control" name="longitude" id="addCustomerLongitude" placeholder="خط الطول" readonly>
-                                </div>
+                            س    </div>
                             </div>
                             <small class="text-muted d-block mt-1 small">يمكنك الحصول على الموقع تلقائياً أو إدخاله يدوياً</small>
                         </div>
