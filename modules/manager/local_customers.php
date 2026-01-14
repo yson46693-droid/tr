@@ -6332,9 +6332,15 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
 // ===== دوال فتح النماذج =====
 
 function showAddRegionFromLocalCustomerModal() {
-    closeAllForms();
-    
+    // لا نغلق النافذة الرئيسية لأن الزر موجود بداخلها
     if (isMobile()) {
+        // إغلاق كارد المنطقة فقط إذا كان مفتوحاً
+        const regionCard = document.getElementById('addRegionFromLocalCustomerCard');
+        if (regionCard && regionCard.style.display !== 'none') {
+            const form = regionCard.querySelector('form');
+            if (form) form.reset();
+        }
+        
         const card = document.getElementById('addRegionFromLocalCustomerCard');
         if (card) {
             card.style.display = 'block';
@@ -6343,10 +6349,22 @@ function showAddRegionFromLocalCustomerModal() {
             }, 50);
         }
     } else {
-        const modal = document.getElementById('addRegionFromLocalCustomerModal');
-        if (modal) {
-            const modalInstance = new bootstrap.Modal(modal);
-            modalInstance.show();
+        // على الكمبيوتر: إغلاق نافذة المنطقة فقط إذا كانت مفتوحة
+        const regionModal = document.getElementById('addRegionFromLocalCustomerModal');
+        if (regionModal) {
+            const existingInstance = bootstrap.Modal.getInstance(regionModal);
+            if (existingInstance) {
+                existingInstance.hide();
+                // انتظار قليل قبل فتحها مرة أخرى
+                setTimeout(function() {
+                    const newInstance = new bootstrap.Modal(regionModal);
+                    newInstance.show();
+                }, 150);
+            } else {
+                // إذا لم تكن مفتوحة، افتحها مباشرة
+                const modalInstance = new bootstrap.Modal(regionModal);
+                modalInstance.show();
+            }
         }
     }
 }
