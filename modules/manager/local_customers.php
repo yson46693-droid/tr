@@ -1542,12 +1542,16 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                     modalInstance.show();
                     
                     // محاولة تحميل البيانات إذا كانت الدالة متاحة
-                    modal.addEventListener('shown.bs.modal', function loadData() {
-                        modal.removeEventListener('shown.bs.modal', loadData);
-                        if (typeof window.loadLocalCustomerPurchaseHistory === 'function') {
-                            window.loadLocalCustomerPurchaseHistory();
-                        }
-                    }, { once: true });
+                    if (typeof window.loadLocalCustomerPurchaseHistory === 'function') {
+                        window.loadLocalCustomerPurchaseHistory();
+                    } else {
+                        modal.addEventListener('shown.bs.modal', function loadData() {
+                            modal.removeEventListener('shown.bs.modal', loadData);
+                            if (typeof window.loadLocalCustomerPurchaseHistory === 'function') {
+                                window.loadLocalCustomerPurchaseHistory();
+                            }
+                        }, { once: true });
+                    }
                 }
             }
         };
@@ -3017,12 +3021,14 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
                 scrollToElement(card);
             }, 50);
             
-            // تحميل البيانات بعد إظهار الـ card
-            setTimeout(function() {
+            // تحميل البيانات بعد إظهار الـ card أو مباشرة كنسخة احتياطية
+            const triggerLoad = function() {
                 if (typeof loadLocalCustomerPurchaseHistory === 'function') {
                     loadLocalCustomerPurchaseHistory();
                 }
-            }, 100);
+            };
+            setTimeout(triggerLoad, 50);
+            triggerLoad();
         }
     } else {
         // على الكمبيوتر: استخدام Modal
@@ -3062,7 +3068,10 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
             const modalInstance = new bootstrap.Modal(modal);
             modalInstance.show();
             
-            // تحميل البيانات بعد إظهار الـ modal
+            // تحميل البيانات فوراً ثم كنسخة احتياطية عند shown لضمان التنفيذ
+            if (typeof loadLocalCustomerPurchaseHistory === 'function') {
+                loadLocalCustomerPurchaseHistory();
+            }
             modal.addEventListener('shown.bs.modal', function loadData() {
                 modal.removeEventListener('shown.bs.modal', loadData);
                 if (typeof loadLocalCustomerPurchaseHistory === 'function') {

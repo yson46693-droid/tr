@@ -28,8 +28,15 @@ try {
     require_once __DIR__ . '/../includes/auth.php';
     require_once __DIR__ . '/../includes/notifications.php';
 } catch (Exception $e) {
-    error_log("Notifications API initialization error: " . $e->getMessage());
-    echo json_encode(['success' => false, 'error' => 'Initialization error']);
+    $errorId = uniqid('notif_init_', true);
+    error_log("[$errorId] Notifications API initialization error: " . $e->getMessage());
+    error_log("[$errorId] Stack trace: " . $e->getTraceAsString());
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'error' => 'Initialization error',
+        'error_id' => $errorId
+    ]);
     exit;
 }
 
@@ -248,13 +255,15 @@ try {
     }
     
 } catch (Exception $e) {
-    error_log("Notifications API error: " . $e->getMessage());
-    error_log("Stack trace: " . $e->getTraceAsString());
+    $errorId = uniqid('notif_', true);
+    error_log("[$errorId] Notifications API error: " . $e->getMessage());
+    error_log("[$errorId] Stack trace: " . $e->getTraceAsString());
     
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'error' => 'Internal server error'
+        'error' => 'Internal server error',
+        'error_id' => $errorId
     ]);
 }
 

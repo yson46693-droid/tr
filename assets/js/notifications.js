@@ -199,7 +199,21 @@ async function loadNotifications() {
         });
         
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            // Try to extract server-provided error_id for debugging
+            let errorId = null;
+            try {
+                const contentType = response.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    const text = await response.clone().text();
+                    if (text && text.trim()) {
+                        const parsed = JSON.parse(text);
+                        errorId = parsed && (parsed.error_id || parsed.errorId || parsed.errorID) ? (parsed.error_id || parsed.errorId || parsed.errorID) : null;
+                    }
+                }
+            } catch (_) {
+                // ignore parsing errors here
+            }
+            throw new Error(`HTTP error! status: ${response.status}${errorId ? ` (error_id: ${errorId})` : ''}`);
         }
         
         // قراءة الاستجابة كنص أولاً للتحقق من أنها JSON صالحة
