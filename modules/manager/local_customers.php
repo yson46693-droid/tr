@@ -2701,7 +2701,6 @@ function closeAllForms() {
         'localCustomerPurchaseHistoryModal', 
         'localCustomerReturnModal', 
         'viewLocationModal',
-        'addRegionFromLocalCustomerModal', 
         'importLocalCustomersModal', 
         'deleteLocalCustomerModal',
         'customerExportModal',
@@ -4378,136 +4377,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // معالج تعديل العميل المحلي - تم نقله إلى دالة showEditLocalCustomerModal
     
-    // معالج إضافة منطقة جديدة من نموذج العميل المحلي (للمدير فقط)
-    var addRegionFromLocalCustomerForm = document.getElementById('addRegionFromLocalCustomerForm');
-    var addRegionFromLocalCustomerModal = document.getElementById('addRegionFromLocalCustomerModal');
-    var addLocalCustomerRegionSelect = document.getElementById('addLocalCustomerRegionId');
-    var editLocalCustomerRegionSelect = document.getElementById('editLocalCustomerRegionId');
-    
-    console.log('Local region form elements:', {
-        form: addRegionFromLocalCustomerForm,
-        modal: addRegionFromLocalCustomerModal,
-        addSelect: addLocalCustomerRegionSelect,
-        editSelect: editLocalCustomerRegionSelect
-    });
-    
-    if (addRegionFromLocalCustomerForm && addRegionFromLocalCustomerModal) {
-        console.log('Setting up add region from local customer form handler');
-        addRegionFromLocalCustomerForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('Add region from local customer form submitted');
-            
-            var regionNameInput = document.getElementById('newLocalRegionName');
-            var regionName = regionNameInput ? regionNameInput.value.trim() : '';
-            var messageDiv = document.getElementById('addLocalRegionMessage');
-            var submitBtn = document.getElementById('addLocalRegionSubmitBtn');
-            var spinner = document.getElementById('addLocalRegionSpinner');
-            
-            if (!regionName) {
-                if (messageDiv) {
-                    messageDiv.className = 'alert alert-danger';
-                    messageDiv.textContent = 'يجب إدخال اسم المنطقة';
-                    messageDiv.classList.remove('d-none');
-                }
-                return;
-            }
-            
-            // إظهار loading
-            if (submitBtn) submitBtn.disabled = true;
-            if (spinner) spinner.classList.remove('d-none');
-            if (messageDiv) messageDiv.classList.add('d-none');
-            
-            // إرسال طلب AJAX
-            var formData = new FormData();
-            formData.append('action', 'add_region_ajax');
-            formData.append('name', regionName);
-            
-            console.log('Sending AJAX request to add region:', regionName);
-            fetch(window.location.href, {
-                method: 'POST',
-                body: formData
-            })
-            .then(function(response) {
-                console.log('Response status:', response.status);
-                if (!response.ok) {
-                    throw new Error('Network response was not ok: ' + response.status);
-                }
-                return response.json();
-            })
-            .then(function(data) {
-                console.log('Response data:', data);
-                if (submitBtn) submitBtn.disabled = false;
-                if (spinner) spinner.classList.add('d-none');
-                
-                if (data && data.success) {
-                    console.log('Region added successfully:', data.region);
-                    // إضافة المنطقة الجديدة إلى select
-                    var newOption = document.createElement('option');
-                    newOption.value = data.region.id;
-                    newOption.textContent = data.region.name;
-                    newOption.selected = true;
-                    
-                    if (addLocalCustomerRegionSelect) {
-                        addLocalCustomerRegionSelect.appendChild(newOption);
-                        addLocalCustomerRegionSelect.value = data.region.id;
-                    }
-                    
-                    if (editLocalCustomerRegionSelect) {
-                        var editOption = newOption.cloneNode(true);
-                        editLocalCustomerRegionSelect.appendChild(editOption);
-                    }
-                    
-                    // إظهار رسالة نجاح
-                    if (messageDiv) {
-                        messageDiv.className = 'alert alert-success';
-                        messageDiv.textContent = data.message || 'تم إضافة المنطقة بنجاح';
-                        messageDiv.classList.remove('d-none');
-                    }
-                    
-                    // إغلاق modal بعد ثانيتين
-                    setTimeout(function() {
-                        if (addRegionFromLocalCustomerModal) {
-                            var modal = bootstrap.Modal.getInstance(addRegionFromLocalCustomerModal);
-                            if (modal) {
-                                modal.hide();
-                            }
-                        }
-                        // مسح الحقول
-                        if (regionNameInput) regionNameInput.value = '';
-                        if (messageDiv) messageDiv.classList.add('d-none');
-                    }, 1500);
-                } else {
-                    if (messageDiv) {
-                        messageDiv.className = 'alert alert-danger';
-                        messageDiv.textContent = (data && data.message) ? data.message : 'حدث خطأ أثناء إضافة المنطقة';
-                        messageDiv.classList.remove('d-none');
-                    }
-                }
-            })
-            .catch(function(error) {
-                if (submitBtn) submitBtn.disabled = false;
-                if (spinner) spinner.classList.add('d-none');
-                console.error('Error adding region:', error);
-                if (messageDiv) {
-                    messageDiv.className = 'alert alert-danger';
-                    messageDiv.textContent = 'حدث خطأ أثناء الاتصال بالخادم: ' + error.message;
-                    messageDiv.classList.remove('d-none');
-                }
-            });
-        });
-    } else {
-        if (!addRegionFromLocalCustomerForm) {
-            console.warn('Add region from local customer form not found');
-        }
-        if (!addRegionFromLocalCustomerModal) {
-            console.warn('Add region from local customer modal not found');
-        }
-    }
-    
-    // معالج إضافة منطقة جديدة من card الموبايل
+    // معالج إضافة منطقة جديدة - card واحد لجميع الأجهزة
     var addRegionFromLocalCustomerCardForm = document.getElementById('addRegionFromLocalCustomerCardForm');
     var addRegionFromLocalCustomerCard = document.getElementById('addRegionFromLocalCustomerCard');
+    var addLocalCustomerRegionSelect = document.getElementById('addLocalCustomerRegionId');
+    var editLocalCustomerRegionSelect = document.getElementById('editLocalCustomerRegionId');
     
     if (addRegionFromLocalCustomerCardForm && addRegionFromLocalCustomerCard) {
         addRegionFromLocalCustomerCardForm.addEventListener('submit', function(e) {
@@ -5084,8 +4958,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <option value="<?php echo $region['id']; ?>"><?php echo htmlspecialchars($region['name']); ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
-                            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRegionFromLocalCustomerModal">
+                            <?php if (in_array($currentRole, ['manager', 'developer', 'accountant'], true)): ?>
+                            <button type="button" class="btn btn-outline-primary" onclick="showAddRegionFromLocalCustomerModal()">
                                 <i class="bi bi-plus-circle"></i>
                             </button>
                             <?php endif; ?>
@@ -5168,41 +5042,9 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 <?php endif; ?>
 
-<!-- Modal إضافة منطقة جديدة (من نموذج العميل المحلي) -->
-<?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
-<!-- Modal للكمبيوتر فقط -->
-<div class="modal fade d-none d-md-block" id="addRegionFromLocalCustomerModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">إضافة منطقة جديدة</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form id="addRegionFromLocalCustomerForm">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">اسم المنطقة <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="newLocalRegionName" required>
-                    </div>
-                    <div id="addLocalRegionMessage" class="alert d-none"></div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                    <button type="submit" class="btn btn-primary" id="addLocalRegionSubmitBtn">
-                        <span class="spinner-border spinner-border-sm d-none me-2" id="addLocalRegionSpinner"></span>
-                        إضافة
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<?php endif; ?>
-
-<?php if (in_array($currentRole, ['manager', 'developer'], true)): ?>
-<!-- Card للموبايل - إضافة منطقة -->
-<div class="card shadow-sm mb-4 d-md-none" id="addRegionFromLocalCustomerCard" style="display: none;">
+<!-- Card إضافة منطقة جديدة - يعمل على جميع الأجهزة -->
+<?php if (in_array($currentRole, ['manager', 'developer', 'accountant'], true)): ?>
+<div class="card shadow-sm mb-4" id="addRegionFromLocalCustomerCard" style="display: none;">
     <div class="card-header bg-primary text-white">
         <h5 class="mb-0">إضافة منطقة جديدة</h5>
     </div>
@@ -6477,44 +6319,35 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
 // ===== دوال فتح النماذج =====
 
 function showAddRegionFromLocalCustomerModal() {
-    // إغلاق النماذج الأخرى عند الاستدعاء من زر منفصل
+    // إغلاق النماذج الأخرى
     if (typeof closeAllForms === 'function') {
         closeAllForms();
     }
     
-    if (isMobile()) {
-        // إغلاق كارد المنطقة فقط إذا كان مفتوحاً
-        const regionCard = document.getElementById('addRegionFromLocalCustomerCard');
-        if (regionCard && regionCard.style.display !== 'none') {
-            const form = regionCard.querySelector('form');
-            if (form) form.reset();
+    // فتح card إضافة المنطقة
+    const card = document.getElementById('addRegionFromLocalCustomerCard');
+    if (card) {
+        // إعادة تعيين النموذج إذا كان مفتوحاً
+        const form = card.querySelector('form');
+        if (form) form.reset();
+        
+        // إخفاء رسالة الخطأ/النجاح
+        const messageDiv = document.getElementById('addLocalRegionCardMessage');
+        if (messageDiv) {
+            messageDiv.classList.add('d-none');
         }
         
-        const card = document.getElementById('addRegionFromLocalCustomerCard');
-        if (card) {
-            card.style.display = 'block';
-            setTimeout(function() {
+        // عرض card
+        card.style.display = 'block';
+        
+        // التمرير إلى card
+        setTimeout(function() {
+            if (typeof scrollToElement === 'function') {
                 scrollToElement(card);
-            }, 50);
-        }
-    } else {
-        // على الكمبيوتر: إغلاق نافذة المنطقة فقط إذا كانت مفتوحة
-        const regionModal = document.getElementById('addRegionFromLocalCustomerModal');
-        if (regionModal) {
-            const existingInstance = bootstrap.Modal.getInstance(regionModal);
-            if (existingInstance) {
-                existingInstance.hide();
-                // انتظار قليل قبل فتحها مرة أخرى
-                setTimeout(function() {
-                    const newInstance = new bootstrap.Modal(regionModal);
-                    newInstance.show();
-                }, 150);
             } else {
-                // إذا لم تكن مفتوحة، افتحها مباشرة
-                const modalInstance = new bootstrap.Modal(regionModal);
-                modalInstance.show();
+                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
-        }
+        }, 50);
     }
 }
 
@@ -6603,7 +6436,6 @@ document.addEventListener('DOMContentLoaded', function() {
         'localCustomerReturnModal',
         'viewLocationModal',
         'editLocalCustomerModal',
-        'addRegionFromLocalCustomerModal',
         'customerExportModal',
         'importLocalCustomersModal',
         'deleteLocalCustomerModal'
