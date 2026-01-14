@@ -6539,8 +6539,20 @@ function showDeleteLocalCustomerModal(button) {
     if (isMobile()) {
         const card = document.getElementById('deleteLocalCustomerCard');
         if (card) {
-            document.getElementById('deleteLocalCustomerCardId').value = customerId;
-            card.querySelector('.delete-local-customer-card-name').textContent = customerName;
+            const idInput = document.getElementById('deleteLocalCustomerCardId');
+            const nameEl = card.querySelector('.delete-local-customer-card-name');
+            
+            if (idInput) {
+                idInput.value = customerId;
+            } else {
+                console.error('deleteLocalCustomerCardId input not found');
+            }
+            
+            if (nameEl) {
+                nameEl.textContent = customerName;
+            } else {
+                console.error('delete-local-customer-card-name element not found');
+            }
             
             card.style.display = 'block';
             setTimeout(function() {
@@ -6550,8 +6562,20 @@ function showDeleteLocalCustomerModal(button) {
     } else {
         const modal = document.getElementById('deleteLocalCustomerModal');
         if (modal) {
-            modal.querySelector('input[name="customer_id"]').value = customerId;
-            modal.querySelector('.delete-local-customer-name').textContent = customerName;
+            const idInput = modal.querySelector('input[name="customer_id"]');
+            const nameEl = modal.querySelector('.delete-local-customer-name');
+            
+            if (idInput) {
+                idInput.value = customerId;
+            } else {
+                console.error('Customer ID input not found in delete modal');
+            }
+            
+            if (nameEl) {
+                nameEl.textContent = customerName;
+            } else {
+                console.error('Customer name element (.delete-local-customer-name) not found in delete modal');
+            }
             
             const modalInstance = new bootstrap.Modal(modal);
             modalInstance.show();
@@ -6599,8 +6623,21 @@ document.addEventListener('DOMContentLoaded', function() {
             var customerId = button.getAttribute('data-customer-id') || '';
             var customerName = button.getAttribute('data-customer-name') || '-';
             var modal = this;
-            modal.querySelector('input[name="customer_id"]').value = customerId;
-            modal.querySelector('.delete-local-customer-name').textContent = customerName;
+            
+            var idInput = modal.querySelector('input[name="customer_id"]');
+            var nameEl = modal.querySelector('.delete-local-customer-name');
+            
+            if (idInput) {
+                idInput.value = customerId;
+            } else {
+                console.error('Customer ID input not found in delete modal');
+            }
+            
+            if (nameEl) {
+                nameEl.textContent = customerName;
+            } else {
+                console.error('Customer name element (.delete-local-customer-name) not found in delete modal');
+            }
         });
     }
     
@@ -6742,24 +6779,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     
-    // Modal حذف
-    var deleteModal = document.getElementById('deleteLocalCustomerModal');
-    if (deleteModal) {
-        deleteModal.addEventListener('show.bs.modal', function(event) {
-            var button = event.relatedTarget;
-            if (!button) return;
-            
-            var customerId = button.getAttribute('data-customer-id');
-            var customerName = button.getAttribute('data-customer-name');
-            
-            var modal = this;
-            var idInput = modal.querySelector('input[name="customer_id"]');
-            var nameEl = modal.querySelector('.delete-local-customer-name');
-            
-            if (idInput) idInput.value = customerId || '';
-            if (nameEl) nameEl.textContent = customerName || '';
-        });
-    }
+    // Modal حذف - تم نقله إلى DOMContentLoaded أعلاه لتجنب التكرار
     
     // Modal مرتجعات
     var returnModal = document.getElementById('localCustomerReturnModal');
