@@ -1592,16 +1592,21 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
     </h2>
     <div class="d-flex gap-2">
         <button class="btn btn-success" onclick="showImportLocalCustomersModal()">
-            <i class="bi bi-file-earmark-spreadsheet me-2"></i>استيراد من CSV
+            <i class="bi bi-file-earmark-spreadsheet me-2"></i> import CSV
         </button>
         <?php if (in_array($currentRole, ['manager', 'developer', 'accountant'], true)): ?>
         <button type="button" class="btn btn-info" onclick="showCustomerExportModal(event)" data-section="local">
-            <i class="bi bi-download me-2"></i>تصدير عملاء محددين
+            <i class="bi bi-download me-2"></i> شيت عملاء 
         </button>
         <?php endif; ?>
         <button class="btn btn-primary" onclick="showAddLocalCustomerModal()">
-            <i class="bi bi-person-plus me-2"></i>إضافة عميل محلي جديد
+            <i class="bi bi-person-plus me-2"></i>إضافة عميل جديد
         </button>
+        <?php if (in_array($currentRole, ['manager', 'developer', 'accountant'], true)): ?>
+        <button class="btn btn-primary" onclick="showAddRegionFromLocalCustomerModal()">
+            <i class="bi bi-geo-alt me-2"></i>إضافة منطقه
+        </button>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -4500,6 +4505,108 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // معالج إضافة منطقة جديدة من card الموبايل
+    var addRegionFromLocalCustomerCardForm = document.getElementById('addRegionFromLocalCustomerCardForm');
+    var addRegionFromLocalCustomerCard = document.getElementById('addRegionFromLocalCustomerCard');
+    
+    if (addRegionFromLocalCustomerCardForm && addRegionFromLocalCustomerCard) {
+        addRegionFromLocalCustomerCardForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            var regionNameInput = document.getElementById('newLocalRegionCardName');
+            var regionName = regionNameInput ? regionNameInput.value.trim() : '';
+            var messageDiv = document.getElementById('addLocalRegionCardMessage');
+            var submitBtn = document.getElementById('addLocalRegionCardSubmitBtn');
+            var spinner = document.getElementById('addLocalRegionCardSpinner');
+            
+            if (!regionName) {
+                if (messageDiv) {
+                    messageDiv.className = 'alert alert-danger';
+                    messageDiv.textContent = 'يجب إدخال اسم المنطقة';
+                    messageDiv.classList.remove('d-none');
+                }
+                return;
+            }
+            
+            // إظهار loading
+            if (submitBtn) submitBtn.disabled = true;
+            if (spinner) spinner.classList.remove('d-none');
+            if (messageDiv) messageDiv.classList.add('d-none');
+            
+            // إرسال طلب AJAX
+            var formData = new FormData();
+            formData.append('action', 'add_region_ajax');
+            formData.append('name', regionName);
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                if (submitBtn) submitBtn.disabled = false;
+                if (spinner) spinner.classList.add('d-none');
+                
+                if (data && data.success) {
+                    // إضافة المنطقة الجديدة إلى select
+                    var newOption = document.createElement('option');
+                    newOption.value = data.region.id;
+                    newOption.textContent = data.region.name;
+                    newOption.selected = true;
+                    
+                    if (addLocalCustomerRegionSelect) {
+                        addLocalCustomerRegionSelect.appendChild(newOption);
+                        addLocalCustomerRegionSelect.value = data.region.id;
+                    }
+                    
+                    if (editLocalCustomerRegionSelect) {
+                        var editOption = newOption.cloneNode(true);
+                        editLocalCustomerRegionSelect.appendChild(editOption);
+                    }
+                    
+                    // إظهار رسالة نجاح
+                    if (messageDiv) {
+                        messageDiv.className = 'alert alert-success';
+                        messageDiv.textContent = data.message || 'تم إضافة المنطقة بنجاح';
+                        messageDiv.classList.remove('d-none');
+                    }
+                    
+                    // إغلاق card بعد ثانيتين
+                    setTimeout(function() {
+                        if (addRegionFromLocalCustomerCard) {
+                            addRegionFromLocalCustomerCard.style.display = 'none';
+                        }
+                        // مسح الحقول
+                        if (regionNameInput) regionNameInput.value = '';
+                        if (messageDiv) messageDiv.classList.add('d-none');
+                    }, 1500);
+                } else {
+                    if (messageDiv) {
+                        messageDiv.className = 'alert alert-danger';
+                        messageDiv.textContent = (data && data.message) ? data.message : 'حدث خطأ أثناء إضافة المنطقة';
+                        messageDiv.classList.remove('d-none');
+                    }
+                }
+            })
+            .catch(function(error) {
+                if (submitBtn) submitBtn.disabled = false;
+                if (spinner) spinner.classList.add('d-none');
+                console.error('Error adding region:', error);
+                if (messageDiv) {
+                    messageDiv.className = 'alert alert-danger';
+                    messageDiv.textContent = 'حدث خطأ أثناء الاتصال بالخادم: ' + error.message;
+                    messageDiv.classList.remove('d-none');
+                }
+            });
+        });
+    }
+    
    
     // معالج استيراد العملاء المحليين من CSV
     var importLocalCustomersForm = document.getElementById('importLocalCustomersForm');
@@ -6370,7 +6477,11 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
 // ===== دوال فتح النماذج =====
 
 function showAddRegionFromLocalCustomerModal() {
-    // لا نغلق النافذة الرئيسية لأن الزر موجود بداخلها
+    // إغلاق النماذج الأخرى عند الاستدعاء من زر منفصل
+    if (typeof closeAllForms === 'function') {
+        closeAllForms();
+    }
+    
     if (isMobile()) {
         // إغلاق كارد المنطقة فقط إذا كان مفتوحاً
         const regionCard = document.getElementById('addRegionFromLocalCustomerCard');
