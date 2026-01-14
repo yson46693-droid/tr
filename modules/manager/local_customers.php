@@ -4973,7 +4973,6 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 </div>
-</script>
 
 <?php endif; ?>
 
