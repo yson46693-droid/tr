@@ -307,7 +307,7 @@ try {
         } elseif ($data['section'] === 'company') {
             $title = 'تصدير_عملاء_الشركة';
         } elseif ($data['section'] === 'local') {
-            $title = 'تصدير_العملاء_المحليين';
+            $title = 'شيت التحصيلات';
         }
     }
     
