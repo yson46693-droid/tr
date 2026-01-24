@@ -151,7 +151,7 @@ if (!$isLoginPage) {
 
 define('DB_PORT', '3306');
 define('DB_NAME', 'albarakah_db_v2');
-define('DB_PASS', 'Osama744');
+define('DB_PASS', '1vv^48C3k');
 define('DB_CHARSET', 'utf8mb4');
 define('DB_HOST', 'localhost:3306');
 define('DB_USER', 'osama744444');
