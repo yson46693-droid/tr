@@ -25,6 +25,29 @@ requireRole(['manager', 'accountant']);
 $currentUser = getCurrentUser();
 $db = db();
 
+// التأكد من وجود جدول local_customer_phones لحفظ أكثر من رقم لكل عميل
+try {
+    $localCustomerPhonesTable = $db->queryOne("SHOW TABLES LIKE 'local_customer_phones'");
+    if (empty($localCustomerPhonesTable)) {
+        $db->execute("
+            CREATE TABLE IF NOT EXISTS `local_customer_phones` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `customer_id` int(11) NOT NULL,
+                `phone` varchar(20) NOT NULL,
+                `is_primary` tinyint(1) DEFAULT 0,
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                KEY `customer_id` (`customer_id`),
+                CONSTRAINT `local_customer_phones_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `local_customers` (`id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        error_log('Table local_customer_phones created successfully in import_local_customers API');
+    }
+} catch (Exception $e) {
+    // لا نوقف العملية إذا فشل إنشاء الجدول، فقط نسجل الخطأ
+    error_log('Error creating local_customer_phones table in import_local_customers API: ' . $e->getMessage());
+}
+
 // التحقق من نوع الطلب
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -199,13 +222,40 @@ try {
     // البحث عن أعمدة البيانات المطلوبة
     $nameIndex = -1;
     $phoneIndex = -1;
+    $phone2Index = -1;
     $addressIndex = -1;
     $balanceIndex = -1;
     $regionIndex = -1;
     
     // البحث عن الأعمدة بطرق مختلفة (عربي/إنجليزي)
     $nameVariations = ['اسم العميل', 'الاسم', 'name', 'customer name', 'اسم', 'اسم_العميل'];
-    $phoneVariations = ['رقم الهاتف', 'الهاتف', 'phone', 'mobile', 'tel', 'رقم_الهاتف'];
+    $phoneVariations = [
+        'رقم الهاتف',
+        'الهاتف',
+        'phone',
+        'mobile',
+        'tel',
+        'رقم_الهاتف',
+        'تليفون',
+        'تلفون',
+        'telephone',
+        'رقم التليفون',
+        'رقم التلفون',
+        'هاتف'
+    ];
+    $phone2Variations = [
+        'رقم الهاتف (الثاني)',
+        'رقم الهاتف الثاني',
+        'الهاتف الثاني',
+        'phone2',
+        'mobile2',
+        'tel2',
+        'رقم_الهاتف_الثاني',
+        'تليفون 2',
+        'تلفون 2',
+        'هاتف 2',
+        'هاتف ثاني'
+    ];
     $addressVariations = ['العنوان', 'address', 'location', 'عنوان'];
     $balanceVariations = ['الرصيد', 'الديون', 'balance', 'debt', 'رصيد', 'ديون'];
     $regionVariations = ['المنطقة', 'region', 'منطقة'];
@@ -220,13 +270,25 @@ try {
         )) {
             $nameIndex = $index;
         }
+        // رقم الهاتف الأول
         if ($phoneIndex === -1 && (
             in_array($headerLower, $phoneVariations, true) || 
-            strpos($headerLower, 'هاتف') !== false || 
-            strpos($headerLower, 'phone') !== false ||
-            strpos($headerLower, 'mobile') !== false
+            (strpos($headerLower, 'هاتف') !== false && strpos($headerLower, 'ثاني') === false && strpos($headerLower, '2') === false) || 
+            (strpos($headerLower, 'phone') !== false && strpos($headerLower, '2') === false) ||
+            (strpos($headerLower, 'mobile') !== false && strpos($headerLower, '2') === false) ||
+            (strpos($headerLower, 'tel') !== false && strpos($headerLower, '2') === false)
         )) {
             $phoneIndex = $index;
+        }
+        // رقم الهاتف الثاني
+        if ($phone2Index === -1 && (
+            in_array($headerLower, $phone2Variations, true) ||
+            (strpos($headerLower, 'هاتف') !== false && (strpos($headerLower, 'ثاني') !== false || strpos($headerLower, '2') !== false)) ||
+            strpos($headerLower, 'phone2') !== false ||
+            strpos($headerLower, 'mobile2') !== false ||
+            strpos($headerLower, 'tel2') !== false
+        )) {
+            $phone2Index = $index;
         }
         if ($addressIndex === -1 && (
             in_array($headerLower, $addressVariations, true) || 
@@ -286,12 +348,14 @@ try {
             
             $name = trim($row[$nameIndex]);
             $phone = ($phoneIndex !== -1 && isset($row[$phoneIndex])) ? trim($row[$phoneIndex]) : null;
+            $phone2 = ($phone2Index !== -1 && isset($row[$phone2Index])) ? trim($row[$phone2Index]) : null;
             $address = ($addressIndex !== -1 && isset($row[$addressIndex])) ? trim($row[$addressIndex]) : null;
             $balance = ($balanceIndex !== -1 && isset($row[$balanceIndex])) ? trim($row[$balanceIndex]) : '0';
             $regionName = ($regionIndex !== -1 && isset($row[$regionIndex])) ? trim($row[$regionIndex]) : null;
             
             // تنظيف البيانات
             $phone = $phone !== null && $phone !== '' ? $phone : null;
+            $phone2 = $phone2 !== null && $phone2 !== '' ? $phone2 : null;
             $address = $address !== null && $address !== '' ? $address : null;
             $balance = is_numeric($balance) ? (float)$balance : 0.0;
             
@@ -354,6 +418,29 @@ try {
                 );
                 
                 $customerId = $db->getLastInsertId();
+                
+                // حفظ أرقام الهواتف في جدول local_customer_phones (الهاتف الأول والثاني)
+                try {
+                    $phonesToSave = [];
+                    if ($phone !== null && $phone !== '') {
+                        $phonesToSave[] = ['phone' => $phone, 'is_primary' => 1];
+                    }
+                    if ($phone2 !== null && $phone2 !== '') {
+                        $phonesToSave[] = ['phone' => $phone2, 'is_primary' => 0];
+                    }
+                    
+                    if (!empty($phonesToSave) && $customerId) {
+                        foreach ($phonesToSave as $phoneData) {
+                            $db->execute(
+                                "INSERT INTO local_customer_phones (customer_id, phone, is_primary) VALUES (?, ?, ?)",
+                                [$customerId, $phoneData['phone'], $phoneData['is_primary'] ? 1 : 0]
+                            );
+                        }
+                    }
+                } catch (Exception $phoneError) {
+                    // في حال فشل حفظ أرقام الهواتف، لا نوقف الاستيراد بالكامل
+                    error_log('Error inserting local_customer_phones for customer ' . $customerId . ': ' . $phoneError->getMessage());
+                }
                 
                 // تسجيل في سجل التدقيق
                 logAudit($currentUser['id'], 'import_local_customer', 'local_customer', $customerId, null, [
