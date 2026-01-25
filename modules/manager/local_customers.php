@@ -1621,23 +1621,9 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
         
         console.log('showLocalCustomerReturnModal called for customer:', customerIdNum, customerName);
         
-        // على الموبايل: نفتح سجل المشتريات مباشرة
+        // على الموبايل وسطح المكتب: نفتح modal المرتجع مباشرة
         const isMobileDevice = typeof checkIsMobile === 'function' ? checkIsMobile() : (typeof isMobile === 'function' ? isMobile() : (typeof window.isMobile === 'function' ? window.isMobile() : window.innerWidth <= 768));
         
-        if (isMobileDevice) {
-            const showHistory = typeof showLocalCustomerPurchaseHistoryModal === 'function' 
-                ? showLocalCustomerPurchaseHistoryModal 
-                : (typeof window.showLocalCustomerPurchaseHistoryModal === 'function' 
-                    ? window.showLocalCustomerPurchaseHistoryModal 
-                    : null);
-            
-            if (showHistory) {
-                showHistory(button);
-            }
-            return;
-        }
-        
-        // على سطح المكتب: نفتح modal المرتجع مباشرة
         // تعيين معرف العميل
         if (typeof currentLocalCustomerId !== 'undefined') {
             currentLocalCustomerId = customerIdNum;
@@ -1651,7 +1637,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             window.currentLocalCustomerName = customerName;
         }
         
-        // فتح modal المرتجع مباشرة
+        // فتح modal المرتجع مباشرة (على الموبايل والكمبيوتر)
         const returnModal = document.getElementById('localCustomerReturnModal');
         if (!returnModal) {
             console.error('localCustomerReturnModal element not found');
@@ -1680,7 +1666,6 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
         modalInstance.show();
         
         // تحميل بيانات المشتريات في الخلفية بعد فتح modal
-        // ثم عرض قائمة المشتريات مباشرة في modal المرتجع
         setTimeout(function() {
             const loadHistory = typeof loadLocalCustomerPurchaseHistory === 'function' 
                 ? loadLocalCustomerPurchaseHistory 
@@ -1694,6 +1679,9 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                 console.warn('loadLocalCustomerPurchaseHistory function not found');
             }
         }, 300);
+        
+        return;
+        
     };
 })();
 </script>
@@ -2542,7 +2530,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 </div>
 
 <!-- Modal إرجاع منتجات العميل المحلي - للكمبيوتر فقط -->
-<div class="modal fade d-none d-md-block" id="localCustomerReturnModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="localCustomerReturnModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content shadow-lg">
             <div class="modal-header bg-warning text-dark border-bottom border-warning">
@@ -5855,9 +5843,12 @@ window.CUSTOMER_EXPORT_CONFIG = {
     #addLocalCustomerModal,
     #editLocalCustomerModal,
     #localCustomerPurchaseHistoryModal,
-    #localCustomerReturnModal,
     #viewLocationModal {
         display: none !important;
+    }
+    /* modal المرتجع مرئي على الموبايل والكمبيوتر */
+    #localCustomerReturnModal {
+        display: block !important;
     }
 }
 
