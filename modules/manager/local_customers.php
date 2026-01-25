@@ -1840,11 +1840,17 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 <!-- قائمة العملاء -->
 <div class="card shadow-sm">
     <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">قائمة العملاء المحليين (<?php echo $totalCustomers; ?>)</h5>
+        <h5 class="mb-0">قائمة العملاء المحليين (<span id="customersCount"><?php echo $totalCustomers; ?></span>)</h5>
     </div>
     <div class="card-body">
+        <div id="customersTableLoading" class="text-center py-4" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">جاري التحميل...</span>
+            </div>
+            <p class="mt-2 text-muted">جاري البحث...</p>
+        </div>
         <div class="table-responsive dashboard-table-wrapper" style="will-change: scroll-position;">
-            <table class="table dashboard-table align-middle" style="table-layout: auto;">
+            <table id="localCustomersTable" class="table dashboard-table align-middle" style="table-layout: auto;">
                 <thead>
                     <tr>
                         <th>ID</th>
@@ -1857,7 +1863,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                         <th>الإجراءات</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="customersTableBody">
                     <?php if (empty($customers)): ?>
                         <tr>
                             <td colspan="8" class="text-center text-muted">لا توجد عملاء محليين</td>
@@ -2020,8 +2026,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
         </div>
         
         <!-- Pagination -->
-        <?php if ($totalPages > 1): ?>
-        <nav aria-label="Page navigation" class="mt-3">
+        <nav id="customersPagination" aria-label="Page navigation" class="mt-3" style="<?php echo $totalPages <= 1 ? 'display: none;' : ''; ?>">
             <ul class="pagination justify-content-center">
                 <li class="page-item <?php echo $pageNum <= 1 ? 'disabled' : ''; ?>">
                     <a class="page-link" href="?page=local_customers&p=<?php echo $pageNum - 1; ?><?php echo $search ? '&search=' . urlencode($search) : ''; ?>&debt_status=<?php echo urlencode($debtStatus); ?>">
@@ -2060,7 +2065,6 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                 </li>
             </ul>
         </nav>
-        <?php endif; ?>
     </div>
 </div>
 
@@ -7041,23 +7045,252 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // ===== البحث الفوري في صفحة العملاء المحليين =====
+    // ===== البحث الفوري المتقدم بدون إعادة تحميل في صفحة العملاء المحليين =====
+    var currentRole = '<?php echo htmlspecialchars($currentRole); ?>';
     var customerSearchInput = document.getElementById('customerSearch');
     var searchForm = customerSearchInput ? customerSearchInput.closest('form') : null;
     var searchTimeout = null;
+    var currentPage = 1;
+    var isLoading = false;
     
+    // دالة لتنسيق العملة (نسخة JavaScript من formatCurrency)
+    function formatCurrency(amount) {
+        var formatted = parseFloat(amount).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+        return formatted + ' ج.م';
+    }
+    
+    // دالة لجلب العملاء عبر AJAX
+    function fetchCustomers(page) {
+        if (isLoading) return;
+        
+        isLoading = true;
+        var searchValue = customerSearchInput ? customerSearchInput.value.trim() : '';
+        var debtStatus = document.getElementById('debtStatusFilter') ? document.getElementById('debtStatusFilter').value : 'all';
+        var regionId = document.getElementById('regionFilter') ? document.getElementById('regionFilter').value : '';
+        
+        // إظهار مؤشر التحميل
+        var loadingEl = document.getElementById('customersTableLoading');
+        var tableWrapper = document.querySelector('.table-responsive');
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (tableWrapper) tableWrapper.style.opacity = '0.5';
+        
+        // بناء URL مع المعاملات
+        var apiUrl = '<?php echo getRelativeUrl("api/get_local_customers_search.php"); ?>';
+        var params = new URLSearchParams({
+            search: searchValue,
+            debt_status: debtStatus,
+            p: page || 1
+        });
+        if (regionId) {
+            params.append('region_id', regionId);
+        }
+        
+        fetch(apiUrl + '?' + params.toString())
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                if (data.success) {
+                    updateCustomersTable(data.customers, data.pagination);
+                    currentPage = data.pagination.current_page;
+                } else {
+                    console.error('Error:', data.message);
+                    showError('حدث خطأ أثناء جلب البيانات');
+                }
+            })
+            .catch(function(error) {
+                console.error('Fetch error:', error);
+                showError('حدث خطأ أثناء الاتصال بالسيرفر');
+            })
+            .finally(function() {
+                isLoading = false;
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (tableWrapper) tableWrapper.style.opacity = '1';
+            });
+    }
+    
+    // دالة لتحديث جدول العملاء
+    function updateCustomersTable(customers, pagination) {
+        var tbody = document.getElementById('customersTableBody');
+        var countEl = document.getElementById('customersCount');
+        var paginationEl = document.getElementById('customersPagination');
+        
+        if (!tbody) return;
+        
+        // تحديث العدد
+        if (countEl) {
+            countEl.textContent = pagination.total_customers;
+        }
+        
+        // مسح الجدول
+        tbody.innerHTML = '';
+        
+        // إضافة العملاء
+        if (customers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">لا توجد عملاء محليين</td></tr>';
+            if (paginationEl) paginationEl.style.display = 'none';
+            return;
+        }
+        
+        customers.forEach(function(customer) {
+            var row = document.createElement('tr');
+            
+            // بناء أرقام الهواتف
+            var phonesHtml = '';
+            if (customer.phones && customer.phones.length > 0) {
+                customer.phones.forEach(function(phone) {
+                    if (phone && phone.trim()) {
+                        phonesHtml += '<a href="tel:' + escapeHtml(phone) + '" class="btn btn-sm btn-outline-primary me-1 mb-1" title="اتصل بـ ' + escapeHtml(phone) + '"><i class="bi bi-telephone-fill"></i> </a>';
+                    }
+                });
+            } else if (customer.phone) {
+                phonesHtml = '<a href="tel:' + escapeHtml(customer.phone) + '" class="btn btn-sm btn-outline-primary me-1 mb-1" title="اتصل بـ ' + escapeHtml(customer.phone) + '"><i class="bi bi-telephone-fill"></i> </a>';
+            }
+            if (!phonesHtml) phonesHtml = '-';
+            
+            // بناء الرصيد
+            var balanceHtml = '<strong>' + customer.balance_formatted + '</strong>';
+            if (customer.balance !== 0) {
+                balanceHtml += ' <span class="badge ' + customer.balance_badge_class + ' ms-1">' + customer.balance_badge_text + '</span>';
+            }
+            
+            // بناء الموقع
+            var locationHtml = '<div class="d-flex flex-wrap align-items-center gap-2">';
+            locationHtml += '<button type="button" class="btn btn-sm btn-outline-primary location-capture-btn" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '"><i class="bi bi-geo-alt me-1"></i>تحديد</button>';
+            if (customer.has_location) {
+                locationHtml += '<button type="button" class="btn btn-sm btn-outline-info location-view-btn" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-latitude="' + customer.latitude.toFixed(8) + '" data-longitude="' + customer.longitude.toFixed(8) + '"><i class="bi bi-map me-1"></i>عرض</button>';
+            } else {
+                locationHtml += '<span class="badge bg-secondary-subtle text-secondary">غير محدد</span>';
+            }
+            locationHtml += '</div>';
+            
+            // بناء الإجراءات
+            var actionsHtml = '<div class="d-flex flex-wrap align-items-center gap-2">';
+            actionsHtml += '<button type="button" class="btn btn-sm btn-outline-warning" onclick="showEditLocalCustomerModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '" data-customer-region-id="' + customer.region_id + '" data-customer-balance="' + customer.raw_balance + '"><i class="bi bi-pencil me-1"></i>تعديل</button>';
+            actionsHtml += '<button type="button" class="btn btn-sm ' + (customer.balance > 0 ? 'btn-success' : 'btn-outline-secondary') + '" onclick="showCollectPaymentModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-balance="' + customer.raw_balance + '" data-customer-balance-formatted="' + escapeHtml(customer.balance_formatted) + '" ' + (customer.balance > 0 ? '' : 'disabled') + '><i class="bi bi-cash-coin me-1"></i>تحصيل</button>';
+            actionsHtml += '<button type="button" class="btn btn-sm btn-outline-info local-customer-purchase-history-btn" onclick="showLocalCustomerPurchaseHistoryModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '"><i class="bi bi-receipt me-1"></i>سجل</button>';
+            if (currentRole === 'manager') {
+                actionsHtml += '<button type="button" class="btn btn-sm btn-outline-danger" onclick="showDeleteLocalCustomerModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '"><i class="bi bi-trash3 me-1"></i>حذف</button>';
+            }
+            actionsHtml += '<button type="button" class="btn btn-sm btn-outline-warning local-customer-return-btn" onclick="showLocalCustomerReturnModal(this)" data-customer-id="' + customer.id + '" data-customer-name="' + escapeHtml(customer.name) + '" data-customer-phone="' + escapeHtml(customer.phone || '') + '" data-customer-address="' + escapeHtml(customer.address || '') + '"><i class="bi bi-arrow-return-left me-1"></i>مرتجع</button>';
+            actionsHtml += '</div>';
+            
+            row.innerHTML = 
+                '<td><strong>' + customer.id + '</strong></td>' +
+                '<td><strong>' + escapeHtml(customer.name) + '</strong></td>' +
+                '<td>' + phonesHtml + '</td>' +
+                '<td>' + balanceHtml + '</td>' +
+                '<td>' + escapeHtml(customer.address || '-') + '</td>' +
+                '<td>' + escapeHtml(customer.region_name || '-') + '</td>' +
+                '<td>' + locationHtml + '</td>' +
+                '<td>' + actionsHtml + '</td>';
+            
+            tbody.appendChild(row);
+        });
+        
+        // تحديث Pagination
+        updatePagination(pagination);
+    }
+    
+    // دالة لتحديث Pagination
+    function updatePagination(pagination) {
+        var paginationEl = document.getElementById('customersPagination');
+        if (!paginationEl) return;
+        
+        if (pagination.total_pages <= 1) {
+            paginationEl.style.display = 'none';
+            return;
+        }
+        
+        paginationEl.style.display = 'block';
+        
+        var startPage = Math.max(1, pagination.current_page - 2);
+        var endPage = Math.min(pagination.total_pages, pagination.current_page + 2);
+        
+        var html = '<ul class="pagination justify-content-center">';
+        
+        // زر السابق
+        html += '<li class="page-item ' + (pagination.current_page <= 1 ? 'disabled' : '') + '">';
+        html += '<a class="page-link" href="#" data-page="' + (pagination.current_page - 1) + '"><i class="bi bi-chevron-right"></i></a>';
+        html += '</li>';
+        
+        // الصفحة الأولى
+        if (startPage > 1) {
+            html += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
+            if (startPage > 2) {
+                html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+        }
+        
+        // صفحات الوسط
+        for (var i = startPage; i <= endPage; i++) {
+            html += '<li class="page-item ' + (i === pagination.current_page ? 'active' : '') + '">';
+            html += '<a class="page-link" href="#" data-page="' + i + '">' + i + '</a>';
+            html += '</li>';
+        }
+        
+        // الصفحة الأخيرة
+        if (endPage < pagination.total_pages) {
+            if (endPage < pagination.total_pages - 1) {
+                html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+            }
+            html += '<li class="page-item"><a class="page-link" href="#" data-page="' + pagination.total_pages + '">' + pagination.total_pages + '</a></li>';
+        }
+        
+        // زر التالي
+        html += '<li class="page-item ' + (pagination.current_page >= pagination.total_pages ? 'disabled' : '') + '">';
+        html += '<a class="page-link" href="#" data-page="' + (pagination.current_page + 1) + '"><i class="bi bi-chevron-left"></i></a>';
+        html += '</li>';
+        
+        html += '</ul>';
+        paginationEl.innerHTML = html;
+        
+        // إضافة event listeners للروابط
+        paginationEl.querySelectorAll('a.page-link[data-page]').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                var page = parseInt(this.getAttribute('data-page'));
+                if (page && page > 0) {
+                    fetchCustomers(page);
+                }
+            });
+        });
+    }
+    
+    // دالة لعرض الأخطاء
+    function showError(message) {
+        var tbody = document.getElementById('customersTableBody');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">' + escapeHtml(message) + '</td></tr>';
+        }
+    }
+    
+    // دالة للهروب من HTML
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // إعداد البحث الفوري
     if (customerSearchInput && searchForm) {
+        // منع الإرسال الافتراضي للنموذج
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            fetchCustomers(1);
+        });
+        
         // البحث الفوري عند الكتابة
         customerSearchInput.addEventListener('input', function() {
-            // إلغاء البحث السابق إذا كان المستخدم لا يزال يكتب
             if (searchTimeout) {
                 clearTimeout(searchTimeout);
             }
             
-            // الانتظار 400ms بعد توقف المستخدم عن الكتابة
             searchTimeout = setTimeout(function() {
-                // إرسال النموذج تلقائياً
-                searchForm.submit();
+                fetchCustomers(1);
             }, 400);
         });
         
@@ -7071,7 +7304,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     clearTimeout(searchTimeout);
                 }
                 searchTimeout = setTimeout(function() {
-                    searchForm.submit();
+                    fetchCustomers(1);
                 }, 300);
             });
         }
@@ -7082,16 +7315,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     clearTimeout(searchTimeout);
                 }
                 searchTimeout = setTimeout(function() {
-                    searchForm.submit();
+                    fetchCustomers(1);
                 }, 300);
             });
         }
-        
-        // إزالة زر البحث من العرض (اختياري - يمكن إخفاؤه أو إبقاؤه)
-        // var searchButton = searchForm.querySelector('button[type="submit"]');
-        // if (searchButton) {
-        //     searchButton.style.display = 'none';
-        // }
     }
     
 }); // End of DOMContentLoaded
