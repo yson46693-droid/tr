@@ -1506,9 +1506,24 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             
             if (!customerId) return;
             
+            // تحويل customerId إلى رقم
+            const customerIdNum = parseInt(customerId, 10);
+            if (isNaN(customerIdNum) || customerIdNum <= 0) {
+                console.error('Invalid customer ID:', customerId);
+                return;
+            }
+            
             // تعيين المتغيرات العامة دائماً (تُستخدم لاحقاً عند توفر دوال التحميل)
-            window.currentLocalCustomerId = parseInt(customerId, 10);
+            window.currentLocalCustomerId = customerIdNum;
             window.currentLocalCustomerName = customerName;
+            
+            // أيضاً تعيين المتغيرات المحلية إذا كانت متاحة
+            if (typeof currentLocalCustomerId !== 'undefined') {
+                currentLocalCustomerId = customerIdNum;
+            }
+            if (typeof currentLocalCustomerName !== 'undefined') {
+                currentLocalCustomerName = customerName;
+            }
             
             if (checkIsMobile()) {
                 const card = document.getElementById('localCustomerPurchaseHistoryCard');
@@ -3004,12 +3019,12 @@ window.showLocalCustomerPurchaseHistoryModal = function(button) {
     }
     
     // تعيين المتغيرات العامة
-    if (typeof currentLocalCustomerId !== 'undefined') {
-        currentLocalCustomerId = customerIdNum;
-    }
-    if (typeof currentLocalCustomerName !== 'undefined') {
-        currentLocalCustomerName = customerName;
-    }
+    currentLocalCustomerId = customerIdNum;
+    currentLocalCustomerName = customerName;
+    
+    // أيضاً تعيين على window كنسخة احتياطية
+    window.currentLocalCustomerId = customerIdNum;
+    window.currentLocalCustomerName = customerName;
     
     if (isMobile()) {
         // على الموبايل: استخدام Card
@@ -4229,6 +4244,12 @@ function loadLocalCustomerPurchaseHistory() {
         currentLocalCustomerId = window.currentLocalCustomerId;
     }
     
+    // إذا لم يكن currentLocalCustomerId محدداً بعد، استخدم window.currentLocalCustomerId مباشرة
+    const customerIdToUse = currentLocalCustomerId || window.currentLocalCustomerId;
+    
+    // تسجيل للتشخيص
+    console.log('loadLocalCustomerPurchaseHistory called, currentLocalCustomerId:', currentLocalCustomerId, 'window.currentLocalCustomerId:', window.currentLocalCustomerId, 'customerIdToUse:', customerIdToUse);
+    
     const basePath = '<?php echo getBasePath(); ?>';
     const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
     
@@ -4257,7 +4278,7 @@ function loadLocalCustomerPurchaseHistory() {
             if (details) {
                 errorHtml += '<div class="mt-2"><small class="text-muted">التفاصيل: ' + details + '</small></div>';
             }
-            errorHtml += '<div class="mt-2"><small>معرف العميل: ' + (currentLocalCustomerId || 'غير محدد') + '</small></div>';
+            errorHtml += '<div class="mt-2"><small>معرف العميل: ' + (customerIdToUse || currentLocalCustomerId || window.currentLocalCustomerId || 'غير محدد') + '</small></div>';
             errorHtml += '</div>';
             errorElement.innerHTML = errorHtml;
             errorElement.classList.remove('d-none');
@@ -4340,6 +4361,37 @@ function loadLocalCustomerPurchaseHistory() {
                 ? document.getElementById('printLocalCustomerStatementCardBtn')
                 : document.getElementById('printLocalCustomerStatementBtn');
             if (printBtn) printBtn.style.display = 'inline-block';
+            
+            // فتح modal المرتجع تلقائياً إذا كان هناك flag
+            if (window.openReturnModalAfterLoad && !isMobileDevice) {
+                setTimeout(function() {
+                    const purchaseHistoryModal = document.getElementById('localCustomerPurchaseHistoryModal');
+                    const returnModal = document.getElementById('localCustomerReturnModal');
+                    
+                    if (purchaseHistoryModal && returnModal) {
+                        // إغلاق modal سجل المشتريات
+                        const purchaseModalInstance = bootstrap.Modal.getInstance(purchaseHistoryModal);
+                        if (purchaseModalInstance) {
+                            purchaseModalInstance.hide();
+                        }
+                        
+                        // فتح modal المرتجع بعد إغلاق modal سجل المشتريات
+                        setTimeout(function() {
+                            const nameEl = returnModal.querySelector('#localReturnCustomerName');
+                            const nameCardEl = returnModal.querySelector('#localReturnCustomerNameCard');
+                            if (nameEl) nameEl.textContent = window.returnModalCustomerName || '-';
+                            if (nameCardEl) nameCardEl.textContent = window.returnModalCustomerName || '-';
+                            
+                            const modalInstance = bootstrap.Modal.getOrCreateInstance(returnModal);
+                            modalInstance.show();
+                            
+                            // إعادة تعيين flag
+                            window.openReturnModalAfterLoad = false;
+                            window.returnModalCustomerName = null;
+                        }, 300);
+                    }
+                }, 500);
+            }
         } else {
             const errorMsg = data.message || 'حدث خطأ أثناء تحميل سجل المشتريات';
             const errorDetails = data.details || data.error || 'لا توجد تفاصيل إضافية';
@@ -4353,6 +4405,9 @@ function loadLocalCustomerPurchaseHistory() {
         console.error('Error loading purchase history:', error);
     });
 }
+
+// تعيين الدالة على window لضمان إمكانية استدعائها من أي مكان
+window.loadLocalCustomerPurchaseHistory = loadLocalCustomerPurchaseHistory;
 
 // دالة عرض سجل المشتريات
 function displayLocalPurchaseHistory(history) {
@@ -6636,22 +6691,20 @@ function showLocalCustomerReturnModal(button) {
     const customerId = button.getAttribute('data-customer-id') || '';
     const customerName = button.getAttribute('data-customer-name') || '-';
     
-    if (isMobile()) {
-        /* على الموبايل: لا توجد Card لمرتجع، نفتح سجل المشتريات أولاً */
+    // على الموبايل والكمبيوتر: نفتح سجل المشتريات أولاً
+    // لأن modal المرتجع يحتاج إلى بيانات المشتريات المحملة
+    if (typeof showLocalCustomerPurchaseHistoryModal === 'function') {
+        // تعيين flag لفتح modal المرتجع بعد تحميل البيانات
+        window.openReturnModalAfterLoad = true;
+        window.returnModalCustomerName = customerName;
+        
+        // فتح سجل المشتريات أولاً
+        // سيتم فتح modal المرتجع تلقائياً بعد تحميل البيانات في دالة loadLocalCustomerPurchaseHistory
         showLocalCustomerPurchaseHistoryModal(button);
-        return;
+    } else {
+        console.error('showLocalCustomerPurchaseHistoryModal function not found');
+        alert('خطأ: لا يمكن فتح سجل المشتريات');
     }
-    
-    const modal = document.getElementById('localCustomerReturnModal');
-    if (!modal) return;
-    
-    const nameEl = modal.querySelector('#localReturnCustomerName');
-    const nameCardEl = modal.querySelector('#localReturnCustomerNameCard');
-    if (nameEl) nameEl.textContent = customerName;
-    if (nameCardEl) nameCardEl.textContent = customerName;
-    
-    const modalInstance = new bootstrap.Modal(modal);
-    modalInstance.show();
 }
 
 // ===== دوال إغلاق Cards =====
