@@ -3323,8 +3323,9 @@ document.addEventListener('DOMContentLoaded', function () {
             if (btn) {
                 e.preventDefault();
                 e.stopPropagation();
-                if (typeof showLocalCustomerReturnModal === 'function') {
-                    showLocalCustomerReturnModal(btn);
+                /* على الموبايل لا توجد Card لمرتجع؛ نفتح سجل المشتريات مباشرةً (نفس مسار زر سجل) */
+                if (typeof showLocalCustomerPurchaseHistoryModal === 'function') {
+                    showLocalCustomerPurchaseHistoryModal(btn);
                 }
             }
         }
