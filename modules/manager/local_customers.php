@@ -1598,6 +1598,60 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             }
         };
     }
+    
+    // تعريف دالة showLocalCustomerReturnModal مباشرة على window لضمان إمكانية استدعائها من onclick
+    window.showLocalCustomerReturnModal = function(button) {
+        if (!button) return;
+        
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        } else if (typeof window.closeAllForms === 'function') {
+            window.closeAllForms();
+        }
+        
+        const customerId = button.getAttribute('data-customer-id') || '';
+        const customerName = button.getAttribute('data-customer-name') || '-';
+        
+        console.log('showLocalCustomerReturnModal called for customer:', customerId, customerName);
+        
+        // على الموبايل: نفتح سجل المشتريات مباشرة
+        const isMobileDevice = typeof checkIsMobile === 'function' ? checkIsMobile() : (typeof isMobile === 'function' ? isMobile() : (typeof window.isMobile === 'function' ? window.isMobile() : window.innerWidth <= 768));
+        
+        if (isMobileDevice) {
+            const showHistory = typeof showLocalCustomerPurchaseHistoryModal === 'function' 
+                ? showLocalCustomerPurchaseHistoryModal 
+                : (typeof window.showLocalCustomerPurchaseHistoryModal === 'function' 
+                    ? window.showLocalCustomerPurchaseHistoryModal 
+                    : null);
+            
+            if (showHistory) {
+                showHistory(button);
+            }
+            return;
+        }
+        
+        // على سطح المكتب: نفتح سجل المشتريات أولاً ثم modal المرتجع بعد تحميل البيانات
+        const showHistory = typeof showLocalCustomerPurchaseHistoryModal === 'function' 
+            ? showLocalCustomerPurchaseHistoryModal 
+            : (typeof window.showLocalCustomerPurchaseHistoryModal === 'function' 
+                ? window.showLocalCustomerPurchaseHistoryModal 
+                : null);
+        
+        if (showHistory) {
+            // تعيين flag لفتح modal المرتجع بعد تحميل البيانات
+            window.openReturnModalAfterLoad = true;
+            window.returnModalCustomerName = customerName;
+            
+            console.log('Setting openReturnModalAfterLoad flag to true');
+            
+            // فتح سجل المشتريات أولاً
+            // سيتم فتح modal المرتجع تلقائياً بعد تحميل البيانات في دالة loadLocalCustomerPurchaseHistory
+            showHistory(button);
+        } else {
+            console.error('showLocalCustomerPurchaseHistoryModal function not found');
+            alert('خطأ: لا يمكن فتح سجل المشتريات');
+        }
+    };
 })();
 </script>
 
@@ -2656,6 +2710,8 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 
 <script>
 // ===== دوال النظام المزدوج (Modal للكمبيوتر / Card للموبايل) =====
+
+// ملاحظة: دالة showLocalCustomerReturnModal معرّفة في IIFE الأول (السطر 1600)
 
 // دالة للتحقق من الموبايل
 function isMobile() {
@@ -6731,43 +6787,7 @@ function showDeleteLocalCustomerModal(button) {
     }
 }
 
-function showLocalCustomerReturnModal(button) {
-    if (!button) return;
-    
-    closeAllForms();
-    
-    const customerId = button.getAttribute('data-customer-id') || '';
-    const customerName = button.getAttribute('data-customer-name') || '-';
-    
-    console.log('showLocalCustomerReturnModal called for customer:', customerId, customerName);
-    
-    // على الموبايل: نفتح سجل المشتريات مباشرة
-    if (isMobile()) {
-        if (typeof showLocalCustomerPurchaseHistoryModal === 'function') {
-            showLocalCustomerPurchaseHistoryModal(button);
-        }
-        return;
-    }
-    
-    // على سطح المكتب: نفتح سجل المشتريات أولاً ثم modal المرتجع بعد تحميل البيانات
-    if (typeof showLocalCustomerPurchaseHistoryModal === 'function') {
-        // تعيين flag لفتح modal المرتجع بعد تحميل البيانات
-        window.openReturnModalAfterLoad = true;
-        window.returnModalCustomerName = customerName;
-        
-        console.log('Setting openReturnModalAfterLoad flag to true');
-        
-        // فتح سجل المشتريات أولاً
-        // سيتم فتح modal المرتجع تلقائياً بعد تحميل البيانات في دالة loadLocalCustomerPurchaseHistory
-        showLocalCustomerPurchaseHistoryModal(button);
-    } else {
-        console.error('showLocalCustomerPurchaseHistoryModal function not found');
-        alert('خطأ: لا يمكن فتح سجل المشتريات');
-    }
-}
-
-// تعيين الدالة على window لضمان إمكانية استدعائها من onclick
-window.showLocalCustomerReturnModal = showLocalCustomerReturnModal;
+// تم نقل تعريف showLocalCustomerReturnModal إلى بداية الـ script tag (السطر 2658)
 
 // ===== دوال إغلاق Cards =====
 
