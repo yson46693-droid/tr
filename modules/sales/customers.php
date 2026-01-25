@@ -5850,6 +5850,9 @@ if (!$isSalesUser && !$isCompanySection && in_array($currentRole, ['manager', 'd
                             <button type="button" class="btn btn-outline-success" id="selectAllCustomersAndGenerate">
                                 <i class="bi bi-check-all me-1"></i>كل العملاء
                             </button>
+                            <button type="button" class="btn btn-outline-danger" id="printDebtorCustomersBtn" onclick="window.open('<?php echo getRelativeUrl('print_debtor_customers.php'); ?>', '_blank');">
+                                <i class="bi bi-people me-1"></i>العملاء المدينين
+                            </button>
                         </div>
                     </div>
                     <div id="exportCustomersList" class="table-responsive">
