@@ -582,7 +582,7 @@ function cleanFinancialValue($value, $allowNegative = false) {
     } else {
         // القيم المقبولة: من 0 إلى 1000000 (للمبالغ المالية الكبيرة مثل التحصيلات والمبيعات)
         // تم زيادة الحد الأقصى من 10000 إلى 1000000 لدعم المبالغ الكبيرة
-        if ($value > 1000000 || $value < 0) {
+        if ($value > 100000000 || $value < 0) {
             return 0;
         }
     }
