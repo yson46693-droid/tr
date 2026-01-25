@@ -1846,8 +1846,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-warning"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#editLocalCustomerModal"
+                                            onclick="showEditLocalCustomerModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
@@ -1861,8 +1860,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <button
                                             type="button"
                                             class="btn btn-sm <?php echo $customerBalance > 0 ? 'btn-success' : 'btn-outline-secondary'; ?>"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#collectPaymentModal"
+                                            onclick="showCollectPaymentModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-balance="<?php echo $rawBalance; ?>"
@@ -1886,8 +1884,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-danger"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#deleteLocalCustomerModal"
+                                            onclick="showDeleteLocalCustomerModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                         >
@@ -1897,8 +1894,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                                         <button
                                             type="button"
                                             class="btn btn-sm btn-outline-warning"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#localCustomerReturnModal"
+                                            onclick="showLocalCustomerReturnModal(this)"
                                             data-customer-id="<?php echo (int)$customer['id']; ?>"
                                             data-customer-name="<?php echo htmlspecialchars($customer['name']); ?>"
                                             data-customer-phone="<?php echo htmlspecialchars($customer['phone'] ?? ''); ?>"
@@ -2740,6 +2736,7 @@ window.showImportLocalCustomersModal = function() {
 // دالة فتح نموذج تحصيل الديون
 function showCollectPaymentModal(button) {
     if (!button) return;
+    if (button.disabled) return;
     
     closeAllForms();
     
@@ -5773,6 +5770,8 @@ window.CUSTOMER_EXPORT_CONFIG = {
     width: 100% !important;
     min-width: 0 !important;
     max-width: 100% !important;
+    touch-action: manipulation;
+    cursor: pointer;
 }
 
 @media (max-width: 767.98px) {
@@ -6581,6 +6580,32 @@ function showDeleteLocalCustomerModal(button) {
             modalInstance.show();
         }
     }
+}
+
+function showLocalCustomerReturnModal(button) {
+    if (!button) return;
+    
+    closeAllForms();
+    
+    const customerId = button.getAttribute('data-customer-id') || '';
+    const customerName = button.getAttribute('data-customer-name') || '-';
+    
+    if (isMobile()) {
+        /* على الموبايل: لا توجد Card لمرتجع، نفتح سجل المشتريات أولاً */
+        showLocalCustomerPurchaseHistoryModal(button);
+        return;
+    }
+    
+    const modal = document.getElementById('localCustomerReturnModal');
+    if (!modal) return;
+    
+    const nameEl = modal.querySelector('#localReturnCustomerName');
+    const nameCardEl = modal.querySelector('#localReturnCustomerNameCard');
+    if (nameEl) nameEl.textContent = customerName;
+    if (nameCardEl) nameCardEl.textContent = customerName;
+    
+    const modalInstance = new bootstrap.Modal(modal);
+    modalInstance.show();
 }
 
 // ===== دوال إغلاق Cards =====

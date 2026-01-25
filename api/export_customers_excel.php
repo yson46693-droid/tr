@@ -300,14 +300,14 @@ try {
     }
     
     // تحديد العنوان بناءً على نوع العملاء
-    $title = 'تصدير_العملاء_المحددين';
+    $title = 'شيت التحصيلات';
     if (isset($data['section'])) {
         if ($data['section'] === 'delegates') {
-            $title = 'تصدير_عملاء_المندوبين';
+            $title = 'شيت تحصيلات المندوب';
         } elseif ($data['section'] === 'company') {
-            $title = 'تصدير_عملاء_الشركة';
-        } elseif ($data['section'] === 'local') {
             $title = 'شيت التحصيلات';
+        } elseif ($data['section'] === 'local') {
+            $title = 'شيت تحصيلات الشركه ';
         }
     }
     
