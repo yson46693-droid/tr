@@ -123,9 +123,12 @@
     }
     
     /* إخفاء الأزرار المكررة على الهواتف - تظهر فقط داخل القائمة السريعة */
-    .mobile-reload-btn,
-    .mobile-dark-toggle {
+    .mobile-reload-btn {
         display: none !important;
+    }
+    
+    .mobile-dark-toggle {
+        display: flex !important;
     }
     
     /* إخفاء بعض الأيقونات على الشاشات الصغيرة جداً */
@@ -136,9 +139,13 @@
         #refreshPageBtn,
         #darkModeToggle,
         .mobile-logout-btn,
-        .mobile-reload-btn,
-        .mobile-dark-toggle {
+        .mobile-reload-btn {
             display: none !important;
+        }
+
+        /* السماح بزر الوضع الداكن بالظهور */
+        .mobile-dark-toggle {
+            display: flex !important;
         }
         
         /* إظهار القائمة المنسدلة على الهواتف */
