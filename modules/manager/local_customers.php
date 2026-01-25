@@ -1741,6 +1741,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
             <table class="table dashboard-table align-middle" style="table-layout: auto;">
                 <thead>
                     <tr>
+                        <th>ID</th>
                         <th>الاسم</th>
                         <th>رقم الهاتف</th>
                         <th>الرصيد</th>
@@ -1758,6 +1759,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                     <?php else: ?>
                         <?php foreach ($customers as $customer): ?>
                             <tr>
+                                <td><strong><?php echo (int)$customer['id']; ?></strong></td>
                                 <td><strong><?php echo htmlspecialchars($customer['name']); ?></strong></td>
                                 <td>
                                     <?php
@@ -5823,30 +5825,37 @@ window.CUSTOMER_EXPORT_CONFIG = {
     }
     
     /* تحديد عرض الأعمدة بناءً على طول المحتوى */
-    /* الاسم: 15 حرف */
+    /* ID */
     .dashboard-table thead th:nth-child(1),
     .dashboard-table tbody td:nth-child(1) {
-        width: 20%;
+        width: 5%;
+        min-width: 50px;
+    }
+    
+    /* الاسم: 15 حرف */
+    .dashboard-table thead th:nth-child(2),
+    .dashboard-table tbody td:nth-child(2) {
+        width: 18%;
         min-width: 110px;
     }
     
     /* رقم الهاتف: 11 حرف */
-    .dashboard-table thead th:nth-child(2),
-    .dashboard-table tbody td:nth-child(2) {
-        width: 15%;
+    .dashboard-table thead th:nth-child(3),
+    .dashboard-table tbody td:nth-child(3) {
+        width: 13%;
         min-width: 85px;
     }
     
     /* الرصيد: 7 حرف */
-    .dashboard-table thead th:nth-child(3),
-    .dashboard-table tbody td:nth-child(3) {
+    .dashboard-table thead th:nth-child(4),
+    .dashboard-table tbody td:nth-child(4) {
         width: 10%;
         min-width: 65px;
     }
     
     /* العنوان: 8 حرف */
-    .dashboard-table thead th:nth-child(4),
-    .dashboard-table tbody td:nth-child(4) {
+    .dashboard-table thead th:nth-child(5),
+    .dashboard-table tbody td:nth-child(5) {
         width: 12%;
         min-width: 75px;
         word-wrap: break-word;
@@ -5854,22 +5863,22 @@ window.CUSTOMER_EXPORT_CONFIG = {
     }
     
     /* المنطقة: 7 حرف */
-    .dashboard-table thead th:nth-child(5),
-    .dashboard-table tbody td:nth-child(5) {
+    .dashboard-table thead th:nth-child(6),
+    .dashboard-table tbody td:nth-child(6) {
         width: 10%;
         min-width: 65px;
     }
     
     /* الموقع */
-    .dashboard-table thead th:nth-child(6),
-    .dashboard-table tbody td:nth-child(6) {
-        width: 13%;
+    .dashboard-table thead th:nth-child(7),
+    .dashboard-table tbody td:nth-child(7) {
+        width: 12%;
         min-width: 90px;
     }
     
     /* الإجراءات */
-    .dashboard-table thead th:nth-child(7),
-    .dashboard-table tbody td:nth-child(7) {
+    .dashboard-table thead th:nth-child(8),
+    .dashboard-table tbody td:nth-child(8) {
         width: 20%;
         min-width: 140px;
     }
@@ -5945,8 +5954,8 @@ window.CUSTOMER_EXPORT_CONFIG = {
     
     
     /* عمود العنوان يبقى ظاهراً - مهم جداً */
-    .dashboard-table thead th:nth-child(4),
-    .dashboard-table tbody td:nth-child(4) {
+    .dashboard-table thead th:nth-child(5),
+    .dashboard-table tbody td:nth-child(5) {
         display: table-cell !important;
     }
     
@@ -5958,36 +5967,41 @@ window.CUSTOMER_EXPORT_CONFIG = {
     /* تقليل min-width للأعمدة على الشاشات الصغيرة */
     .dashboard-table thead th:nth-child(1),
     .dashboard-table tbody td:nth-child(1) {
-        min-width: 100px;
+        min-width: 45px;
     }
     
     .dashboard-table thead th:nth-child(2),
     .dashboard-table tbody td:nth-child(2) {
-        min-width: 80px;
+        min-width: 100px;
     }
     
     .dashboard-table thead th:nth-child(3),
     .dashboard-table tbody td:nth-child(3) {
-        min-width: 60px;
+        min-width: 80px;
     }
     
     .dashboard-table thead th:nth-child(4),
     .dashboard-table tbody td:nth-child(4) {
-        min-width: 70px;
+        min-width: 60px;
     }
     
     .dashboard-table thead th:nth-child(5),
     .dashboard-table tbody td:nth-child(5) {
-        min-width: 60px;
+        min-width: 70px;
     }
     
     .dashboard-table thead th:nth-child(6),
     .dashboard-table tbody td:nth-child(6) {
-        min-width: 85px;
+        min-width: 60px;
     }
     
     .dashboard-table thead th:nth-child(7),
     .dashboard-table tbody td:nth-child(7) {
+        min-width: 85px;
+    }
+    
+    .dashboard-table thead th:nth-child(8),
+    .dashboard-table tbody td:nth-child(8) {
         min-width: 130px;
     }
 }

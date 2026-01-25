@@ -200,12 +200,6 @@ $statusLabels = [
     'approved' => 'معتمد',
     'rejected' => 'مرفوض'
 ];
-
-$statusColors = [
-    'pending' => '#f59e0b',
-    'approved' => '#10b981',
-    'rejected' => '#ef4444'
-];
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -214,7 +208,7 @@ $statusColors = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>تقرير تفصيلي - خزنة الشركة</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
         
         * {
             margin: 0;
@@ -224,524 +218,221 @@ $statusColors = [
         
         body {
             font-family: 'Cairo', 'Segoe UI', 'Tajawal', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%);
-            background-size: 400% 400%;
-            animation: gradientShift 15s ease infinite;
-            padding: 20px;
-            color: #1a1a1a;
-            line-height: 1.6;
-            min-height: 100vh;
-        }
-        
-        @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            background: #ffffff;
+            padding: 15px;
+            color: #000000;
+            line-height: 1.5;
+            font-size: 12px;
         }
         
         .report-container {
-            max-width: 1400px;
+            max-width: 210mm;
             margin: 0 auto;
             background: #ffffff;
-            padding: 60px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.1);
-            border-radius: 24px;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .report-container::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 5px;
-            background: linear-gradient(90deg, #667eea, #764ba2, #f093fb, #4facfe, #00f2fe);
-            background-size: 200% 100%;
-            animation: gradientShift 3s ease infinite;
+            padding: 15mm;
         }
         
         .report-header {
             text-align: center;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 50px 40px;
-            border-radius: 20px;
-            margin-bottom: 50px;
-            box-shadow: 0 15px 35px rgba(102, 126, 234, 0.4);
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .report-header::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-            animation: rotate 20s linear infinite;
-        }
-        
-        @keyframes rotate {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+            border-bottom: 2px solid #000000;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
         }
         
         .report-header h1 {
-            font-size: 42px;
-            font-weight: 900;
-            margin-bottom: 20px;
-            text-shadow: 0 4px 8px rgba(0,0,0,0.3);
-            letter-spacing: 1px;
-            position: relative;
-            z-index: 1;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #000000;
+        }
+        
+        .report-header .period {
+            font-size: 14px;
+            margin-top: 8px;
+            font-weight: 600;
+        }
+        
+        .report-header .meta-info {
+            margin-top: 10px;
+            font-size: 11px;
+            padding-top: 10px;
+            border-top: 1px solid #000000;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 15px;
-        }
-        
-        .report-header h1::before {
-            content: '💰';
-            font-size: 48px;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
-        }
-        
-        .report-header .period {
-            font-size: 20px;
-            opacity: 0.95;
-            margin-top: 15px;
-            font-weight: 600;
-            position: relative;
-            z-index: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        
-        .report-header .meta-info {
-            margin-top: 20px;
-            font-size: 15px;
-            opacity: 0.9;
-            padding-top: 20px;
-            border-top: 2px solid rgba(255,255,255,0.3);
-            position: relative;
-            z-index: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 20px;
             flex-wrap: wrap;
         }
         
         .summary-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 45px;
-            border-radius: 20px;
-            margin-bottom: 50px;
-            box-shadow: 0 15px 35px rgba(102, 126, 234, 0.35);
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .summary-section::after {
-            content: '';
-            position: absolute;
-            top: -100px;
-            right: -100px;
-            width: 300px;
-            height: 300px;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-            border-radius: 50%;
+            border: 1px solid #000000;
+            padding: 15px;
+            margin-bottom: 20px;
         }
         
         .summary-section h2 {
-            font-size: 28px;
-            font-weight: 900;
-            margin-bottom: 30px;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 15px;
             text-align: center;
-            position: relative;
-            z-index: 1;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            border-bottom: 1px solid #000000;
+            padding-bottom: 8px;
         }
         
         .summary-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 25px;
-            margin-top: 25px;
-            position: relative;
-            z-index: 1;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
         }
         
         .summary-item {
-            background: rgba(255,255,255,0.25);
-            padding: 25px;
-            border-radius: 16px;
-            backdrop-filter: blur(15px);
-            border: 2px solid rgba(255,255,255,0.4);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .summary-item::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-            transition: left 0.5s;
-        }
-        
-        .summary-item:hover::before {
-            left: 100%;
-        }
-        
-        .summary-item:hover {
-            transform: translateY(-5px) scale(1.02);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            border-color: rgba(255,255,255,0.6);
+            border: 1px solid #000000;
+            padding: 10px;
+            text-align: center;
         }
         
         .summary-item-label {
-            font-size: 14px;
-            opacity: 0.95;
-            margin-bottom: 12px;
+            font-size: 11px;
+            margin-bottom: 5px;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .summary-item-label::before {
-            content: '▸';
-            font-size: 12px;
         }
         
         .summary-item-value {
-            font-size: 32px;
-            font-weight: 900;
+            font-size: 16px;
+            font-weight: 700;
             line-height: 1.2;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
         .section-title {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white;
-            padding: 22px 30px;
-            border-radius: 14px;
-            margin: 50px 0 25px 0;
-            font-size: 22px;
-            font-weight: 900;
-            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+            border: 1px solid #000000;
+            background: #f5f5f5;
+            padding: 10px 15px;
+            margin: 20px 0 10px 0;
+            font-size: 14px;
+            font-weight: 700;
             display: flex;
             align-items: center;
-            gap: 12px;
-            position: relative;
-            overflow: hidden;
+            gap: 10px;
         }
         
-        .section-title::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-            animation: shimmer 3s infinite;
-        }
-        
-        @keyframes shimmer {
-            0% { left: -100%; }
-            100% { left: 100%; }
+        .table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin-bottom: 20px;
+            border: 1px solid #000000;
         }
         
         .transactions-table {
             width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            margin-bottom: 50px;
-            background: white;
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            border: 1px solid #e9ecef;
+            min-width: 800px;
+            border-collapse: collapse;
+            background: #ffffff;
         }
         
         .transactions-table thead {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #f5f5f5;
         }
         
         .transactions-table th {
-            padding: 18px 16px;
+            padding: 8px 6px;
             text-align: right;
             font-weight: 700;
-            font-size: 15px;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            border-bottom: 3px solid rgba(255,255,255,0.3);
+            font-size: 11px;
+            border: 1px solid #000000;
             white-space: nowrap;
-            position: relative;
-        }
-        
-        .transactions-table th::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: rgba(255,255,255,0.5);
-        }
-        
-        .transactions-table th:nth-child(1) {
-            width: 60px;
-        }
-        
-        .transactions-table th:nth-child(2) {
-            width: 160px;
-        }
-        
-        .transactions-table th:nth-child(3) {
-            width: 130px;
-        }
-        
-        .transactions-table th:nth-child(4) {
-            min-width: 220px;
-        }
-        
-        .transactions-table th:nth-child(5) {
-            width: 160px;
-        }
-        
-        .transactions-table th:nth-child(6) {
-            width: 110px;
-        }
-        
-        .transactions-table th:nth-child(7),
-        .transactions-table th:nth-child(8) {
-            width: 130px;
-        }
-        
-        .transactions-table th:first-child {
-            border-top-right-radius: 16px;
-        }
-        
-        .transactions-table th:last-child {
-            border-top-left-radius: 16px;
         }
         
         .transactions-table td {
-            padding: 16px;
-            border-bottom: 1px solid #f1f3f5;
-            font-size: 14px;
-            vertical-align: middle;
+            padding: 6px;
+            border: 1px solid #000000;
+            font-size: 11px;
+            vertical-align: top;
             word-wrap: break-word;
-            transition: all 0.2s ease;
-        }
-        
-        .transactions-table td:nth-child(4) {
-            max-width: 300px;
-            word-break: break-word;
-        }
-        
-        .transactions-table tbody tr {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-        }
-        
-        .transactions-table tbody tr::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 4px;
-            background: transparent;
-            transition: all 0.3s ease;
         }
         
         .transactions-table tbody tr:nth-child(even) {
-            background: #fafbfc;
+            background: #f9f9f9;
         }
         
         .transactions-table tbody tr:nth-child(odd) {
             background: #ffffff;
         }
         
-        .transactions-table tbody tr:hover {
-            background: linear-gradient(90deg, #f0f4ff 0%, #ffffff 100%) !important;
-            transform: translateX(-3px);
-            box-shadow: -4px 0 12px rgba(102, 126, 234, 0.2);
-        }
-        
-        .transactions-table tbody tr:hover::before {
-            background: linear-gradient(180deg, #667eea, #764ba2);
-        }
-        
-        .transactions-table tbody tr:last-child td {
-            border-bottom: none;
+        .transactions-table tbody tr.total-row {
+            background: #e5e5e5;
+            font-weight: 700;
+            font-size: 12px;
         }
         
         .transactions-table tbody tr td:first-child {
             font-weight: 700;
-            color: #667eea;
-            font-size: 15px;
-        }
-        
-        .transactions-table tbody tr.total-row {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            font-weight: 900;
-            font-size: 16px;
-            border-top: 3px solid #667eea;
-        }
-        
-        .transactions-table tbody tr.total-row:hover {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            transform: none;
-            box-shadow: none;
-        }
-        
-        .transactions-table tbody tr.total-row::before {
-            display: none;
+            text-align: center;
         }
         
         .type-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 8px 16px;
-            border-radius: 25px;
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .type-badge::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.3);
-            transform: translate(-50%, -50%);
-            transition: width 0.6s, height 0.6s;
-        }
-        
-        .type-badge:hover::before {
-            width: 300px;
-            height: 300px;
-        }
-        
-        .type-income {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white;
-        }
-        
-        .type-expense {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-            color: white;
-        }
-        
-        .type-payment {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-            color: white;
-        }
-        
-        .type-transfer {
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-            color: white;
-        }
-        
-        .type-other {
-            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
-            color: white;
+            display: inline-block;
+            padding: 3px 8px;
+            border: 1px solid #000000;
+            font-size: 10px;
+            font-weight: 600;
         }
         
         .status-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 7px 14px;
-            border-radius: 25px;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
-            position: relative;
-        }
-        
-        .status-badge::before {
-            content: '●';
-            margin-left: 5px;
-            font-size: 8px;
+            display: inline-block;
+            padding: 3px 8px;
+            border: 1px solid #000000;
+            font-size: 10px;
+            font-weight: 600;
         }
         
         .amount {
-            font-weight: 800;
-            font-size: 16px;
-            letter-spacing: 0.5px;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        .amount::before {
-            content: '';
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: currentColor;
-            opacity: 0.6;
-        }
-        
-        .amount-income {
-            color: #10b981;
-        }
-        
-        .amount-expense {
-            color: #ef4444;
-        }
-        
-        .amount-payment {
-            color: #f59e0b;
-        }
-        
-        .amount-transfer {
-            color: #3b82f6;
+            font-weight: 700;
+            font-size: 11px;
         }
         
         .footer {
-            margin-top: 60px;
-            padding: 30px;
-            border-top: 4px solid #667eea;
+            margin-top: 30px;
+            padding: 15px;
+            border-top: 1px solid #000000;
             text-align: center;
-            color: #6b7280;
-            font-size: 14px;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border-radius: 16px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            font-size: 10px;
         }
         
         .footer p {
-            margin: 8px 0;
+            margin: 5px 0;
+        }
+        
+        .print-button {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: #000000;
+            color: white;
+            border: 1px solid #000000;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 14px;
             font-weight: 600;
+            font-family: 'Cairo', sans-serif;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            border: 1px solid #000000;
+            margin: 20px 0;
+        }
+        
+        .empty-state h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .empty-state p {
+            font-size: 12px;
         }
         
         @media print {
@@ -751,17 +442,17 @@ $statusColors = [
             }
             
             .report-container {
-                box-shadow: none;
-                padding: 20px;
-                border-radius: 0;
-            }
-            
-            .report-container::before {
-                display: none;
+                max-width: 100%;
+                padding: 10mm;
             }
             
             .no-print {
-                display: none;
+                display: none !important;
+            }
+            
+            .table-wrapper {
+                overflow: visible;
+                page-break-inside: auto;
             }
             
             .transactions-table {
@@ -777,76 +468,39 @@ $statusColors = [
                 page-break-inside: avoid;
             }
             
-            .summary-section::after {
-                display: none;
+            .section-title {
+                page-break-after: avoid;
+            }
+            
+            @page {
+                size: A4;
+                margin: 10mm;
             }
         }
         
-        .print-button {
-            position: fixed;
-            bottom: 30px;
-            left: 30px;
-            z-index: 1000;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 16px 32px;
-            border-radius: 14px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 700;
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-family: 'Cairo', sans-serif;
-        }
-        
-        .print-button:hover {
-            transform: translateY(-3px) scale(1.05);
-            box-shadow: 0 12px 35px rgba(102, 126, 234, 0.6);
-        }
-        
-        .print-button:active {
-            transform: translateY(-1px) scale(1.02);
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 80px 20px;
-            color: #6b7280;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border-radius: 16px;
-            margin: 40px 0;
-        }
-        
-        .empty-state .icon {
-            font-size: 100px;
-            margin-bottom: 30px;
-            opacity: 0.4;
-            filter: grayscale(0.3);
-        }
-        
-        .empty-state h3 {
-            font-size: 28px;
-            margin-bottom: 15px;
-            color: #374151;
-            font-weight: 900;
-        }
-        
-        .empty-state p {
-            font-size: 18px;
-            color: #6b7280;
-            font-weight: 600;
+        @media screen and (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .report-container {
+                padding: 10px;
+            }
+            
+            .table-wrapper {
+                -webkit-overflow-scrolling: touch;
+                overflow-x: scroll;
+                overflow-y: visible;
+            }
+            
+            .transactions-table {
+                min-width: 1000px;
+            }
         }
     </style>
 </head>
 <body>
     <button class="print-button no-print" onclick="window.print()" title="طباعة التقرير">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" viewBox="0 0 16 16" style="margin-left: 8px;">
-            <path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1v2H4V3zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1h12a1 1 0 0 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2H5zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1v-3a1 1 0 0 1 1h6a1 1 0 0 1 1z"/>
-        </svg>
         طباعة التقرير
     </button>
     
@@ -854,51 +508,51 @@ $statusColors = [
         <div class="report-header">
             <h1>تقرير تفصيلي - خزنة الشركة</h1>
             <div class="period">
-                <span>📅</span> الفترة: من <strong><?php echo formatReportDate($dateFrom); ?></strong> إلى <strong><?php echo formatReportDate($dateTo); ?></strong>
+                الفترة: من <strong><?php echo formatReportDate($dateFrom); ?></strong> إلى <strong><?php echo formatReportDate($dateTo); ?></strong>
             </div>
             <div class="meta-info">
-                <span>🕐</span> تاريخ الإنشاء: <strong><?php echo date('Y/m/d H:i'); ?></strong>
-                <span style="margin: 0 10px;">|</span>
-                <span>👤</span> أنشأه: <strong><?php echo htmlspecialchars($currentUser['full_name'] ?? $currentUser['username'] ?? 'غير معروف', ENT_QUOTES, 'UTF-8'); ?></strong>
+                <span>تاريخ الإنشاء: <strong><?php echo date('Y/m/d H:i'); ?></strong></span>
+                <span>|</span>
+                <span>أنشأه: <strong><?php echo htmlspecialchars($currentUser['full_name'] ?? $currentUser['username'] ?? 'غير معروف', ENT_QUOTES, 'UTF-8'); ?></strong></span>
             </div>
         </div>
         
         <div class="summary-section">
-            <h2>📊 ملخص الحركات المالية</h2>
+            <h2>ملخص الحركات المالية</h2>
             <div class="summary-grid">
                 <div class="summary-item">
-                    <div class="summary-item-label">💰 إجمالي الإيرادات</div>
+                    <div class="summary-item-label">إجمالي الإيرادات</div>
                     <div class="summary-item-value"><?php echo formatCurrency($totalIncome); ?></div>
                 </div>
                 <div class="summary-item">
-                    <div class="summary-item-label">💸 إجمالي المصروفات</div>
+                    <div class="summary-item-label">إجمالي المصروفات</div>
                     <div class="summary-item-value"><?php echo formatCurrency($totalExpense); ?></div>
                 </div>
                 <div class="summary-item">
-                    <div class="summary-item-label">💳 إجمالي المدفوعات</div>
+                    <div class="summary-item-label">إجمالي المدفوعات</div>
                     <div class="summary-item-value"><?php echo formatCurrency($totalPayment); ?></div>
                 </div>
                 <div class="summary-item">
-                    <div class="summary-item-label">⚖️ صافي الرصيد</div>
-                    <div class="summary-item-value" style="color: <?php echo $netBalance >= 0 ? '#10b981' : '#ef4444'; ?>">
+                    <div class="summary-item-label">صافي الرصيد</div>
+                    <div class="summary-item-value">
                         <?php echo formatCurrency($netBalance); ?>
                     </div>
                 </div>
                 <?php if ($totalCollections > 0): ?>
                 <div class="summary-item">
-                    <div class="summary-item-label">📥 التحصيلات من المندوبين</div>
+                    <div class="summary-item-label">التحصيلات من المندوبين</div>
                     <div class="summary-item-value"><?php echo formatCurrency($totalCollections); ?></div>
                 </div>
                 <?php endif; ?>
                 <?php if ($totalSalaryAdjustments > 0): ?>
                 <div class="summary-item">
-                    <div class="summary-item-label">💼 تسويات المرتبات</div>
+                    <div class="summary-item-label">تسويات المرتبات</div>
                     <div class="summary-item-value"><?php echo formatCurrency($totalSalaryAdjustments); ?></div>
                 </div>
                 <?php endif; ?>
                 <?php if ($totalCustomerSettlements > 0): ?>
                 <div class="summary-item">
-                    <div class="summary-item-label">🤝 تسويات أرصدة العملاء</div>
+                    <div class="summary-item-label">تسويات أرصدة العملاء</div>
                     <div class="summary-item-value"><?php echo formatCurrency($totalCustomerSettlements); ?></div>
                 </div>
                 <?php endif; ?>
@@ -907,7 +561,6 @@ $statusColors = [
         
         <?php if (empty($allTransactions)): ?>
             <div class="empty-state">
-                <div class="icon">📊</div>
                 <h3>لا توجد حركات مالية</h3>
                 <p>لا توجد حركات مالية في الفترة المحددة (من <?php echo formatReportDate($dateFrom); ?> إلى <?php echo formatReportDate($dateTo); ?>)</p>
             </div>
@@ -915,12 +568,12 @@ $statusColors = [
             <?php foreach ($transactionsByType as $type => $transactions): ?>
                 <?php if (!empty($transactions)): ?>
                     <div class="section-title">
-                        <span>📋</span>
                         <span><?php echo htmlspecialchars($typeLabels[$type] ?? $type, ENT_QUOTES, 'UTF-8'); ?></span>
-                        <span style="background: rgba(255,255,255,0.25); padding: 6px 14px; border-radius: 25px; font-size: 14px; margin-right: 10px; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                            <?php echo count($transactions); ?> حركة
+                        <span style="margin-right: 10px; font-size: 12px;">
+                            (<?php echo count($transactions); ?> حركة)
                         </span>
                     </div>
+                    <div class="table-wrapper">
                     <table class="transactions-table">
                         <thead>
                             <tr>
@@ -943,43 +596,33 @@ $statusColors = [
                                 <tr>
                                     <td><?php echo $index + 1; ?></td>
                                     <td>
-                                        <span style="font-weight: 600; color: #374151;">
-                                            <?php echo formatReportDateTime($trans['created_at']); ?>
-                                        </span>
+                                        <?php echo formatReportDateTime($trans['created_at']); ?>
                                     </td>
                                     <td>
-                                        <span class="amount amount-<?php echo $type; ?>">
+                                        <span class="amount">
                                             <?php echo ($type === 'income' ? '+' : '-'); ?><?php echo formatCurrency($trans['amount']); ?>
                                         </span>
                                     </td>
-                                    <td style="line-height: 1.6;">
-                                        <span style="display: inline-block; padding: 4px 0;">
-                                            <?php echo htmlspecialchars($trans['description'] ?? '-', ENT_QUOTES, 'UTF-8'); ?>
-                                        </span>
+                                    <td>
+                                        <?php echo htmlspecialchars($trans['description'] ?? '-', ENT_QUOTES, 'UTF-8'); ?>
                                     </td>
                                     <td>
                                 <?php if (!empty($trans['reference_number'])): ?>
-                                    <span style="font-family: 'Courier New', monospace; font-size: 12px; color: #667eea; background: linear-gradient(135deg, #f0f4ff 0%, #e9ecff 100%); padding: 6px 12px; border-radius: 8px; font-weight: 600; border: 1px solid rgba(102, 126, 234, 0.2); display: inline-block;">
-                                        <?php echo htmlspecialchars($trans['reference_number'], ENT_QUOTES, 'UTF-8'); ?>
-                                    </span>
+                                    <?php echo htmlspecialchars($trans['reference_number'], ENT_QUOTES, 'UTF-8'); ?>
                                 <?php else: ?>
-                                    <span style="color: #9ca3af; font-style: italic;">-</span>
+                                    -
                                 <?php endif; ?>
                             </td>
                                     <td>
-                                        <span class="status-badge" style="background: <?php echo $statusColors[$trans['status']] ?? '#6b7280'; ?>; color: white;">
+                                        <span class="status-badge">
                                             <?php echo htmlspecialchars($statusLabels[$trans['status']] ?? $trans['status'], ENT_QUOTES, 'UTF-8'); ?>
                                         </span>
                                     </td>
                                     <td>
-                                        <span style="font-weight: 600; color: #4b5563;">
-                                            <?php echo getUserName($trans['created_by'], $users); ?>
-                                        </span>
+                                        <?php echo getUserName($trans['created_by'], $users); ?>
                                     </td>
                                     <td>
-                                        <span style="font-weight: 600; color: #4b5563;">
-                                            <?php echo getUserName($trans['approved_by'], $users); ?>
-                                        </span>
+                                        <?php echo getUserName($trans['approved_by'], $users); ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -988,7 +631,7 @@ $statusColors = [
                                     <strong>الإجمالي</strong>
                                 </td>
                                 <td>
-                                    <span class="amount amount-<?php echo $type; ?>" style="font-size: 16px;">
+                                    <span class="amount">
                                         <?php echo ($type === 'income' ? '+' : '-'); ?><?php echo formatCurrency($typeTotal); ?>
                                     </span>
                                 </td>
@@ -996,16 +639,17 @@ $statusColors = [
                             </tr>
                         </tbody>
                     </table>
+                    </div>
                 <?php endif; ?>
             <?php endforeach; ?>
         <?php else: ?>
             <div class="section-title">
-                <span>📋</span>
                 <span>جميع الحركات المالية</span>
-                <span style="background: rgba(255,255,255,0.25); padding: 6px 14px; border-radius: 25px; font-size: 14px; margin-right: 10px; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                    <?php echo count($allTransactions); ?> حركة
+                <span style="margin-right: 10px; font-size: 12px;">
+                    (<?php echo count($allTransactions); ?> حركة)
                 </span>
             </div>
+            <div class="table-wrapper">
             <table class="transactions-table">
                 <thead>
                     <tr>
@@ -1026,58 +670,49 @@ $statusColors = [
                         <tr>
                             <td><?php echo $index + 1; ?></td>
                             <td>
-                                <span style="font-weight: 600; color: #374151;">
-                                    <?php echo formatReportDateTime($trans['created_at']); ?>
-                                </span>
+                                <?php echo formatReportDateTime($trans['created_at']); ?>
                             </td>
                             <td>
-                                <span class="type-badge type-<?php echo $type; ?>">
+                                <span class="type-badge">
                                     <?php echo htmlspecialchars($typeLabels[$type] ?? $type, ENT_QUOTES, 'UTF-8'); ?>
                                 </span>
                             </td>
                             <td>
-                                <span class="amount amount-<?php echo $type; ?>">
+                                <span class="amount">
                                     <?php echo ($type === 'income' ? '+' : '-'); ?><?php echo formatCurrency($trans['amount']); ?>
                                 </span>
                             </td>
-                            <td style="max-width: 300px; word-wrap: break-word; line-height: 1.6;">
-                                <span style="display: inline-block; padding: 4px 0;">
-                                    <?php echo htmlspecialchars($trans['description'] ?? '-', ENT_QUOTES, 'UTF-8'); ?>
-                                </span>
+                            <td>
+                                <?php echo htmlspecialchars($trans['description'] ?? '-', ENT_QUOTES, 'UTF-8'); ?>
                             </td>
                             <td>
                                 <?php if (!empty($trans['reference_number'])): ?>
-                                    <span style="font-family: 'Courier New', monospace; font-size: 12px; color: #667eea; background: linear-gradient(135deg, #f0f4ff 0%, #e9ecff 100%); padding: 6px 12px; border-radius: 8px; font-weight: 600; border: 1px solid rgba(102, 126, 234, 0.2); display: inline-block;">
-                                        <?php echo htmlspecialchars($trans['reference_number'], ENT_QUOTES, 'UTF-8'); ?>
-                                    </span>
+                                    <?php echo htmlspecialchars($trans['reference_number'], ENT_QUOTES, 'UTF-8'); ?>
                                 <?php else: ?>
-                                    <span style="color: #9ca3af; font-style: italic;">-</span>
+                                    -
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <span class="status-badge" style="background: <?php echo $statusColors[$trans['status']] ?? '#6b7280'; ?>; color: white;">
+                                <span class="status-badge">
                                     <?php echo htmlspecialchars($statusLabels[$trans['status']] ?? $trans['status'], ENT_QUOTES, 'UTF-8'); ?>
                                 </span>
                             </td>
                             <td>
-                                <span style="font-weight: 600; color: #4b5563;">
-                                    <?php echo getUserName($trans['created_by'], $users); ?>
-                                </span>
+                                <?php echo getUserName($trans['created_by'], $users); ?>
                             </td>
                             <td>
-                                <span style="font-weight: 600; color: #4b5563;">
-                                    <?php echo getUserName($trans['approved_by'], $users); ?>
-                                </span>
+                                <?php echo getUserName($trans['approved_by'], $users); ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            </div>
         <?php endif; ?>
         
         <div class="footer">
-            <p style="font-size: 15px; margin-bottom: 10px;">✨ تم إنشاء هذا التقرير تلقائياً من نظام إدارة خزنة الشركة</p>
-            <p style="font-size: 13px; opacity: 0.8;">© <?php echo date('Y'); ?> - جميع الحقوق محفوظة</p>
+            <p>تم إنشاء هذا التقرير تلقائياً من نظام إدارة خزنة الشركة</p>
+            <p>© <?php echo date('Y'); ?> - جميع الحقوق محفوظة</p>
         </div>
     </div>
     

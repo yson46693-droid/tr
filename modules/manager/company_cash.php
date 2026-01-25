@@ -289,11 +289,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // تحديد دور المستخدم
         $userRole = strtolower($currentUser['role'] ?? '');
         $isManager = ($userRole === 'manager');
+        $isAccountant = ($userRole === 'accountant');
         
-        // إذا كان المدير، المصروف معتمد تلقائياً
-        // إذا كان المحاسب، يعتمد على اختيار المستخدم
-        if ($isManager) {
-            $markAsApproved = true; // المدير دائماً يعتمد المصروف تلقائياً
+        // إذا كان المدير أو المحاسب، المصروف معتمد تلقائياً
+        if ($isManager || $isAccountant) {
+            $markAsApproved = true; // المدير والمحاسب يعتمدان المصروف تلقائياً
         } else {
             $markAsApproved = isset($_POST['mark_as_approved']);
         }
@@ -309,13 +309,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['financial_error'] = 'يرجى إدخال مبلغ مصروف صحيح.';
         } else {
             try {
-                // إذا كان المدير، المصروف معتمد تلقائياً
-                if ($isManager) {
+                // إذا كان المدير أو المحاسب، المصروف معتمد تلقائياً
+                if ($isManager || $isAccountant) {
                     $status = 'approved';
                     $approvedBy = $currentUser['id'];
                     $approvedAt = date('Y-m-d H:i:s');
                 } else {
-                    // المحاسب: يعتمد على الاختيار
+                    // المستخدمون الآخرون: يعتمد على الاختيار
                     $status = $markAsApproved ? 'approved' : 'pending';
                     $approvedBy = $markAsApproved ? $currentUser['id'] : null;
                     $approvedAt = $markAsApproved ? date('Y-m-d H:i:s') : null;
@@ -339,6 +339,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $transactionId = $db->getLastInsertId();
 
                 // إذا كانت الحالة pending، إرسال طلب موافقة للمدير
+                // (لا يحدث هذا للمدير أو المحاسب لأنهما يعتمدان تلقائياً)
                 if ($status === 'pending') {
                     $approvalNotes = sprintf(
                         "مصروف سريع\nالمبلغ: %s ج.م\nالوصف: %s%s",
@@ -370,7 +371,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 unset($_SESSION['financial_form_data']);
 
                 // رسالة النجاح
-                if ($isManager) {
+                if ($isManager || $isAccountant) {
                     $_SESSION['financial_success'] = 'تم تسجيل المصروف واعتماده تلقائياً.';
                 } else {
                     $_SESSION['financial_success'] = $markAsApproved
@@ -624,11 +625,12 @@ $typeColorMap = [
                         <textarea class="form-control" id="quickExpenseDescription" name="description" rows="3" required placeholder="أدخل تفاصيل المصروف..."><?php echo htmlspecialchars($financialFormData['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
                     </div>
                     <?php
-                    // إخفاء خيار الاعتماد للمدير (المدير يعتمد تلقائياً)
+                    // إخفاء خيار الاعتماد للمدير والمحاسب (كلاهما يعتمد تلقائياً)
                     $userRole = strtolower($currentUser['role'] ?? '');
                     $isManager = ($userRole === 'manager');
+                    $isAccountant = ($userRole === 'accountant');
                     
-                    if (!$isManager): // عرض الخيار فقط للمحاسب
+                    if (!$isManager && !$isAccountant): // عرض الخيار فقط للمستخدمين الآخرين
                     ?>
                     <div class="col-12">
                         <div class="form-check">

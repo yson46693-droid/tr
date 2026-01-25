@@ -885,22 +885,24 @@ if ($page === 'financial' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $amount = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;
         $description = trim($_POST['description'] ?? '');
         $referenceNumber = trim($_POST['reference_number'] ?? '');
-        $markAsApproved = isset($_POST['mark_as_approved']);
+        
+        // المحاسب يعتمد المصروف تلقائياً
+        $markAsApproved = true;
 
         $_SESSION['financial_form_data'] = [
             'amount' => $_POST['amount'] ?? '',
             'description' => $description,
             'reference_number' => $referenceNumber,
-            'mark_as_approved' => $markAsApproved ? '1' : '0',
         ];
 
         if ($amount <= 0) {
             $_SESSION['financial_error'] = 'يرجى إدخال مبلغ مصروف صحيح.';
         } else {
             try {
-                $status = $markAsApproved ? 'approved' : 'pending';
-                $approvedBy = $markAsApproved ? $currentUser['id'] : null;
-                $approvedAt = $markAsApproved ? date('Y-m-d H:i:s') : null;
+                // المحاسب يعتمد المصروف تلقائياً
+                $status = 'approved';
+                $approvedBy = $currentUser['id'];
+                $approvedAt = date('Y-m-d H:i:s');
 
                 $db->execute(
                     "INSERT INTO financial_transactions (type, amount, supplier_id, description, reference_number, status, approved_by, created_by, approved_at)
@@ -919,23 +921,6 @@ if ($page === 'financial' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $transactionId = $db->getLastInsertId();
 
-                // إذا كانت الحالة pending، إرسال طلب موافقة للمدير
-                if ($status === 'pending') {
-                    $approvalNotes = sprintf(
-                        "مصروف سريع\nالمبلغ: %s ج.م\nالوصف: %s%s",
-                        formatCurrency($amount),
-                        $description,
-                        $referenceNumber !== '' ? "\nالرقم المرجعي: " . $referenceNumber : ''
-                    );
-                    
-                    $approvalResult = requestApproval('financial', $transactionId, $currentUser['id'], $approvalNotes);
-                    
-                    if (!$approvalResult['success']) {
-                        // إذا فشل إرسال طلب الموافقة، تسجيل الخطأ ولكن لا نمنع حفظ المعاملة
-                        error_log('Failed to create approval request for expense: ' . ($approvalResult['message'] ?? 'Unknown error'));
-                    }
-                }
-
                 logAudit(
                     $currentUser['id'],
                     'quick_expense_create',
@@ -951,9 +936,7 @@ if ($page === 'financial' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 unset($_SESSION['financial_form_data']);
 
-                $_SESSION['financial_success'] = $markAsApproved
-                    ? 'تم تسجيل المصروف واعتماده فوراً.'
-                    : 'تم تسجيل المصروف وإرساله للاعتماد.';
+                $_SESSION['financial_success'] = 'تم تسجيل المصروف واعتماده تلقائياً.';
             } catch (Throwable $e) {
                 error_log('Quick expense insertion failed: ' . $e->getMessage());
                 $_SESSION['financial_error'] = 'حدث خطأ أثناء تسجيل المصروف. حاول مرة أخرى.';
@@ -1421,15 +1404,6 @@ if ($isAjaxNavigation) {
                                         <div class="col-12">
                                             <label for="quickExpenseDescription" class="form-label">وصف المصروف <span class="text-danger">*</span></label>
                                             <textarea class="form-control" id="quickExpenseDescription" name="description" rows="3" required placeholder="أدخل تفاصيل المصروف..."><?php echo htmlspecialchars($financialFormData['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea>
-                                        </div>
-                                        <div class="col-12">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="quickExpenseApproved" name="mark_as_approved" value="1" <?php echo isset($financialFormData['mark_as_approved']) && $financialFormData['mark_as_approved'] === '1' ? 'checked' : ''; ?>>
-                                                <label class="form-check-label" for="quickExpenseApproved">
-                                                    اعتماد المعاملة فوراً (يُستخدم عند تسجيل مصروف مؤكد)
-                                                </label>
-                                            </div>
-                                            <small class="text-muted d-block mt-1">إذا تُرك غير محدد فسيتم إرسال المصروف للموافقة لاحقاً.</small>
                                         </div>
                                         <div class="col-12 d-flex justify-content-end gap-2">
                                             <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
