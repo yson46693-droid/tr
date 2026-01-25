@@ -4253,6 +4253,8 @@ function loadLocalCustomerPurchaseHistory() {
     const basePath = '<?php echo getBasePath(); ?>';
     const isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
     
+    console.log('loadLocalCustomerPurchaseHistory - isMobileDevice:', isMobileDevice, 'openReturnModalAfterLoad:', window.openReturnModalAfterLoad);
+    
     // تحديد العناصر حسب نوع الجهاز
     const loadingElement = isMobileDevice 
         ? document.getElementById('localPurchaseHistoryCardLoading')
@@ -4364,31 +4366,74 @@ function loadLocalCustomerPurchaseHistory() {
             
             // فتح modal المرتجع تلقائياً إذا كان هناك flag
             if (window.openReturnModalAfterLoad && !isMobileDevice) {
+                console.log('Opening return modal after purchase history loaded, isMobileDevice:', isMobileDevice);
+                
+                // انتظار قليل لضمان أن modal سجل المشتريات مفتوح
                 setTimeout(function() {
                     const purchaseHistoryModal = document.getElementById('localCustomerPurchaseHistoryModal');
                     const returnModal = document.getElementById('localCustomerReturnModal');
+                    
+                    console.log('Purchase history modal:', purchaseHistoryModal, 'Return modal:', returnModal);
+                    console.log('Purchase history modal visible:', purchaseHistoryModal ? purchaseHistoryModal.classList.contains('show') : 'N/A');
                     
                     if (purchaseHistoryModal && returnModal) {
                         // إغلاق modal سجل المشتريات
                         const purchaseModalInstance = bootstrap.Modal.getInstance(purchaseHistoryModal);
                         if (purchaseModalInstance) {
+                            console.log('Hiding purchase history modal');
                             purchaseModalInstance.hide();
+                            
+                            // انتظار إغلاق modal سجل المشتريات قبل فتح modal المرتجع
+                            purchaseHistoryModal.addEventListener('hidden.bs.modal', function openReturnModal() {
+                                purchaseHistoryModal.removeEventListener('hidden.bs.modal', openReturnModal);
+                                
+                                setTimeout(function() {
+                                    const nameEl = returnModal.querySelector('#localReturnCustomerName');
+                                    const nameCardEl = returnModal.querySelector('#localReturnCustomerNameCard');
+                                    if (nameEl) nameEl.textContent = window.returnModalCustomerName || '-';
+                                    if (nameCardEl) nameCardEl.textContent = window.returnModalCustomerName || '-';
+                                    
+                                    console.log('Opening return modal with customer name:', window.returnModalCustomerName);
+                                    
+                                    // التأكد من أن bootstrap متاح
+                                    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                                        const modalInstance = bootstrap.Modal.getOrCreateInstance(returnModal);
+                                        modalInstance.show();
+                                        
+                                        // إعادة تعيين flag
+                                        window.openReturnModalAfterLoad = false;
+                                        window.returnModalCustomerName = null;
+                                    } else {
+                                        console.error('Bootstrap Modal not available');
+                                    }
+                                }, 100);
+                            }, { once: true });
+                        } else {
+                            // إذا لم يكن modal سجل المشتريات مفتوحاً، افتح modal المرتجع مباشرة
+                            console.log('Purchase history modal not open, opening return modal directly');
+                            setTimeout(function() {
+                                const nameEl = returnModal.querySelector('#localReturnCustomerName');
+                                const nameCardEl = returnModal.querySelector('#localReturnCustomerNameCard');
+                                if (nameEl) nameEl.textContent = window.returnModalCustomerName || '-';
+                                if (nameCardEl) nameCardEl.textContent = window.returnModalCustomerName || '-';
+                                
+                                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                                    const modalInstance = bootstrap.Modal.getOrCreateInstance(returnModal);
+                                    modalInstance.show();
+                                    
+                                    window.openReturnModalAfterLoad = false;
+                                    window.returnModalCustomerName = null;
+                                }
+                            }, 100);
                         }
-                        
-                        // فتح modal المرتجع بعد إغلاق modal سجل المشتريات
-                        setTimeout(function() {
-                            const nameEl = returnModal.querySelector('#localReturnCustomerName');
-                            const nameCardEl = returnModal.querySelector('#localReturnCustomerNameCard');
-                            if (nameEl) nameEl.textContent = window.returnModalCustomerName || '-';
-                            if (nameCardEl) nameCardEl.textContent = window.returnModalCustomerName || '-';
-                            
-                            const modalInstance = bootstrap.Modal.getOrCreateInstance(returnModal);
-                            modalInstance.show();
-                            
-                            // إعادة تعيين flag
-                            window.openReturnModalAfterLoad = false;
-                            window.returnModalCustomerName = null;
-                        }, 300);
+                    } else {
+                        console.error('Modal elements not found:', {
+                            purchaseHistoryModal: !!purchaseHistoryModal,
+                            returnModal: !!returnModal
+                        });
+                        // إعادة تعيين flag في حالة الخطأ
+                        window.openReturnModalAfterLoad = false;
+                        window.returnModalCustomerName = null;
                     }
                 }, 500);
             }
