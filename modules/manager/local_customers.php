@@ -5644,6 +5644,23 @@ document.addEventListener('DOMContentLoaded', function() {
     .modal-backdrop * {
         pointer-events: none !important;
     }
+    
+    /* إصلاح خاص للـ scroll الجانبي في الجدول */
+    .dashboard-table-wrapper.table-responsive {
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x pan-y !important;
+        position: relative !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* ضمان أن الجدول نفسه لا يمنع الـ scroll */
+    .dashboard-table-wrapper .dashboard-table {
+        min-width: 600px !important;
+        width: auto !important;
+    }
 }
 
 /* تحسينات responsive للمودال - متوافقة مع responsive-modals.css */
@@ -5836,11 +5853,15 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
 
 /* تحسينات الأداء على الموبايل */
 @media (max-width: 768px) {
-    /* تحسين الجدول على الموبايل */
+    /* تحسين الجدول على الموبايل - إصلاح الـ scroll الجانبي */
     .dashboard-table-wrapper {
-        -webkit-overflow-scrolling: touch;
-        overflow-x: auto;
+        -webkit-overflow-scrolling: touch !important;
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+        touch-action: pan-x pan-y !important; /* السماح بالـ scroll في كلا الاتجاهين */
         transform: translateZ(0); /* تفعيل hardware acceleration */
+        position: relative !important;
+        width: 100% !important;
     }
     
     .dashboard-table {
@@ -5870,9 +5891,13 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
     }
 }
 
-/* تحسين الأداء العام */
+/* تحسين الأداء العام - مع السماح بالـ scroll الجانبي */
 .dashboard-table-wrapper {
     contain: layout style paint;
+    /* ضمان أن الـ scroll الجانبي يعمل على جميع الأجهزة */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
 }
 
 .dashboard-table tbody tr {
@@ -6090,12 +6115,16 @@ function printDebtorCustomers() {
 }
 
 @media (max-width: 767.98px) {
-    /* تحسين الجدول الرئيسي للعملاء المحليين */
+    /* تحسين الجدول الرئيسي للعملاء المحليين - إصلاح الـ scroll الجانبي */
     .dashboard-table-wrapper {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x pan-y !important; /* السماح بالـ scroll في كلا الاتجاهين */
         margin: 0 -0.75rem;
         padding: 0 0.75rem;
+        position: relative !important;
+        width: 100% !important;
     }
     
     .dashboard-table {
@@ -6913,10 +6942,12 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
         -webkit-tap-highlight-color: rgba(0, 123, 255, 0.2) !important;
     }
     
-    /* ضمان أن الجدول قابل للتفاعل */
+    /* ضمان أن الجدول قابل للتفاعل مع السماح بالـ scroll الجانبي */
     body:not(.modal-open):not(.sidebar-open) .dashboard-table-wrapper {
         pointer-events: auto !important;
-        touch-action: pan-y !important;
+        touch-action: pan-x pan-y !important; /* السماح بالـ scroll في كلا الاتجاهين */
+        overflow-x: auto !important; /* ضمان تفعيل الـ scroll الجانبي */
+        -webkit-overflow-scrolling: touch !important; /* تحسين الـ scroll على iOS */
     }
     
     body:not(.modal-open):not(.sidebar-open) .dashboard-table tbody tr {
@@ -7088,37 +7119,47 @@ body:not(.modal-open):not(.sidebar-open) .dashboard-main {
 <script>
 // ===== دوال فتح النماذج =====
 
-function showAddRegionFromLocalCustomerModal() {
-    // إغلاق النماذج الأخرى
-    if (typeof closeAllForms === 'function') {
-        closeAllForms();
-    }
-    
-    // فتح card إضافة المنطقة
-    const card = document.getElementById('addRegionFromLocalCustomerCard');
-    if (card) {
-        // إعادة تعيين النموذج إذا كان مفتوحاً
-        const form = card.querySelector('form');
-        if (form) form.reset();
-        
-        // إخفاء رسالة الخطأ/النجاح
-        const messageDiv = document.getElementById('addLocalRegionCardMessage');
-        if (messageDiv) {
-            messageDiv.classList.add('d-none');
+// تعريف الدالة في window scope لضمان الوصول إليها من onclick
+if (typeof window.showAddRegionFromLocalCustomerModal === 'undefined') {
+    window.showAddRegionFromLocalCustomerModal = function() {
+        // إغلاق النماذج الأخرى
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        } else if (typeof doCloseAllForms === 'function') {
+            doCloseAllForms();
         }
         
-        // عرض card
-        card.style.display = 'block';
-        
-        // التمرير إلى card
-        setTimeout(function() {
-            if (typeof scrollToElement === 'function') {
-                scrollToElement(card);
-            } else {
-                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // فتح card إضافة المنطقة
+        const card = document.getElementById('addRegionFromLocalCustomerCard');
+        if (card) {
+            // إعادة تعيين النموذج إذا كان مفتوحاً
+            const form = card.querySelector('form');
+            if (form) form.reset();
+            
+            // إخفاء رسالة الخطأ/النجاح
+            const messageDiv = document.getElementById('addLocalRegionCardMessage');
+            if (messageDiv) {
+                messageDiv.classList.add('d-none');
+                messageDiv.textContent = '';
             }
-        }, 50);
-    }
+            
+            // عرض card
+            card.style.display = 'block';
+            
+            // التمرير إلى card
+            setTimeout(function() {
+                if (typeof scrollToElement === 'function') {
+                    scrollToElement(card);
+                } else if (typeof doScrollToElement === 'function') {
+                    doScrollToElement(card);
+                } else {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 50);
+        } else {
+            console.error('addRegionFromLocalCustomerCard not found');
+        }
+    };
 }
 
 function showDeleteLocalCustomerModal(button) {
@@ -7180,13 +7221,21 @@ function showDeleteLocalCustomerModal(button) {
 
 // ===== دوال إغلاق Cards =====
 
-function closeAddRegionFromLocalCustomerCard() {
-    const card = document.getElementById('addRegionFromLocalCustomerCard');
-    if (card) {
-        card.style.display = 'none';
-        const form = card.querySelector('form');
-        if (form) form.reset();
-    }
+// تعريف دالة الإغلاق في window scope
+if (typeof window.closeAddRegionFromLocalCustomerCard === 'undefined') {
+    window.closeAddRegionFromLocalCustomerCard = function() {
+        const card = document.getElementById('addRegionFromLocalCustomerCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+            const messageDiv = document.getElementById('addLocalRegionCardMessage');
+            if (messageDiv) {
+                messageDiv.classList.add('d-none');
+                messageDiv.textContent = '';
+            }
+        }
+    };
 }
 
 function closeImportLocalCustomersCard() {
