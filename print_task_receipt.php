@@ -389,12 +389,6 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             </div>
         </div>
         <?php endif; ?>
-        
-        <div class="footer">
-            <p style="margin: 5px 0; font-weight: 600;">شكراً لكم</p>
-            <p style="margin: 5px 0;">تم إنشاء هذا الإيصال تلقائياً</p>
-            <p style="margin: 5px 0;"><?php echo date('Y/m/d H:i:s'); ?></p>
-        </div>
     </div>
     
     <script>
