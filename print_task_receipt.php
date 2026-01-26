@@ -54,6 +54,45 @@ $createdAt = $task['created_at'] ?? date('Y-m-d H:i:s');
 $dueDate = $task['due_date'] ?? null;
 $taskType = $task['task_type'] ?? 'general';
 
+// استخراج المنتجات المتعددة من notes
+$products = [];
+if (!empty($notes)) {
+    // محاولة استخراج JSON من notes
+    if (preg_match('/\[PRODUCTS_JSON\]:(.+?)(?=\n|$)/', $notes, $matches)) {
+        $productsJson = trim($matches[1]);
+        $decodedProducts = json_decode($productsJson, true);
+        if (is_array($decodedProducts) && !empty($decodedProducts)) {
+            $products = $decodedProducts;
+        }
+    }
+    
+    // إذا لم نجد JSON، حاول استخراج من الصيغة النصية
+    if (empty($products)) {
+        $lines = explode("\n", $notes);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (preg_match('/المنتج:\s*(.+?)(?:\s*-\s*الكمية:\s*([0-9.]+))?/i', $line, $matches)) {
+                $productName = trim($matches[1]);
+                $productQuantity = isset($matches[2]) ? (float)$matches[2] : null;
+                if (!empty($productName)) {
+                    $products[] = [
+                        'name' => $productName,
+                        'quantity' => $productQuantity
+                    ];
+                }
+            }
+        }
+    }
+}
+
+// إذا لم نجد منتجات متعددة، استخدم المنتج الواحد (للتوافق مع الكود القديم)
+if (empty($products) && !empty($productName)) {
+    $products[] = [
+        'name' => $productName,
+        'quantity' => $quantity > 0 ? $quantity : null
+    ];
+}
+
 // تسميات الحالة والأولوية
 $statusLabels = [
     'pending' => 'معلقة',
@@ -201,6 +240,46 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             font-size: 14px;
         }
         
+        .products-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 13px;
+        }
+        
+        .products-table thead {
+            background-color: #f8f9fa;
+        }
+        
+        .products-table th {
+            padding: 8px 5px;
+            text-align: right;
+            font-weight: 700;
+            font-size: 13px;
+            border-bottom: 2px solid #000;
+            color: #000;
+        }
+        
+        .products-table td {
+            padding: 8px 5px;
+            text-align: right;
+            border-bottom: 1px solid #ddd;
+            color: #000;
+            font-weight: 500;
+        }
+        
+        .products-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .products-table .product-name {
+            font-weight: 600;
+        }
+        
+        .products-table .product-quantity {
+            text-align: center;
+        }
+        
         .section-title {
             font-size: 16px;
             font-weight: 700;
@@ -315,22 +394,63 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         </div>
         
         <div class="section-title">تفاصيل الاوردر</div>
+        <?php if (!empty($products)): ?>
+        <table class="products-table">
+            <thead>
+                <tr>
+                    <th style="width: 60%;">المنتج</th>
+                    <th style="width: 40%; text-align: center;">الكمية</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php 
+                $totalQuantity = 0;
+                foreach ($products as $product): 
+                    $productQty = $product['quantity'] ?? null;
+                    if ($productQty !== null) {
+                        $totalQuantity += $productQty;
+                    }
+                ?>
+                <tr>
+                    <td class="product-name"><?php echo htmlspecialchars($product['name']); ?></td>
+                    <td class="product-quantity">
+                        <?php 
+                        if ($productQty !== null) {
+                            echo number_format($productQty, 2) . ' قطعة';
+                        } else {
+                            echo '<span style="color: #999;">-</span>';
+                        }
+                        ?>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                <?php if (count($products) > 1 && $totalQuantity > 0): ?>
+                <tr style="border-top: 2px solid #000; font-weight: 700;">
+                    <td style="text-align: left; padding-top: 10px;">الإجمالي:</td>
+                    <td style="text-align: center; padding-top: 10px;"><?php echo number_format($totalQuantity, 2); ?> قطعة</td>
+                </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+        <?php else: ?>
         <table class="info-table">
-            <?php if (!empty($productName)): ?>
             <tr>
-                <td>المنتج:</td>
-                <td><?php echo htmlspecialchars($productName); ?></td>
+                <td>لا توجد منتجات</td>
+                <td>-</td>
             </tr>
-            <?php endif; ?>
-            <?php if ($quantity > 0): ?>
-            <tr>
-                <td>الكمية:</td>
-                <td><?php echo number_format((int)$quantity); ?> - قطعة</td>
-            </tr>
-            <?php endif; ?>
+        </table>
+        <?php endif; ?>
+        
+        <div class="divider"></div>
+        
+        <table class="info-table">
             <tr>
                 <td>الأولوية:</td>
                 <td style="font-weight: 600;"><?php echo htmlspecialchars($priorityLabel); ?></td>
+            </tr>
+            <tr>
+                <td>الحالة:</td>
+                <td style="font-weight: 600;"><?php echo htmlspecialchars($statusLabel); ?></td>
             </tr>
         </table>
         

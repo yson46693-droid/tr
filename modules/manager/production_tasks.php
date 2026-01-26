@@ -253,24 +253,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $priority = in_array($priority, $allowedPriorities, true) ? $priority : 'normal';
         $dueDate = $_POST['due_date'] ?? '';
         $assignees = $_POST['assigned_to'] ?? [];
-        // الحصول على اسم المنتج من حقل الإدخال النصي
-        $productName = trim($_POST['product_name'] ?? '');
-
-        $productQuantityInput = isset($_POST['product_quantity']) ? trim((string)$_POST['product_quantity']) : '';
-        $productQuantity = null;
-        if ($productQuantityInput !== '') {
-            $normalizedQuantity = str_replace(',', '.', $productQuantityInput);
-            if (!is_numeric($normalizedQuantity)) {
-                $error = 'يرجى إدخال كمية صحيحة أو ترك الحقل فارغاً.';
-            } else {
-                $productQuantity = (float)$normalizedQuantity;
-                if ($productQuantity < 0) {
-                    $error = 'لا يمكن أن تكون الكمية سالبة.';
+        
+        // الحصول على المنتجات المتعددة
+        $products = [];
+        if (isset($_POST['products']) && is_array($_POST['products'])) {
+            foreach ($_POST['products'] as $productData) {
+                $productName = trim($productData['name'] ?? '');
+                $productQuantityInput = isset($productData['quantity']) ? trim((string)$productData['quantity']) : '';
+                
+                if ($productName === '') {
+                    continue; // تخطي المنتجات الفارغة
                 }
+                
+                $productQuantity = null;
+                if ($productQuantityInput !== '') {
+                    $normalizedQuantity = str_replace(',', '.', $productQuantityInput);
+                    if (is_numeric($normalizedQuantity)) {
+                        $productQuantity = (float)$normalizedQuantity;
+                        if ($productQuantity < 0) {
+                            $error = 'لا يمكن أن تكون الكمية سالبة.';
+                            break;
+                        }
+                    } else {
+                        $error = 'يرجى إدخال كمية صحيحة.';
+                        break;
+                    }
+                }
+                
+                if ($productQuantity !== null && $productQuantity <= 0) {
+                    $productQuantity = null;
+                }
+                
+                $products[] = [
+                    'name' => $productName,
+                    'quantity' => $productQuantity
+                ];
             }
         }
-        if ($productQuantity !== null && $productQuantity <= 0) {
-            $productQuantity = null;
+        
+        // للتوافق مع الكود القديم: إذا لم تكن هناك منتجات في المصفوفة، جرب الحقول القديمة
+        if (empty($products)) {
+            $productName = trim($_POST['product_name'] ?? '');
+            $productQuantityInput = isset($_POST['product_quantity']) ? trim((string)$_POST['product_quantity']) : '';
+            
+            if ($productName !== '') {
+                $productQuantity = null;
+                if ($productQuantityInput !== '') {
+                    $normalizedQuantity = str_replace(',', '.', $productQuantityInput);
+                    if (is_numeric($normalizedQuantity)) {
+                        $productQuantity = (float)$normalizedQuantity;
+                        if ($productQuantity < 0) {
+                            $error = 'لا يمكن أن تكون الكمية سالبة.';
+                        }
+                    } else {
+                        $error = 'يرجى إدخال كمية صحيحة.';
+                    }
+                }
+                
+                if ($productQuantity !== null && $productQuantity <= 0) {
+                    $productQuantity = null;
+                }
+                
+                if ($productName !== '' && !$error) {
+                    $products[] = [
+                        'name' => $productName,
+                        'quantity' => $productQuantity
+                    ];
+                }
+            }
         }
 
         if (!is_array($assignees)) {
@@ -329,7 +379,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $placeholders[] = '?';
                 }
 
-                // البحث عن template_id و product_id من اسم المنتج - نفس طريقة customer_orders
+                // حفظ المنتجات في notes بصيغة JSON
+                $notesParts = [];
+                if ($details) {
+                    $notesParts[] = $details;
+                }
+                
+                // حفظ المنتجات المتعددة في notes بصيغة JSON
+                if (!empty($products)) {
+                    $productsJson = json_encode($products, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    $notesParts[] = '[PRODUCTS_JSON]:' . $productsJson;
+                    
+                    // أيضاً حفظ بصيغة نصية للتوافق مع الكود القديم
+                    $productInfoLines = [];
+                    foreach ($products as $product) {
+                        $productInfo = 'المنتج: ' . $product['name'];
+                        if ($product['quantity'] !== null) {
+                            $productInfo .= ' - الكمية: ' . $product['quantity'];
+                        }
+                        $productInfoLines[] = $productInfo;
+                    }
+                    if (!empty($productInfoLines)) {
+                        $notesParts[] = implode("\n", $productInfoLines);
+                    }
+                }
+                
+                // حفظ أول منتج في الحقول القديمة للتوافق
+                $firstProduct = !empty($products) ? $products[0] : null;
+                $productName = $firstProduct['name'] ?? '';
+                $productQuantity = $firstProduct['quantity'] ?? null;
+                
+                // البحث عن template_id و product_id من اسم المنتج الأول - نفس طريقة customer_orders
                 $templateId = null;
                 $productId = null;
                 if ($productName !== '') {
@@ -404,20 +484,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                 }
-
-                // بناء notes مع معلومات المنتج والعمال
-                $notesParts = [];
-                if ($details) {
-                    $notesParts[] = $details;
-                }
-                
-                if ($productName !== '') {
-                    $productInfo = 'المنتج: ' . $productName;
-                    if ($productQuantity !== null) {
-                        $productInfo .= ' - الكمية: ' . $productQuantity;
-                    }
-                    $notesParts[] = $productInfo;
-                }
                 
                 // حفظ قائمة العمال في notes
                 if (count($assignees) > 1) {
@@ -459,7 +525,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $placeholders[] = '?';
                 }
 
-                if ($productQuantity !== null) {
+                // حفظ الكمية الإجمالية (من أول منتج أو مجموع الكميات)
+                $totalQuantity = null;
+                if (!empty($products)) {
+                    $totalQuantity = 0;
+                    foreach ($products as $product) {
+                        if ($product['quantity'] !== null) {
+                            $totalQuantity += $product['quantity'];
+                        }
+                    }
+                    if ($totalQuantity > 0) {
+                        $columns[] = 'quantity';
+                        $values[] = $totalQuantity;
+                        $placeholders[] = '?';
+                    }
+                } elseif ($productQuantity !== null) {
                     $columns[] = 'quantity';
                     $values[] = $productQuantity;
                     $placeholders[] = '?';
@@ -1032,21 +1112,34 @@ try {
                             <label class="form-label">وصف وتفاصيل المهمة</label>
                             <textarea class="form-control" name="details" rows="4" placeholder="أدخل التفاصيل والتعليمات اللازمة للعمال."></textarea>
                         </div>
-                        <div class="col-md-6" id="productFieldWrapper">
-                            <label class="form-label">المنتج (اختياري)</label>
-                            <input type="text" class="form-control" name="product_name" id="productNameInput" placeholder="أدخل اسم المنتج أو القالب" list="templateSuggestions" autocomplete="off">
+                        <div class="col-12" id="productsSection">
+                            <label class="form-label fw-bold">المنتجات والكميات</label>
+                            <div id="productsContainer">
+                                <div class="product-row mb-3 p-3 border rounded" data-product-index="0">
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <label class="form-label small">اسم المنتج</label>
+                                            <input type="text" class="form-control product-name-input" name="products[0][name]" placeholder="أدخل اسم المنتج أو القالب" list="templateSuggestions" autocomplete="off">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small">الكمية</label>
+                                            <input type="number" class="form-control product-quantity-input" name="products[0][quantity]" step="0.01" min="0" placeholder="مثال: 120">
+                                        </div>
+                                        <div class="col-md-2 d-flex align-items-end">
+                                            <button type="button" class="btn btn-danger btn-sm w-100 remove-product-btn" style="display: none;">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             <datalist id="templateSuggestions"></datalist>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="addProductBtn">
+                                <i class="bi bi-plus-circle me-1"></i>إضافة منتج آخر
+                            </button>
                             <div class="form-text mt-2">
-                                <small class="text-muted">أدخل اسم المنتج أو القالب المراد إنتاجه.</small>
+                                <small class="text-muted">يمكنك إضافة أكثر من منتج وكمية في نفس المهمة.</small>
                             </div>
-                        </div>
-                        <div class="col-md-6" id="quantityFieldWrapper">
-                            <label class="form-label">الكمية (اختياري)</label>
-                            <div class="input-group">
-                                <input type="number" class="form-control" name="product_quantity" id="productQuantityInput" step="0.01" min="0" placeholder="مثال: 120">
-                                <span class="input-group-text">وحدة</span>
-                            </div>
-                            <div class="form-text">اختياري: أدخل الكمية المرتبطة بالمهمة.</div>
                         </div>
                     </div>
                     <div class="d-flex justify-content-end mt-4 gap-2">
@@ -1259,6 +1352,71 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // تحميل الاقتراحات عند تحميل الصفحة
     loadTemplateSuggestions();
+    
+    // إدارة المنتجات المتعددة
+    const productsContainer = document.getElementById('productsContainer');
+    const addProductBtn = document.getElementById('addProductBtn');
+    let productIndex = 1;
+    
+    function updateRemoveButtons() {
+        const productRows = productsContainer.querySelectorAll('.product-row');
+        productRows.forEach((row, index) => {
+            const removeBtn = row.querySelector('.remove-product-btn');
+            if (productRows.length > 1) {
+                removeBtn.style.display = 'block';
+            } else {
+                removeBtn.style.display = 'none';
+            }
+        });
+    }
+    
+    function addProductRow() {
+        const newRow = document.createElement('div');
+        newRow.className = 'product-row mb-3 p-3 border rounded';
+        newRow.setAttribute('data-product-index', productIndex);
+        newRow.innerHTML = `
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <label class="form-label small">اسم المنتج</label>
+                    <input type="text" class="form-control product-name-input" name="products[${productIndex}][name]" placeholder="أدخل اسم المنتج أو القالب" list="templateSuggestions" autocomplete="off">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">الكمية</label>
+                    <input type="number" class="form-control product-quantity-input" name="products[${productIndex}][quantity]" step="0.01" min="0" placeholder="مثال: 120">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="button" class="btn btn-danger btn-sm w-100 remove-product-btn">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        productsContainer.appendChild(newRow);
+        productIndex++;
+        updateRemoveButtons();
+        
+        // إضافة مستمع الحدث لزر الحذف
+        newRow.querySelector('.remove-product-btn').addEventListener('click', function() {
+            newRow.remove();
+            updateRemoveButtons();
+        });
+    }
+    
+    // إضافة منتج جديد
+    if (addProductBtn) {
+        addProductBtn.addEventListener('click', addProductRow);
+    }
+    
+    // إضافة مستمعات الأحداث لأزرار الحذف الموجودة
+    productsContainer.querySelectorAll('.remove-product-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            this.closest('.product-row').remove();
+            updateRemoveButtons();
+        });
+    });
+    
+    // تحديث حالة أزرار الحذف عند التحميل
+    updateRemoveButtons();
 });
 
 // لا حاجة لإعادة التحميل التلقائي - preventDuplicateSubmission يتولى ذلك
