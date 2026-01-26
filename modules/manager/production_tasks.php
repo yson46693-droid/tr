@@ -1148,17 +1148,25 @@ try {
                                     <td><?php echo $task['due_date'] ? htmlspecialchars($task['due_date']) : '<span class="text-muted">غير محدد</span>'; ?></td>
                                     <td><?php echo htmlspecialchars($task['created_at']); ?></td>
                                     <td>
-                                        <?php if (in_array($task['status'], ['completed', 'cancelled'], true)): ?>
-                                            <span class="text-muted small">لا يوجد إجراء</span>
-                                        <?php else: ?>
-                                            <form method="post" class="d-inline" onsubmit="return confirm('هل أنت متأكد من إلغاء هذه المهمة؟');">
-                                                <input type="hidden" name="action" value="cancel_task">
-                                                <input type="hidden" name="task_id" value="<?php echo (int)$task['id']; ?>">
-                                                <button type="submit" class="btn btn-outline-danger btn-sm">
-                                                    <i class="bi bi-x-circle me-1"></i>إلغاء المهمة
-                                                </button>
-                                            </form>
-                                        <?php endif; ?>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <?php if ($isAccountant || $isManager): ?>
+                                                <a href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank" class="btn btn-outline-primary" title="طباعة إيصال المهمة">
+                                                    <i class="bi bi-printer"></i>
+                                                </a>
+                                            <?php endif; ?>
+                                            
+                                            <?php if (in_array($task['status'], ['completed', 'cancelled'], true)): ?>
+                                                <span class="text-muted small">لا يوجد إجراء</span>
+                                            <?php else: ?>
+                                                <form method="post" class="d-inline" onsubmit="return confirm('هل أنت متأكد من إلغاء هذه المهمة؟');">
+                                                    <input type="hidden" name="action" value="cancel_task">
+                                                    <input type="hidden" name="task_id" value="<?php echo (int)$task['id']; ?>">
+                                                    <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                        <i class="bi bi-x-circle me-1"></i>إلغاء المهمة
+                                                    </button>
+                                                </form>
+                                            <?php endif; ?>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
