@@ -7118,103 +7118,149 @@ body:not(.modal-open):not(.sidebar-open) .dashboard-main {
 
 <script>
 // ===== دوال فتح النماذج =====
+// يجب أن تكون هذه الدوال في window scope لضمان الوصول إليها من onclick
 
 // تعريف الدالة في window scope لضمان الوصول إليها من onclick
 if (typeof window.showAddRegionFromLocalCustomerModal === 'undefined') {
     window.showAddRegionFromLocalCustomerModal = function() {
-        // إغلاق النماذج الأخرى
-        if (typeof closeAllForms === 'function') {
-            closeAllForms();
-        } else if (typeof doCloseAllForms === 'function') {
-            doCloseAllForms();
-        }
-        
-        // فتح card إضافة المنطقة
-        const card = document.getElementById('addRegionFromLocalCustomerCard');
-        if (card) {
-            // إعادة تعيين النموذج إذا كان مفتوحاً
-            const form = card.querySelector('form');
-            if (form) form.reset();
-            
-            // إخفاء رسالة الخطأ/النجاح
-            const messageDiv = document.getElementById('addLocalRegionCardMessage');
-            if (messageDiv) {
-                messageDiv.classList.add('d-none');
-                messageDiv.textContent = '';
+        try {
+            // إغلاق النماذج الأخرى
+            if (typeof closeAllForms === 'function') {
+                closeAllForms();
+            } else if (typeof window.closeAllForms === 'function') {
+                window.closeAllForms();
+            } else if (typeof doCloseAllForms === 'function') {
+                doCloseAllForms();
             }
             
-            // عرض card
-            card.style.display = 'block';
-            
-            // التمرير إلى card
-            setTimeout(function() {
-                if (typeof scrollToElement === 'function') {
-                    scrollToElement(card);
-                } else if (typeof doScrollToElement === 'function') {
-                    doScrollToElement(card);
-                } else {
-                    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // فتح card إضافة المنطقة
+            const card = document.getElementById('addRegionFromLocalCustomerCard');
+            if (card) {
+                // إعادة تعيين النموذج إذا كان مفتوحاً
+                const form = card.querySelector('form');
+                if (form) {
+                    form.reset();
                 }
-            }, 50);
-        } else {
-            console.error('addRegionFromLocalCustomerCard not found');
+                
+                // إخفاء رسالة الخطأ/النجاح
+                const messageDiv = document.getElementById('addLocalRegionCardMessage');
+                if (messageDiv) {
+                    messageDiv.classList.add('d-none');
+                    messageDiv.textContent = '';
+                    messageDiv.innerHTML = '';
+                }
+                
+                // عرض card
+                card.style.display = 'block';
+                card.classList.remove('d-none');
+                
+                // التمرير إلى card
+                setTimeout(function() {
+                    if (typeof scrollToElement === 'function') {
+                        scrollToElement(card);
+                    } else if (typeof window.scrollToElement === 'function') {
+                        window.scrollToElement(card);
+                    } else if (typeof doScrollToElement === 'function') {
+                        doScrollToElement(card);
+                    } else {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 50);
+            } else {
+                console.error('addRegionFromLocalCustomerCard not found');
+                alert('خطأ: لم يتم العثور على نموذج إضافة المنطقة');
+            }
+        } catch (error) {
+            console.error('Error in showAddRegionFromLocalCustomerModal:', error);
+            alert('حدث خطأ أثناء فتح نموذج إضافة المنطقة');
         }
     };
 }
 
-function showDeleteLocalCustomerModal(button) {
-    if (!button) return;
-    
-    closeAllForms();
-    
-    const customerId = button.getAttribute('data-customer-id') || '';
-    const customerName = button.getAttribute('data-customer-name') || '-';
-    
-    if (isMobile()) {
-        const card = document.getElementById('deleteLocalCustomerCard');
-        if (card) {
-            const idInput = document.getElementById('deleteLocalCustomerCardId');
-            const nameEl = card.querySelector('.delete-local-customer-card-name');
-            
-            if (idInput) {
-                idInput.value = customerId;
-            } else {
-                console.error('deleteLocalCustomerCardId input not found');
-            }
-            
-            if (nameEl) {
-                nameEl.textContent = customerName;
-            } else {
-                console.error('delete-local-customer-card-name element not found');
-            }
-            
-            card.style.display = 'block';
-            setTimeout(function() {
-                scrollToElement(card);
-            }, 50);
+// تعريف دالة حذف العميل في window scope لضمان الوصول إليها من onclick
+if (typeof window.showDeleteLocalCustomerModal === 'undefined') {
+    window.showDeleteLocalCustomerModal = function(button) {
+        if (!button) {
+            console.error('showDeleteLocalCustomerModal: button is required');
+            return;
         }
-    } else {
-        const modal = document.getElementById('deleteLocalCustomerModal');
-        if (modal) {
-            const idInput = modal.querySelector('input[name="customer_id"]');
-            const nameEl = modal.querySelector('.delete-local-customer-name');
-            
-            if (idInput) {
-                idInput.value = customerId;
-            } else {
-                console.error('Customer ID input not found in delete modal');
-            }
-            
-            if (nameEl) {
-                nameEl.textContent = customerName;
-            } else {
-                console.error('Customer name element (.delete-local-customer-name) not found in delete modal');
-            }
-            
-            const modalInstance = new bootstrap.Modal(modal);
-            modalInstance.show();
+        
+        // إغلاق النماذج الأخرى
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        } else if (typeof window.closeAllForms === 'function') {
+            window.closeAllForms();
         }
-    }
+        
+        const customerId = button.getAttribute('data-customer-id') || '';
+        const customerName = button.getAttribute('data-customer-name') || '-';
+        
+        // التحقق من الموبايل
+        const isMobileDevice = typeof isMobile === 'function' ? isMobile() : 
+                               (typeof window.isMobile === 'function' ? window.isMobile() : 
+                               window.innerWidth <= 768);
+        
+        if (isMobileDevice) {
+            // على الموبايل: فتح card
+            const card = document.getElementById('deleteLocalCustomerCard');
+            if (card) {
+                const idInput = document.getElementById('deleteLocalCustomerCardId');
+                const nameEl = card.querySelector('.delete-local-customer-card-name');
+                
+                if (idInput) {
+                    idInput.value = customerId;
+                } else {
+                    console.error('deleteLocalCustomerCardId input not found');
+                }
+                
+                if (nameEl) {
+                    nameEl.textContent = customerName;
+                } else {
+                    console.error('delete-local-customer-card-name element not found');
+                }
+                
+                // عرض card
+                card.style.display = 'block';
+                
+                // التمرير إلى card
+                setTimeout(function() {
+                    if (typeof scrollToElement === 'function') {
+                        scrollToElement(card);
+                    } else if (typeof window.scrollToElement === 'function') {
+                        window.scrollToElement(card);
+                    } else {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 50);
+            } else {
+                console.error('deleteLocalCustomerCard not found');
+            }
+        } else {
+            // على الكمبيوتر: فتح modal
+            const modal = document.getElementById('deleteLocalCustomerModal');
+            if (modal) {
+                const idInput = modal.querySelector('input[name="customer_id"]');
+                const nameEl = modal.querySelector('.delete-local-customer-name');
+                
+                if (idInput) {
+                    idInput.value = customerId;
+                } else {
+                    console.error('Customer ID input not found in delete modal');
+                }
+                
+                if (nameEl) {
+                    nameEl.textContent = customerName;
+                } else {
+                    console.error('Customer name element (.delete-local-customer-name) not found in delete modal');
+                }
+                
+                const modalInstance = new bootstrap.Modal(modal);
+                modalInstance.show();
+            } else {
+                console.error('deleteLocalCustomerModal not found');
+            }
+        }
+    };
 }
 
 // تم نقل تعريف showLocalCustomerReturnModal إلى بداية الـ script tag (السطر 2658)
@@ -7224,16 +7270,26 @@ function showDeleteLocalCustomerModal(button) {
 // تعريف دالة الإغلاق في window scope
 if (typeof window.closeAddRegionFromLocalCustomerCard === 'undefined') {
     window.closeAddRegionFromLocalCustomerCard = function() {
-        const card = document.getElementById('addRegionFromLocalCustomerCard');
-        if (card) {
-            card.style.display = 'none';
-            const form = card.querySelector('form');
-            if (form) form.reset();
-            const messageDiv = document.getElementById('addLocalRegionCardMessage');
-            if (messageDiv) {
-                messageDiv.classList.add('d-none');
-                messageDiv.textContent = '';
+        try {
+            const card = document.getElementById('addRegionFromLocalCustomerCard');
+            if (card) {
+                card.style.display = 'none';
+                card.classList.add('d-none');
+                
+                const form = card.querySelector('form');
+                if (form) {
+                    form.reset();
+                }
+                
+                const messageDiv = document.getElementById('addLocalRegionCardMessage');
+                if (messageDiv) {
+                    messageDiv.classList.add('d-none');
+                    messageDiv.textContent = '';
+                    messageDiv.innerHTML = '';
+                }
             }
+        } catch (error) {
+            console.error('Error in closeAddRegionFromLocalCustomerCard:', error);
         }
     };
 }
@@ -7247,13 +7303,35 @@ function closeImportLocalCustomersCard() {
     }
 }
 
-function closeDeleteLocalCustomerCard() {
-    const card = document.getElementById('deleteLocalCustomerCard');
-    if (card) {
-        card.style.display = 'none';
-        const form = card.querySelector('form');
-        if (form) form.reset();
-    }
+// تعريف دالة إغلاق card الحذف في window scope
+if (typeof window.closeDeleteLocalCustomerCard === 'undefined') {
+    window.closeDeleteLocalCustomerCard = function() {
+        try {
+            const card = document.getElementById('deleteLocalCustomerCard');
+            if (card) {
+                card.style.display = 'none';
+                card.classList.add('d-none');
+                
+                const form = card.querySelector('form');
+                if (form) {
+                    form.reset();
+                }
+                
+                // إعادة تعيين القيم
+                const idInput = document.getElementById('deleteLocalCustomerCardId');
+                if (idInput) {
+                    idInput.value = '';
+                }
+                
+                const nameEl = card.querySelector('.delete-local-customer-card-name');
+                if (nameEl) {
+                    nameEl.textContent = '-';
+                }
+            }
+        } catch (error) {
+            console.error('Error in closeDeleteLocalCustomerCard:', error);
+        }
+    };
 }
 
 document.addEventListener('DOMContentLoaded', function() {
