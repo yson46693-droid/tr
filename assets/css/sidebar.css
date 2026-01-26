@@ -349,3 +349,44 @@
     }
 }
 
+/* ===== Sidebar Search ===== */
+.sidebar-search-wrapper {
+    position: relative;
+}
+
+.sidebar-search-input {
+    color: #ffffff !important;
+    caret-color: #ffffff !important;
+}
+
+.sidebar-search-input::placeholder {
+    color: rgba(255, 255, 255, 0.6) !important;
+    opacity: 1 !important;
+}
+
+.sidebar-search-input:focus {
+    color: #ffffff !important;
+    caret-color: #ffffff !important;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* Dark mode support for sidebar search */
+[data-theme="dark"] .sidebar-search-input,
+body.dark-mode .sidebar-search-input {
+    color: #ffffff !important;
+    caret-color: #ffffff !important;
+}
+
+[data-theme="dark"] .sidebar-search-input::placeholder,
+body.dark-mode .sidebar-search-input::placeholder {
+    color: rgba(255, 255, 255, 0.6) !important;
+    opacity: 1 !important;
+}
+
+[data-theme="dark"] .sidebar-search-input:focus,
+body.dark-mode .sidebar-search-input:focus {
+    color: #ffffff !important;
+    caret-color: #ffffff !important;
+}
+

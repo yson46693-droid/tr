@@ -802,7 +802,7 @@ if (empty($menuItems)) {
                    id="sidebarSearchInput" 
                    placeholder="بحث سريع..." 
                    autocomplete="off"
-                   style="border-color: rgba(255,255,255,0.1); color: inherit;">
+                   style="border-color: rgba(255,255,255,0.1); color: #ffffff !important;">
         </div>
         <script>
         document.addEventListener('DOMContentLoaded', function() {
