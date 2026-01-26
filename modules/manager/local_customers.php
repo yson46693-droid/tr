@@ -3445,6 +3445,21 @@ document.addEventListener('DOMContentLoaded', function () {
         document.body.style.height = '';
     }
     
+    // ===== إصلاح مشكلة overlay الـ sidebar على الموبايل =====
+    // التأكد من أن الـ sidebar مغلق عند تحميل الصفحة
+    const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+    if (dashboardWrapper && window.innerWidth <= 768) {
+        // إزالة class sidebar-open إذا كان موجوداً
+        dashboardWrapper.classList.remove('sidebar-open');
+        document.body.classList.remove('sidebar-open');
+        
+        // ضمان أن overlay الـ sidebar غير مرئي
+        const sidebar = document.querySelector('.homeline-sidebar');
+        if (sidebar) {
+            sidebar.style.transform = '';
+        }
+    }
+    
     // تفويض النقر/اللمس لأزرار سجل ومرتجع على الموبايل (داخل جدول قابل للتمرير)
     var tableWrapper = document.querySelector('.dashboard-table-wrapper');
     if (tableWrapper && typeof isMobile === 'function') {
@@ -6723,11 +6738,30 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
 /* ===== إصلاح مشكلة عدم القدرة على الضغط على العناصر على الموبايل ===== */
 /* ضمان أن الصفحة قابلة للتفاعل عندما لا توجد نماذج مفتوحة */
 @media (max-width: 768px) {
+    /* إزالة overlay الـ sidebar عندما يكون مغلقاً */
+    .dashboard-wrapper:not(.sidebar-open)::before {
+        display: none !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
+        z-index: -1 !important;
+    }
+    
+    /* ضمان أن overlay الـ sidebar لا يمنع التفاعل إلا عند فتح الـ sidebar */
+    .dashboard-wrapper.sidebar-open::before {
+        pointer-events: auto !important;
+    }
+    
     /* ضمان أن body قابل للتفاعل عندما لا توجد نماذج مفتوحة */
-    body:not(.modal-open) {
+    body:not(.modal-open):not(.sidebar-open) {
         pointer-events: auto !important;
         touch-action: manipulation !important;
         overflow: auto !important;
+    }
+    
+    /* ضمان أن المحتوى الرئيسي قابل للتفاعل عندما لا يكون الـ sidebar مفتوحاً */
+    .dashboard-wrapper:not(.sidebar-open) .dashboard-main {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
     }
     
     /* إخفاء backdrop عندما لا توجد نماذج مفتوحة */
@@ -6739,42 +6773,42 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
     }
     
     /* ضمان أن جميع العناصر القابلة للتفاعل تعمل على الموبايل */
-    body:not(.modal-open) .btn,
-    body:not(.modal-open) button,
-    body:not(.modal-open) input,
-    body:not(.modal-open) select,
-    body:not(.modal-open) textarea,
-    body:not(.modal-open) a,
-    body:not(.modal-open) .card,
-    body:not(.modal-open) .table,
-    body:not(.modal-open) .table tbody tr,
-    body:not(.modal-open) .table td,
-    body:not(.modal-open) .table th {
+    body:not(.modal-open):not(.sidebar-open) .btn,
+    body:not(.modal-open):not(.sidebar-open) button,
+    body:not(.modal-open):not(.sidebar-open) input,
+    body:not(.modal-open):not(.sidebar-open) select,
+    body:not(.modal-open):not(.sidebar-open) textarea,
+    body:not(.modal-open):not(.sidebar-open) a,
+    body:not(.modal-open):not(.sidebar-open) .card,
+    body:not(.modal-open):not(.sidebar-open) .table,
+    body:not(.modal-open):not(.sidebar-open) .table tbody tr,
+    body:not(.modal-open):not(.sidebar-open) .table td,
+    body:not(.modal-open):not(.sidebar-open) .table th {
         pointer-events: auto !important;
         touch-action: manipulation !important;
         -webkit-tap-highlight-color: rgba(0, 123, 255, 0.2) !important;
     }
     
     /* ضمان أن الجدول قابل للتفاعل */
-    body:not(.modal-open) .dashboard-table-wrapper {
+    body:not(.modal-open):not(.sidebar-open) .dashboard-table-wrapper {
         pointer-events: auto !important;
         touch-action: pan-y !important;
     }
     
-    body:not(.modal-open) .dashboard-table tbody tr {
+    body:not(.modal-open):not(.sidebar-open) .dashboard-table tbody tr {
         pointer-events: auto !important;
         touch-action: manipulation !important;
     }
     
     /* ضمان أن الكروت قابلة للتفاعل */
-    body:not(.modal-open) .card {
+    body:not(.modal-open):not(.sidebar-open) .card {
         pointer-events: auto !important;
         touch-action: manipulation !important;
     }
     
     /* ضمان أن حقل البحث قابل للتفاعل */
-    body:not(.modal-open) #customerSearch,
-    body:not(.modal-open) .customers-search-card {
+    body:not(.modal-open):not(.sidebar-open) #customerSearch,
+    body:not(.modal-open):not(.sidebar-open) .customers-search-card {
         pointer-events: auto !important;
         touch-action: manipulation !important;
     }
@@ -6800,11 +6834,39 @@ body:not(.modal-open) .modal-backdrop {
     opacity: 0 !important;
 }
 
+/* إزالة overlay الـ sidebar على جميع الشاشات عندما يكون مغلقاً */
+.dashboard-wrapper:not(.sidebar-open)::before {
+    display: none !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    z-index: -1 !important;
+    content: none !important;
+}
+
+/* على الموبايل: ضمان أن overlay الـ sidebar لا يمنع التفاعل إلا عند فتح الـ sidebar */
+@media (max-width: 768px) {
+    .dashboard-wrapper:not(.sidebar-open)::before {
+        display: none !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
+        z-index: -1 !important;
+        content: none !important;
+    }
+    
+    /* ضمان أن المحتوى الرئيسي قابل للتفاعل عندما لا يكون الـ sidebar مفتوحاً */
+    .dashboard-wrapper:not(.sidebar-open) .dashboard-main,
+    .dashboard-wrapper:not(.sidebar-open) .dashboard-main * {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+    }
+}
+
 /* ضمان أن المحتوى الرئيسي قابل للتفاعل دائماً */
-body:not(.modal-open) .container,
-body:not(.modal-open) .container-fluid,
-body:not(.modal-open) main,
-body:not(.modal-open) .content-wrapper {
+body:not(.modal-open):not(.sidebar-open) .container,
+body:not(.modal-open):not(.sidebar-open) .container-fluid,
+body:not(.modal-open):not(.sidebar-open) main,
+body:not(.modal-open):not(.sidebar-open) .content-wrapper,
+body:not(.modal-open):not(.sidebar-open) .dashboard-main {
     pointer-events: auto !important;
     touch-action: manipulation !important;
 }
@@ -7127,6 +7189,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.body.style.position = '';
                 document.body.style.height = '';
                 
+                // إزالة class sidebar-open إذا كان موجوداً (إصلاح مشكلة overlay الـ sidebar)
+                const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+                if (dashboardWrapper && window.innerWidth <= 768) {
+                    dashboardWrapper.classList.remove('sidebar-open');
+                    document.body.classList.remove('sidebar-open');
+                }
+                
                 // ضمان أن جميع العناصر القابلة للتفاعل تعمل
                 const interactiveElements = document.querySelectorAll('.btn, button, input, select, textarea, a, .card, .table tbody tr');
                 interactiveElements.forEach(function(el) {
@@ -7153,6 +7222,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.body.style.paddingRight = '';
                     document.body.style.pointerEvents = '';
                     document.body.style.touchAction = '';
+                    
+                    // إزالة class sidebar-open إذا كان موجوداً (إصلاح مشكلة overlay الـ sidebar)
+                    const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+                    if (dashboardWrapper && window.innerWidth <= 768) {
+                        dashboardWrapper.classList.remove('sidebar-open');
+                        document.body.classList.remove('sidebar-open');
+                    }
                 }
             }, 200);
         });
@@ -7649,6 +7725,35 @@ document.addEventListener('DOMContentLoaded', function() {
                 }, 300);
             });
         }
+    }
+    
+    // ===== مراقبة تغييرات الـ sidebar وإزالة overlay عند إغلاقه =====
+    const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+    if (dashboardWrapper && window.innerWidth <= 768) {
+        // مراقبة تغييرات class sidebar-open
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    const hasSidebarOpen = dashboardWrapper.classList.contains('sidebar-open');
+                    if (!hasSidebarOpen) {
+                        // إزالة class من body أيضاً
+                        document.body.classList.remove('sidebar-open');
+                        // ضمان أن جميع العناصر قابلة للتفاعل
+                        document.body.style.pointerEvents = '';
+                        document.body.style.touchAction = '';
+                    }
+                }
+            });
+        });
+        
+        observer.observe(dashboardWrapper, {
+            attributes: true,
+            attributeFilter: ['class']
+        });
+        
+        // تنظيف فوري عند تحميل الصفحة
+        dashboardWrapper.classList.remove('sidebar-open');
+        document.body.classList.remove('sidebar-open');
     }
     
 }); // End of DOMContentLoaded
