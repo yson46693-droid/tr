@@ -1787,13 +1787,13 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 <?php endif; ?>
 
 <!-- البحث -->
-<div class="card shadow-sm mb-4">
+<div class="card shadow-sm mb-4 customers-search-card">
     <div class="card-body">
         <form method="GET" action="" class="row g-2 g-md-3 align-items-end">
             <input type="hidden" name="page" value="local_customers">
             <div class="col-12 col-md-6 col-lg-5">
                 <label for="customerSearch" class="visually-hidden">بحث عن العملاء</label>
-                <div class="input-group input-group-sm shadow-sm">
+                <div class="input-group input-group-sm shadow-sm customers-search-input-group">
                     <span class="input-group-text bg-light text-muted border-end-0">
                         <i class="bi bi-search"></i>
                     </span>
@@ -6624,6 +6624,59 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
     pointer-events: none !important;
 }
 
+/* إصلاح مشكلة عدم القدرة على الضغط على حقل البحث على الهاتف */
+@media (max-width: 768px) {
+    /* ضمان أن حقل البحث قابل للنقر على الجوال */
+    .customers-search-card #customerSearch {
+        touch-action: manipulation !important;
+        -webkit-tap-highlight-color: rgba(0, 123, 255, 0.2) !important;
+        pointer-events: auto !important;
+        z-index: 10 !important;
+        position: relative !important;
+        min-height: 44px !important; /* الحد الأدنى لحجم اللمس */
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+        cursor: text !important;
+    }
+    
+    /* ضمان أن input-group-text لا يمنع النقر */
+    .customers-search-input-group .input-group-text {
+        pointer-events: none !important;
+        z-index: 1 !important;
+        user-select: none !important;
+        -webkit-user-select: none !important;
+    }
+    
+    /* السماح للنقر على input-group بالكامل */
+    .customers-search-input-group {
+        touch-action: manipulation !important;
+        pointer-events: auto !important;
+        position: relative;
+        z-index: 1;
+    }
+    
+    /* ضمان أن card البحث قابل للنقر */
+    .customers-search-card {
+        position: relative;
+        z-index: 1;
+    }
+    
+    /* إزالة أي تأثيرات قد تمنع اللمس */
+    .customers-search-card #customerSearch:focus,
+    .customers-search-card #customerSearch:active {
+        outline: 2px solid rgba(0, 123, 255, 0.5) !important;
+        outline-offset: 2px !important;
+        -webkit-tap-highlight-color: rgba(0, 123, 255, 0.3) !important;
+        z-index: 11 !important;
+    }
+    
+    /* إصلاح خاص للتأكد من أن الحقل قابل للنقر */
+    .customers-search-card .form-control {
+        pointer-events: auto !important;
+    }
+}
+
 </style>
 
 <!-- Modal حذف العميل المحلي -->
@@ -7298,6 +7351,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // إعداد البحث الفوري
     if (customerSearchInput && searchForm) {
+        // إصلاح خاص للجوال: ضمان أن الحقل قابل للنقر والتركيز
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            // إزالة أي منع للحدث على الجوال
+            customerSearchInput.style.pointerEvents = 'auto';
+            customerSearchInput.style.touchAction = 'manipulation';
+            
+            // إضافة event listener للـ touchstart لضمان الاستجابة
+            customerSearchInput.addEventListener('touchstart', function(e) {
+                e.stopPropagation();
+                this.focus();
+            }, { passive: true });
+            
+            // إضافة event listener للـ click كبديل
+            customerSearchInput.addEventListener('click', function(e) {
+                e.stopPropagation();
+                this.focus();
+            });
+        }
+        
         // منع الإرسال الافتراضي للنموذج
         searchForm.addEventListener('submit', function(e) {
             e.preventDefault();
