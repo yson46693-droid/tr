@@ -1525,6 +1525,12 @@ function tasksHtml(string $value): string
                                                     <i class="bi bi-trash"></i>
                                                 </button>
                                             <?php endif; ?>
+                                            
+                                            <?php if ($isManager || $isProduction): ?>
+                                                <a href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank" class="btn btn-outline-primary" title="طباعة إيصال المهمة">
+                                                    <i class="bi bi-printer"></i>
+                                                </a>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
                                 </tr>
