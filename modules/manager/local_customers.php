@@ -7385,7 +7385,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // إعداد البحث الفوري - مع تأخير للجوال لتجنب التجمد
     if (customerSearchInput && searchForm) {
-        // إصلاح خاص للجوال: ضمان أن الحقل قابل للنقر والتركيز
+        // إصلاح خاص للجوال: ضمان أن الحقل قابل للنقر والتركيز والكتابة
         var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         if (isMobile) {
             // إزالة أي منع للحدث على الجوال
@@ -7393,14 +7393,20 @@ document.addEventListener('DOMContentLoaded', function() {
             customerSearchInput.style.touchAction = 'manipulation';
             customerSearchInput.style.userSelect = 'text';
             customerSearchInput.style.webkitUserSelect = 'text';
+            customerSearchInput.style.MozUserSelect = 'text';
+            customerSearchInput.setAttribute('readonly', false);
+            customerSearchInput.removeAttribute('readonly');
             
             // إضافة event listener للـ touchstart لضمان الاستجابة (بدون stopPropagation)
             customerSearchInput.addEventListener('touchstart', function(e) {
                 // لا نستخدم stopPropagation حتى لا نمنع الكتابة
                 if (document.activeElement !== this) {
-                    setTimeout(function() {
+                    // استخدام requestAnimationFrame لضمان التركيز بعد render
+                    requestAnimationFrame(function() {
                         customerSearchInput.focus();
-                    }, 0);
+                        // التأكد من أن الكيبورد يفتح
+                        customerSearchInput.click();
+                    });
                 }
             }, { passive: true });
             
@@ -7408,11 +7414,42 @@ document.addEventListener('DOMContentLoaded', function() {
             customerSearchInput.addEventListener('click', function(e) {
                 // لا نستخدم stopPropagation حتى لا نمنع الكتابة
                 if (document.activeElement !== this) {
-                    setTimeout(function() {
+                    requestAnimationFrame(function() {
                         customerSearchInput.focus();
-                    }, 0);
+                    });
                 }
             }, { passive: true });
+            
+            // إضافة event listener للتأكد من أن الكتابة تعمل
+            customerSearchInput.addEventListener('focus', function() {
+                // التأكد من أن الحقل قابل للكتابة
+                this.removeAttribute('readonly');
+                this.removeAttribute('disabled');
+                // التأكد من أن الحقل في وضع الكتابة
+                if (this.setSelectionRange) {
+                    var len = this.value.length;
+                    this.setSelectionRange(len, len);
+                }
+            });
+            
+            // التأكد من أن الكتابة تعمل عند الكتابة
+            customerSearchInput.addEventListener('keydown', function(e) {
+                // السماح بجميع المفاتيح - لا نمنع أي شيء
+            }, false);
+            
+            customerSearchInput.addEventListener('keyup', function(e) {
+                // التأكد من أن القيمة موجودة
+                if (this.value === undefined || this.value === null) {
+                    this.value = '';
+                }
+            }, false);
+            
+            customerSearchInput.addEventListener('input', function(e) {
+                // التأكد من أن القيمة موجودة
+                if (this.value === undefined || this.value === null) {
+                    this.value = '';
+                }
+            }, false);
         }
         
         // منع الإرسال الافتراضي للنموذج
