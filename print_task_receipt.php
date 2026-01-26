@@ -370,10 +370,9 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             <?php endif; ?>
         </table>
         <?php if (!empty($notes)): ?>
-        <div class="divider"></div>
         <div class="section-title">ملاحظات</div>
         <div class="task-details">
-            <div style="font-size: 14px; line-height: 1.8; padding: 8px 0; font-weight: 500; color: #000;">
+            <div style="font-size: 14px; line-height: 1.8; padding: 4px 0; font-weight: 500; color: #000;">
                 <?php 
                 // إزالة معلومات العمال من الملاحظات للعرض
                 $displayNotes = preg_replace('/\[ASSIGNED_WORKERS_IDS\]:\s*[0-9,]+/', '', $notes);
