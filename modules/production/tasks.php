@@ -282,8 +282,6 @@ function tasksHandleAction(string $action, array $input, array $context): array
                         error_log("✗ ERROR: Production task requires product_name or product_id!");
                         error_log("  - productId: $productId");
                         error_log("  - productName: '$productName'");
-                        error_log("  - rawProductName: " . ($rawProductName === null ? 'NULL' : "'$rawProductName'"));
-                        error_log("  - POST data: " . json_encode(['product_id' => $productId, 'product_name' => $rawProductName, 'quantity' => $quantity]));
                         throw new RuntimeException('يجب اختيار منتج لمهمة الإنتاج');
                     }
 
@@ -395,26 +393,15 @@ function tasksHandleAction(string $action, array $input, array $context): array
                             $displayProductName = $product['name'];
                         }
                     }
-                    
-                    if ($displayProductName !== '') {
-                        $title = 'إنتاج ' . tasksSafeString($displayProductName) . ' - ' . number_format($quantity, 2) . ' قطعة';
-                    }
                 }
 
-                if ($title === '') {
-                    throw new RuntimeException('يجب إدخال عنوان المهمة');
-                }
+               
 
-                $columns = ['title', 'created_by', 'priority', 'status'];
-                $values = [$title, (int) $currentUser['id'], $priority, 'pending'];
+                $columns = ['created_by', 'priority', 'status'];
+                $values = [(int) $currentUser['id'], $priority, 'pending'];
                 $placeholders = ['?', '?', '?', '?'];
 
-                if ($description !== '') {
-                    $columns[] = 'description';
-                    $values[] = $description;
-                    $placeholders[] = '?';
-                }
-
+              
                 if ($assignedTo > 0) {
                     $columns[] = 'assigned_to';
                     $values[] = $assignedTo;

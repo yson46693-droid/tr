@@ -1103,13 +1103,8 @@ try {
                             </select>
                             <div class="form-text">يمكن تحديد أكثر من عامل باستخدام زر CTRL أو SHIFT.</div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">عنوان المهمة</label>
-                            <input type="text" class="form-control" name="title" placeholder="مثال: تنظيف خط الإنتاج">
-                            <div class="form-text">يمكنك ترك العنوان فارغاً وسيتم توليد عنوان افتراضي للمهمة الإنتاجية.</div>
-                        </div>
                         <div class="col-12">
-                            <label class="form-label">وصف وتفاصيل المهمة</label>
+                            <label class="form-label">وصف وتفاصيل و ملاحظات الاوردر</label>
                             <textarea class="form-control" name="details" rows="4" placeholder="أدخل التفاصيل والتعليمات اللازمة للعمال."></textarea>
                         </div>
                         <div class="col-12" id="productsSection">
