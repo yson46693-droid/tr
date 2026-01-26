@@ -354,28 +354,32 @@
     position: relative;
 }
 
+/* Light mode (نهاري) - نص أسود */
 .sidebar-search-input {
-    color: #ffffff !important;
-    caret-color: #ffffff !important;
+    color: #000000 !important;
+    caret-color: #000000 !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
 }
 
 .sidebar-search-input::placeholder {
-    color: rgba(255, 255, 255, 0.6) !important;
+    color: rgba(0, 0, 0, 0.5) !important;
     opacity: 1 !important;
 }
 
 .sidebar-search-input:focus {
-    color: #ffffff !important;
-    caret-color: #ffffff !important;
+    color: #000000 !important;
+    caret-color: #000000 !important;
+    border-color: rgba(59, 130, 246, 0.5) !important;
     outline: none;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
 }
 
-/* Dark mode support for sidebar search */
+/* Dark mode support for sidebar search - نص أبيض */
 [data-theme="dark"] .sidebar-search-input,
 body.dark-mode .sidebar-search-input {
     color: #ffffff !important;
     caret-color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 [data-theme="dark"] .sidebar-search-input::placeholder,
@@ -388,5 +392,6 @@ body.dark-mode .sidebar-search-input::placeholder {
 body.dark-mode .sidebar-search-input:focus {
     color: #ffffff !important;
     caret-color: #ffffff !important;
+    border-color: rgba(59, 130, 246, 0.5) !important;
 }
 

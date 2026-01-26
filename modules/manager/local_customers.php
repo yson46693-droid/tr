@@ -3425,8 +3425,9 @@ function closeViewLocationCard() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    // ===== تنظيف فوري للـ backdrop و body عند تحميل الصفحة - إصلاح مشكلة عدم التفاعل على الموبايل =====
-    // التحقق من عدم وجود نماذج مفتوحة
+    // ===== تنظيف فوري شامل للـ backdrop و body و sidebar عند تحميل الصفحة - حل جذري =====
+    
+    // 1. التحقق من عدم وجود نماذج مفتوحة وإزالة backdrops
     const openModals = document.querySelectorAll('.modal.show, .modal.showing');
     if (openModals.length === 0) {
         // إزالة جميع backdrops فوراً
@@ -3445,13 +3446,44 @@ document.addEventListener('DOMContentLoaded', function () {
         document.body.style.height = '';
     }
     
-    // ===== إصلاح مشكلة overlay الـ sidebar على الموبايل =====
-    // التأكد من أن الـ sidebar مغلق عند تحميل الصفحة
+    // 2. إصلاح جذري لمشكلة overlay الـ sidebar على الموبايل
     const dashboardWrapper = document.querySelector('.dashboard-wrapper');
-    if (dashboardWrapper && window.innerWidth <= 768) {
+    if (dashboardWrapper) {
         // إزالة class sidebar-open إذا كان موجوداً
         dashboardWrapper.classList.remove('sidebar-open');
         document.body.classList.remove('sidebar-open');
+        
+        // إزالة overlay الـ sidebar باستخدام CSS مباشرة
+        if (window.innerWidth <= 768) {
+            // إزالة pseudo-element overlay باستخدام style
+            const style = document.createElement('style');
+            style.id = 'sidebar-overlay-fix';
+            style.textContent = `
+                .dashboard-wrapper:not(.sidebar-open)::before {
+                    content: none !important;
+                    display: none !important;
+                    visibility: hidden !important;
+                    pointer-events: none !important;
+                    opacity: 0 !important;
+                    z-index: -9999 !important;
+                    position: absolute !important;
+                    width: 0 !important;
+                    height: 0 !important;
+                    top: -9999px !important;
+                    left: -9999px !important;
+                }
+                .dashboard-wrapper:not(.sidebar-open) {
+                    pointer-events: auto !important;
+                    touch-action: manipulation !important;
+                }
+                .dashboard-wrapper:not(.sidebar-open) .dashboard-main,
+                .dashboard-wrapper:not(.sidebar-open) .dashboard-main * {
+                    pointer-events: auto !important;
+                    touch-action: manipulation !important;
+                }
+            `;
+            document.head.appendChild(style);
+        }
         
         // ضمان أن overlay الـ sidebar غير مرئي
         const sidebar = document.querySelector('.homeline-sidebar');
@@ -3459,6 +3491,17 @@ document.addEventListener('DOMContentLoaded', function () {
             sidebar.style.transform = '';
         }
     }
+    
+    // 3. ضمان أن جميع العناصر القابلة للتفاعل تعمل
+    setTimeout(function() {
+        const interactiveElements = document.querySelectorAll('.btn, button, input, select, textarea, a, .card, .table tbody tr, .dashboard-main *');
+        interactiveElements.forEach(function(el) {
+            if (!el.closest('.modal') && !el.closest('.modal-backdrop')) {
+                el.style.pointerEvents = '';
+                el.style.touchAction = '';
+            }
+        });
+    }, 100);
     
     // تفويض النقر/اللمس لأزرار سجل ومرتجع على الموبايل (داخل جدول قابل للتمرير)
     var tableWrapper = document.querySelector('.dashboard-table-wrapper');
@@ -5558,6 +5601,51 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <style>
+/* ===== حل جذري لمشكلة عدم التفاعل على الموبايل - يجب أن يكون في البداية ===== */
+/* ضمان أن الصفحة قابلة للتفاعل على الموبايل من البداية */
+@media (max-width: 768px) {
+    /* إزالة overlay الـ sidebar تماماً عندما يكون مغلقاً - أولوية عالية */
+    .dashboard-wrapper:not(.sidebar-open)::before {
+        content: none !important;
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
+        z-index: -9999 !important;
+        position: absolute !important;
+        width: 0 !important;
+        height: 0 !important;
+        top: -9999px !important;
+        left: -9999px !important;
+    }
+    
+    /* ضمان أن body و dashboard-wrapper قابلان للتفاعل */
+    body:not(.modal-open):not(.sidebar-open),
+    .dashboard-wrapper:not(.sidebar-open) {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+        overflow: auto !important;
+    }
+    
+    /* ضمان أن dashboard-main قابل للتفاعل */
+    .dashboard-main {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+    }
+    
+    /* ضمان أن جميع العناصر داخل dashboard-main قابلة للتفاعل */
+    .dashboard-main * {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+    }
+    
+    /* استثناء: backdrop فقط */
+    .modal-backdrop,
+    .modal-backdrop * {
+        pointer-events: none !important;
+    }
+}
+
 /* تحسينات responsive للمودال - متوافقة مع responsive-modals.css */
 @media (max-width: 768px) {
     /* القواعد العامة للـ modal-dialog موجودة في responsive-modals.css */
@@ -6735,33 +6823,69 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
     }
 }
 
-/* ===== إصلاح مشكلة عدم القدرة على الضغط على العناصر على الموبايل ===== */
-/* ضمان أن الصفحة قابلة للتفاعل عندما لا توجد نماذج مفتوحة */
+/* ===== إصلاح جذري لمشكلة عدم القدرة على الضغط على العناصر على الموبايل ===== */
+/* الحل الجذري: إزالة overlay الـ sidebar تماماً عندما يكون مغلقاً */
 @media (max-width: 768px) {
-    /* إزالة overlay الـ sidebar عندما يكون مغلقاً */
+    /* إزالة overlay الـ sidebar تماماً عندما يكون مغلقاً - حل جذري */
     .dashboard-wrapper:not(.sidebar-open)::before {
+        content: none !important;
         display: none !important;
+        visibility: hidden !important;
         pointer-events: none !important;
         opacity: 0 !important;
-        z-index: -1 !important;
+        z-index: -9999 !important;
+        position: absolute !important;
+        width: 0 !important;
+        height: 0 !important;
+        top: -9999px !important;
+        left: -9999px !important;
     }
     
-    /* ضمان أن overlay الـ sidebar لا يمنع التفاعل إلا عند فتح الـ sidebar */
+    /* ضمان أن overlay الـ sidebar لا يمنع التفاعل إلا عند فتح الـ sidebar فعلياً */
     .dashboard-wrapper.sidebar-open::before {
         pointer-events: auto !important;
+        z-index: 1049 !important;
     }
     
-    /* ضمان أن body قابل للتفاعل عندما لا توجد نماذج مفتوحة */
+    /* ضمان أن body قابل للتفاعل عندما لا توجد نماذج مفتوحة ولا sidebar مفتوح */
     body:not(.modal-open):not(.sidebar-open) {
         pointer-events: auto !important;
         touch-action: manipulation !important;
         overflow: auto !important;
+        position: relative !important;
+    }
+    
+    /* ضمان أن dashboard-wrapper لا يمنع التفاعل */
+    .dashboard-wrapper:not(.sidebar-open) {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+        position: relative !important;
     }
     
     /* ضمان أن المحتوى الرئيسي قابل للتفاعل عندما لا يكون الـ sidebar مفتوحاً */
-    .dashboard-wrapper:not(.sidebar-open) .dashboard-main {
+    .dashboard-wrapper:not(.sidebar-open) .dashboard-main,
+    .dashboard-wrapper:not(.sidebar-open) .dashboard-main * {
         pointer-events: auto !important;
         touch-action: manipulation !important;
+        position: relative !important;
+    }
+    
+    /* إزالة أي تأثيرات CSS قد تمنع التفاعل */
+    .dashboard-main {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+    }
+    
+    /* ضمان أن جميع العناصر داخل dashboard-main قابلة للتفاعل */
+    .dashboard-main * {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+    }
+    
+    /* استثناء: العناصر التي يجب أن تكون غير قابلة للتفاعل (مثل backdrop) */
+    .dashboard-main .modal-backdrop,
+    .dashboard-main .modal-backdrop * {
+        pointer-events: none !important;
     }
     
     /* إخفاء backdrop عندما لا توجد نماذج مفتوحة */
@@ -6834,28 +6958,47 @@ body:not(.modal-open) .modal-backdrop {
     opacity: 0 !important;
 }
 
-/* إزالة overlay الـ sidebar على جميع الشاشات عندما يكون مغلقاً */
+/* إزالة overlay الـ sidebar على جميع الشاشات عندما يكون مغلقاً - حل جذري */
 .dashboard-wrapper:not(.sidebar-open)::before {
+    content: none !important;
     display: none !important;
+    visibility: hidden !important;
     pointer-events: none !important;
     opacity: 0 !important;
-    z-index: -1 !important;
-    content: none !important;
+    z-index: -9999 !important;
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    top: -9999px !important;
+    left: -9999px !important;
 }
 
 /* على الموبايل: ضمان أن overlay الـ sidebar لا يمنع التفاعل إلا عند فتح الـ sidebar */
 @media (max-width: 768px) {
     .dashboard-wrapper:not(.sidebar-open)::before {
+        content: none !important;
         display: none !important;
+        visibility: hidden !important;
         pointer-events: none !important;
         opacity: 0 !important;
-        z-index: -1 !important;
-        content: none !important;
+        z-index: -9999 !important;
+        position: absolute !important;
+        width: 0 !important;
+        height: 0 !important;
+        top: -9999px !important;
+        left: -9999px !important;
     }
     
     /* ضمان أن المحتوى الرئيسي قابل للتفاعل عندما لا يكون الـ sidebar مفتوحاً */
     .dashboard-wrapper:not(.sidebar-open) .dashboard-main,
     .dashboard-wrapper:not(.sidebar-open) .dashboard-main * {
+        pointer-events: auto !important;
+        touch-action: manipulation !important;
+        position: relative !important;
+    }
+    
+    /* ضمان أن dashboard-wrapper نفسه قابل للتفاعل */
+    .dashboard-wrapper:not(.sidebar-open) {
         pointer-events: auto !important;
         touch-action: manipulation !important;
     }
@@ -7205,7 +7348,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, 100);
         
-        // تنظيف إضافي بعد تحميل الصفحة بالكامل
+        // تنظيف إضافي بعد تحميل الصفحة بالكامل - حل جذري شامل
         window.addEventListener('load', function() {
             setTimeout(function() {
                 const openModals = document.querySelectorAll('.modal.show, .modal.showing');
@@ -7222,16 +7365,94 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.body.style.paddingRight = '';
                     document.body.style.pointerEvents = '';
                     document.body.style.touchAction = '';
+                    document.body.style.position = '';
                     
                     // إزالة class sidebar-open إذا كان موجوداً (إصلاح مشكلة overlay الـ sidebar)
                     const dashboardWrapper = document.querySelector('.dashboard-wrapper');
-                    if (dashboardWrapper && window.innerWidth <= 768) {
+                    if (dashboardWrapper) {
                         dashboardWrapper.classList.remove('sidebar-open');
                         document.body.classList.remove('sidebar-open');
+                        
+                        // إزالة أي styles قد تمنع التفاعل
+                        dashboardWrapper.style.pointerEvents = '';
+                        dashboardWrapper.style.touchAction = '';
+                        
+                        // ضمان أن dashboard-main قابل للتفاعل
+                        const dashboardMain = document.querySelector('.dashboard-main');
+                        if (dashboardMain) {
+                            dashboardMain.style.pointerEvents = '';
+                            dashboardMain.style.touchAction = '';
+                            
+                            // ضمان أن جميع العناصر داخل dashboard-main قابلة للتفاعل
+                            const allElements = dashboardMain.querySelectorAll('*');
+                            allElements.forEach(function(el) {
+                                if (!el.closest('.modal') && !el.closest('.modal-backdrop')) {
+                                    el.style.pointerEvents = '';
+                                    el.style.touchAction = '';
+                                }
+                            });
+                        }
+                    }
+                    
+                    // إزالة أي overlay عالق من sidebar
+                    if (window.innerWidth <= 768) {
+                        // إضافة style مباشر لإزالة overlay
+                        if (!document.getElementById('sidebar-overlay-fix')) {
+                            const style = document.createElement('style');
+                            style.id = 'sidebar-overlay-fix';
+                            style.textContent = `
+                                .dashboard-wrapper:not(.sidebar-open)::before {
+                                    content: none !important;
+                                    display: none !important;
+                                    visibility: hidden !important;
+                                    pointer-events: none !important;
+                                    opacity: 0 !important;
+                                    z-index: -9999 !important;
+                                    position: absolute !important;
+                                    width: 0 !important;
+                                    height: 0 !important;
+                                    top: -9999px !important;
+                                    left: -9999px !important;
+                                }
+                            `;
+                            document.head.appendChild(style);
+                        }
                     }
                 }
             }, 200);
         });
+        
+        // إضافة event listener مباشر لضمان عمل الأحداث على الموبايل
+        if (window.innerWidth <= 768) {
+            // إضافة touch event listeners مباشرة للعناصر القابلة للتفاعل
+            setTimeout(function() {
+                const interactiveSelectors = [
+                    '.btn', 'button', 'input', 'select', 'textarea', 'a',
+                    '.card', '.table tbody tr', '.dashboard-table-wrapper',
+                    '#customerSearch', '.customers-search-card'
+                ];
+                
+                interactiveSelectors.forEach(function(selector) {
+                    const elements = document.querySelectorAll(selector);
+                    elements.forEach(function(el) {
+                        if (!el.closest('.modal') && !el.closest('.modal-backdrop')) {
+                            // إزالة أي event listeners قد تمنع التفاعل
+                            el.style.pointerEvents = 'auto';
+                            el.style.touchAction = 'manipulation';
+                            
+                            // إضافة touch event listener مباشر
+                            el.addEventListener('touchstart', function(e) {
+                                // لا نمنع الـ default behavior
+                            }, { passive: true });
+                            
+                            el.addEventListener('touchend', function(e) {
+                                // لا نمنع الـ default behavior
+                            }, { passive: true });
+                        }
+                    });
+                });
+            }, 300);
+        }
     }, initModalsDelay);
     
     // ===== ملء بيانات Modals عند فتحها =====
@@ -7727,9 +7948,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // ===== مراقبة تغييرات الـ sidebar وإزالة overlay عند إغلاقه =====
+    // ===== مراقبة تغييرات الـ sidebar وإزالة overlay عند إغلاقه - حل جذري =====
     const dashboardWrapper = document.querySelector('.dashboard-wrapper');
-    if (dashboardWrapper && window.innerWidth <= 768) {
+    if (dashboardWrapper) {
         // مراقبة تغييرات class sidebar-open
         const observer = new MutationObserver(function(mutations) {
             mutations.forEach(function(mutation) {
@@ -7738,9 +7959,45 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!hasSidebarOpen) {
                         // إزالة class من body أيضاً
                         document.body.classList.remove('sidebar-open');
+                        
+                        // إزالة overlay الـ sidebar فوراً
+                        const beforeElement = window.getComputedStyle(dashboardWrapper, '::before');
+                        if (beforeElement && beforeElement.content !== 'none') {
+                            // إضافة style مباشر لإزالة overlay
+                            if (!document.getElementById('sidebar-overlay-fix')) {
+                                const style = document.createElement('style');
+                                style.id = 'sidebar-overlay-fix';
+                                style.textContent = `
+                                    .dashboard-wrapper:not(.sidebar-open)::before {
+                                        content: none !important;
+                                        display: none !important;
+                                        visibility: hidden !important;
+                                        pointer-events: none !important;
+                                        opacity: 0 !important;
+                                        z-index: -9999 !important;
+                                        position: absolute !important;
+                                        width: 0 !important;
+                                        height: 0 !important;
+                                        top: -9999px !important;
+                                        left: -9999px !important;
+                                    }
+                                `;
+                                document.head.appendChild(style);
+                            }
+                        }
+                        
                         // ضمان أن جميع العناصر قابلة للتفاعل
                         document.body.style.pointerEvents = '';
                         document.body.style.touchAction = '';
+                        dashboardWrapper.style.pointerEvents = '';
+                        dashboardWrapper.style.touchAction = '';
+                        
+                        // ضمان أن dashboard-main قابل للتفاعل
+                        const dashboardMain = document.querySelector('.dashboard-main');
+                        if (dashboardMain) {
+                            dashboardMain.style.pointerEvents = '';
+                            dashboardMain.style.touchAction = '';
+                        }
                     }
                 }
             });

@@ -798,11 +798,11 @@ if (empty($menuItems)) {
             <span class="input-group-text bg-transparent border-end-0 text-muted">
                 <i class="bi bi-search"></i>
             </span>
-            <input type="text" class="form-control border-start-0 bg-transparent text-white sidebar-search-input shadow-none" 
+            <input type="text" class="form-control border-start-0 bg-transparent sidebar-search-input shadow-none" 
                    id="sidebarSearchInput" 
                    placeholder="بحث سريع..." 
                    autocomplete="off"
-                   style="border-color: rgba(255,255,255,0.1); color: #ffffff !important;">
+                   style="border-color: rgba(0,0,0,0.1);">
         </div>
         <script>
         document.addEventListener('DOMContentLoaded', function() {
