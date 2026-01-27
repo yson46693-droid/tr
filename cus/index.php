@@ -7,9 +7,14 @@
 define('ACCESS_ALLOWED', true);
 define('STANDALONE_PWA', true); // تعريف ثابت للكشف عن PWA المستقل
 
-// تنظيف أي output buffer سابق
+// تنظيف أي output buffer سابق قبل أي شيء
 while (ob_get_level() > 0) {
     ob_end_clean();
+}
+
+// التأكد من عدم إرسال headers بعد
+if (headers_sent($file, $line)) {
+    error_log("cus/index.php: Headers already sent in {$file} at line {$line}");
 }
 
 session_start([
@@ -19,12 +24,92 @@ session_start([
     'use_strict_mode' => true,
 ]);
 
+// تحميل الملفات الأساسية
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/path_helper.php';
 
-requireRole(['manager', 'accountant', 'developer']);
+// التحقق من تسجيل الدخول قبل أي output
+if (!isLoggedIn()) {
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    
+    // الحصول على رابط تسجيل الدخول
+    $loginUrl = getRelativeUrl('index.php');
+    
+    // تنظيف URL من أي معاملات
+    $loginUrl = preg_replace('/[?&](_nocache|_refresh|_cache_bust|_t|_r|_auto_refresh)=\d+/', '', $loginUrl);
+    $loginUrl = rtrim($loginUrl, '?&');
+    
+    // التأكد من أن URL يبدأ بـ /
+    if (strpos($loginUrl, '/') !== 0) {
+        $loginUrl = '/' . $loginUrl;
+    }
+    
+    // إعادة التوجيه إلى صفحة تسجيل الدخول
+    if (!headers_sent()) {
+        header('Location: ' . $loginUrl, true, 303);
+        exit;
+    } else {
+        // إذا تم إرسال headers بالفعل، استخدم JavaScript redirect
+        echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+        echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
+        exit;
+    }
+}
+
+// التحقق من الصلاحيات
+$currentUser = getCurrentUser();
+if (!$currentUser || !is_array($currentUser) || empty($currentUser)) {
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    
+    $loginUrl = getRelativeUrl('index.php');
+    if (strpos($loginUrl, '/') !== 0) {
+        $loginUrl = '/' . $loginUrl;
+    }
+    
+    if (!headers_sent()) {
+        header('Location: ' . $loginUrl, true, 303);
+        exit;
+    } else {
+        echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+        echo '</head><body><p>جاري التحويل إلى صفحة تسجيل الدخول...</p></body></html>';
+        exit;
+    }
+}
+
+$userRole = strtolower($currentUser['role'] ?? '');
+$allowedRoles = ['manager', 'accountant', 'developer'];
+if (!in_array($userRole, $allowedRoles, true)) {
+    // تنظيف output buffer
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    
+    $loginUrl = getRelativeUrl('index.php');
+    if (strpos($loginUrl, '/') !== 0) {
+        $loginUrl = '/' . $loginUrl;
+    }
+    
+    if (!headers_sent()) {
+        header('Location: ' . $loginUrl, true, 303);
+        exit;
+    } else {
+        echo '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>إعادة التوجيه...</title>';
+        echo '<script>window.location.replace("' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '");</script>';
+        echo '</head><body><p>غير مصرح لك بالوصول إلى هذه الصفحة.</p></body></html>';
+        exit;
+    }
+}
 
 // تعريف ثابت لتجنب requireRole داخل الملف
 define('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED', true);
@@ -33,12 +118,11 @@ define('LOCAL_CUSTOMERS_MODULE_BOOTSTRAPPED', true);
 require_once __DIR__ . '/../includes/audit_log.php';
 require_once __DIR__ . '/../includes/table_styles.php';
 
-$currentUser = getCurrentUser();
 $baseUrl = getBasePath();
 $assetsUrl = ASSETS_URL;
 $cacheVersion = time(); // يمكن استخدام version.json لاحقاً
 
-// بدء output buffering
+// بدء output buffering بعد التحقق من كل شيء
 ob_start();
 ?>
 <!DOCTYPE html>
