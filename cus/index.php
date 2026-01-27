@@ -4,6 +4,10 @@
  * منفصلة تماماً عن عملاء المندوبين
  */
 
+// تعريف ثابت الوصول للسماح بالوصول المباشر كـ PWA
+if (!defined('ACCESS_ALLOWED')) {
+    define('ACCESS_ALLOWED', true);
+}
 
 // ملاحظة: Headers يتم إرسالها من dashboard/accountant.php أو dashboard/manager.php
 // لا حاجة لإرسالها هنا لتجنب مشاكل headers already sent
