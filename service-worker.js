@@ -414,9 +414,72 @@ self.addEventListener('activate', (event) => {
 // ============================================
 // Fetch Event - Request Handling
 // ============================================
+/**
+ * تنظيف URL وإصلاح أي تكرار في اسم الملف
+ */
+function normalizeUrl(urlString) {
+  try {
+    const url = new URL(urlString);
+    
+    // إصلاح تكرار اسم الملف في pathname (مثل manager.phpmanager.php)
+    let pathname = url.pathname;
+    
+    // البحث عن نمط ملف.php مكرر
+    const phpFilePattern = /([a-z_]+\.php)\1+/gi;
+    if (phpFilePattern.test(pathname)) {
+      // إزالة التكرار
+      pathname = pathname.replace(phpFilePattern, '$1');
+    }
+    
+    // إصلاح أي تكرار آخر لـ .php
+    pathname = pathname.replace(/([a-z_]+\.php)+/gi, (match) => {
+      // إذا كان هناك تكرار، احتفظ بالاسم الأول فقط
+      const parts = match.split('.php');
+      return parts[0] + '.php';
+    });
+    
+    // تحديث pathname
+    url.pathname = pathname;
+    
+    return url.href;
+  } catch (e) {
+    // إذا فشل parsing، حاول إصلاح URL يدوياً
+    let fixedUrl = urlString;
+    // إصلاح تكرار manager.phpmanager.php
+    fixedUrl = fixedUrl.replace(/([a-z_]+\.php)\1+/gi, '$1');
+    // إصلاح أي تكرار آخر
+    fixedUrl = fixedUrl.replace(/([a-z_]+\.php)+/gi, (match) => {
+      const parts = match.split('.php');
+      return parts[0] + '.php';
+    });
+    return fixedUrl;
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  const url = new URL(request.url);
+  
+  // تنظيف URL قبل الاستخدام
+  const cleanedUrl = normalizeUrl(request.url);
+  const url = new URL(cleanedUrl);
+  
+  // إذا تغير URL، أنشئ request جديد
+  if (cleanedUrl !== request.url) {
+    event.respondWith(
+      fetch(cleanedUrl, {
+        method: request.method,
+        headers: request.headers,
+        body: request.body,
+        mode: request.mode,
+        credentials: request.credentials,
+        cache: request.cache,
+        redirect: request.redirect,
+        referrer: request.referrer,
+        integrity: request.integrity
+      })
+    );
+    return;
+  }
 
   // Only handle GET requests
   if (request.method !== 'GET') {

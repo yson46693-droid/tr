@@ -210,9 +210,58 @@
     }
     
     /**
+     * تنظيف URL وإصلاح أي تكرار في اسم الملف
+     */
+    function normalizeUrl(url) {
+        if (!url || typeof url !== 'string') {
+            return url;
+        }
+        
+        try {
+            // إنشاء URL object للتعامل معه بشكل صحيح
+            const urlObj = new URL(url, window.location.origin);
+            
+            // إصلاح تكرار اسم الملف في pathname (مثل manager.phpmanager.php)
+            let pathname = urlObj.pathname;
+            
+            // البحث عن نمط ملف.php مكرر
+            const phpFilePattern = /([a-z_]+\.php)\1+/gi;
+            if (phpFilePattern.test(pathname)) {
+                // إزالة التكرار
+                pathname = pathname.replace(phpFilePattern, '$1');
+            }
+            
+            // إصلاح أي تكرار آخر لـ .php
+            pathname = pathname.replace(/([a-z_]+\.php)+/gi, (match) => {
+                // إذا كان هناك تكرار، احتفظ بالاسم الأول فقط
+                const parts = match.split('.php');
+                return parts[0] + '.php';
+            });
+            
+            // تحديث pathname
+            urlObj.pathname = pathname;
+            
+            return urlObj.href;
+        } catch (e) {
+            // إذا فشل parsing، حاول إصلاح URL يدوياً
+            // إصلاح تكرار manager.phpmanager.php
+            url = url.replace(/([a-z_]+\.php)\1+/gi, '$1');
+            // إصلاح أي تكرار آخر
+            url = url.replace(/([a-z_]+\.php)+/gi, (match) => {
+                const parts = match.split('.php');
+                return parts[0] + '.php';
+            });
+            return url;
+        }
+    }
+    
+    /**
      * محاولة استخدام AJAX navigation إذا كان متاحاً
      */
     function tryAjaxNavigation(url) {
+        // تنظيف URL قبل الاستخدام
+        url = normalizeUrl(url);
+        
         // التحقق من وجود AjaxNavigation API من ajax-navigation.js
         if (window.AjaxNavigation && typeof window.AjaxNavigation.load === 'function') {
             try {
@@ -240,8 +289,8 @@
             return; // لا نعترض الأحداث في PWA
         }
         
-        // الحصول على URL الهدف
-        const targetUrl = link.href;
+        // الحصول على URL الهدف وتنظيفه
+        const targetUrl = normalizeUrl(link.href);
         
         // إذا كان الرابط هو نفس الصفحة الحالية، لا تفعل شيء
         const currentUrl = window.location.href.split('?')[0];
