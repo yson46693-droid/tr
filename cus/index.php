@@ -37,8 +37,9 @@ if (!isLoggedIn()) {
         @ob_end_clean();
     }
     
-    // الحصول على رابط تسجيل الدخول
-    $loginUrl = getRelativeUrl('index.php');
+    // الحصول على رابط تسجيل الدخول - استخدام المسار المطلق من الجذر
+    $basePath = getBasePath();
+    $loginUrl = rtrim($basePath, '/') . '/index.php';
     
     // تنظيف URL من أي معاملات
     $loginUrl = preg_replace('/[?&](_nocache|_refresh|_cache_bust|_t|_r|_auto_refresh)=\d+/', '', $loginUrl);
@@ -48,6 +49,10 @@ if (!isLoggedIn()) {
     if (strpos($loginUrl, '/') !== 0) {
         $loginUrl = '/' . $loginUrl;
     }
+    
+    // إزالة أي بروتوكول أو hostname
+    $loginUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $loginUrl);
+    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
     
     // إعادة التوجيه إلى صفحة تسجيل الدخول
     if (!headers_sent()) {
@@ -71,7 +76,10 @@ if (!$currentUser || !is_array($currentUser) || empty($currentUser)) {
         @ob_end_clean();
     }
     
-    $loginUrl = getRelativeUrl('index.php');
+    $basePath = getBasePath();
+    $loginUrl = rtrim($basePath, '/') . '/index.php';
+    $loginUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $loginUrl);
+    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
     if (strpos($loginUrl, '/') !== 0) {
         $loginUrl = '/' . $loginUrl;
     }
@@ -95,7 +103,10 @@ if (!in_array($userRole, $allowedRoles, true)) {
         @ob_end_clean();
     }
     
-    $loginUrl = getRelativeUrl('index.php');
+    $basePath = getBasePath();
+    $loginUrl = rtrim($basePath, '/') . '/index.php';
+    $loginUrl = preg_replace('/^https?:\/\/[^\/]+(:[0-9]+)?/', '', $loginUrl);
+    $loginUrl = preg_replace('/^\/\//', '/', $loginUrl);
     if (strpos($loginUrl, '/') !== 0) {
         $loginUrl = '/' . $loginUrl;
     }
