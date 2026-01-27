@@ -202,6 +202,122 @@ ob_start();
     <!-- Google Fonts - Cairo -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
+    <!-- Helper Functions - يجب تحميلها قبل محتوى local_customers.php -->
+    <script>
+    // تعريف دوال مساعدة مطلوبة - يجب أن تكون متاحة قبل تحميل local_customers.php
+    (function() {
+        'use strict';
+        
+        // دالة للتحقق من الموبايل
+        window.checkIsMobile = function() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+        };
+        
+        window.isMobile = window.checkIsMobile;
+        
+        // دالة للتمرير إلى عنصر
+        window.doScrollToElement = function(element) {
+            if (element && element.scrollIntoView) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        };
+        
+        window.scrollToElement = window.doScrollToElement;
+        
+        // دالة لإغلاق جميع النماذج
+        window.closeAllForms = function() {
+            const cards = ['importLocalCustomersCard', 'addLocalCustomerCard', 'customerExportCard', 
+                          'localCustomerPurchaseHistoryCard', 'deleteLocalCustomerCard', 
+                          'collectPaymentCard', 'viewLocationCard', 'addRegionFromLocalCustomerCard'];
+            cards.forEach(function(cardId) {
+                const card = document.getElementById(cardId);
+                if (card) {
+                    card.style.display = 'none';
+                    card.classList.add('d-none');
+                }
+            });
+            
+            const modals = ['importLocalCustomersModal', 'addLocalCustomerModal', 'customerExportModal',
+                           'localCustomerPurchaseHistoryModal', 'deleteLocalCustomerModal',
+                           'collectPaymentModal', 'viewLocationModal', 'addRegionFromLocalCustomerModal'];
+            modals.forEach(function(modalId) {
+                const modal = document.getElementById(modalId);
+                if (modal && typeof bootstrap !== 'undefined') {
+                    const modalInstance = bootstrap.Modal.getInstance(modal);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+                }
+            });
+        };
+        
+        window.doCloseAllForms = window.closeAllForms;
+        
+        // دالة printDebtorCustomers
+        window.printDebtorCustomers = function() {
+            const basePath = '<?php echo $basePath; ?>';
+            const printUrl = (basePath ? basePath : '') + '/print_debtor_customers.php';
+            window.open(printUrl, '_blank');
+        };
+        
+        // دالة showAddRegionModal - مطلوبة من داخل نموذج إضافة العميل
+        window.showAddRegionModal = function() {
+            // محاولة فتح card إضافة المنطقة مباشرة
+            const card = document.getElementById('addRegionFromLocalCustomerCard');
+            if (card) {
+                // إغلاق النماذج الأخرى
+                if (typeof window.closeAllForms === 'function') {
+                    window.closeAllForms();
+                }
+                
+                // إعادة تعيين النموذج إذا كان مفتوحاً
+                const form = card.querySelector('form');
+                if (form) {
+                    form.reset();
+                }
+                
+                // إخفاء رسالة الخطأ/النجاح
+                const messageDiv = document.getElementById('addLocalRegionCardMessage');
+                if (messageDiv) {
+                    messageDiv.classList.add('d-none');
+                    messageDiv.textContent = '';
+                    messageDiv.innerHTML = '';
+                }
+                
+                // عرض card
+                card.style.display = 'block';
+                card.classList.remove('d-none');
+                
+                // التمرير إلى card
+                setTimeout(function() {
+                    if (typeof window.doScrollToElement === 'function') {
+                        window.doScrollToElement(card);
+                    } else {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 50);
+            } else {
+                // إذا لم يكن card موجوداً، استدعاء الدالة من local_customers.php
+                if (typeof window.showAddRegionFromLocalCustomerModal === 'function') {
+                    window.showAddRegionFromLocalCustomerModal();
+                } else {
+                    // إذا لم تكن متاحة بعد، انتظر قليلاً
+                    setTimeout(function() {
+                        if (typeof window.showAddRegionFromLocalCustomerModal === 'function') {
+                            window.showAddRegionFromLocalCustomerModal();
+                        } else {
+                            console.error('showAddRegionFromLocalCustomerModal not available');
+                            alert('يرجى المحاولة مرة أخرى بعد تحميل الصفحة بالكامل');
+                        }
+                    }, 1000);
+                }
+            }
+        };
+        
+        console.log('Helper functions loaded in head');
+    })();
+    </script>
+    
     <!-- Custom CSS -->
     <link href="<?php echo $assetsUrl; ?>css/homeline-dashboard.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
     <link href="<?php echo $assetsUrl; ?>css/topbar.css?v=<?php echo $cacheVersion; ?>" rel="stylesheet">
@@ -276,7 +392,10 @@ ob_start();
         if (!file_exists($modulePath)) {
             echo '<div class="alert alert-danger">صفحة العملاء المحليين غير متاحة حالياً</div>';
         } else {
+            // التأكد من أن الدوال المساعدة متاحة قبل تحميل المحتوى
+            echo '<script>console.log("Loading local_customers module...");</script>';
             include $modulePath;
+            echo '<script>console.log("local_customers module loaded");</script>';
         }
         ?>
     </main>
@@ -293,120 +412,45 @@ ob_start();
     <!-- Customer Export JS - مطلوب لأزرار التصدير -->
     <script src="<?php echo $assetsUrl; ?>js/customer_export.js?v=<?php echo $cacheVersion; ?>"></script>
     
-    <!-- Additional JS files required for local_customers functionality -->
+    <!-- Additional JS for debugging -->
     <script>
-    // تعريف دوال مساعدة مطلوبة
-    (function() {
-        'use strict';
-        
-        // دالة للتحقق من الموبايل
-        if (typeof window.checkIsMobile === 'undefined') {
-            window.checkIsMobile = function() {
-                return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
-            };
-        }
-        
-        if (typeof window.isMobile === 'undefined') {
-            window.isMobile = window.checkIsMobile;
-        }
-        
-        // دالة للتمرير إلى عنصر
-        if (typeof window.doScrollToElement === 'undefined') {
-            window.doScrollToElement = function(element) {
-                if (element && element.scrollIntoView) {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            };
-        }
-        
-        // دالة لإغلاق جميع النماذج
-        if (typeof window.closeAllForms === 'undefined') {
-            window.closeAllForms = function() {
-                const cards = ['importLocalCustomersCard', 'addLocalCustomerCard', 'customerExportCard', 
-                              'localCustomerPurchaseHistoryCard', 'deleteLocalCustomerCard', 
-                              'collectPaymentCard', 'viewLocationCard'];
-                cards.forEach(function(cardId) {
-                    const card = document.getElementById(cardId);
-                    if (card && card.style.display !== 'none') {
-                        card.style.display = 'none';
-                    }
-                });
-                
-                const modals = ['importLocalCustomersModal', 'addLocalCustomerModal', 'customerExportModal',
-                               'localCustomerPurchaseHistoryModal', 'deleteLocalCustomerModal',
-                               'collectPaymentModal', 'viewLocationModal'];
-                modals.forEach(function(modalId) {
-                    const modal = document.getElementById(modalId);
-                    if (modal && typeof bootstrap !== 'undefined') {
-                        const modalInstance = bootstrap.Modal.getInstance(modal);
-                        if (modalInstance) {
-                            modalInstance.hide();
-                        }
-                    }
-                });
-            };
-        }
-        
-        // دالة printDebtorCustomers
-        if (typeof window.printDebtorCustomers === 'undefined') {
-            window.printDebtorCustomers = function() {
-                const basePath = '<?php echo $basePath; ?>';
-                const printUrl = (basePath ? basePath : '') + '/print_debtor_customers.php';
-                window.open(printUrl, '_blank');
-            };
-        }
-        
-        // التأكد من أن Bootstrap متاح
-        if (typeof bootstrap === 'undefined' && typeof window.bootstrap === 'undefined') {
-            console.warn('Bootstrap is not loaded. Some modals may not work.');
-        }
-        
-        // الانتظار حتى تحميل DOM بالكامل قبل تنفيذ أي كود
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                // التأكد من أن جميع الدوال من local_customers.php متاحة
-                setTimeout(function() {
-                    // التحقق من وجود الدوال المطلوبة
-                    const requiredFunctions = [
-                        'showImportLocalCustomersModal',
-                        'showCustomerExportModal',
-                        'showAddLocalCustomerModal',
-                        'showAddRegionFromLocalCustomerModal',
-                        'showEditLocalCustomerModal',
-                        'showCollectPaymentModal',
-                        'showLocalCustomerPurchaseHistoryModal',
-                        'showDeleteLocalCustomerModal',
-                        'showLocalCustomerReturnModal',
-                        'printLocalCustomerStatement',
-                        'openLocalCustomerReturnModal',
-                        'submitLocalCustomerReturn',
-                        'closeCollectPaymentCard',
-                        'closeAddLocalCustomerCard',
-                        'closeLocalCustomerPurchaseHistoryCard',
-                        'closeViewLocationCard'
-                    ];
-                    
-                    const missingFunctions = requiredFunctions.filter(fn => typeof window[fn] === 'undefined');
-                    if (missingFunctions.length > 0) {
-                        console.warn('Missing functions:', missingFunctions);
-                    }
-                }, 1000);
-            });
-        } else {
-            // DOM محمل بالفعل
-            setTimeout(function() {
-                const requiredFunctions = [
-                    'showImportLocalCustomersModal',
-                    'showCustomerExportModal',
-                    'showAddLocalCustomerModal'
-                ];
-                const missingFunctions = requiredFunctions.filter(fn => typeof window[fn] === 'undefined');
-                if (missingFunctions.length > 0) {
-                    console.warn('Missing functions:', missingFunctions);
-                }
-            }, 1000);
-        }
-    })();
+    // التحقق من أن Bootstrap متاح
+    if (typeof bootstrap === 'undefined' && typeof window.bootstrap === 'undefined') {
+        console.warn('Bootstrap is not loaded. Some modals may not work.');
+    }
+    
+    // الانتظار حتى تحميل DOM بالكامل والتحقق من الدوال
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            // التحقق من وجود الدوال المطلوبة
+            const requiredFunctions = [
+                'showImportLocalCustomersModal',
+                'showCustomerExportModal',
+                'showAddLocalCustomerModal',
+                'showAddRegionFromLocalCustomerModal',
+                'showEditLocalCustomerModal',
+                'showCollectPaymentModal',
+                'showLocalCustomerPurchaseHistoryModal',
+                'showDeleteLocalCustomerModal',
+                'showLocalCustomerReturnModal',
+                'printLocalCustomerStatement',
+                'openLocalCustomerReturnModal',
+                'submitLocalCustomerReturn',
+                'closeCollectPaymentCard',
+                'closeAddLocalCustomerCard',
+                'closeLocalCustomerPurchaseHistoryCard',
+                'closeViewLocationCard',
+                'closeAddRegionFromLocalCustomerCard'
+            ];
+            
+            const missingFunctions = requiredFunctions.filter(fn => typeof window[fn] === 'undefined');
+            if (missingFunctions.length > 0) {
+                console.warn('Missing functions after page load:', missingFunctions);
+            } else {
+                console.log('All required functions are available');
+            }
+        }, 2000); // انتظار 2 ثانية لضمان تحميل جميع scripts
+    });
     </script>
     
     <!-- PWA Install Script -->
