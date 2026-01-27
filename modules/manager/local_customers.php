@@ -2126,6 +2126,33 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                         >
                         <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">نوع التحصيل <span class="text-danger">*</span></label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <div class="form-check p-2 border rounded h-100" style="cursor: pointer;" onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor=''">
+                                    <input class="form-check-input" type="radio" name="collection_type" id="collectionTypeDirect" value="direct" checked>
+                                    <label class="form-check-label w-100" for="collectionTypeDirect" style="cursor: pointer;">
+                                        <div class="fw-semibold mb-1">
+                                            <i class="bi bi-cash-stack me-1 text-success"></i>مباشر
+                                        </div>
+                                        <small class="text-muted d-block">تحصيل مباشر في خزنة الشركة</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check p-2 border rounded h-100" style="cursor: pointer;" onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor=''">
+                                    <input class="form-check-input" type="radio" name="collection_type" id="collectionTypeManagement" value="management">
+                                    <label class="form-check-label w-100" for="collectionTypeManagement" style="cursor: pointer;">
+                                        <div class="fw-semibold mb-1">
+                                            <i class="bi bi-building me-1 text-primary"></i>للإدارة
+                                        </div>
+                                        <small class="text-muted d-block">تحصيل للإدارة وتوريدات</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
@@ -2165,6 +2192,33 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                     required
                 >
                 <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع التحصيل <span class="text-danger">*</span></label>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <div class="form-check p-2 border rounded h-100" style="cursor: pointer;" onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor=''">
+                            <input class="form-check-input" type="radio" name="collection_type" id="collectPaymentCardTypeDirect" value="direct" checked>
+                            <label class="form-check-label w-100" for="collectPaymentCardTypeDirect" style="cursor: pointer;">
+                                <div class="fw-semibold mb-1">
+                                    <i class="bi bi-cash-stack me-1 text-success"></i>مباشر
+                                </div>
+                                <small class="text-muted d-block">تحصيل مباشر في خزنة الشركة</small>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-check p-2 border rounded h-100" style="cursor: pointer;" onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor=''">
+                            <input class="form-check-input" type="radio" name="collection_type" id="collectPaymentCardTypeManagement" value="management">
+                            <label class="form-check-label w-100" for="collectPaymentCardTypeManagement" style="cursor: pointer;">
+                                <div class="fw-semibold mb-1">
+                                    <i class="bi bi-building me-1 text-primary"></i>للإدارة
+                                </div>
+                                <small class="text-muted d-block">تحصيل للإدارة وتوريدات</small>
+                            </label>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-primary">تحصيل المبلغ</button>
@@ -3109,6 +3163,12 @@ function showCollectPaymentModal(button) {
                 amountInput.readOnly = debtAmount <= 0;
             }
             
+            // تعيين نوع التحصيل إلى "مباشر" افتراضياً
+            const directRadio = card.querySelector('#collectPaymentCardTypeDirect');
+            const managementRadio = card.querySelector('#collectPaymentCardTypeManagement');
+            if (directRadio) directRadio.checked = true;
+            if (managementRadio) managementRadio.checked = false;
+            
             card.style.display = 'block';
             setTimeout(function() {
                 scrollToElement(card);
@@ -3131,6 +3191,12 @@ function showCollectPaymentModal(button) {
                 amountInput.setAttribute('min', '0');
                 amountInput.readOnly = debtAmount <= 0;
             }
+            
+            // تعيين نوع التحصيل إلى "مباشر" افتراضياً
+            const directRadio = modal.querySelector('#collectionTypeDirect');
+            const managementRadio = modal.querySelector('#collectionTypeManagement');
+            if (directRadio) directRadio.checked = true;
+            if (managementRadio) managementRadio.checked = false;
             
             const modalInstance = new bootstrap.Modal(modal);
             modalInstance.show();
@@ -3796,6 +3862,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 customerIdInput.value = '';
                 amountInput.value = '';
                 amountInput.removeAttribute('max');
+                // إعادة تعيين نوع التحصيل إلى "مباشر"
+                const directRadio = collectionModal.querySelector('#collectionTypeDirect');
+                const managementRadio = collectionModal.querySelector('#collectionTypeManagement');
+                if (directRadio) directRadio.checked = true;
+                if (managementRadio) managementRadio.checked = false;
             });
         }
     }
