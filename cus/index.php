@@ -140,7 +140,25 @@ require_once __DIR__ . '/../includes/audit_log.php';
 require_once __DIR__ . '/../includes/table_styles.php';
 
 $baseUrl = getBasePath();
-$assetsUrl = ASSETS_URL;
+
+// إصلاح مسار ASSETS_URL - بناء المسار الصحيح من الجذر
+$basePath = getBasePath();
+// إزالة /cus من basePath للحصول على المسار الأساسي
+$basePath = str_replace('/cus', '', $basePath);
+$basePath = rtrim($basePath, '/');
+
+// بناء ASSETS_URL الصحيح
+if (empty($basePath)) {
+    $assetsUrl = '/assets/';
+} else {
+    $assetsUrl = $basePath . '/assets/';
+}
+
+// التأكد من أن المسار يبدأ بـ /
+if (strpos($assetsUrl, '/') !== 0) {
+    $assetsUrl = '/' . $assetsUrl;
+}
+
 $cacheVersion = time(); // يمكن استخدام version.json لاحقاً
 
 // بدء output buffering بعد التحقق من كل شيء
@@ -166,11 +184,11 @@ ob_start();
     <title>عملاء الشركة - Customers</title>
     
     <!-- Manifest -->
-    <link rel="manifest" href="manifest.php">
+    <link rel="manifest" href="<?php echo $basePath ? $basePath . '/cus/manifest.php' : '/cus/manifest.php'; ?>">
     
     <!-- Icons -->
-    <link rel="icon" type="image/png" sizes="512x512" href="cus.png">
-    <link rel="apple-touch-icon" href="cus.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="<?php echo $basePath ? $basePath . '/cus/cus.png' : '/cus/cus.png'; ?>">
+    <link rel="apple-touch-icon" href="<?php echo $basePath ? $basePath . '/cus/cus.png' : '/cus/cus.png'; ?>">
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
@@ -344,9 +362,11 @@ ob_start();
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 // استخدام مسار نسبي من موقع الصفحة الحالية
-                const swPath = new URL('service-worker.js', window.location.href).href;
+                const currentPath = window.location.pathname;
+                const basePath = currentPath.substring(0, currentPath.lastIndexOf('/'));
+                const swPath = basePath + '/service-worker.js';
                 navigator.serviceWorker.register(swPath, {
-                    scope: './'
+                    scope: basePath + '/'
                 })
                     .then((registration) => {
                         console.log('Service Worker registered successfully:', registration.scope);
