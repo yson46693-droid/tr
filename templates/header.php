@@ -310,6 +310,13 @@ if (ob_get_level() > 0) {
     <link rel="preload" href="<?php echo $assetsUrl; ?>css/topbar.css?v=<?php echo $cacheVersion; ?>" as="style">
     <link rel="preload" href="https://code.jquery.com/jquery-3.7.0.min.js" as="script" crossorigin="anonymous">
     <link rel="preload" href="<?php echo $assetsUrl; ?>js/main.js?v=<?php echo $cacheVersion; ?>" as="script">
+    <!-- Preload Icons - تحميل مسبق للأيقونات الأساسية لتحسين الأداء -->
+    <?php if (file_exists(__DIR__ . '/../assets/icons/icon-192x192.png')): ?>
+    <link rel="preload" href="<?php echo ASSETS_URL; ?>icons/icon-192x192.png" as="image">
+    <?php endif; ?>
+    <?php if (file_exists(__DIR__ . '/../assets/icons/icon-512x512.png')): ?>
+    <link rel="preload" href="<?php echo ASSETS_URL; ?>icons/icon-512x512.png" as="image">
+    <?php endif; ?>
     <?php else: ?>
     <!-- Mobile: Preload Critical Resources فقط -->
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" as="style" crossorigin="anonymous">
@@ -320,6 +327,10 @@ if (ob_get_level() > 0) {
     <link rel="preload" href="<?php echo $assetsUrl; ?>css/homeline-dashboard.css?v=<?php echo $cacheVersion; ?>" as="style">
     <link rel="preload" href="<?php echo $assetsUrl; ?>css/topbar.css?v=<?php echo $cacheVersion; ?>" as="style">
     <link rel="preload" href="<?php echo $assetsUrl; ?>js/main.js?v=<?php echo $cacheVersion; ?>" as="script">
+    <!-- Preload Icons - تحميل مسبق للأيقونات الأساسية على الموبايل -->
+    <?php if (file_exists(__DIR__ . '/../assets/icons/icon-192x192.png')): ?>
+    <link rel="preload" href="<?php echo ASSETS_URL; ?>icons/icon-192x192.png" as="image">
+    <?php endif; ?>
     <?php endif; ?>
     
     <!-- Bootstrap 5 CSS - تحميل غير متزامن على الموبايل لتحسين الأداء -->

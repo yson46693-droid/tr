@@ -268,8 +268,18 @@ ob_clean();
 // إرسال headers - يجب أن يكون قبل أي output
 if (!headers_sent()) {
     header('Content-Type: application/manifest+json; charset=utf-8');
-    header('Cache-Control: public, max-age=3600');
+    // تحسين الكاش: أسبوع واحد بدلاً من ساعة واحدة
+    header('Cache-Control: public, max-age=604800, stale-while-revalidate=86400');
     header('X-Content-Type-Options: nosniff');
+    // إضافة ETag للتحقق من التحديثات
+    $etag = md5($content);
+    header('ETag: "' . $etag . '"');
+    
+    // التحقق من If-None-Match للكاش
+    if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && $_SERVER['HTTP_IF_NONE_MATCH'] === '"' . $etag . '"') {
+        http_response_code(304);
+        exit(0);
+    }
 }
 
 // إرسال المحتوى بدون أي output إضافي

@@ -156,24 +156,58 @@ RewriteRule ^(.*)$ index.php [QSA,L]
     Header set Connection "keep-alive"
 </IfModule>
 
-# Cache Control for Static Assets
+# Cache Control for Static Assets - محسّن لتسريع التحميل
 <IfModule mod_expires.c>
     ExpiresActive On
+    # الأيقونات والصور - كاش طويل الأمد (سنة واحدة)
     ExpiresByType image/png "access plus 1 year"
     ExpiresByType image/jpg "access plus 1 year"
     ExpiresByType image/jpeg "access plus 1 year"
     ExpiresByType image/gif "access plus 1 year"
     ExpiresByType image/svg+xml "access plus 1 year"
     ExpiresByType image/webp "access plus 1 year"
-    ExpiresByType text/css "access plus 1 month"
-    ExpiresByType application/javascript "access plus 1 month"
-    ExpiresByType text/javascript "access plus 1 month"
+    ExpiresByType image/x-icon "access plus 1 year"
+    # ملفات CSS - كاش متوسط (6 أشهر)
+    ExpiresByType text/css "access plus 6 months"
+    # ملفات JavaScript - كاش متوسط (6 أشهر)
+    ExpiresByType application/javascript "access plus 6 months"
+    ExpiresByType text/javascript "access plus 6 months"
+    # Manifest - كاش قصير (أسبوع واحد)
     ExpiresByType application/manifest+json "access plus 1 week"
+    # الخطوط - كاش طويل الأمد (سنة واحدة)
     ExpiresByType font/woff2 "access plus 1 year"
     ExpiresByType font/woff "access plus 1 year"
     ExpiresByType font/ttf "access plus 1 year"
     ExpiresByType font/otf "access plus 1 year"
     ExpiresByType application/font-woff2 "access plus 1 year"
+</IfModule>
+
+# Cache-Control Headers - إضافة headers إضافية للكاش
+<IfModule mod_headers.c>
+    # الأيقونات - كاش عام لمدة سنة
+    <FilesMatch "\.(png|jpg|jpeg|gif|svg|ico|webp)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+    
+    # ملفات CSS - كاش عام لمدة 6 أشهر
+    <FilesMatch "\.css$">
+        Header set Cache-Control "public, max-age=15552000"
+    </FilesMatch>
+    
+    # ملفات JavaScript - كاش عام لمدة 6 أشهر
+    <FilesMatch "\.js$">
+        Header set Cache-Control "public, max-age=15552000"
+    </FilesMatch>
+    
+    # الخطوط - كاش عام لمدة سنة
+    <FilesMatch "\.(woff|woff2|ttf|otf|eot)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+    
+    # Manifest - كاش عام لمدة أسبوع
+    <FilesMatch "manifest\.(json|php)$">
+        Header set Cache-Control "public, max-age=604800"
+    </FilesMatch>
 </IfModule>
 
 # Gzip Compression - محسّن للموبايل

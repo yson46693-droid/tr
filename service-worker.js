@@ -3,7 +3,7 @@
 // ============================================
 // Configuration
 // ============================================
-const CACHE_VERSION = 'v2.0.0';
+const CACHE_VERSION = 'v2.1.0'; // تحديث الإصدار لإضافة الكاش المحسّن
 const PRECACHE_NAME = `albarakah-precache-${CACHE_VERSION}`;
 const STATIC_CACHE_NAME = `albarakah-static-${CACHE_VERSION}`;
 const CDN_CACHE_NAME = `albarakah-cdn-${CACHE_VERSION}`;
@@ -11,11 +11,30 @@ const CDN_CACHE_NAME = `albarakah-cdn-${CACHE_VERSION}`;
 // Maximum cache size: 50MB (approximate)
 const MAX_CACHE_SIZE = 50 * 1024 * 1024;
 
-// Assets to precache during install
+// Assets to precache during install - جميع الأيقونات والملفات الأساسية
 const PRECACHE_ASSETS = [
   '/offline.html',
+  // جميع الأيقونات الأساسية للكاش المسبق
+  '/assets/icons/icon-72x72.png',
+  '/assets/icons/icon-96x96.png',
+  '/assets/icons/icon-128x128.png',
+  '/assets/icons/icon-144x144.png',
+  '/assets/icons/icon-152x152.png',
   '/assets/icons/icon-192x192.png',
-  '/assets/icons/icon-512x512.png'
+  '/assets/icons/icon-384x384.png',
+  '/assets/icons/icon-512x512.png',
+  '/assets/icons/apple-touch-icon.svg',
+  // ملفات CSS الأساسية
+  '/assets/css/style.css',
+  '/assets/css/rtl.css',
+  '/assets/css/homeline-dashboard.css',
+  '/assets/css/topbar.css',
+  '/assets/css/responsive.css',
+  '/assets/css/sidebar.css',
+  // ملفات JS الأساسية
+  '/assets/js/main.js',
+  '/assets/js/local-storage-cache.js',
+  '/assets/js/lazy-loading.js'
 ];
 
 // CDN assets to cache
@@ -26,20 +45,29 @@ const CDN_ASSETS = [
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js'
 ];
 
-// Critical static assets to cache (CSS, JS, Fonts)
+// Critical static assets to cache (CSS, JS, Fonts) - ملفات حرجة للكاش
 const CRITICAL_ASSETS = [
-  // CSS files
+  // CSS files - جميع ملفات CSS الأساسية
+  '/assets/css/style.css',
+  '/assets/css/rtl.css',
   '/assets/css/homeline-dashboard.css',
   '/assets/css/topbar.css',
   '/assets/css/responsive.css',
   '/assets/css/sidebar.css',
   '/assets/css/cards.css',
   '/assets/css/tables.css',
-  // JS files
+  '/assets/css/modal-mobile-fix.css',
+  '/assets/css/dark-mode.css',
+  // JS files - جميع ملفات JS الأساسية
   '/assets/js/main.js',
+  '/assets/js/local-storage-cache.js',
+  '/assets/js/lazy-loading.js',
   '/assets/js/ajax-navigation.js',
+  '/assets/js/auto-refresh-navigation.js',
   '/assets/js/notifications.js',
-  // Fonts
+  '/assets/js/sidebar.js',
+  '/assets/js/modal-mobile-fix.js',
+  // Fonts - الخطوط الأساسية
   'https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap',
   'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/fonts/bootstrap-icons.woff2'
 ];
