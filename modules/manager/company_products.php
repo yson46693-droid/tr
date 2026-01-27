@@ -1027,109 +1027,69 @@ foreach ($factoryProducts as $product) {
         </div>
     <?php endif; ?>
 
-    <!-- شريط البحث والفلترة المتقدم -->
-    <div class="card mb-4 shadow-sm">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><i class="bi bi-search me-2"></i>بحث متقدم وفلترة</h5>
-        </div>
-        <div class="card-body">
-            <div class="row g-3">
-                <!-- البحث النصي -->
-                <div class="col-md-12">
-                    <label class="form-label"><i class="bi bi-search me-1"></i>البحث</label>
-                    <input type="text" 
-                           class="form-control" 
-                           id="productSearchInput" 
-                           placeholder="ابحث عن منتج، رقم تشغيلة، فئة..." 
-                           autocomplete="off">
-                </div>
-                
-                <!-- نوع المنتج -->
-                <div class="col-md-3">
-                    <label class="form-label"><i class="bi bi-tags me-1"></i>نوع المنتج</label>
-                    <select class="form-select" id="productTypeFilter">
-                        <option value="all">الكل</option>
-                        <option value="factory">منتجات المصنع</option>
-                        <option value="external">المنتجات الخارجية</option>
-                    </select>
-                </div>
-                
-                <!-- الفئة -->
-                <div class="col-md-3">
-                    <label class="form-label"><i class="bi bi-folder me-1"></i>الفئة</label>
-                    <input type="text" 
-                           class="form-control" 
-                           id="categoryFilter" 
-                           placeholder="ابحث بالفئة..." 
-                           autocomplete="off">
-                </div>
-                
-                <!-- سعر الوحدة -->
-                <div class="col-md-3">
-                    <label class="form-label"><i class="bi bi-currency-dollar me-1"></i>سعر الوحدة</label>
-                    <div class="input-group">
-                        <input type="number" 
-                               class="form-control" 
-                               id="minPriceFilter" 
-                               placeholder="من" 
-                               step="0.01" 
-                               min="0">
-                        <input type="number" 
-                               class="form-control" 
-                               id="maxPriceFilter" 
-                               placeholder="إلى" 
-                               step="0.01" 
-                               min="0">
-                    </div>
-                </div>
-                
-                <!-- الكمية -->
-                <div class="col-md-3">
-                    <label class="form-label"><i class="bi bi-box me-1"></i>الكمية</label>
-                    <div class="input-group">
-                        <input type="number" 
-                               class="form-control" 
-                               id="minQuantityFilter" 
-                               placeholder="من" 
-                               step="0.01" 
-                               min="0">
-                        <input type="number" 
-                               class="form-control" 
-                               id="maxQuantityFilter" 
-                               placeholder="إلى" 
-                               step="0.01" 
-                               min="0">
-                    </div>
-                </div>
-            </div>
-            
-            <!-- زر إعادة تعيين الفلاتر -->
-            <div class="mt-3 d-flex justify-content-end">
-                <button type="button" class="btn btn-outline-secondary" id="resetFiltersBtn">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i>إعادة تعيين
-                </button>
-            </div>
-        </div>
-    </div>
-
     <!-- قسم منتجات المصنع -->
-    <div class="card company-card mb-4">
+    <div class="card company-card mb-4" id="factoryProductsSection">
         <div class="section-header">
             <h5>
                 <i class="bi bi-building"></i>
                 منتجات المصنع
             </h5>
-            <span class="badge"><?php echo $totalFactoryProducts; ?> منتج</span>
+            <span class="badge" id="factoryProductsCount"><?php echo $totalFactoryProducts; ?> منتج</span>
         </div>
         <div class="card-body">
-            <?php if (!empty($factoryProducts)): ?>
+            <!-- شريط البحث والفلترة لمنتجات المصنع -->
+            <div class="mb-3 p-3 bg-light rounded" style="border: 1px solid #dee2e6;">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label small mb-1"><i class="bi bi-search me-1"></i>البحث</label>
+                        <input type="text" 
+                               class="form-control form-control-sm" 
+                               id="factorySearchInput" 
+                               placeholder="اسم المنتج، رقم تشغيلة، فئة..." 
+                               autocomplete="off">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1"><i class="bi bi-folder me-1"></i>الفئة</label>
+                        <input type="text" 
+                               class="form-control form-control-sm" 
+                               id="factoryCategoryFilter" 
+                               placeholder="الفئة..." 
+                               autocomplete="off">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1"><i class="bi bi-currency-dollar me-1"></i>سعر من</label>
+                        <input type="number" 
+                               class="form-control form-control-sm" 
+                               id="factoryMinPrice" 
+                               placeholder="من" 
+                               step="0.01" 
+                               min="0">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1"><i class="bi bi-currency-dollar me-1"></i>سعر إلى</label>
+                        <input type="number" 
+                               class="form-control form-control-sm" 
+                               id="factoryMaxPrice" 
+                               placeholder="إلى" 
+                               step="0.01" 
+                               min="0">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" id="resetFactoryFiltersBtn">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>إعادة تعيين
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="factoryProductsStats" style="<?php echo empty($factoryProducts) ? 'display:none;' : ''; ?>">
                 <div class="total-value-box">
                     <div class="d-flex justify-content-between align-items-center">
                         <span class="fw-bold">القيمة الإجمالية لمنتجات المصنع:</span>
-                        <span class="text-success fw-bold"><?php echo formatCurrency($totalFactoryValue); ?></span>
+                        <span class="text-success fw-bold" id="factoryTotalValue"><?php echo formatCurrency($totalFactoryValue); ?></span>
                     </div>
                 </div>
-            <?php endif; ?>
+            </div>
             
             <style>
                 body {
@@ -1443,6 +1403,61 @@ foreach ($factoryProducts as $product) {
             </div>
         </div>
         <div class="card-body">
+            <!-- شريط البحث والفلترة للمنتجات الخارجية -->
+            <div class="mb-3 p-3 bg-light rounded" style="border: 1px solid #dee2e6;">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1"><i class="bi bi-search me-1"></i>البحث</label>
+                        <input type="text" 
+                               class="form-control form-control-sm" 
+                               id="externalSearchInput" 
+                               placeholder="اسم المنتج..." 
+                               autocomplete="off">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1"><i class="bi bi-currency-dollar me-1"></i>سعر من</label>
+                        <input type="number" 
+                               class="form-control form-control-sm" 
+                               id="externalMinPrice" 
+                               placeholder="من" 
+                               step="0.01" 
+                               min="0">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1"><i class="bi bi-currency-dollar me-1"></i>سعر إلى</label>
+                        <input type="number" 
+                               class="form-control form-control-sm" 
+                               id="externalMaxPrice" 
+                               placeholder="إلى" 
+                               step="0.01" 
+                               min="0">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1"><i class="bi bi-box me-1"></i>كمية من</label>
+                        <input type="number" 
+                               class="form-control form-control-sm" 
+                               id="externalMinQuantity" 
+                               placeholder="من" 
+                               step="0.01" 
+                               min="0">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1"><i class="bi bi-box me-1"></i>كمية إلى</label>
+                        <input type="number" 
+                               class="form-control form-control-sm" 
+                               id="externalMaxQuantity" 
+                               placeholder="إلى" 
+                               step="0.01" 
+                               min="0">
+                    </div>
+                    <div class="col-md-1">
+                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" id="resetExternalFiltersBtn">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
             <div id="externalProductsStats" style="<?php echo empty($externalProducts) ? 'display:none;' : ''; ?>">
                 <div class="total-value-box">
                     <div class="d-flex justify-content-between align-items-center">
@@ -3002,22 +3017,26 @@ function initEditExternalButtons() {
 
 // ===== البحث والفلترة الديناميكية =====
 (function() {
-    let searchTimeout = null;
+    let factorySearchTimeout = null;
+    let externalSearchTimeout = null;
     const API_URL = '<?php echo getRelativeUrl("api/search_company_products.php"); ?>';
     
-    // عناصر البحث والفلترة
-    const searchInput = document.getElementById('productSearchInput');
-    const productTypeFilter = document.getElementById('productTypeFilter');
-    const categoryFilter = document.getElementById('categoryFilter');
-    const minPriceFilter = document.getElementById('minPriceFilter');
-    const maxPriceFilter = document.getElementById('maxPriceFilter');
-    const minQuantityFilter = document.getElementById('minQuantityFilter');
-    const maxQuantityFilter = document.getElementById('maxQuantityFilter');
-    const resetFiltersBtn = document.getElementById('resetFiltersBtn');
+    // عناصر البحث والفلترة لمنتجات المصنع
+    const factorySearchInput = document.getElementById('factorySearchInput');
+    const factoryCategoryFilter = document.getElementById('factoryCategoryFilter');
+    const factoryMinPrice = document.getElementById('factoryMinPrice');
+    const factoryMaxPrice = document.getElementById('factoryMaxPrice');
+    const resetFactoryFiltersBtn = document.getElementById('resetFactoryFiltersBtn');
+    
+    // عناصر البحث والفلترة للمنتجات الخارجية
+    const externalSearchInput = document.getElementById('externalSearchInput');
+    const externalMinPrice = document.getElementById('externalMinPrice');
+    const externalMaxPrice = document.getElementById('externalMaxPrice');
+    const externalMinQuantity = document.getElementById('externalMinQuantity');
+    const externalMaxQuantity = document.getElementById('externalMaxQuantity');
+    const resetExternalFiltersBtn = document.getElementById('resetExternalFiltersBtn');
     
     // عناصر العرض
-    const factoryProductsGrid = document.getElementById('factoryProductsGrid');
-    const externalProductsGrid = document.getElementById('externalProductsGrid');
     const factoryProductsContainer = document.getElementById('factoryProductsContainer');
     const externalProductsContainer = document.getElementById('externalProductsContainer');
     const factoryProductsCount = document.getElementById('factoryProductsCount');
@@ -3027,36 +3046,25 @@ function initEditExternalButtons() {
     const factoryProductsStats = document.getElementById('factoryProductsStats');
     const externalProductsStats = document.getElementById('externalProductsStats');
     
-    // دالة جلب البيانات من API
-    async function fetchProducts() {
+    // دالة جلب منتجات المصنع من API
+    async function fetchFactoryProducts() {
         const params = new URLSearchParams();
+        params.append('product_type', 'factory');
         
-        if (searchInput && searchInput.value.trim()) {
-            params.append('search', searchInput.value.trim());
+        if (factorySearchInput && factorySearchInput.value.trim()) {
+            params.append('search', factorySearchInput.value.trim());
         }
         
-        if (productTypeFilter && productTypeFilter.value !== 'all') {
-            params.append('product_type', productTypeFilter.value);
+        if (factoryCategoryFilter && factoryCategoryFilter.value.trim()) {
+            params.append('category', factoryCategoryFilter.value.trim());
         }
         
-        if (categoryFilter && categoryFilter.value.trim()) {
-            params.append('category', categoryFilter.value.trim());
+        if (factoryMinPrice && factoryMinPrice.value) {
+            params.append('min_price', factoryMinPrice.value);
         }
         
-        if (minPriceFilter && minPriceFilter.value) {
-            params.append('min_price', minPriceFilter.value);
-        }
-        
-        if (maxPriceFilter && maxPriceFilter.value) {
-            params.append('max_price', maxPriceFilter.value);
-        }
-        
-        if (minQuantityFilter && minQuantityFilter.value) {
-            params.append('min_quantity', minQuantityFilter.value);
-        }
-        
-        if (maxQuantityFilter && maxQuantityFilter.value) {
-            params.append('max_quantity', maxQuantityFilter.value);
+        if (factoryMaxPrice && factoryMaxPrice.value) {
+            params.append('max_price', factoryMaxPrice.value);
         }
         
         try {
@@ -3065,13 +3073,52 @@ function initEditExternalButtons() {
             
             if (data.success) {
                 updateFactoryProducts(data.factory_products || []);
-                updateExternalProducts(data.external_products || []);
-                updateStatistics(data.statistics || {});
+                updateFactoryStatistics(data.statistics || {});
             } else {
-                console.error('Error fetching products:', data.message);
+                console.error('Error fetching factory products:', data.message);
             }
         } catch (error) {
-            console.error('Error fetching products:', error);
+            console.error('Error fetching factory products:', error);
+        }
+    }
+    
+    // دالة جلب المنتجات الخارجية من API
+    async function fetchExternalProducts() {
+        const params = new URLSearchParams();
+        params.append('product_type', 'external');
+        
+        if (externalSearchInput && externalSearchInput.value.trim()) {
+            params.append('search', externalSearchInput.value.trim());
+        }
+        
+        if (externalMinPrice && externalMinPrice.value) {
+            params.append('min_price', externalMinPrice.value);
+        }
+        
+        if (externalMaxPrice && externalMaxPrice.value) {
+            params.append('max_price', externalMaxPrice.value);
+        }
+        
+        if (externalMinQuantity && externalMinQuantity.value) {
+            params.append('min_quantity', externalMinQuantity.value);
+        }
+        
+        if (externalMaxQuantity && externalMaxQuantity.value) {
+            params.append('max_quantity', externalMaxQuantity.value);
+        }
+        
+        try {
+            const response = await fetch(API_URL + '?' + params.toString());
+            const data = await response.json();
+            
+            if (data.success) {
+                updateExternalProducts(data.external_products || []);
+                updateExternalStatistics(data.statistics || {});
+            } else {
+                console.error('Error fetching external products:', data.message);
+            }
+        } catch (error) {
+            console.error('Error fetching external products:', error);
         }
     }
     
@@ -3242,26 +3289,29 @@ function initEditExternalButtons() {
         initEditExternalButtons();
     }
     
-    // تحديث الإحصائيات
-    function updateStatistics(stats) {
+    // تحديث إحصائيات منتجات المصنع
+    function updateFactoryStatistics(stats) {
         if (factoryProductsCount) {
             factoryProductsCount.textContent = (stats.total_factory_products || 0) + ' منتج';
-        }
-        
-        if (externalProductsCount) {
-            externalProductsCount.textContent = (stats.total_external_products || 0) + ' منتج';
         }
         
         if (factoryTotalValue) {
             factoryTotalValue.textContent = formatCurrency(stats.total_factory_value || 0);
         }
         
-        if (externalTotalValue) {
-            externalTotalValue.textContent = formatCurrency(stats.total_external_value || 0);
-        }
-        
         if (factoryProductsStats) {
             factoryProductsStats.style.display = (stats.total_factory_products || 0) > 0 ? '' : 'none';
+        }
+    }
+    
+    // تحديث إحصائيات المنتجات الخارجية
+    function updateExternalStatistics(stats) {
+        if (externalProductsCount) {
+            externalProductsCount.textContent = (stats.total_external_products || 0) + ' منتج';
+        }
+        
+        if (externalTotalValue) {
+            externalTotalValue.textContent = formatCurrency(stats.total_external_value || 0);
         }
         
         if (externalProductsStats) {
@@ -3330,53 +3380,77 @@ function initEditExternalButtons() {
         });
     }
     
-    // دالة البحث مع تأخير (debounce)
-    function performSearch() {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            fetchProducts();
-        }, 300); // تأخير 300ms بعد توقف الكتابة
+    // دوال البحث مع تأخير (debounce)
+    function performFactorySearch() {
+        clearTimeout(factorySearchTimeout);
+        factorySearchTimeout = setTimeout(() => {
+            fetchFactoryProducts();
+        }, 300);
     }
     
-    // إرفاق event listeners
-    if (searchInput) {
-        searchInput.addEventListener('input', performSearch);
+    function performExternalSearch() {
+        clearTimeout(externalSearchTimeout);
+        externalSearchTimeout = setTimeout(() => {
+            fetchExternalProducts();
+        }, 300);
     }
     
-    if (productTypeFilter) {
-        productTypeFilter.addEventListener('change', performSearch);
+    // إرفاق event listeners لمنتجات المصنع
+    if (factorySearchInput) {
+        factorySearchInput.addEventListener('input', performFactorySearch);
     }
     
-    if (categoryFilter) {
-        categoryFilter.addEventListener('input', performSearch);
+    if (factoryCategoryFilter) {
+        factoryCategoryFilter.addEventListener('input', performFactorySearch);
     }
     
-    if (minPriceFilter) {
-        minPriceFilter.addEventListener('input', performSearch);
+    if (factoryMinPrice) {
+        factoryMinPrice.addEventListener('input', performFactorySearch);
     }
     
-    if (maxPriceFilter) {
-        maxPriceFilter.addEventListener('input', performSearch);
+    if (factoryMaxPrice) {
+        factoryMaxPrice.addEventListener('input', performFactorySearch);
     }
     
-    if (minQuantityFilter) {
-        minQuantityFilter.addEventListener('input', performSearch);
+    if (resetFactoryFiltersBtn) {
+        resetFactoryFiltersBtn.addEventListener('click', function() {
+            if (factorySearchInput) factorySearchInput.value = '';
+            if (factoryCategoryFilter) factoryCategoryFilter.value = '';
+            if (factoryMinPrice) factoryMinPrice.value = '';
+            if (factoryMaxPrice) factoryMaxPrice.value = '';
+            performFactorySearch();
+        });
     }
     
-    if (maxQuantityFilter) {
-        maxQuantityFilter.addEventListener('input', performSearch);
+    // إرفاق event listeners للمنتجات الخارجية
+    if (externalSearchInput) {
+        externalSearchInput.addEventListener('input', performExternalSearch);
     }
     
-    if (resetFiltersBtn) {
-        resetFiltersBtn.addEventListener('click', function() {
-            if (searchInput) searchInput.value = '';
-            if (productTypeFilter) productTypeFilter.value = 'all';
-            if (categoryFilter) categoryFilter.value = '';
-            if (minPriceFilter) minPriceFilter.value = '';
-            if (maxPriceFilter) maxPriceFilter.value = '';
-            if (minQuantityFilter) minQuantityFilter.value = '';
-            if (maxQuantityFilter) maxQuantityFilter.value = '';
-            performSearch();
+    if (externalMinPrice) {
+        externalMinPrice.addEventListener('input', performExternalSearch);
+    }
+    
+    if (externalMaxPrice) {
+        externalMaxPrice.addEventListener('input', performExternalSearch);
+    }
+    
+    if (externalMinQuantity) {
+        externalMinQuantity.addEventListener('input', performExternalSearch);
+    }
+    
+    if (externalMaxQuantity) {
+        externalMaxQuantity.addEventListener('input', performExternalSearch);
+    }
+    
+    if (resetExternalFiltersBtn) {
+        resetExternalFiltersBtn.addEventListener('click', function() {
+            if (externalSearchInput) externalSearchInput.value = '';
+            if (externalMinPrice) externalMinPrice.value = '';
+            if (externalMaxPrice) externalMaxPrice.value = '';
+            if (externalMinQuantity) externalMinQuantity.value = '';
+            if (externalMaxQuantity) externalMaxQuantity.value = '';
+            performExternalSearch();
         });
     }
 })();

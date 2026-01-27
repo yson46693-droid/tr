@@ -271,7 +271,35 @@ if (!defined('ACCESS_ALLOWED')) {
         window.__unifiedPollingActive = true;
         
         let lastActivity = Date.now();
-        const POLLING_INTERVAL = 90 * 1000; // 90 ثانية - فترة موحدة لجميع المهام (تم زيادة الفترة لتقليل الضغط)
+        
+        // نظام كشف نوع الاتصال وتحسين الأداء على بيانات الهاتف
+        function detectConnectionType() {
+            // استخدام Network Information API إذا كان متاحاً
+            if ('connection' in navigator) {
+                const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                if (conn) {
+                    const effectiveType = conn.effectiveType || 'unknown';
+                    const type = conn.type || 'unknown';
+                    const saveData = conn.saveData || false;
+                    
+                    // إذا كان saveData مفعلاً أو نوع الاتصال mobile، نعتبره بيانات هاتف
+                    if (saveData || type === 'cellular' || effectiveType === '2g' || effectiveType === 'slow-2g') {
+                        return { isMobileData: true, effectiveType, saveData };
+                    }
+                }
+            }
+            
+            // كشف بديل: إذا كان المستخدم على هاتف محمول
+            const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            return { isMobileData: isMobileDevice, effectiveType: 'unknown', saveData: false };
+        }
+        
+        const connectionInfo = detectConnectionType();
+        const isMobileData = connectionInfo.isMobileData;
+        
+        // تحديد فترة Polling حسب نوع الاتصال
+        // WiFi: 90 ثانية | بيانات الهاتف: 180 ثانية (3 دقائق) لتقليل استهلاك البيانات
+        const POLLING_INTERVAL = isMobileData ? 180 * 1000 : 90 * 1000;
         const ACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 دقيقة
         
         const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click', 'keydown'];
@@ -307,18 +335,19 @@ if (!defined('ACCESS_ALLOWED')) {
             lastActivity = Date.now();
         }
         
-        // تحديد ما يجب إضافته للطلب بناءً على الصفحة
+        // تحديد ما يجب إضافته للطلب بناءً على الصفحة ونوع الاتصال
         function getPollingParams() {
             const params = new URLSearchParams();
             const path = window.location.pathname || '';
             
-            // إضافة notifications دائماً
+            // إضافة notifications دائماً (وظيفة أساسية - لا يتم تعطيلها)
             params.set('notifications', '1');
             if (typeof window.lastNotificationId !== 'undefined' && window.lastNotificationId) {
                 params.set('last_notification_id', window.lastNotificationId);
             }
             
             // إضافة chat إذا كانت الصفحة تحتوي على chat
+            // عند استخدام بيانات الهاتف، نستمر في جلب الرسائل لكن بفترة أطول
             if (document.querySelector('[data-chat-app]')) {
                 params.set('chat', '1');
                 if (typeof window.lastChatMessageId !== 'undefined' && window.lastChatMessageId) {
@@ -346,8 +375,10 @@ if (!defined('ACCESS_ALLOWED')) {
             const params = getPollingParams();
             const apiPath = getApiPath('api/unified_polling.php') + (params ? '?' + params : '');
             
+            // زيادة timeout عند استخدام بيانات الهاتف لتجنب إلغاء الطلبات المبكر
+            const requestTimeout = isMobileData ? 12000 : 8000; // 12 ثانية للهاتف، 8 ثواني للWiFi
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 ثواني بدلاً من 12 لتقليل الانتظار
+            const timeoutId = setTimeout(() => controller.abort(), requestTimeout);
             
             fetch(apiPath, {
                 method: 'GET',

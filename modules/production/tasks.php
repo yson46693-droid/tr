@@ -2357,18 +2357,42 @@ function tasksHtml(string $value): string
             clearInterval(autoRefreshInterval);
         }
         
-        // جلب المهام لأول مرة بعد 10 ثوان من تحميل الصفحة (زيادة من 2 ثانية)
+        // كشف نوع الاتصال لتحديد فترة التحديث المناسبة
+        function detectConnectionType() {
+            if ('connection' in navigator) {
+                const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                if (conn) {
+                    const effectiveType = conn.effectiveType || 'unknown';
+                    const type = conn.type || 'unknown';
+                    const saveData = conn.saveData || false;
+                    
+                    if (saveData || type === 'cellular' || effectiveType === '2g' || effectiveType === 'slow-2g') {
+                        return true; // بيانات هاتف
+                    }
+                }
+            }
+            const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            return isMobileDevice;
+        }
+        
+        const isMobileData = detectConnectionType();
+        
+        // جلب المهام لأول مرة بعد تأخير حسب نوع الاتصال
+        const initialDelay = isMobileData ? 15000 : 10000; // 15 ثانية للهاتف، 10 ثواني للWiFi
         setTimeout(function() {
             fetchTasks();
-        }, 10000);
+        }, initialDelay);
         
-        // ثم كل 2 دقيقة (120 ثانية) لتقليل الاستهلاك بشكل كبير
+        // تحديد فترة التحديث حسب نوع الاتصال
+        // WiFi: 2 دقيقة | بيانات الهاتف: 4 دقائق لتقليل استهلاك البيانات
+        const refreshInterval = isMobileData ? 240000 : 120000; // 4 دقائق للهاتف، 2 دقيقة للWiFi
+        
         autoRefreshInterval = setInterval(function() {
             // التحقق من أن الصفحة مرئية ونشطة قبل الطلب
             if (!document.hidden) {
                 fetchTasks();
             }
-        }, 120000); // 2 دقيقة لتقليل الاستهلاك بشكل كبير
+        }, refreshInterval);
     }
     
     // إيقاف التحديث التلقائي عند مغادرة الصفحة
