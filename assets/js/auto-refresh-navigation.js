@@ -279,7 +279,7 @@
      * معالجة النقر على روابط الشريط الجانبي
      */
     function handleSidebarLinkClick(event) {
-        const link = event.currentTarget;
+        const link = event.currentTarget || event.target.closest('a');
         
         // التحقق من أن الرابط موجود وأنه رابط تنقل
         if (!link || !link.href) return;
@@ -302,27 +302,24 @@
             return;
         }
         
+        // على الهاتف، إغلاق الشريط الجانبي فوراً قبل منع الانتشار
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile) {
+            const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+            if (dashboardWrapper && dashboardWrapper.classList.contains('sidebar-open')) {
+                dashboardWrapper.classList.remove('sidebar-open');
+                document.body.classList.remove('sidebar-open');
+            }
+        }
+        
         // منع التنقل الافتراضي وإيقاف انتشار الحدث فوراً لمنع أي تداخل
-        // يجب منع الانتشار قبل أي شيء آخر
+        // يجب منع الانتشار بعد إغلاق الشريط الجانبي
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
         
         // إضافة علامة خاصة على الرابط لمنع sidebar.js من إغلاق الشريط الجانبي
         link.setAttribute('data-navigating', 'true');
-        
-        // على الهاتف، إغلاق الشريط الجانبي فوراً بعد منع الانتشار
-        const isMobile = window.innerWidth <= 768;
-        if (isMobile) {
-            // استخدام requestAnimationFrame لضمان التنفيذ بعد منع الانتشار
-            requestAnimationFrame(() => {
-                const dashboardWrapper = document.querySelector('.dashboard-wrapper');
-                if (dashboardWrapper && dashboardWrapper.classList.contains('sidebar-open')) {
-                    dashboardWrapper.classList.remove('sidebar-open');
-                    document.body.classList.remove('sidebar-open');
-                }
-            });
-        }
         
         // إزالة العلامة بعد قليل
         setTimeout(() => {

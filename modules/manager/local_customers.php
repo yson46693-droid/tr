@@ -8294,6 +8294,69 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.classList.remove('sidebar-open');
     }
     
+    // ===== إصلاح مشكلة النقر على روابط الشريط الجانبي على الموبايل =====
+    // إضافة مستمع حدث مباشر على روابط الشريط الجانبي لضمان عملها بشكل صحيح
+    function fixSidebarLinksOnMobile() {
+        const sidebarLinks = document.querySelectorAll('.homeline-sidebar .nav-link, .sidebar .nav-link');
+        
+        sidebarLinks.forEach(link => {
+            // التحقق من أن الرابط موجود وأنه رابط تنقل
+            const href = link.getAttribute('href');
+            if (!href || href === '#' || 
+                href.startsWith('javascript:') || 
+                href.startsWith('mailto:') || 
+                href.startsWith('tel:')) {
+                return;
+            }
+            
+            // إضافة مستمع حدث جديد في مرحلة capture لضمان التنفيذ أولاً
+            link.addEventListener('click', function(e) {
+                // على الهاتف فقط
+                if (window.innerWidth > 768) return;
+                
+                // التحقق من أن الرابط موجود وأنه رابط تنقل
+                if (!this.href || this.href === '#' || 
+                    this.href.startsWith('javascript:') || 
+                    this.href.startsWith('mailto:') || 
+                    this.href.startsWith('tel:')) {
+                    return;
+                }
+                
+                // إغلاق الشريط الجانبي فوراً
+                const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+                if (dashboardWrapper && dashboardWrapper.classList.contains('sidebar-open')) {
+                    dashboardWrapper.classList.remove('sidebar-open');
+                    document.body.classList.remove('sidebar-open');
+                }
+                
+                // لا نمنع الانتشار - نترك auto-refresh-navigation.js يتعامل مع التنقل
+            }, {capture: true, passive: false});
+        });
+    }
+    
+    // محاولة إصلاح الروابط فوراً وبعد تأخير قصير
+    fixSidebarLinksOnMobile();
+    setTimeout(fixSidebarLinksOnMobile, 500);
+    setTimeout(fixSidebarLinksOnMobile, 1000);
+    
+    // إعادة إصلاح الروابط عند فتح الشريط الجانبي
+    const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+    if (dashboardWrapper) {
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    if (dashboardWrapper.classList.contains('sidebar-open')) {
+                        setTimeout(fixSidebarLinksOnMobile, 100);
+                    }
+                }
+            });
+        });
+        observer.observe(dashboardWrapper, {
+            attributes: true,
+            attributeFilter: ['class']
+        });
+    }
+    
 }); // End of DOMContentLoaded
 </script>
 <?php endif; ?>
