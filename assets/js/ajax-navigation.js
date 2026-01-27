@@ -1016,7 +1016,7 @@
             return false;
         }
 
-        // التحقق من Cache
+        // التحقق من Cache المحلي أولاً (الأسرع)
         if (CONFIG.cacheEnabled && pageCache.has(url)) {
             const cachedData = pageCache.get(url);
             // تحديث URL أولاً لتحديث حالة active بشكل صحيح
@@ -1025,6 +1025,74 @@
             updateHistory(url);
             return true;
         }
+        
+        // في PWA، محاولة استخدام Service Worker cache فوراً قبل network
+        // هذا يسرع التحميل بشكل كبير في أول فتح PWA
+        if ('caches' in window && window.matchMedia('(display-mode: standalone)').matches) {
+            try {
+                const cacheNames = ['albarakah-static-v2.0.0', 'albarakah-precache-v2.0.0'];
+                
+                for (const cacheName of cacheNames) {
+                    try {
+                        const cache = await caches.open(cacheName);
+                        const cachedResponse = await cache.match(url);
+                        
+                        if (cachedResponse) {
+                            // استخدام cache فوراً - تحميل فوري بدون انتظار network
+                            const html = await cachedResponse.text();
+                            
+                            // حفظ في pageCache للاستخدام القادم
+                            if (CONFIG.cacheEnabled) {
+                                pageCache.set(url, html);
+                                // تنظيف cache إذا تجاوز الحد الأقصى
+                                if (pageCache.size > CONFIG.cacheMaxSize) {
+                                    const firstKey = pageCache.keys().next().value;
+                                    pageCache.delete(firstKey);
+                                }
+                            }
+                            
+                            currentUrl = url;
+                            updatePageContent(html);
+                            updateHistory(url);
+                            
+                            // تحديث cache في الخلفية
+                            fetch(url, {
+                                method: 'GET',
+                                headers: {
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                    'Accept': 'text/html'
+                                },
+                                cache: 'no-cache'
+                            }).then(async (networkResponse) => {
+                                if (networkResponse.ok) {
+                                    try {
+                                        const cache = await caches.open(cacheName);
+                                        await cache.put(url, networkResponse.clone());
+                                        
+                                        // تحديث pageCache أيضاً
+                                        const updatedHtml = await networkResponse.text();
+                                        if (CONFIG.cacheEnabled) {
+                                            pageCache.set(url, updatedHtml);
+                                        }
+                                    } catch (e) {
+                                        // تجاهل أخطاء cache
+                                    }
+                                }
+                            }).catch(() => {
+                                // تجاهل أخطاء التحديث في الخلفية
+                            });
+                            
+                            return true;
+                        }
+                    } catch (e) {
+                        // تجاهل أخطاء cache معين، جرب cache آخر
+                        continue;
+                    }
+                }
+            } catch (cacheError) {
+                // إذا فشل cache، نستخدم network
+            }
+        }
 
         isLoading = true;
         showLoading();
@@ -1032,31 +1100,48 @@
         let timeoutId = null;
         try {
             // محاولة استخدام Service Worker cache أولاً (لتحسين الأداء في PWA)
+            // هذا مهم جداً لأول فتح PWA - يقلل وقت التحميل من دقيقة إلى ثواني
             let response = null;
-            if ('caches' in window && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            if ('caches' in window) {
                 try {
-                    const cache = await caches.open('albarakah-static-v2.0.0');
-                    const cachedResponse = await cache.match(url);
-                    if (cachedResponse) {
-                        // استخدام cache إذا كان متاحاً، لكن نتحقق من التحديثات في الخلفية
-                        response = cachedResponse;
-                        
-                        // تحديث cache في الخلفية
-                        fetch(url, {
-                            method: 'GET',
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'Accept': 'text/html'
-                            },
-                            cache: 'no-cache'
-                        }).then(async (networkResponse) => {
-                            if (networkResponse.ok) {
-                                const cache = await caches.open('albarakah-static-v2.0.0');
-                                await cache.put(url, networkResponse.clone());
+                    // محاولة فتح جميع caches المحتملة
+                    const cacheNames = ['albarakah-static-v2.0.0', 'albarakah-precache-v2.0.0'];
+                    
+                    for (const cacheName of cacheNames) {
+                        try {
+                            const cache = await caches.open(cacheName);
+                            const cachedResponse = await cache.match(url);
+                            if (cachedResponse) {
+                                // استخدام cache إذا كان متاحاً - هذا يسرع التحميل بشكل كبير
+                                response = cachedResponse;
+                                
+                                // تحديث cache في الخلفية بدون انتظار
+                                fetch(url, {
+                                    method: 'GET',
+                                    headers: {
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                        'Accept': 'text/html'
+                                    },
+                                    cache: 'no-cache'
+                                }).then(async (networkResponse) => {
+                                    if (networkResponse.ok) {
+                                        try {
+                                            const cache = await caches.open(cacheName);
+                                            await cache.put(url, networkResponse.clone());
+                                        } catch (e) {
+                                            // تجاهل أخطاء cache
+                                        }
+                                    }
+                                }).catch(() => {
+                                    // تجاهل أخطاء التحديث في الخلفية
+                                });
+                                
+                                break; // وجدنا cache، لا نحتاج للبحث في باقي caches
                             }
-                        }).catch(() => {
-                            // تجاهل أخطاء التحديث في الخلفية
-                        });
+                        } catch (e) {
+                            // تجاهل أخطاء cache معين، جرب cache آخر
+                            continue;
+                        }
                     }
                 } catch (cacheError) {
                     // إذا فشل cache، نستخدم network
@@ -1242,8 +1327,17 @@
                 return false;
             }
 
-            // التحقق من أن الرابط يحتوي على dashboard أو page parameter
-            if (linkUrl.pathname.includes('/dashboard/') || linkUrl.searchParams.has('page')) {
+            // التحقق من أن الرابط من الشريط الجانبي (أهم تحسين لـ PWA)
+            const isSidebarLink = link.closest('.homeline-sidebar') || 
+                                  link.closest('.sidebar') ||
+                                  link.closest('.sidebar-nav') ||
+                                  link.classList.contains('nav-link');
+            
+            // التحقق من أن الرابط يحتوي على dashboard أو page parameter أو أنه رابط من الشريط الجانبي
+            if (isSidebarLink || 
+                linkUrl.pathname.includes('/dashboard/') || 
+                linkUrl.pathname.includes('/modules/') ||
+                linkUrl.searchParams.has('page')) {
                 return true;
             }
         } catch (e) {

@@ -926,6 +926,36 @@ if (empty($menuItems)) {
         setupPrefetching();
     }
     
+    // كشف PWA
+    function isPWA() {
+        return window.matchMedia('(display-mode: standalone)').matches ||
+               (navigator.standalone === true) ||
+               (window.matchMedia('(display-mode: fullscreen)').matches);
+    }
+    
+    // في PWA، prefetch جميع الصفحات الشائعة فوراً بعد تحميل الصفحة
+    if (isPWA()) {
+        setTimeout(() => {
+            const sidebarLinks = document.querySelectorAll('.homeline-sidebar .nav-link[href]');
+            const prefetchedUrls = new Set();
+            
+            // Prefetch أول 5 صفحات شائعة فوراً في PWA
+            Array.from(sidebarLinks).slice(0, 5).forEach((link, index) => {
+                setTimeout(() => {
+                    const href = link.getAttribute('href');
+                    if (href && href !== '#' && !href.startsWith('javascript:') && !prefetchedUrls.has(href)) {
+                        const linkElement = document.createElement('link');
+                        linkElement.rel = 'prefetch';
+                        linkElement.href = href;
+                        linkElement.as = 'document';
+                        document.head.appendChild(linkElement);
+                        prefetchedUrls.add(href);
+                    }
+                }, index * 300); // تأخير 300ms بين كل صفحة
+            });
+        }, 1000); // انتظار ثانية واحدة بعد تحميل الصفحة
+    }
+    
     // Prefetch للصفحة النشطة الحالية (إذا كانت موجودة في cache)
     const currentActiveLink = document.querySelector('.homeline-sidebar .nav-link.active');
     if (currentActiveLink) {

@@ -175,40 +175,51 @@ async function cacheFirst(request, cacheName) {
 
 /**
  * Network First strategy - try network, then cache, then offline
- * محسّن لـ PWA: محاولة cache أولاً لأول فتح PWA لتسريع الاستجابة
+ * محسّن لـ PWA: محاولة cache أولاً لأول فتح PWA لتسريع الاستجابة بشكل كبير
  */
 async function networkFirst(request, cacheName, isNavigation = false) {
-  // لأول فتح PWA، محاولة استخدام cache أولاً لتسريع الاستجابة
-  // ثم تحديث cache في الخلفية
+  // لأول فتح PWA، محاولة استخدام cache أولاً لتسريع الاستجابة بشكل كبير
+  // هذا يقلل وقت التحميل من دقيقة كاملة إلى ثواني قليلة
   if (isNavigation && 'caches' in self) {
     try {
-      const cache = await caches.open(cacheName);
-      const cached = await cache.match(request);
+      // محاولة فتح جميع caches المحتملة
+      const cacheNames = [cacheName, 'albarakah-precache-v2.0.0'];
       
-      if (cached) {
-        // استخدام cache فوراً، وتحديثه في الخلفية
-        fetchWithTimeout(request).then(async (networkResponse) => {
-          if (networkResponse.status === 200 && networkResponse.ok) {
-            try {
-              const cache = await caches.open(cacheName);
-              const responseClone = networkResponse.clone();
-              await cache.put(request, responseClone);
-            } catch (cacheError) {
-              // Silently fail cache update
-            }
+      for (const name of cacheNames) {
+        try {
+          const cache = await caches.open(name);
+          const cached = await cache.match(request);
+          
+          if (cached) {
+            // استخدام cache فوراً - هذا يسرع التحميل بشكل كبير
+            // تحديث cache في الخلفية بدون انتظار
+            fetchWithTimeout(request).then(async (networkResponse) => {
+              if (networkResponse.status === 200 && networkResponse.ok) {
+                try {
+                  const cache = await caches.open(name);
+                  const responseClone = networkResponse.clone();
+                  await cache.put(request, responseClone);
+                } catch (cacheError) {
+                  // Silently fail cache update
+                }
+              }
+            }).catch(() => {
+              // Silently fail background update
+            });
+            
+            return cached;
           }
-        }).catch(() => {
-          // Silently fail background update
-        });
-        
-        return cached;
+        } catch (e) {
+          // تجاهل أخطاء cache معين، جرب cache آخر
+          continue;
+        }
       }
     } catch (cacheError) {
       // Silently fail cache lookup - continue to network
     }
   }
   
-  // Network first strategy
+  // Network first strategy مع timeout أقصر لتسريع الاستجابة
   try {
     const response = await fetchWithTimeout(request);
     
@@ -236,11 +247,21 @@ async function networkFirst(request, cacheName, isNavigation = false) {
       // Only try cache if CacheStorage is available
       if ('caches' in self) {
         try {
-          const cache = await caches.open(cacheName);
-          const cached = await cache.match(request);
+          // محاولة فتح جميع caches المحتملة
+          const cacheNames = [cacheName, 'albarakah-precache-v2.0.0'];
           
-          if (cached) {
-            return cached;
+          for (const name of cacheNames) {
+            try {
+              const cache = await caches.open(name);
+              const cached = await cache.match(request);
+              
+              if (cached) {
+                return cached;
+              }
+            } catch (e) {
+              // تجاهل أخطاء cache معين، جرب cache آخر
+              continue;
+            }
           }
         } catch (cacheError) {
           // Silently fail cache lookup

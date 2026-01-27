@@ -235,6 +235,11 @@
         // التحقق من أن الرابط موجود وأنه رابط تنقل
         if (!link || !link.href) return;
         
+        // في PWA، نترك AJAX navigation يتعامل مع التنقل
+        if (isPWA()) {
+            return; // لا نعترض الأحداث في PWA
+        }
+        
         // الحصول على URL الهدف
         const targetUrl = link.href;
         
@@ -279,9 +284,46 @@
     }
     
     /**
+     * كشف إذا كان التطبيق يعمل كـ PWA
+     */
+    function isPWA() {
+        // كشف PWA من خلال عدة طرق
+        // 1. التحقق من display mode
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+            return true;
+        }
+        
+        // 2. التحقق من Service Worker
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            return true;
+        }
+        
+        // 3. التحقق من manifest
+        if (window.matchMedia('(display-mode: standalone)').matches || 
+            window.matchMedia('(display-mode: fullscreen)').matches ||
+            window.matchMedia('(display-mode: minimal-ui)').matches) {
+            return true;
+        }
+        
+        // 4. التحقق من وجود start_url في manifest
+        const manifestLink = document.querySelector('link[rel="manifest"]');
+        if (manifestLink) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
      * تهيئة السكريبت
      */
     function init() {
+        // في PWA، نعطل auto-refresh-navigation تماماً ونستخدم AJAX navigation فقط
+        if (isPWA()) {
+            console.log('PWA detected - disabling auto-refresh-navigation, using AJAX navigation only');
+            return; // لا نضيف event listeners في PWA
+        }
+        
         // التحقق من أن المستخدم من الأدوار المستهدفة
         if (!shouldApplyRefresh()) {
             return;
