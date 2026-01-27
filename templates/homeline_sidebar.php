@@ -125,13 +125,6 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => 'عملاء الشركه',
-                'icon' => 'bi-people',
-                'url' => $baseUrl . 'manager.php?page=local_customers',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'local_customers'),
-                'badge' => null
-            ],
-            [
                 'title' => 'عملاء المندوبين',
                 'icon' => 'bi-people-fill',
                 'url' => $baseUrl . 'manager.php?page=representatives_customers',
@@ -313,13 +306,6 @@ switch ($role) {
                 'icon' => 'bi-truck',
                 'url' => $baseUrl . 'accountant.php?page=suppliers',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'suppliers'),
-                'badge' => null
-            ],
-            [
-                'title' => 'عملاء الشركه ',
-                'icon' => 'bi-people',
-                'url' => $baseUrl . 'accountant.php?page=local_customers',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'local_customers'),
                 'badge' => null
             ],
             [
