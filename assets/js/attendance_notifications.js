@@ -4,8 +4,34 @@
  */
 
 // منع إعادة تعريف الـ class إذا كان موجوداً بالفعل
-if (typeof AttendanceNotificationManager === 'undefined' && 
-    (typeof window === 'undefined' || typeof window.AttendanceNotificationManager === 'undefined')) {
+// استخدام IIFE لتغليف الكود بالكامل
+(function() {
+    'use strict';
+    
+    // التحقق من وجود الـ class في window - إذا كان موجوداً، لا نعيد تعريفه
+    if (typeof window !== 'undefined' && typeof window.AttendanceNotificationManager !== 'undefined') {
+        // الـ class موجود بالفعل - نعيد تهيئة النظام فقط إذا لزم الأمر
+        if (typeof window.attendanceNotificationManager === 'undefined' || window.attendanceNotificationManager === null) {
+            try {
+                window.attendanceNotificationManager = new window.AttendanceNotificationManager();
+                window.attendanceNotificationManager.init();
+            } catch (e) {
+                console.warn('Error initializing existing AttendanceNotificationManager:', e);
+            }
+        } else if (window.attendanceNotificationManager && typeof window.attendanceNotificationManager.init === 'function') {
+            // إعادة تهيئة فقط إذا كانت الصفحة الحالية هي صفحة الحضور
+            if (window.location.pathname.includes('attendance.php') || document.body.getAttribute('data-user-role') !== 'manager') {
+                try {
+                    window.attendanceNotificationManager.init();
+                } catch (e) {
+                    console.warn('Error reinitializing attendance notifications:', e);
+                }
+            }
+        }
+        return; // الخروج من IIFE - لا نعيد تعريف الـ class
+    }
+    
+    // تعريف الـ class فقط إذا لم يكن موجوداً
     class AttendanceNotificationManager {
     constructor() {
         this.notificationPermission = null;
@@ -655,18 +681,17 @@ if (typeof AttendanceNotificationManager === 'undefined' &&
     }
 }
 
-// إغلاق الـ if statement لمنع إعادة التعريف
-}
+    // تصدير الـ class إلى window للوصول العام
+    if (typeof window !== 'undefined') {
+        window.AttendanceNotificationManager = AttendanceNotificationManager;
+    }
 
-// تهيئة النظام عند تحميل الصفحة - فقط إذا لم يتم تهيئته مسبقاً
-if (typeof window.attendanceNotificationManager === 'undefined' || window.attendanceNotificationManager === null) {
+    // تهيئة النظام عند تحميل الصفحة - فقط إذا لم يتم تهيئته مسبقاً
     let attendanceNotificationManager = null;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function() {
-            const ManagerClass = typeof AttendanceNotificationManager !== 'undefined' 
-                ? AttendanceNotificationManager 
-                : (typeof window !== 'undefined' ? window.AttendanceNotificationManager : null);
+            const ManagerClass = typeof window !== 'undefined' ? window.AttendanceNotificationManager : null;
             if (ManagerClass) {
                 attendanceNotificationManager = new ManagerClass();
                 attendanceNotificationManager.init();
@@ -677,9 +702,7 @@ if (typeof window.attendanceNotificationManager === 'undefined' || window.attend
             }
         });
     } else {
-        const ManagerClass = typeof AttendanceNotificationManager !== 'undefined' 
-            ? AttendanceNotificationManager 
-            : (typeof window !== 'undefined' ? window.AttendanceNotificationManager : null);
+        const ManagerClass = typeof window !== 'undefined' ? window.AttendanceNotificationManager : null;
         if (ManagerClass) {
             attendanceNotificationManager = new ManagerClass();
             attendanceNotificationManager.init();
@@ -689,26 +712,5 @@ if (typeof window.attendanceNotificationManager === 'undefined' || window.attend
             }
         }
     }
-} else {
-    // إذا كان النظام مهيأ بالفعل، فقط أعد تهيئته إذا لزم الأمر
-    if (window.attendanceNotificationManager && typeof window.attendanceNotificationManager.init === 'function') {
-        // إعادة تهيئة فقط إذا كانت الصفحة الحالية هي صفحة الحضور
-        if (window.location.pathname.includes('attendance.php') || document.body.getAttribute('data-user-role') !== 'manager') {
-            try {
-                window.attendanceNotificationManager.init();
-            } catch (e) {
-                console.warn('Error reinitializing attendance notifications:', e);
-            }
-        }
-    }
-}
-
-// تصدير للاستخدام العام - فقط إذا تم تعريف الـ class
-if (typeof window !== 'undefined') {
-    // التأكد من أن AttendanceNotificationManager متاح في النطاق الحالي
-    if (typeof AttendanceNotificationManager !== 'undefined') {
-        window.AttendanceNotificationManager = AttendanceNotificationManager;
-    }
-    // إذا كان موجوداً في window بالفعل، لا نفعل شيء - هذا يمنع إعادة التعريف
-}
+})(); // إغلاق IIFE
 
