@@ -302,24 +302,27 @@
             return;
         }
         
-        // إضافة علامة خاصة على الرابط لمنع sidebar.js من إغلاق الشريط الجانبي
-        link.setAttribute('data-navigating', 'true');
-        
-        // على الهاتف، إغلاق الشريط الجانبي فوراً قبل منع الانتشار
-        const isMobile = window.innerWidth <= 768;
-        if (isMobile) {
-            const dashboardWrapper = document.querySelector('.dashboard-wrapper');
-            if (dashboardWrapper && dashboardWrapper.classList.contains('sidebar-open')) {
-                dashboardWrapper.classList.remove('sidebar-open');
-                document.body.classList.remove('sidebar-open');
-            }
-        }
-        
-        // منع التنقل الافتراضي وإيقاف انتشار الحدث لمنع ajax-navigation و sidebar.js من اعتراضه
-        // يجب منع الانتشار بعد إغلاق الشريط الجانبي
+        // منع التنقل الافتراضي وإيقاف انتشار الحدث فوراً لمنع أي تداخل
+        // يجب منع الانتشار قبل أي شيء آخر
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
+        
+        // إضافة علامة خاصة على الرابط لمنع sidebar.js من إغلاق الشريط الجانبي
+        link.setAttribute('data-navigating', 'true');
+        
+        // على الهاتف، إغلاق الشريط الجانبي فوراً بعد منع الانتشار
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile) {
+            // استخدام requestAnimationFrame لضمان التنفيذ بعد منع الانتشار
+            requestAnimationFrame(() => {
+                const dashboardWrapper = document.querySelector('.dashboard-wrapper');
+                if (dashboardWrapper && dashboardWrapper.classList.contains('sidebar-open')) {
+                    dashboardWrapper.classList.remove('sidebar-open');
+                    document.body.classList.remove('sidebar-open');
+                }
+            });
+        }
         
         // إزالة العلامة بعد قليل
         setTimeout(() => {
@@ -427,8 +430,12 @@
                 return;
             }
             
+            // إزالة أي مستمعات سابقة لتجنب التكرار
+            link.removeEventListener('click', handleSidebarLinkClick, true);
+            
             // إضافة مستمع الأحداث في مرحلة الالتقاط (capture) لضمان التنفيذ قبل ajax-navigation
-            link.addEventListener('click', handleSidebarLinkClick, true);
+            // استخدام {capture: true, passive: false} لضمان إمكانية منع الانتشار
+            link.addEventListener('click', handleSidebarLinkClick, {capture: true, passive: false});
         });
         
         // معالجة النقر على شعار الشريط الجانبي أيضاً

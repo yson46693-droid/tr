@@ -3798,6 +3798,14 @@ document.addEventListener('DOMContentLoaded', function () {
     if (tableWrapper && typeof isMobile === 'function') {
         function handleActionClick(e) {
             if (!isMobile()) return;
+            
+            // التحقق من أن النقر ليس على رابط في الشريط الجانبي
+            const clickedLink = e.target.closest('.homeline-sidebar .nav-link, .sidebar .nav-link, .homeline-sidebar a, .sidebar a');
+            if (clickedLink) {
+                // لا نتعامل مع النقر على روابط الشريط الجانبي
+                return;
+            }
+            
             var btn = e.target.closest('.local-customer-purchase-history-btn');
             if (btn) {
                 e.preventDefault();
