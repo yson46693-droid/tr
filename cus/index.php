@@ -142,10 +142,13 @@ require_once __DIR__ . '/../includes/table_styles.php';
 $baseUrl = getBasePath();
 
 // إصلاح مسار ASSETS_URL - بناء المسار الصحيح من الجذر
-$basePath = getBasePath();
+$basePathForAssets = getBasePath();
 // إزالة /cus من basePath للحصول على المسار الأساسي
-$basePath = str_replace('/cus', '', $basePath);
-$basePath = rtrim($basePath, '/');
+$basePathForAssets = str_replace('/cus', '', $basePathForAssets);
+$basePathForAssets = rtrim($basePathForAssets, '/');
+
+// حفظ basePath للاستخدام في JavaScript
+$basePath = $basePathForAssets;
 
 // بناء ASSETS_URL الصحيح
 if (empty($basePath)) {
@@ -286,6 +289,125 @@ ob_start();
     
     <!-- Custom JS -->
     <script src="<?php echo $assetsUrl; ?>js/main.js?v=<?php echo $cacheVersion; ?>"></script>
+    
+    <!-- Customer Export JS - مطلوب لأزرار التصدير -->
+    <script src="<?php echo $assetsUrl; ?>js/customer_export.js?v=<?php echo $cacheVersion; ?>"></script>
+    
+    <!-- Additional JS files required for local_customers functionality -->
+    <script>
+    // تعريف دوال مساعدة مطلوبة
+    (function() {
+        'use strict';
+        
+        // دالة للتحقق من الموبايل
+        if (typeof window.checkIsMobile === 'undefined') {
+            window.checkIsMobile = function() {
+                return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+            };
+        }
+        
+        if (typeof window.isMobile === 'undefined') {
+            window.isMobile = window.checkIsMobile;
+        }
+        
+        // دالة للتمرير إلى عنصر
+        if (typeof window.doScrollToElement === 'undefined') {
+            window.doScrollToElement = function(element) {
+                if (element && element.scrollIntoView) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            };
+        }
+        
+        // دالة لإغلاق جميع النماذج
+        if (typeof window.closeAllForms === 'undefined') {
+            window.closeAllForms = function() {
+                const cards = ['importLocalCustomersCard', 'addLocalCustomerCard', 'customerExportCard', 
+                              'localCustomerPurchaseHistoryCard', 'deleteLocalCustomerCard', 
+                              'collectPaymentCard', 'viewLocationCard'];
+                cards.forEach(function(cardId) {
+                    const card = document.getElementById(cardId);
+                    if (card && card.style.display !== 'none') {
+                        card.style.display = 'none';
+                    }
+                });
+                
+                const modals = ['importLocalCustomersModal', 'addLocalCustomerModal', 'customerExportModal',
+                               'localCustomerPurchaseHistoryModal', 'deleteLocalCustomerModal',
+                               'collectPaymentModal', 'viewLocationModal'];
+                modals.forEach(function(modalId) {
+                    const modal = document.getElementById(modalId);
+                    if (modal && typeof bootstrap !== 'undefined') {
+                        const modalInstance = bootstrap.Modal.getInstance(modal);
+                        if (modalInstance) {
+                            modalInstance.hide();
+                        }
+                    }
+                });
+            };
+        }
+        
+        // دالة printDebtorCustomers
+        if (typeof window.printDebtorCustomers === 'undefined') {
+            window.printDebtorCustomers = function() {
+                const basePath = '<?php echo $basePath; ?>';
+                const printUrl = (basePath ? basePath : '') + '/print_debtor_customers.php';
+                window.open(printUrl, '_blank');
+            };
+        }
+        
+        // التأكد من أن Bootstrap متاح
+        if (typeof bootstrap === 'undefined' && typeof window.bootstrap === 'undefined') {
+            console.warn('Bootstrap is not loaded. Some modals may not work.');
+        }
+        
+        // الانتظار حتى تحميل DOM بالكامل قبل تنفيذ أي كود
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                // التأكد من أن جميع الدوال من local_customers.php متاحة
+                setTimeout(function() {
+                    // التحقق من وجود الدوال المطلوبة
+                    const requiredFunctions = [
+                        'showImportLocalCustomersModal',
+                        'showCustomerExportModal',
+                        'showAddLocalCustomerModal',
+                        'showAddRegionFromLocalCustomerModal',
+                        'showEditLocalCustomerModal',
+                        'showCollectPaymentModal',
+                        'showLocalCustomerPurchaseHistoryModal',
+                        'showDeleteLocalCustomerModal',
+                        'showLocalCustomerReturnModal',
+                        'printLocalCustomerStatement',
+                        'openLocalCustomerReturnModal',
+                        'submitLocalCustomerReturn',
+                        'closeCollectPaymentCard',
+                        'closeAddLocalCustomerCard',
+                        'closeLocalCustomerPurchaseHistoryCard',
+                        'closeViewLocationCard'
+                    ];
+                    
+                    const missingFunctions = requiredFunctions.filter(fn => typeof window[fn] === 'undefined');
+                    if (missingFunctions.length > 0) {
+                        console.warn('Missing functions:', missingFunctions);
+                    }
+                }, 1000);
+            });
+        } else {
+            // DOM محمل بالفعل
+            setTimeout(function() {
+                const requiredFunctions = [
+                    'showImportLocalCustomersModal',
+                    'showCustomerExportModal',
+                    'showAddLocalCustomerModal'
+                ];
+                const missingFunctions = requiredFunctions.filter(fn => typeof window[fn] === 'undefined');
+                if (missingFunctions.length > 0) {
+                    console.warn('Missing functions:', missingFunctions);
+                }
+            }, 1000);
+        }
+    })();
+    </script>
     
     <!-- PWA Install Script -->
     <script>
