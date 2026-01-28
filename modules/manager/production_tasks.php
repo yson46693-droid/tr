@@ -277,13 +277,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 $productQuantity = null;
+                $productUnit = trim($productData['unit'] ?? 'قطعة');
+                $allowedUnits = ['قطعة', 'كرتونة', 'عبوة', 'شرينك', 'جرام', 'كيلو'];
+                if (!in_array($productUnit, $allowedUnits, true)) {
+                    $productUnit = 'قطعة'; // القيمة الافتراضية
+                }
+                
+                // الوحدات التي يجب أن تكون أرقام صحيحة فقط
+                $integerUnits = ['كيلو', 'قطعة', 'جرام'];
+                $mustBeInteger = in_array($productUnit, $integerUnits, true);
+                
                 if ($productQuantityInput !== '') {
                     $normalizedQuantity = str_replace(',', '.', $productQuantityInput);
                     if (is_numeric($normalizedQuantity)) {
                         $productQuantity = (float)$normalizedQuantity;
+                        
+                        // التحقق من أن الكمية رقم صحيح للوحدات المحددة
+                        if ($mustBeInteger && $productQuantity != (int)$productQuantity) {
+                            $error = 'الكمية يجب أن تكون رقماً صحيحاً للوحدة "' . $productUnit . '".';
+                            break;
+                        }
+                        
                         if ($productQuantity < 0) {
                             $error = 'لا يمكن أن تكون الكمية سالبة.';
                             break;
+                        }
+                        
+                        // تحويل إلى رقم صحيح للوحدات المحددة
+                        if ($mustBeInteger) {
+                            $productQuantity = (int)$productQuantity;
                         }
                     } else {
                         $error = 'يرجى إدخال كمية صحيحة.';
@@ -293,12 +315,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 if ($productQuantity !== null && $productQuantity <= 0) {
                     $productQuantity = null;
-                }
-                
-                $productUnit = trim($productData['unit'] ?? 'قطعة');
-                $allowedUnits = ['قطعة', 'كرتونة', 'عبوة', 'شرينك', 'جرام', 'كيلو'];
-                if (!in_array($productUnit, $allowedUnits, true)) {
-                    $productUnit = 'قطعة'; // القيمة الافتراضية
                 }
                 
                 $products[] = [
@@ -753,6 +769,7 @@ try {
                 SELECT status, COUNT(*) as total
                 FROM tasks
                 WHERE created_by IN ($placeholders)
+                AND status != 'cancelled'
                 GROUP BY status
             ", $adminIds);
         } else {
@@ -812,12 +829,13 @@ try {
             $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
             $recentTasks = $db->query("
                 SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
-                       t.quantity, t.notes, t.product_id, u.full_name AS assigned_name, t.assigned_to,
+                       t.quantity, t.unit, t.notes, t.product_id, u.full_name AS assigned_name, t.assigned_to,
                        uCreator.full_name AS creator_name, t.created_by
                 FROM tasks t
                 LEFT JOIN users u ON t.assigned_to = u.id
                 LEFT JOIN users uCreator ON t.created_by = uCreator.id
                 WHERE t.created_by IN ($placeholders)
+                AND t.status != 'cancelled'
                 ORDER BY t.created_at DESC, t.id DESC
                 LIMIT 10
             ", $adminIds);
@@ -1135,11 +1153,11 @@ try {
                                         </div>
                                         <div class="col-md-3">
                                             <label class="form-label small">الكمية</label>
-                                            <input type="number" class="form-control product-quantity-input" name="products[0][quantity]" step="0.01" min="0" placeholder="مثال: 120">
+                                            <input type="number" class="form-control product-quantity-input" name="products[0][quantity]" step="1" min="0" placeholder="مثال: 120" id="product-quantity-0">
                                         </div>
                                         <div class="col-md-2">
                                             <label class="form-label small">الوحدة</label>
-                                            <select class="form-select form-select-sm product-unit-input" name="products[0][unit]">
+                                            <select class="form-select form-select-sm product-unit-input" name="products[0][unit]" id="product-unit-0" onchange="updateQuantityStep(0)">
                                                 <option value="كرتونة">كرتونة</option>
                                                 <option value="عبوة">عبوة</option>
                                                 <option value="كيلو">كيلو</option>
@@ -1408,11 +1426,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small">الكمية</label>
-                    <input type="number" class="form-control product-quantity-input" name="products[${productIndex}][quantity]" step="0.01" min="0" placeholder="مثال: 120">
+                    <input type="number" class="form-control product-quantity-input" name="products[${productIndex}][quantity]" step="1" min="0" placeholder="مثال: 120" id="product-quantity-${productIndex}">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small">الوحدة</label>
-                    <select class="form-select form-select-sm product-unit-input" name="products[${productIndex}][unit]">
+                    <select class="form-select form-select-sm product-unit-input" name="products[${productIndex}][unit]" id="product-unit-${productIndex}" onchange="updateQuantityStep(${productIndex})">
                         <option value="كرتونة">كرتونة</option>
                         <option value="عبوة">عبوة</option>
                         <option value="كيلو">كيلو</option>
@@ -1454,7 +1472,40 @@ document.addEventListener('DOMContentLoaded', function () {
     
     // تحديث حالة أزرار الحذف عند التحميل
     updateRemoveButtons();
+    
+    // تحديث step للكمية بناءً على الوحدة المختارة عند التحميل
+    document.querySelectorAll('.product-unit-input').forEach(function(unitSelect) {
+        const index = unitSelect.id.replace('product-unit-', '');
+        updateQuantityStep(index);
+    });
 });
+
+// دالة لتحديث step حقل الكمية بناءً على الوحدة المختارة
+function updateQuantityStep(index) {
+    const unitSelect = document.getElementById('product-unit-' + index);
+    const quantityInput = document.getElementById('product-quantity-' + index);
+    
+    if (!unitSelect || !quantityInput) {
+        return;
+    }
+    
+    const selectedUnit = unitSelect.value;
+    // الوحدات التي يجب أن تكون أرقام صحيحة فقط
+    const integerUnits = ['كيلو', 'قطعة', 'جرام'];
+    const mustBeInteger = integerUnits.includes(selectedUnit);
+    
+    if (mustBeInteger) {
+        quantityInput.step = '1';
+        quantityInput.setAttribute('step', '1');
+        // تحويل القيمة الحالية إلى رقم صحيح إذا كانت عشرية
+        if (quantityInput.value && quantityInput.value.includes('.')) {
+            quantityInput.value = Math.round(parseFloat(quantityInput.value));
+        }
+    } else {
+        quantityInput.step = '0.01';
+        quantityInput.setAttribute('step', '0.01');
+    }
+}
 
 // طباعة تلقائية للإيصال بعد إنشاء المهمة بنجاح
 (function() {
