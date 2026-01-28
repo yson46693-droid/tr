@@ -1132,52 +1132,52 @@ try {
         </div>
     <?php endif; ?>
 
-    <div class="row g-3 mb-4">
-        <div class="col-md-4 col-sm-6">
+    <div class="row g-2 mb-3">
+        <div class="col-4 col-sm-4 col-md-2">
             <div class="card border-primary h-100">
-                <div class="card-body text-center py-3">
+                <div class="card-body text-center py-2 px-2">
                     <div class="text-muted small mb-1">إجمالي المهام</div>
-                    <div class="fs-4 text-primary fw-semibold"><?php echo $stats['total']; ?></div>
+                    <div class="fs-5 text-primary fw-semibold"><?php echo $stats['total']; ?></div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4 col-sm-6">
+        <div class="col-4 col-sm-4 col-md-2">
             <div class="card border-warning h-100">
-                <div class="card-body text-center py-3">
+                <div class="card-body text-center py-2 px-2">
                     <div class="text-muted small mb-1">معلقة</div>
-                    <div class="fs-4 text-warning fw-semibold"><?php echo $stats['pending']; ?></div>
+                    <div class="fs-5 text-warning fw-semibold"><?php echo $stats['pending']; ?></div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4 col-sm-6">
+        <div class="col-4 col-sm-4 col-md-2">
             <div class="card border-info h-100">
-                <div class="card-body text-center py-3">
+                <div class="card-body text-center py-2 px-2">
                     <div class="text-muted small mb-1">مستلمة</div>
-                    <div class="fs-4 text-info fw-semibold"><?php echo $stats['received']; ?></div>
+                    <div class="fs-5 text-info fw-semibold"><?php echo $stats['received']; ?></div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4 col-sm-6">
+        <div class="col-4 col-sm-4 col-md-2">
             <div class="card border-info h-100">
-                <div class="card-body text-center py-3">
+                <div class="card-body text-center py-2 px-2">
                     <div class="text-muted small mb-1">قيد التنفيذ</div>
-                    <div class="fs-4 text-info fw-semibold"><?php echo $stats['in_progress']; ?></div>
+                    <div class="fs-5 text-info fw-semibold"><?php echo $stats['in_progress']; ?></div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4 col-sm-6">
+        <div class="col-4 col-sm-4 col-md-2">
             <div class="card border-success h-100">
-                <div class="card-body text-center py-3">
+                <div class="card-body text-center py-2 px-2">
                     <div class="text-muted small mb-1">مكتملة</div>
-                    <div class="fs-4 text-success fw-semibold"><?php echo $stats['completed']; ?></div>
+                    <div class="fs-5 text-success fw-semibold"><?php echo $stats['completed']; ?></div>
                 </div>
             </div>
         </div>
-        <div class="col-md-4 col-sm-6">
+        <div class="col-4 col-sm-4 col-md-2">
             <div class="card border-danger h-100">
-                <div class="card-body text-center py-3">
+                <div class="card-body text-center py-2 px-2">
                     <div class="text-muted small mb-1">ملغاة</div>
-                    <div class="fs-4 text-danger fw-semibold"><?php echo $stats['cancelled']; ?></div>
+                    <div class="fs-5 text-danger fw-semibold"><?php echo $stats['cancelled']; ?></div>
                 </div>
             </div>
         </div>
