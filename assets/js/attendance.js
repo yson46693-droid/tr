@@ -8,7 +8,11 @@ let currentAction = null;
 
 // دالة للتحقق من الموبايل
 function isMobile() {
-    return window.innerWidth <= 768;
+    // التحقق من عرض الشاشة
+    const width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
+    // التحقق من user agent أيضاً
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    return width <= 768 || isMobileUA;
 }
 
 // دالة للـ scroll تلقائي محسّنة
@@ -959,15 +963,28 @@ document.addEventListener('DOMContentLoaded', function() {
     function openCamera(action) {
         currentAction = action;
         const isMobileDevice = isMobile();
+        const screenWidth = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
         
-        console.log('openCamera called:', { action, isMobileDevice });
+        console.log('openCamera called:', { 
+            action, 
+            isMobileDevice, 
+            screenWidth,
+            userAgent: navigator.userAgent,
+            windowInnerWidth: window.innerWidth,
+            documentClientWidth: document.documentElement.clientWidth
+        });
         
         if (isMobileDevice) {
             // على الموبايل: استخدام Card
             const card = document.getElementById('cameraCard');
             const cardTitle = document.getElementById('cameraCardTitle');
             
-            console.log('Opening card:', { card: !!card, cardTitle: !!cardTitle });
+            console.log('Opening card:', { 
+                card: !!card, 
+                cardTitle: !!cardTitle,
+                cardElement: card,
+                cardComputedStyle: card ? window.getComputedStyle(card).display : 'N/A'
+            });
             
             if (card && cardTitle) {
                 // تحديث العنوان
@@ -980,16 +997,58 @@ document.addEventListener('DOMContentLoaded', function() {
                 // إعادة تعيين الحالة
                 resetCameraState(true);
                 
+                // إزالة class d-md-none إذا كان موجوداً
+                card.classList.remove('d-md-none');
+                card.classList.add('d-block', 'force-show');
+                
                 // إظهار Card - استخدام setProperty مع !important
                 card.style.setProperty('display', 'block', 'important');
                 card.style.setProperty('visibility', 'visible', 'important');
                 card.style.setProperty('opacity', '1', 'important');
+                card.style.setProperty('position', 'relative', 'important');
+                card.style.setProperty('z-index', '1000', 'important');
+                
+                // إزالة أي inline style قد يخفي البطاقة
+                if (card.style.display === 'none') {
+                    card.style.removeProperty('display');
+                    card.style.setProperty('display', 'block', 'important');
+                }
                 
                 // إجبار reflow لضمان أن البطاقة ظاهرة في DOM
                 card.offsetHeight;
                 
+                // التحقق من أن البطاقة ظاهرة بعد التعديلات
+                setTimeout(function() {
+                    const computedStyle = window.getComputedStyle(card);
+                    console.log('Card visibility check:', {
+                        inlineDisplay: card.style.display,
+                        computedDisplay: computedStyle.display,
+                        visibility: computedStyle.visibility,
+                        opacity: computedStyle.opacity,
+                        classes: card.className
+                    });
+                    
+                    // إذا كانت البطاقة لا تزال مخفية، حاول إظهارها مرة أخرى
+                    if (computedStyle.display === 'none') {
+                        console.warn('Card is still hidden, forcing display...');
+                        card.style.setProperty('display', 'block', 'important');
+                        card.style.setProperty('visibility', 'visible', 'important');
+                        card.style.setProperty('opacity', '1', 'important');
+                        // إزالة أي CSS class قد يخفي البطاقة
+                        card.classList.remove('d-none', 'd-md-none');
+                        card.classList.add('d-block', 'force-show');
+                    }
+                }, 50);
+                
                 // التمرير التلقائي للبطاقة - استخدام طرق متعددة لضمان العمل على جميع الأجهزة
                 setTimeout(function() {
+                    // التحقق مرة أخرى من أن البطاقة ظاهرة قبل التمرير
+                    const computedStyle = window.getComputedStyle(card);
+                    if (computedStyle.display === 'none') {
+                        console.error('Card is still hidden, cannot scroll to it');
+                        return;
+                    }
+                    
                     // طريقة 1: استخدام scrollIntoView (الأفضل للموبايل)
                     if (card.scrollIntoView) {
                         card.scrollIntoView({
@@ -1003,7 +1062,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     setTimeout(function() {
                         scrollToElement(card);
                     }, 100);
-                }, 100);
+                }, 150);
                 
                 // تهيئة الكاميرا بعد التأكد من أن Card مرئي
                 setTimeout(async () => {
@@ -1014,7 +1073,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }, 300);
             } else {
-                console.error('Card elements not found!', { card: !!card, cardTitle: !!cardTitle });
+                console.error('Card elements not found!', { 
+                    card: !!card, 
+                    cardTitle: !!cardTitle,
+                    cardElement: card,
+                    cardTitleElement: cardTitle
+                });
+                // محاولة إيجاد البطاقة مرة أخرى
+                const retryCard = document.getElementById('cameraCard');
+                if (retryCard) {
+                    console.log('Card found on retry, attempting to show...');
+                    retryCard.style.setProperty('display', 'block', 'important');
+                    retryCard.classList.remove('d-md-none');
+                    retryCard.classList.add('d-block');
+                }
             }
         } else {
             // على الكمبيوتر: استخدام Modal

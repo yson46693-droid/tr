@@ -708,7 +708,7 @@ $lang = isset($translations) ? $translations : [];
 
 /* إخفاء Card على الكمبيوتر */
 @media (min-width: 769px) {
-    #cameraCard {
+    #cameraCard:not(.force-show) {
         display: none !important;
     }
 }
