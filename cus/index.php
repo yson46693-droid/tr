@@ -1291,25 +1291,6 @@ if ($regionFilter !== null) {
     $statsParams[] = $regionFilter;
 }
 
-// فلتر التاريخ (تاريخ الإنشاء)
-if ($dateFrom) {
-    $sql .= " AND DATE(c.created_at) >= ?";
-    $countSql .= " AND DATE(created_at) >= ?";
-    $statsSql .= " AND DATE(created_at) >= ?";
-    $params[] = $dateFrom;
-    $countParams[] = $dateFrom;
-    $statsParams[] = $dateFrom;
-}
-
-if ($dateTo) {
-    $sql .= " AND DATE(c.created_at) <= ?";
-    $countSql .= " AND DATE(created_at) <= ?";
-    $statsSql .= " AND DATE(created_at) <= ?";
-    $params[] = $dateTo;
-    $countParams[] = $dateTo;
-    $statsParams[] = $dateTo;
-}
-
 // التحقق النهائي من وجود الجدول قبل تنفيذ الاستعلامات (فقط إذا لم يتم فحصه مسبقاً)
 if (!$tablesChecked) {
     $tableCheck = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
@@ -2187,14 +2168,6 @@ console.log('showImportLocalCustomersModal متاحة:', typeof window.showImpor
                         </option>
                     <?php endforeach; ?>
                 </select>
-            </div>
-            <div class="col-6 col-md-3 col-lg-2">
-                <label for="dateFromFilter" class="form-label small">من تاريخ</label>
-                <input type="date" class="form-control form-control-sm shadow-sm" id="dateFromFilter" name="date_from" value="<?php echo htmlspecialchars($dateFrom ?? ''); ?>">
-            </div>
-            <div class="col-6 col-md-3 col-lg-2">
-                <label for="dateToFilter" class="form-label small">إلى تاريخ</label>
-                <input type="date" class="form-control form-control-sm shadow-sm" id="dateToFilter" name="date_to" value="<?php echo htmlspecialchars($dateTo ?? ''); ?>">
             </div>
             <div class="col-6 col-md-3 col-lg-2 d-grid">
                 <button type="submit" class="btn btn-primary btn-sm">

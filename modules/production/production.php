@@ -7588,7 +7588,7 @@ $lang = isset($translations) ? $translations : [];
 
 <!-- Modal إنشاء إنتاج من قالب -->
 <div class="modal fade d-none d-md-block" id="createFromTemplateModal" tabindex="-1">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable production-template-dialog">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable production-template-dialog" style="max-height: 90vh;">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title"><i class="bi bi-file-earmark-text me-2"></i>إنشاء تشغيلة إنتاج</h5>
@@ -10052,11 +10052,17 @@ document.getElementById('createFromTemplateModal')?.addEventListener('shown.bs.m
 });
 
 document.getElementById('createFromTemplateModal')?.addEventListener('hidden.bs.modal', function() {
-    const modalBody = document.querySelector('#createFromTemplateModal .production-template-body');
+    const modalBody = document.querySelector('#createFromTemplateModal .modal-body');
+    const productionTemplateBody = document.querySelector('#createFromTemplateModal .production-template-body');
+    
+    // إعادة تعيين scroll position
     if (modalBody) {
         modalBody.scrollTop = 0;
-        modalBody.style.overflowY = '';
     }
+    if (productionTemplateBody) {
+        productionTemplateBody.scrollTop = 0;
+    }
+    
     // إعادة تعيين overflow للجسم
     document.body.style.overflow = '';
     document.body.style.paddingRight = '';
@@ -11032,21 +11038,46 @@ body.modal-open .dashboard-main {
 
 /* جعل النموذج نفسه قابل للتمرير - تصغير الطول */
 #createFromTemplateModal .modal-dialog {
-    max-height: calc(100vh - 4rem);
-    margin: 2rem auto;
-}
-
-#createFromTemplateModal .modal-content {
-    max-height: calc(100vh - 4rem);
+    max-height: 90vh;
+    margin: 1rem auto;
     display: flex;
     flex-direction: column;
 }
 
+#createFromTemplateModal .modal-content {
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
 #createFromTemplateModal .modal-body {
-    overflow-y: auto;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
     flex: 1 1 auto;
-    max-height: calc(100vh - 250px);
-    padding: 1rem 1.25rem;
+    min-height: 0;
+    max-height: calc(90vh - 120px) !important;
+    padding: 0.75rem 1rem;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* إضافة scrollbar مرئي */
+#createFromTemplateModal .modal-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+#createFromTemplateModal .modal-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+#createFromTemplateModal .modal-body::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+#createFromTemplateModal .modal-body::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }
 
 #createFromTemplateModal .modal-header {
@@ -11070,24 +11101,25 @@ body.modal-open .dashboard-main {
     }
     
     #createFromTemplateModal .modal-dialog {
-        max-height: calc(100vh - 2rem);
-        margin: 1rem 0.5rem;
+        max-height: 95vh;
+        margin: 0.5rem;
         width: calc(100% - 1rem);
     }
     
     #createFromTemplateModal .modal-content {
-        max-height: calc(100vh - 2rem);
+        max-height: 95vh;
     }
     
     #createFromTemplateModal .modal-body {
-        max-height: calc(100vh - 180px);
-        overflow-y: auto;
-        padding: 0.75rem 1rem;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding: 0.5rem 0.75rem;
+        min-height: 0;
     }
     
     #createFromTemplateModal .modal-header,
     #createFromTemplateModal .modal-footer {
-        padding: 0.5rem 1rem;
+        padding: 0.4rem 0.75rem;
     }
 }
 
@@ -11103,6 +11135,11 @@ body.modal-open .modal-backdrop {
 /* تصغير عناصر نموذج إنشاء التشغيلة */
 #createFromTemplateModal .production-template-body {
     font-size: 0.875rem;
+    overflow-y: visible;
+    overflow-x: hidden;
+    max-height: none;
+    position: relative;
+    height: auto;
 }
 
 #createFromTemplateModal .section-block {
@@ -11194,6 +11231,9 @@ body.modal-open .modal-backdrop {
 
 #createFromTemplateModal .modal-body {
     padding: 0.75rem 1rem !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    max-height: calc(90vh - 120px) !important;
 }
 
 /* تصغير عناصر الموردين */

@@ -1166,7 +1166,7 @@ try {
 <div class="card shadow-sm mt-4">
     <div class="card-header bg-primary text-white">
         <div class="d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">جميع عملاء المندوبين (<?php echo $allCustomersTotal; ?>)</h5>
+            <h5 class="mb-0">جميع عملاء المندوبين (<span id="repCustomersTotalCount"><?php echo $allCustomersTotal; ?></span>)</h5>
             <button class="btn btn-light btn-sm" id="openCustomerExportBtn" onclick="openCustomerExport()">
                 <i class="bi bi-download me-2"></i>تصدير عملاء محددين
             </button>
@@ -1176,7 +1176,7 @@ try {
         <!-- البحث والفلترة -->
         <div class="card shadow-sm mb-4">
             <div class="card-body">
-                <form method="GET" action="" class="row g-2 g-md-3 align-items-end">
+                <form method="GET" action="" class="row g-2 g-md-3 align-items-end" id="repCustomersSearchForm">
                     <input type="hidden" name="page" value="representatives_customers">
                     <div class="col-12 col-md-6 col-lg-5">
                         <label for="allCustomersSearch" class="visually-hidden">بحث عن العملاء</label>
@@ -1421,6 +1421,7 @@ try {
         </div>
         
         <!-- Pagination -->
+        <div id="repCustomersPagination">
         <?php if ($allCustomersTotalPages > 1): ?>
         <nav aria-label="Page navigation" class="mt-3">
             <ul class="pagination justify-content-center">
@@ -1470,6 +1471,7 @@ try {
             </ul>
         </nav>
         <?php endif; ?>
+        </div>
     </div>
 </div>
 
@@ -6515,5 +6517,162 @@ function closeEditRepCustomerCard() {
         }
     }
 }
+
+// البحث الديناميكي في عملاء المندوبين
+(function() {
+    const searchInput = document.getElementById('allCustomersSearch');
+    const searchForm = document.getElementById('repCustomersSearchForm');
+    const tableBody = document.getElementById('repCustomersTableBody');
+    const paginationContainer = document.getElementById('repCustomersPagination');
+    const totalCountSpan = document.getElementById('repCustomersTotalCount');
+    const repFilter = document.getElementById('allCustomersRepFilter');
+    const debtStatusFilter = document.getElementById('allCustomersDebtStatusFilter');
+    
+    let searchTimeout = null;
+    let currentAbortController = null;
+    let currentPage = <?php echo $allCustomersPageNum; ?>;
+    
+    if (!searchInput || !tableBody) {
+        return;
+    }
+    
+    // منع الإرسال الافتراضي للنموذج
+    if (searchForm) {
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            loadRepCustomers(1);
+        });
+    }
+    
+    // البحث الديناميكي عند الكتابة
+    searchInput.addEventListener('input', function() {
+        const searchValue = this.value.trim();
+        
+        // إلغاء أي timeout سابق
+        if (searchTimeout) {
+            clearTimeout(searchTimeout);
+        }
+        
+        // إلغاء أي طلب AJAX سابق
+        if (currentAbortController) {
+            currentAbortController.abort();
+        }
+        
+        // البحث بعد 300ms من توقف المستخدم عن الكتابة (debounce)
+        searchTimeout = setTimeout(function() {
+            loadRepCustomers(1);
+        }, 300);
+    });
+    
+    // البحث عند الضغط على Enter
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault();
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            loadRepCustomers(1);
+        }
+    });
+    
+    // البحث عند تغيير الفلاتر
+    if (repFilter) {
+        repFilter.addEventListener('change', function() {
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            loadRepCustomers(1);
+        });
+    }
+    
+    if (debtStatusFilter) {
+        debtStatusFilter.addEventListener('change', function() {
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            loadRepCustomers(1);
+        });
+    }
+    
+    // دالة تحميل عملاء المندوبين
+    function loadRepCustomers(page) {
+        const searchValue = searchInput.value.trim();
+        const repFilterValue = repFilter ? repFilter.value : '0';
+        const debtStatusValue = debtStatusFilter ? debtStatusFilter.value : 'all';
+        currentPage = page;
+        
+        // إلغاء أي طلب سابق
+        if (currentAbortController) {
+            currentAbortController.abort();
+        }
+        
+        // إنشاء AbortController جديد
+        currentAbortController = new AbortController();
+        
+        // إظهار مؤشر التحميل
+        tableBody.innerHTML = '<tr><td colspan="8" class="text-center"><div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">جاري التحميل...</span></div></td></tr>';
+        
+        // بناء URL للبحث
+        const params = new URLSearchParams();
+        params.append('cs', searchValue);
+        params.append('cds', debtStatusValue);
+        params.append('rep_filter', repFilterValue);
+        params.append('p', page);
+        params.append('per_page', <?php echo $allCustomersPerPage; ?>);
+        
+        // إرسال طلب AJAX
+        fetch('<?php echo getRelativeUrl("api/search_rep_customers.php"); ?>?' + params.toString(), {
+            method: 'GET',
+            credentials: 'include',
+            signal: currentAbortController.signal
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // تحديث الجدول
+                tableBody.innerHTML = data.tableRows;
+                
+                // تحديث Pagination
+                if (paginationContainer) {
+                    paginationContainer.innerHTML = data.pagination;
+                }
+                
+                // تحديث العدد الإجمالي
+                if (totalCountSpan) {
+                    totalCountSpan.textContent = data.totalCustomers;
+                }
+                
+                // تحديث URL بدون إعادة تحميل الصفحة
+                const url = new URL(window.location);
+                url.searchParams.set('cs', searchValue);
+                url.searchParams.set('cds', debtStatusValue);
+                url.searchParams.set('rep_filter', repFilterValue);
+                url.searchParams.set('cp', page);
+                window.history.pushState({}, '', url);
+            } else {
+                tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">' + (data.message || 'حدث خطأ في البحث') + '</td></tr>';
+            }
+        })
+        .catch(error => {
+            if (error.name === 'AbortError') {
+                // تم إلغاء الطلب، لا حاجة لعرض رسالة خطأ
+                return;
+            }
+            console.error('Error loading rep customers:', error);
+            tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">حدث خطأ في تحميل البيانات</td></tr>';
+        })
+        .finally(() => {
+            currentAbortController = null;
+        });
+    }
+    
+    // جعل دالة loadRepCustomers متاحة عالمياً للاستخدام من Pagination
+    window.loadRepCustomers = loadRepCustomers;
+})();
 </script>
 
