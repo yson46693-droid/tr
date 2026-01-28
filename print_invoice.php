@@ -223,7 +223,13 @@ $companyName = COMPANY_NAME;
 
                 const invoiceUrl = data.url;
                 const invoiceTitle = data.title || 'فاتورة رقم: ' + (data.invoice_number || invoiceId);
-                const fullUrl = window.location.origin + invoiceUrl;
+                
+                // التحقق من أن الرابط absolute أو نسبي
+                let fullUrl = invoiceUrl;
+                if (!invoiceUrl.startsWith('http://') && !invoiceUrl.startsWith('https://')) {
+                    // إذا كان الرابط نسبياً، أضف origin
+                    fullUrl = window.location.origin + (invoiceUrl.startsWith('/') ? invoiceUrl : '/' + invoiceUrl);
+                }
 
                 // استخدام Web Share API للمشاركة
                 try {

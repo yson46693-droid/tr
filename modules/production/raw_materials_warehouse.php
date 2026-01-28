@@ -826,7 +826,7 @@ if ($sessionSuccess) {
 
 // الحصول على القسم المطلوب (افتراضياً: العسل)
 $section = $_GET['section'] ?? 'honey';
-$validSections = ['honey', 'olive_oil', 'beeswax', 'derivatives', 'nuts', 'sesame'];
+$validSections = ['honey', 'olive_oil', 'beeswax', 'derivatives', 'nuts', 'sesame', 'date'];
 if (!in_array($section, $validSections)) {
     $section = 'honey';
 }

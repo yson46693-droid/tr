@@ -835,10 +835,16 @@ async function shareInvoiceExternal(invoiceId) {
 
         const invoiceUrl = data.url;
         const invoiceTitle = data.title || 'فاتورة رقم: ' + (data.invoice_number || invoiceId);
-        const fullUrl = window.location.origin + invoiceUrl;
+        
+        // التحقق من أن الرابط absolute أو نسبي
+        let fullUrl = invoiceUrl;
+        if (!invoiceUrl.startsWith('http://') && !invoiceUrl.startsWith('https://')) {
+            // إذا كان الرابط نسبياً، أضف origin
+            fullUrl = window.location.origin + (invoiceUrl.startsWith('/') ? invoiceUrl : '/' + invoiceUrl);
+        }
 
         // فتح صفحة الطباعة أولاً
-        const printWindow = window.open(invoiceUrl, '_blank');
+        const printWindow = window.open(invoiceUrl.startsWith('http') ? invoiceUrl : fullUrl, '_blank');
         
         // بعد فتح صفحة الطباعة، انتظر قليلاً ثم استخدم Web Share API
         setTimeout(async () => {

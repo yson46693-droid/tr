@@ -53,8 +53,8 @@ try {
         throw new InvalidArgumentException('الفاتورة غير موجودة');
     }
 
-    // إنشاء رابط الفاتورة
-    $invoiceUrl = getRelativeUrl('print_invoice.php?id=' . $invoiceId . '&format=a4');
+    // إنشاء رابط الفاتورة - استخدام absolute URL
+    $invoiceUrl = getAbsoluteUrl('print_invoice.php?id=' . $invoiceId . '&format=a4');
     $invoiceNumber = htmlspecialchars($invoice['invoice_number'] ?? 'INV-' . $invoiceId, ENT_QUOTES, 'UTF-8');
     
     // الحصول على اسم العميل إذا كان متاحاً
