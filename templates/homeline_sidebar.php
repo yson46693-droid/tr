@@ -104,11 +104,32 @@ switch ($role) {
             ],
             ['divider' => true, 'title' => isset($lang['management']) ? $lang['management'] : 'الإدارة'],
             [
-                'title' => isset($lang['menu_approvals']) ? $lang['menu_approvals'] : 'الموافقات',
-                'icon' => 'bi-check-circle',
-                'url' => $baseUrl . 'manager.php?page=approvals',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'approvals'),
-                'badge' => '<span class="badge" id="approvalBadge">0</span>'
+                'title' => 'العملاء المحليين',
+                'icon' => 'bi-people',
+                'url' => $baseUrl . 'manager.php?page=local_customers',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'local_customers'),
+                'badge' => null
+            ],
+            [
+                'title' => 'عملاء المندوبين',
+                'icon' => 'bi-people-fill',
+                'url' => $baseUrl . 'manager.php?page=representatives_customers',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'representatives_customers'),
+                'badge' => null
+            ],
+            [
+                'title' => 'خزنة الشركة',
+                'icon' => 'bi-bank',
+                'url' => $baseUrl . 'manager.php?page=company_cash',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'company_cash'),
+                'badge' => null
+            ],
+            [
+                'title' => 'طلبات الشحن',
+                'icon' => 'bi-truck',
+                'url' => $baseUrl . 'manager.php?page=shipping_orders',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'shipping_orders'),
+                'badge' => null
             ],
             [
                 'title' => ' تسجيل مهام الإنتاج',
@@ -125,24 +146,10 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => 'عملاء المندوبين',
-                'icon' => 'bi-people-fill',
-                'url' => $baseUrl . 'manager.php?page=representatives_customers',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'representatives_customers'),
-                'badge' => null
-            ],
-            [
                 'title' => 'نقطة البيع',
                 'icon' => 'bi-cart4',
                 'url' => $baseUrl . 'manager.php?page=pos',
                 'active' => ($currentPage === 'manager.php' && $currentPageParam === 'pos'),
-                'badge' => null
-            ],
-            [
-                'title' => 'طلبات الشحن',
-                'icon' => 'bi-truck',
-                'url' => $baseUrl . 'manager.php?page=shipping_orders',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'shipping_orders'),
                 'badge' => null
             ],
             [
@@ -153,74 +160,10 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => isset($lang['menu_returns_exchanges']) ? $lang['menu_returns_exchanges'] : 'المرتجعات',
-                'icon' => 'bi-arrow-left-right',
-                'url' => $baseUrl . 'manager.php?page=returns_overview',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'returns_overview'),
-                'badge' => null
-            ],
-            [
-                'title' => 'خزنة الشركة',
-                'icon' => 'bi-bank',
-                'url' => $baseUrl . 'manager.php?page=company_cash',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'company_cash'),
-                'badge' => null
-            ],
-            [
-                'title' => 'أرصدة العملاء الدائنة',
-                'icon' => 'bi-wallet2',
-                'url' => $baseUrl . 'manager.php?page=customer_credit_balances',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'customer_credit_balances'),
-                'badge' => null
-            ],
-            [
                 'title' => 'جداول التحصيل - عملاء الشركة',
                 'icon' => 'bi-calendar-check',
                 'url' => $baseUrl . 'manager.php?page=company_payment_schedules',
                 'active' => ($currentPage === 'manager.php' && $currentPageParam === 'company_payment_schedules'),
-                'badge' => null
-            ],
-            [
-                'title' => isset($lang['menu_warehouse_transfers']) ? $lang['menu_warehouse_transfers'] : 'نقل المخازن',
-                'icon' => 'bi-arrow-left-right',
-                'url' => $baseUrl . 'manager.php?page=warehouse_transfers',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'warehouse_transfers'),
-                'badge' => null
-            ],
-            [
-                'title' => 'منتجات الشركة',
-                'icon' => 'bi-box-seam',
-                'url' => $baseUrl . 'manager.php?page=company_products',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'company_products'),
-                'badge' => null
-            ],
-            [
-                'title' => 'قارئ أرقام التشغيلات',
-                'icon' => 'bi-upc-scan',
-                'url' => $baseUrl . 'manager.php?page=batch_reader',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'batch_reader'),
-                'badge' => null
-            ],
-            [
-                'title' => 'مخزن أدوات التعبئة',
-                'icon' => 'bi-box-seam',
-                'url' => $baseUrl . 'manager.php?page=packaging_warehouse',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'packaging_warehouse'),
-                'badge' => null
-            ],
-            [
-                'title' => 'مخزن الخامات',
-                'icon' => 'bi-box-seam',
-                'url' => $baseUrl . 'manager.php?page=raw_materials_warehouse',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'raw_materials_warehouse'),
-                'badge' => null
-            ],
-            ['divider' => true, 'title' => isset($lang['listing']) ? $lang['listing'] : 'القوائم'],
-            [
-                'title' => 'العملاء المحليين',
-                'icon' => 'bi-people',
-                'url' => $baseUrl . 'manager.php?page=local_customers',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'local_customers'),
                 'badge' => null
             ],
             [
@@ -231,18 +174,73 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'منتجات الشركة',
+                'icon' => 'bi-box-seam',
+                'url' => $baseUrl . 'manager.php?page=company_products',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'company_products'),
+                'badge' => null
+            ],
+            [
+                'title' => 'مخزن الخامات',
+                'icon' => 'bi-box-seam',
+                'url' => $baseUrl . 'manager.php?page=raw_materials_warehouse',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'raw_materials_warehouse'),
+                'badge' => null
+            ],
+            [
+                'title' => 'مخزن أدوات التعبئة',
+                'icon' => 'bi-box-seam',
+                'url' => $baseUrl . 'manager.php?page=packaging_warehouse',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'packaging_warehouse'),
+                'badge' => null
+            ],
+            [
                 'title' => isset($lang['menu_salaries']) ? $lang['menu_salaries'] : 'الرواتب',
                 'icon' => 'bi-currency-dollar',
                 'url' => $baseUrl . 'manager.php?page=salaries',
                 'active' => ($currentPage === 'manager.php' && $currentPageParam === 'salaries'),
                 'badge' => null
             ],
-            ['divider' => true, 'title' => isset($lang['attendance_section']) ? $lang['attendance_section'] : 'الحضور والانصراف'],
             [
                 'title' => 'متابعة الحضور والانصراف',
                 'icon' => 'bi-calendar-check',
                 'url' => $baseUrl . 'manager.php?page=attendance_management',
                 'active' => ($currentPage === 'manager.php' && $currentPageParam === 'attendance_management'),
+                'badge' => null
+            ],
+            [
+                'title' => isset($lang['menu_approvals']) ? $lang['menu_approvals'] : 'الموافقات',
+                'icon' => 'bi-check-circle',
+                'url' => $baseUrl . 'manager.php?page=approvals',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'approvals'),
+                'badge' => '<span class="badge" id="approvalBadge">0</span>'
+            ],
+            [
+                'title' => isset($lang['menu_returns_exchanges']) ? $lang['menu_returns_exchanges'] : 'المرتجعات',
+                'icon' => 'bi-arrow-left-right',
+                'url' => $baseUrl . 'manager.php?page=returns_overview',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'returns_overview'),
+                'badge' => null
+            ],
+            [
+                'title' => 'أرصدة العملاء الدائنة',
+                'icon' => 'bi-wallet2',
+                'url' => $baseUrl . 'manager.php?page=customer_credit_balances',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'customer_credit_balances'),
+                'badge' => null
+            ],
+            [
+                'title' => isset($lang['menu_warehouse_transfers']) ? $lang['menu_warehouse_transfers'] : 'نقل المخازن',
+                'icon' => 'bi-arrow-left-right',
+                'url' => $baseUrl . 'manager.php?page=warehouse_transfers',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'warehouse_transfers'),
+                'badge' => null
+            ],
+            [
+                'title' => 'قارئ أرقام التشغيلات',
+                'icon' => 'bi-upc-scan',
+                'url' => $baseUrl . 'manager.php?page=batch_reader',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'batch_reader'),
                 'badge' => null
             ],
             [
@@ -302,17 +300,10 @@ switch ($role) {
             ],
             ['divider' => true, 'title' => isset($lang['accounting_section']) ? $lang['accounting_section'] : 'المحاسبة'],
             [
-                'title' => isset($lang['menu_financial']) ? $lang['menu_financial'] : 'الخزنة',
-                'icon' => 'bi-safe',
-                'url' => $baseUrl . 'accountant.php?page=financial',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'financial'),
-                'badge' => null
-            ],
-            [
-                'title' => isset($lang['menu_suppliers']) ? $lang['menu_suppliers'] : 'الموردين',
-                'icon' => 'bi-truck',
-                'url' => $baseUrl . 'accountant.php?page=suppliers',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'suppliers'),
+                'title' => 'العملاء المحليين',
+                'icon' => 'bi-people',
+                'url' => $baseUrl . 'accountant.php?page=local_customers',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'local_customers'),
                 'badge' => null
             ],
             [
@@ -323,85 +314,12 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => 'طلبات العملاء',
-                'icon' => 'bi-bag-check',
-                'url' => $baseUrl . 'accountant.php?page=orders',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'orders'),
+                'title' => isset($lang['menu_financial']) ? $lang['menu_financial'] : 'الخزنة',
+                'icon' => 'bi-safe',
+                'url' => $baseUrl . 'accountant.php?page=financial',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'financial'),
                 'badge' => null
             ],
-            [
-                'title' => 'العملاء المحليين',
-                'icon' => 'bi-people',
-                'url' => $baseUrl . 'accountant.php?page=local_customers',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'local_customers'),
-                'badge' => null
-            ],
-            [
-                'title' => 'الفواتير',
-                'icon' => 'bi-receipt',
-                'url' => $baseUrl . 'accountant.php?page=invoices',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'invoices'),
-                'badge' => null
-            ],
-            [
-                'title' => 'أرصدة العملاء الدائنة',
-                'icon' => 'bi-wallet2',
-                'url' => $baseUrl . 'accountant.php?page=customer_credit_balances',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'customer_credit_balances'),
-                'badge' => null
-            ],
-            [
-                'title' => 'جداول التحصيل - عملاء الشركة',
-                'icon' => 'bi-calendar-check',
-                'url' => $baseUrl . 'accountant.php?page=company_payment_schedules',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'company_payment_schedules'),
-                'badge' => null
-            ],
-            [
-                'title' => 'منتجات الشركة',
-                'icon' => 'bi-box-seam',
-                'url' => $baseUrl . 'accountant.php?page=company_products',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'company_products'),
-                'badge' => null
-            ],
-            [
-                'title' => 'نقطة البيع',
-                'icon' => 'bi-cart4',
-                'url' => $baseUrl . 'accountant.php?page=pos',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'pos'),
-                'badge' => null
-            ],
-           
-            [
-                'title' => isset($lang['menu_attendance']) ? $lang['menu_attendance'] : 'الحضور',
-                'icon' => 'bi-calendar-check',
-                'url' => getRelativeUrl('attendance.php'),
-                'active' => ($currentPage === 'attendance.php'),
-                'badge' => null
-            ],
-            ['divider' => true, 'title' => isset($lang['attendance_management']) ? $lang['attendance_management'] : 'إدارة الحضور'],
-            [
-                'title' => isset($lang['menu_salaries']) ? $lang['menu_salaries'] : 'الرواتب',
-                'icon' => 'bi-currency-dollar',
-                'url' => $baseUrl . 'accountant.php?page=salaries',
-                'active' => ($currentPage === 'accountant.php' && ($currentPageParam === 'salaries' || $currentPageParam === 'salary_details')),
-                'badge' => null
-            ],
-            [
-                'title' => isset($lang['my_salary']) ? $lang['my_salary'] : 'مرتبي',
-                'icon' => 'bi-wallet2',
-                'url' => $baseUrl . 'accountant.php?page=my_salary',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'my_salary'),
-                'badge' => null
-            ],
-            [
-                'title' => 'متابعة الحضور والانصراف',
-                'icon' => 'bi-bar-chart',
-                'url' => $baseUrl . 'accountant.php?page=attendance_management',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'attendance_management'),
-                'badge' => null
-            ],
-            ['divider' => true, 'title' => 'الإدارة والعمليات'],
             [
                 'title' => 'طلبات الشحن',
                 'icon' => 'bi-truck',
@@ -417,13 +335,103 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'طلبات العملاء',
+                'icon' => 'bi-bag-check',
+                'url' => $baseUrl . 'accountant.php?page=orders',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'orders'),
+                'badge' => null
+            ],
+            [
+                'title' => 'نقطة البيع',
+                'icon' => 'bi-cart4',
+                'url' => $baseUrl . 'accountant.php?page=pos',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'pos'),
+                'badge' => null
+            ],
+            [
+                'title' => 'الفواتير',
+                'icon' => 'bi-receipt',
+                'url' => $baseUrl . 'accountant.php?page=invoices',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'invoices'),
+                'badge' => null
+            ],
+            [
+                'title' => 'جداول التحصيل - عملاء الشركة',
+                'icon' => 'bi-calendar-check',
+                'url' => $baseUrl . 'accountant.php?page=company_payment_schedules',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'company_payment_schedules'),
+                'badge' => null
+            ],
+            [
+                'title' => isset($lang['menu_suppliers']) ? $lang['menu_suppliers'] : 'الموردين',
+                'icon' => 'bi-truck',
+                'url' => $baseUrl . 'accountant.php?page=suppliers',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'suppliers'),
+                'badge' => null
+            ],
+            [
+                'title' => 'منتجات الشركة',
+                'icon' => 'bi-box-seam',
+                'url' => $baseUrl . 'accountant.php?page=company_products',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'company_products'),
+                'badge' => null
+            ],
+            [
+                'title' => 'مخزن الخامات',
+                'icon' => 'bi-droplet',
+                'url' => $baseUrl . 'accountant.php?page=raw_materials_warehouse',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'raw_materials_warehouse'),
+                'badge' => null
+            ],
+            [
+                'title' => 'مخزن أدوات التعبئة',
+                'icon' => 'bi-box-seam',
+                'url' => $baseUrl . 'accountant.php?page=packaging_warehouse',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'packaging_warehouse'),
+                'badge' => null
+            ],
+            [
+                'title' => isset($lang['menu_salaries']) ? $lang['menu_salaries'] : 'الرواتب',
+                'icon' => 'bi-currency-dollar',
+                'url' => $baseUrl . 'accountant.php?page=salaries',
+                'active' => ($currentPage === 'accountant.php' && ($currentPageParam === 'salaries' || $currentPageParam === 'salary_details')),
+                'badge' => null
+            ],
+            [
+                'title' => 'متابعة الحضور والانصراف',
+                'icon' => 'bi-bar-chart',
+                'url' => $baseUrl . 'accountant.php?page=attendance_management',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'attendance_management'),
+                'badge' => null
+            ],
+            [
+                'title' => 'أرصدة العملاء الدائنة',
+                'icon' => 'bi-wallet2',
+                'url' => $baseUrl . 'accountant.php?page=customer_credit_balances',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'customer_credit_balances'),
+                'badge' => null
+            ],
+            [
+                'title' => isset($lang['menu_attendance']) ? $lang['menu_attendance'] : 'الحضور',
+                'icon' => 'bi-calendar-check',
+                'url' => getRelativeUrl('attendance.php'),
+                'active' => ($currentPage === 'attendance.php'),
+                'badge' => null
+            ],
+            [
+                'title' => isset($lang['my_salary']) ? $lang['my_salary'] : 'مرتبي',
+                'icon' => 'bi-wallet2',
+                'url' => $baseUrl . 'accountant.php?page=my_salary',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'my_salary'),
+                'badge' => null
+            ],
+            [
                 'title' => 'المرتجعات',
                 'icon' => 'bi-arrow-return-left',
                 'url' => $baseUrl . 'accountant.php?page=returns',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'returns'),
                 'badge' => null
             ],
-            
             [
                 'title' => 'السيارات',
                 'icon' => 'bi-car-front',
@@ -438,21 +446,6 @@ switch ($role) {
                 'active' => ($currentPage === 'manager.php' && $currentPageParam === 'reports'),
                 'badge' => null
             ],
-            ['divider' => true, 'title' => 'المخازن'],
-            [
-                'title' => 'مخزن أدوات التعبئة',
-                'icon' => 'bi-box-seam',
-                'url' => $baseUrl . 'accountant.php?page=packaging_warehouse',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'packaging_warehouse'),
-                'badge' => null
-            ],
-            [
-                'title' => 'مخزن الخامات',
-                'icon' => 'bi-droplet',
-                'url' => $baseUrl . 'accountant.php?page=raw_materials_warehouse',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'raw_materials_warehouse'),
-                'badge' => null
-            ],
             [
                 'title' => 'نقل المنتجات',
                 'icon' => 'bi-arrow-left-right',
@@ -460,7 +453,6 @@ switch ($role) {
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'warehouse_transfers'),
                 'badge' => null
             ],
-            ['divider' => true, 'title' => 'أدوات'],
             [
                 'title' => 'مخزن توالف المصنع',
                 'icon' => 'bi-trash',
