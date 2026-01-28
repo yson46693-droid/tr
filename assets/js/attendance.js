@@ -19,32 +19,23 @@ function isMobile() {
 function scrollToElement(element) {
     if (!element) return;
     
-    // استخدام scrollIntoView كطريقة أساسية (أفضل للموبايل)
-    if (element.scrollIntoView) {
-        element.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start',
-            inline: 'nearest'
-        });
-    } else {
-        // طريقة بديلة للـ scroll
-        setTimeout(function() {
-            // استخدام getBoundingClientRect للحصول على الموضع النسبي
-            const rect = element.getBoundingClientRect();
-            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-            const elementTop = rect.top + scrollTop;
-            const offset = 80; // offset من الأعلى (لإعطاء مساحة للـ header)
-            const targetPosition = elementTop - offset;
-            
-            // استخدام requestAnimationFrame لضمان smooth scroll
-            requestAnimationFrame(function() {
-                window.scrollTo({
-                    top: Math.max(0, targetPosition), // التأكد من عدم السكرول لأعلى من الصفحة
-                    behavior: 'smooth'
-                });
+    // الانتظار قليلاً للتأكد من أن العنصر ظاهر
+    setTimeout(function() {
+        // استخدام getBoundingClientRect للحصول على الموضع النسبي
+        const rect = element.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const elementTop = rect.top + scrollTop;
+        const offset = 80; // offset من الأعلى (لإعطاء مساحة للـ header)
+        const targetPosition = elementTop - offset;
+        
+        // استخدام requestAnimationFrame لضمان smooth scroll
+        requestAnimationFrame(function() {
+            window.scrollTo({
+                top: Math.max(0, targetPosition), // التأكد من عدم السكرول لأعلى من الصفحة
+                behavior: 'smooth'
             });
-        }, 100);
-    }
+        });
+    }, 200);
 }
 
 // الحصول على API path ديناميكياً
@@ -785,8 +776,6 @@ async function updateTimeSummary() {
 
 // معالجة فتح الـ modal
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Attendance.js: DOMContentLoaded event fired');
-    
     const cameraModal = document.getElementById('cameraModal');
     const checkInBtn = document.getElementById('checkInBtn');
     const checkOutBtn = document.getElementById('checkOutBtn');
@@ -795,25 +784,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const submitBtn = document.getElementById('submitBtn');
     const cancelBtn = document.getElementById('cancelBtn');
     
-    console.log('Attendance.js: Elements found:', {
-        cameraModal: !!cameraModal,
-        checkInBtn: !!checkInBtn,
-        checkOutBtn: !!checkOutBtn,
-        captureBtn: !!captureBtn,
-        retakeBtn: !!retakeBtn,
-        submitBtn: !!submitBtn,
-        cancelBtn: !!cancelBtn
-    });
-    
-    // التحقق من وجود الأزرار الأساسية
-    if (!checkInBtn && !checkOutBtn) {
-        console.error('Attendance buttons not found');
-        return;
-    }
-    
-    // التحقق من وجود cameraModal (قد لا يكون موجوداً على الموبايل)
+    // التحقق من وجود العناصر
     if (!cameraModal) {
-        console.warn('Camera modal not found - mobile mode expected');
+        console.error('Camera modal not found');
+        return;
     }
     
     // دالة لإزالة backdrop
@@ -829,8 +803,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // عند فتح الـ modal (للكمبيوتر فقط)
-    if (cameraModal) {
-        cameraModal.addEventListener('show.bs.modal', function(event) {
+    cameraModal.addEventListener('show.bs.modal', function(event) {
         const button = event.relatedTarget;
         
         // إذا لم يكن button موجوداً (أي تم فتح الـ modal برمجياً)، استخدم currentAction
@@ -867,8 +840,8 @@ document.addEventListener('DOMContentLoaded', function() {
         cameraModal.dataset.backdropInterval = backdropInterval;
     });
     
-        // عند اكتمال فتح الـ modal (بعد أن يكون مرئياً تماماً) - مهم جداً للموبايل
-        cameraModal.addEventListener('shown.bs.modal', function(event) {
+    // عند اكتمال فتح الـ modal (بعد أن يكون مرئياً تماماً) - مهم جداً للموبايل
+    cameraModal.addEventListener('shown.bs.modal', function(event) {
         // كشف ما إذا كان الجهاز موبايل
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
@@ -934,8 +907,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-        // عند إغلاق الـ modal
-        cameraModal.addEventListener('hidden.bs.modal', function() {
+    // عند إغلاق الـ modal
+    cameraModal.addEventListener('hidden.bs.modal', function() {
         stopCamera();
         capturedPhoto = null;
         currentAction = null;
@@ -953,42 +926,26 @@ document.addEventListener('DOMContentLoaded', function() {
             delete cameraModal.dataset.backdropInterval;
         }
         
-            // إزالة backdrop نهائياً
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            backdrops.forEach(backdrop => backdrop.remove());
-        });
-    }
+        // إزالة backdrop نهائياً
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(backdrop => backdrop.remove());
+    });
     
     // دالة لفتح الكاميرا (Modal للكمبيوتر أو Card للموبايل)
     function openCamera(action) {
         currentAction = action;
         const isMobileDevice = isMobile();
-        const screenWidth = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
         
-        console.log('openCamera called:', { 
-            action, 
-            isMobileDevice, 
-            screenWidth,
-            userAgent: navigator.userAgent,
-            windowInnerWidth: window.innerWidth,
-            documentClientWidth: document.documentElement.clientWidth
-        });
+        console.log('openCamera called:', { action, isMobileDevice });
         
         if (isMobileDevice) {
             // على الموبايل: استخدام Card
             const card = document.getElementById('cameraCard');
             const cardTitle = document.getElementById('cameraCardTitle');
             
-            console.log('Opening card:', { 
-                card: !!card, 
-                cardTitle: !!cardTitle,
-                cardElement: card,
-                cardComputedStyle: card ? window.getComputedStyle(card).display : 'N/A'
-            });
+            console.log('Opening card:', { card: !!card, cardTitle: !!cardTitle });
             
             if (card && cardTitle) {
-                console.log('Card found, preparing to show...');
-                
                 // تحديث العنوان
                 if (action === 'check_in') {
                     cardTitle.textContent = 'تسجيل الحضور - التقاط صورة';
@@ -999,107 +956,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 // إعادة تعيين الحالة
                 resetCameraState(true);
                 
-                // إزالة جميع classes التي قد تخفي البطاقة
-                card.classList.remove('d-none', 'd-md-none');
-                card.classList.add('d-block', 'force-show');
-                
-                // إزالة أي inline style قد يخفي البطاقة أولاً
-                card.style.removeProperty('display');
-                card.style.removeProperty('visibility');
-                card.style.removeProperty('opacity');
-                
                 // إظهار Card - استخدام setProperty مع !important
                 card.style.setProperty('display', 'block', 'important');
                 card.style.setProperty('visibility', 'visible', 'important');
                 card.style.setProperty('opacity', '1', 'important');
-                card.style.setProperty('position', 'relative', 'important');
-                card.style.setProperty('z-index', '1000', 'important');
                 
-                // إجبار reflow لضمان أن البطاقة ظاهرة في DOM
-                card.offsetHeight;
-                
-                console.log('Card styles applied:', {
-                    display: card.style.display,
-                    visibility: card.style.visibility,
-                    opacity: card.style.opacity,
-                    classes: card.className
-                });
-                
-                // التحقق من أن البطاقة ظاهرة بعد التعديلات
+                // التمرير التلقائي
                 setTimeout(function() {
-                    const computedStyle = window.getComputedStyle(card);
-                    console.log('Card visibility check:', {
-                        inlineDisplay: card.style.display,
-                        computedDisplay: computedStyle.display,
-                        visibility: computedStyle.visibility,
-                        opacity: computedStyle.opacity,
-                        classes: card.className
-                    });
-                    
-                    // إذا كانت البطاقة لا تزال مخفية، حاول إظهارها مرة أخرى
-                    if (computedStyle.display === 'none') {
-                        console.warn('Card is still hidden, forcing display...');
-                        card.style.setProperty('display', 'block', 'important');
-                        card.style.setProperty('visibility', 'visible', 'important');
-                        card.style.setProperty('opacity', '1', 'important');
-                        // إزالة أي CSS class قد يخفي البطاقة
-                        card.classList.remove('d-none', 'd-md-none');
-                        card.classList.add('d-block', 'force-show');
-                    }
+                    scrollToElement(card);
                 }, 50);
-                
-                // التمرير التلقائي للبطاقة - استخدام طرق متعددة لضمان العمل على جميع الأجهزة
-                setTimeout(function() {
-                    // التحقق مرة أخرى من أن البطاقة ظاهرة قبل التمرير
-                    const computedStyle = window.getComputedStyle(card);
-                    console.log('Before scroll - Card computed style:', {
-                        display: computedStyle.display,
-                        visibility: computedStyle.visibility,
-                        opacity: computedStyle.opacity
-                    });
-                    
-                    if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
-                        console.error('Card is still hidden, forcing display again...');
-                        // محاولة إجبار الإظهار مرة أخرى
-                        card.style.setProperty('display', 'block', 'important');
-                        card.style.setProperty('visibility', 'visible', 'important');
-                        card.style.setProperty('opacity', '1', 'important');
-                        card.classList.remove('d-none', 'd-md-none');
-                        card.classList.add('d-block', 'force-show');
-                        
-                        // انتظر قليلاً ثم حاول التمرير مرة أخرى
-                        setTimeout(function() {
-                            if (card.scrollIntoView) {
-                                card.scrollIntoView({
-                                    behavior: 'smooth',
-                                    block: 'start',
-                                    inline: 'nearest'
-                                });
-                            }
-                            scrollToElement(card);
-                        }, 100);
-                        return;
-                    }
-                    
-                    // طريقة 1: استخدام scrollIntoView (الأفضل للموبايل)
-                    if (card.scrollIntoView) {
-                        try {
-                            card.scrollIntoView({
-                                behavior: 'smooth',
-                                block: 'start',
-                                inline: 'nearest'
-                            });
-                            console.log('ScrollIntoView executed successfully');
-                        } catch (e) {
-                            console.error('Error in scrollIntoView:', e);
-                        }
-                    }
-                    
-                    // طريقة 2: استخدام دالة scrollToElement كبديل
-                    setTimeout(function() {
-                        scrollToElement(card);
-                    }, 100);
-                }, 200);
                 
                 // تهيئة الكاميرا بعد التأكد من أن Card مرئي
                 setTimeout(async () => {
@@ -1108,22 +973,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     } catch (error) {
                         console.error('Error initializing camera in card:', error);
                     }
-                }, 300);
+                }, 200);
             } else {
-                console.error('Card elements not found!', { 
-                    card: !!card, 
-                    cardTitle: !!cardTitle,
-                    cardElement: card,
-                    cardTitleElement: cardTitle
-                });
-                // محاولة إيجاد البطاقة مرة أخرى
-                const retryCard = document.getElementById('cameraCard');
-                if (retryCard) {
-                    console.log('Card found on retry, attempting to show...');
-                    retryCard.style.setProperty('display', 'block', 'important');
-                    retryCard.classList.remove('d-md-none');
-                    retryCard.classList.add('d-block');
-                }
+                console.error('Card elements not found!', { card: !!card, cardTitle: !!cardTitle });
             }
         } else {
             // على الكمبيوتر: استخدام Modal
@@ -1227,37 +1079,27 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // إضافة event listeners للأزرار مع التحقق من حالة التعطيل
     if (checkInBtn) {
-        console.log('Adding event listener to checkInBtn');
         checkInBtn.addEventListener('click', function(e) {
-            console.log('checkInBtn clicked', { disabled: checkInBtn.disabled });
             if (checkInBtn.disabled) {
                 e.preventDefault();
                 e.stopPropagation();
                 return false;
             }
             // تعيين الإجراء وفتح modal/card
-            console.log('Calling openCamera with check_in');
             openCamera('check_in');
         });
-    } else {
-        console.error('checkInBtn not found!');
     }
     
     if (checkOutBtn) {
-        console.log('Adding event listener to checkOutBtn');
         checkOutBtn.addEventListener('click', function(e) {
-            console.log('checkOutBtn clicked', { disabled: checkOutBtn.disabled });
             if (checkOutBtn.disabled) {
                 e.preventDefault();
                 e.stopPropagation();
                 return false;
             }
             // تعيين الإجراء وفتح modal/card
-            console.log('Calling openCamera with check_out');
             openCamera('check_out');
         });
-    } else {
-        console.error('checkOutBtn not found!');
     }
     
     // أحداث الأزرار (Modal)
