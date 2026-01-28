@@ -1096,11 +1096,13 @@ try {
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">اختر العمال المستهدفين</label>
-                            <select class="form-select form-select-sm" name="assigned_to[]" multiple required size="3">
-                                <?php foreach ($productionUsers as $worker): ?>
-                                    <option value="<?php echo (int)$worker['id']; ?>"><?php echo htmlspecialchars($worker['full_name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
+                            <div style="max-height: 120px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0.375rem;">
+                                <select class="form-select form-select-sm border-0" name="assigned_to[]" multiple required style="max-height: 100px;">
+                                    <?php foreach ($productionUsers as $worker): ?>
+                                        <option value="<?php echo (int)$worker['id']; ?>"><?php echo htmlspecialchars($worker['full_name']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
                             <div class="form-text small">يمكن تحديد أكثر من عامل باستخدام زر CTRL أو SHIFT.</div>
                         </div>
                         <div class="col-md-9">
@@ -1171,8 +1173,9 @@ try {
                                 <td colspan="7" class="text-center text-muted py-4">لم يتم إنشاء مهام بعد.</td>
                             </tr>
                         <?php else: ?>
-                            <?php foreach ($recentTasks as $task): ?>
+                            <?php foreach ($recentTasks as $index => $task): ?>
                                 <tr>
+                                    <td><strong>#<?php echo (int)$task['id']; ?></strong></td>
                                     <td>
                                         <strong><?php echo htmlspecialchars($task['title']); ?></strong>
                                         <?php 
@@ -1234,7 +1237,6 @@ try {
                                         </span>
                                     </td>
                                     <td><?php echo $task['due_date'] ? htmlspecialchars($task['due_date']) : '<span class="text-muted">غير محدد</span>'; ?></td>
-                                    <td><?php echo htmlspecialchars($task['created_at']); ?></td>
                                     <td>
                                         <div class="btn-group btn-group-sm" role="group">
                                             <?php if ($isAccountant || $isManager || $isAdmin || $isProduction || $isDeveloper): ?>

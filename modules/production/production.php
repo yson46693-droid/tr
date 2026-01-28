@@ -1837,6 +1837,17 @@ $hasUserIdColumn = !empty($userIdColumnCheck);
 $hasWorkerIdColumn = !empty($workerIdColumnCheck);
 $userIdColumn = $hasUserIdColumn ? 'user_id' : ($hasWorkerIdColumn ? 'worker_id' : null);
 
+// التحقق من وجود عمود unit في جدول production وإضافته إذا لم يكن موجوداً
+try {
+    $unitColumnCheck = $db->queryOne("SHOW COLUMNS FROM production LIKE 'unit'");
+    if (empty($unitColumnCheck)) {
+        $db->execute("ALTER TABLE production ADD COLUMN unit VARCHAR(50) NULL DEFAULT 'كيلو' AFTER quantity");
+        error_log('Added unit column to production table in production.php');
+    }
+} catch (Exception $e) {
+    error_log('Error checking/adding unit column in production table: ' . $e->getMessage());
+}
+
 // معالجة الطلبات
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -1865,7 +1876,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['last_submit_token'] = $submitToken;
         $productId = intval($_POST['product_id'] ?? 0);
         $quantity = floatval($_POST['quantity'] ?? 0);
-        $unit = 'kg';
+        $unit = trim($_POST['unit'] ?? 'كيلو');
+        // التحقق من أن الوحدة من القيم المسموحة
+        $allowedUnits = ['قطعة', 'كرتونة', 'شرينك', 'جرام', 'كيلو'];
+        if (!in_array($unit, $allowedUnits, true)) {
+            $unit = 'كيلو'; // القيمة الافتراضية
+        }
         $productionDate = $_POST['production_date'] ?? date('Y-m-d');
         $notes = trim($_POST['notes'] ?? '');
         $materialsUsed = trim($_POST['materials_used'] ?? '');
@@ -1944,7 +1960,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $productionId = intval($_POST['production_id'] ?? 0);
         $productId = intval($_POST['product_id'] ?? 0);
         $quantity = floatval($_POST['quantity'] ?? 0);
-        $unit = 'kg';
+        $unit = trim($_POST['unit'] ?? 'كيلو');
+        // التحقق من أن الوحدة من القيم المسموحة
+        $allowedUnits = ['قطعة', 'كرتونة', 'شرينك', 'جرام', 'كيلو'];
+        if (!in_array($unit, $allowedUnits, true)) {
+            $unit = 'كيلو'; // القيمة الافتراضية
+        }
         $productionDate = $_POST['production_date'] ?? date('Y-m-d');
         $notes = trim($_POST['notes'] ?? '');
         $materialsUsed = trim($_POST['materials_used'] ?? '');
@@ -1958,8 +1979,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'يجب إدخال كمية صحيحة';
         } else {
             // بناء الاستعلام ديناميكيًا بحسب الأعمدة المتاحة
-            $setParts = ['product_id = ?', 'quantity = ?'];
-            $values = [$productId, $quantity];
+            $setParts = ['product_id = ?', 'quantity = ?', 'unit = ?'];
+            $values = [$productId, $quantity, $unit];
             
             // تحديث عمود التاريخ
             $setParts[] = "$dateColumn = ?";
@@ -7757,9 +7778,14 @@ $lang = isset($translations) ? $translations : [];
                             <input type="number" step="0.01" name="quantity" class="form-control" required min="0.01">
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label d-block">الوحدة</label>
-                            <div class="form-control-plaintext fw-semibold">كجم</div>
-                            <input type="hidden" name="unit" value="kg">
+                            <label class="form-label">الوحدة</label>
+                            <select name="unit" class="form-select">
+                                <option value="قطعة">قطعة</option>
+                                <option value="كرتونة">كرتونة</option>
+                                <option value="شرينك">شرينك</option>
+                                <option value="جرام">جرام</option>
+                                <option value="كيلو" selected>كيلو</option>
+                            </select>
                         </div>
                     </div>
                     <div class="row mb-3">
@@ -8030,9 +8056,14 @@ $lang = isset($translations) ? $translations : [];
                 <input type="number" step="0.01" name="quantity" class="form-control" required min="0.01">
             </div>
             <div class="mb-3">
-                <label class="form-label d-block">الوحدة</label>
-                <div class="form-control-plaintext fw-semibold">كجم</div>
-                <input type="hidden" name="unit" value="kg">
+                <label class="form-label">الوحدة</label>
+                <select name="unit" class="form-select">
+                    <option value="قطعة">قطعة</option>
+                    <option value="كرتونة">كرتونة</option>
+                    <option value="شرينك">شرينك</option>
+                    <option value="جرام">جرام</option>
+                    <option value="كيلو" selected>كيلو</option>
+                </select>
             </div>
             <div class="mb-3">
                 <label class="form-label"><?php echo isset($lang['date']) ? $lang['date'] : 'تاريخ الإنتاج'; ?> <span class="text-danger">*</span></label>
@@ -8094,9 +8125,14 @@ $lang = isset($translations) ? $translations : [];
                 <input type="number" step="0.01" name="quantity" id="edit_quantity_card" class="form-control" required min="0.01">
             </div>
             <div class="mb-3">
-                <label class="form-label d-block">الوحدة</label>
-                <div class="form-control-plaintext fw-semibold" id="edit_unit_display_card">كجم</div>
-                <input type="hidden" name="unit" id="edit_unit_card" value="kg">
+                <label class="form-label">الوحدة</label>
+                <select name="unit" id="edit_unit_card" class="form-select">
+                    <option value="قطعة">قطعة</option>
+                    <option value="كرتونة">كرتونة</option>
+                    <option value="شرينك">شرينك</option>
+                    <option value="جرام">جرام</option>
+                    <option value="كيلو" selected>كيلو</option>
+                </select>
             </div>
             <div class="mb-3">
                 <label class="form-label"><?php echo isset($lang['date']) ? $lang['date'] : 'تاريخ الإنتاج'; ?> <span class="text-danger">*</span></label>
@@ -9743,6 +9779,9 @@ function editProduction(id) {
                 document.getElementById('edit_production_id').value = data.production.id;
                 document.getElementById('edit_product_id').value = data.production.product_id;
                 document.getElementById('edit_quantity').value = data.production.quantity;
+                if (document.getElementById('edit_unit')) {
+                    document.getElementById('edit_unit').value = data.production.unit || 'كيلو';
+                }
                 document.getElementById('edit_production_date').value = data.production.date;
                 document.getElementById('edit_materials_used').value = data.production.materials_used || '';
                 document.getElementById('edit_notes').value = data.production.notes || '';
@@ -10945,6 +10984,9 @@ window.editProduction = function(id) {
                         document.getElementById('edit_production_id_card').value = data.production.id;
                         document.getElementById('edit_product_id_card').value = data.production.product_id;
                         document.getElementById('edit_quantity_card').value = data.production.quantity;
+                        if (document.getElementById('edit_unit_card')) {
+                            document.getElementById('edit_unit_card').value = data.production.unit || 'كيلو';
+                        }
                         document.getElementById('edit_production_date_card').value = data.production.date;
                         document.getElementById('edit_materials_used_card').value = data.production.materials_used || '';
                         document.getElementById('edit_notes_card').value = data.production.notes || '';
@@ -10963,6 +11005,9 @@ window.editProduction = function(id) {
                     document.getElementById('edit_production_id').value = data.production.id;
                     document.getElementById('edit_product_id').value = data.production.product_id;
                     document.getElementById('edit_quantity').value = data.production.quantity;
+                    if (document.getElementById('edit_unit')) {
+                        document.getElementById('edit_unit').value = data.production.unit || 'كيلو';
+                    }
                     document.getElementById('edit_production_date').value = data.production.date;
                     document.getElementById('edit_materials_used').value = data.production.materials_used || '';
                     document.getElementById('edit_notes').value = data.production.notes || '';
