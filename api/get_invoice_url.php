@@ -27,6 +27,7 @@ try {
     require_once __DIR__ . '/../includes/invoices.php';
     require_once __DIR__ . '/../includes/path_helper.php';
     require_once __DIR__ . '/../includes/auth.php';
+    require_once __DIR__ . '/../includes/pdf_helper.php';
 } catch (Throwable $e) {
     error_log('get_invoice_url bootstrap error: ' . $e->getMessage());
     http_response_code(500);
@@ -61,7 +62,7 @@ try {
         $customerName = htmlspecialchars($invoice['customer_name'], ENT_QUOTES, 'UTF-8');
     }
 
-    // إنشاء محتوى HTML للفاتورة باستخدام نفس طريقة share_invoice.php
+    // إنشاء محتوى HTML للفاتورة (HTML كامل مع head و body)
     ob_start();
     
     // إعداد المتغيرات المطلوبة (نفس المتغيرات في print_invoice.php)
@@ -69,6 +70,36 @@ try {
     $invoiceData = $invoice;
     $companyName = COMPANY_NAME;
     $printFormat = 'a4';
+    
+    // بدء HTML كامل
+    echo '<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فاتورة ' . htmlspecialchars($invoiceNumber) . '</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: "Tajawal", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: #ffffff;
+            padding: 20px;
+            color: #1f2937;
+        }
+        @media print {
+            body {
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>';
     
     // تضمين ملف طباعة الفاتورة
     $invoicePrintPath = __DIR__ . '/../old-recipt.php';
@@ -80,26 +111,48 @@ try {
         throw new RuntimeException('ملف طباعة الفاتورة غير موجود');
     }
     
+    echo '</body>
+</html>';
+    
     $invoiceHtml = ob_get_clean();
 
     if (empty($invoiceHtml)) {
         throw new RuntimeException('فشل في إنشاء محتوى الفاتورة');
     }
 
-    // حفظ HTML كملف في مجلد uploads
+    // إنشاء مجلد uploads/invoices إذا لم يكن موجوداً
     $uploadDir = __DIR__ . '/../uploads/invoices/';
     if (!is_dir($uploadDir)) {
         mkdir($uploadDir, 0755, true);
     }
 
-    // إنشاء اسم ملف فريد
+    // إنشاء اسم ملف PDF فريد
     $normalizedNumber = preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) $invoiceNumber);
-    $filename = 'invoice-' . $normalizedNumber . '-' . date('Ymd-His') . '-' . uniqid() . '.html';
+    $filename = 'invoice-' . $normalizedNumber . '-' . date('Ymd-His') . '-' . uniqid() . '.pdf';
     $filepath = $uploadDir . $filename;
 
-    // حفظ الملف
-    if (file_put_contents($filepath, $invoiceHtml) === false) {
-        throw new RuntimeException('فشل في حفظ ملف الفاتورة');
+    // تحويل HTML إلى PDF وحفظه
+    try {
+        apdfSavePdfToPath($invoiceHtml, $filepath, [
+            'pageSize' => 'A4',
+            'printBackground' => true,
+            'margin' => [
+                'top' => '15mm',
+                'right' => '12mm',
+                'bottom' => '15mm',
+                'left' => '12mm',
+            ],
+        ]);
+    } catch (Throwable $pdfError) {
+        error_log('PDF generation error: ' . $pdfError->getMessage());
+        // في حالة فشل إنشاء PDF، حفظ HTML كبديل
+        $htmlFilename = str_replace('.pdf', '.html', $filename);
+        $htmlFilepath = $uploadDir . $htmlFilename;
+        if (file_put_contents($htmlFilepath, $invoiceHtml) === false) {
+            throw new RuntimeException('فشل في حفظ ملف الفاتورة');
+        }
+        $filename = $htmlFilename;
+        $filepath = $htmlFilepath;
     }
 
     // إنشاء رابط الملف - استخدام absolute URL
@@ -120,11 +173,14 @@ try {
     // رابط الطباعة أيضاً (بدون api/)
     $printUrl = $protocol . $host . $basePath . '/print_invoice.php?id=' . $invoiceId . '&format=a4';
 
+    $isPdf = strpos($filename, '.pdf') !== false;
+    
     echo json_encode([
         'success' => true,
         'url' => $printUrl,
         'file_url' => $fileUrl,
         'file_path' => $relativeUrl,
+        'file_type' => $isPdf ? 'pdf' : 'html',
         'invoice_number' => $invoiceNumber,
         'customer_name' => $customerName,
         'title' => 'فاتورة رقم: ' . $invoiceNumber . ($customerName ? ' - ' . $customerName : '')

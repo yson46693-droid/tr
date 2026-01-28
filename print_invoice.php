@@ -227,7 +227,9 @@ $companyName = COMPANY_NAME;
 
                 const invoiceUrl = data.url;
                 const fileUrl = data.file_url || data.url;
+                const fileType = data.file_type || 'pdf';
                 const invoiceTitle = data.title || 'فاتورة رقم: ' + (data.invoice_number || invoiceId);
+                const fileName = 'فاتورة-' + (data.invoice_number || invoiceId) + '.' + fileType;
 
                 // استخدام Web Share API للمشاركة
                 try {
@@ -237,7 +239,8 @@ $companyName = COMPANY_NAME;
                             const response = await fetch(fileUrl);
                             if (response.ok) {
                                 const blob = await response.blob();
-                                const file = new File([blob], 'فاتورة-' + (data.invoice_number || invoiceId) + '.html', { type: 'text/html' });
+                                const mimeType = fileType === 'pdf' ? 'application/pdf' : 'text/html';
+                                const file = new File([blob], fileName, { type: mimeType });
                                 
                                 await navigator.share({
                                     title: invoiceTitle,
