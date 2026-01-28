@@ -217,6 +217,13 @@ switch ($role) {
             ],
             ['divider' => true, 'title' => isset($lang['listing']) ? $lang['listing'] : 'القوائم'],
             [
+                'title' => 'العملاء المحليين',
+                'icon' => 'bi-people',
+                'url' => $baseUrl . 'manager.php?page=local_customers',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'local_customers'),
+                'badge' => null
+            ],
+            [
                 'title' => isset($lang['menu_suppliers']) ? $lang['menu_suppliers'] : 'الموردين',
                 'icon' => 'bi-truck',
                 'url' => $baseUrl . 'manager.php?page=suppliers',
@@ -320,6 +327,13 @@ switch ($role) {
                 'icon' => 'bi-bag-check',
                 'url' => $baseUrl . 'accountant.php?page=orders',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'orders'),
+                'badge' => null
+            ],
+            [
+                'title' => 'العملاء المحليين',
+                'icon' => 'bi-people',
+                'url' => $baseUrl . 'accountant.php?page=local_customers',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'local_customers'),
                 'badge' => null
             ],
             [

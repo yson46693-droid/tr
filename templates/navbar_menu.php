@@ -27,6 +27,13 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'العملاء المحليين',
+                'icon' => 'bi-people',
+                'url' => $baseUrl . 'manager.php?page=local_customers',
+                'active' => (isset($_GET['page']) && $_GET['page'] === 'local_customers'),
+                'badge' => null
+            ],
+            [
                 'title' => isset($lang['menu_approvals']) ? $lang['menu_approvals'] : 'الموافقات',
                 'icon' => 'bi-check-circle',
                 'url' => $baseUrl . 'manager.php?page=approvals',
@@ -108,6 +115,13 @@ switch ($role) {
                 'icon' => 'bi-safe',
                 'url' => $baseUrl . 'accountant.php?page=financial',
                 'active' => (isset($_GET['page']) && $_GET['page'] === 'financial'),
+                'badge' => null
+            ],
+            [
+                'title' => 'العملاء المحليين',
+                'icon' => 'bi-people',
+                'url' => $baseUrl . 'accountant.php?page=local_customers',
+                'active' => (isset($_GET['page']) && $_GET['page'] === 'local_customers'),
                 'badge' => null
             ],
             ['divider' => true, 'title' => 'Finance'],
