@@ -270,10 +270,10 @@ $lang = isset($translations) ? $translations : [];
 
 <div class="container-fluid">
     <!-- إحصائيات سريعة -->
-    <div class="row mb-4">
-        <div class="col-md-3 col-sm-6 mb-3">
+    <div class="row g-2 mb-3">
+        <div class="col-4 col-sm-4 col-md-3">
             <div class="card">
-                <div class="card-body">
+                <div class="card-body p-2">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
                             <div class="stat-card-icon blue">
@@ -282,16 +282,16 @@ $lang = isset($translations) ? $translations : [];
                         </div>
                         <div class="flex-grow-1 ms-3">
                             <div class="text-muted small">ساعات اليوم</div>
-                            <div class="h4 mb-0"><?php echo $todayHours; ?></div>
+                            <div class="h5 mb-0"><?php echo $todayHours; ?></div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div class="col-md-3 col-sm-6 mb-3">
+        <div class="col-4 col-sm-4 col-md-3">
             <div class="card">
-                <div class="card-body">
+                <div class="card-body p-2">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
                             <div class="stat-card-icon green">
@@ -300,16 +300,16 @@ $lang = isset($translations) ? $translations : [];
                         </div>
                         <div class="flex-grow-1 ms-3">
                             <div class="text-muted small">ساعات الشهر</div>
-                            <div class="h4 mb-0"><?php echo $monthStats['total_hours']; ?></div>
+                            <div class="h5 mb-0"><?php echo $monthStats['total_hours']; ?></div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div class="col-md-3 col-sm-6 mb-3">
+        <div class="col-4 col-sm-4 col-md-3">
             <div class="card">
-                <div class="card-body">
+                <div class="card-body p-2">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
                             <div class="stat-card-icon orange">
@@ -318,17 +318,17 @@ $lang = isset($translations) ? $translations : [];
                         </div>
                         <div class="flex-grow-1 ms-3">
                         <div class="text-muted small">متوسط التأخير</div>
-                        <div class="h4 mb-0"><?php echo number_format($delayStats['average_minutes'] ?? 0, 2); ?> دقيقة</div>
-                        <div class="text-muted small mt-1">إجمالي التأخير: <?php echo number_format($delayStats['total_minutes'] ?? 0, 2); ?> دقيقة</div>
+                        <div class="h6 mb-0"><?php echo number_format($delayStats['average_minutes'] ?? 0, 2); ?> دقيقة</div>
+                        <div class="text-muted small mt-1 d-none d-sm-block">إجمالي التأخير: <?php echo number_format($delayStats['total_minutes'] ?? 0, 2); ?> دقيقة</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div class="col-md-3 col-sm-6 mb-3">
+        <div class="col-4 col-sm-4 col-md-3">
             <div class="card">
-                <div class="card-body">
+                <div class="card-body p-2">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
                             <div class="stat-card-icon purple">
@@ -337,8 +337,8 @@ $lang = isset($translations) ? $translations : [];
                         </div>
                         <div class="flex-grow-1 ms-3">
                             <div class="text-muted small">مرات التأخير</div>
-                            <div class="h4 mb-0"><?php echo (int) ($delayStats['delay_days'] ?? 0); ?></div>
-                            <div class="text-muted small mt-1">من إجمالي <?php echo (int) ($delayStats['attendance_days'] ?? 0); ?> أيام حضور</div>
+                            <div class="h5 mb-0"><?php echo (int) ($delayStats['delay_days'] ?? 0); ?></div>
+                            <div class="text-muted small mt-1 d-none d-sm-block">من إجمالي <?php echo (int) ($delayStats['attendance_days'] ?? 0); ?> أيام حضور</div>
                         </div>
                     </div>
                 </div>

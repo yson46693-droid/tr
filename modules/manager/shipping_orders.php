@@ -2720,8 +2720,8 @@ $hasShippingCompanies = !empty($shippingCompanies);
     </div>
 <?php endif; ?>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-3 col-sm-6">
+<div class="row g-2 mb-3">
+    <div class="col-4 col-sm-4 col-md-3">
         <div class="stat-card">
             <div class="stat-card-header">
                 <div class="stat-card-icon blue"><i class="bi bi-building"></i></div>
@@ -2730,7 +2730,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
             <div class="stat-card-value"><?php echo number_format(count($shippingCompanies)); ?></div>
         </div>
     </div>
-    <div class="col-md-3 col-sm-6">
+    <div class="col-4 col-sm-4 col-md-3">
         <div class="stat-card">
             <div class="stat-card-header">
                 <div class="stat-card-icon orange"><i class="bi bi-truck"></i></div>
@@ -2739,7 +2739,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
             <div class="stat-card-value"><?php echo number_format($ordersStats['active_orders']); ?></div>
         </div>
     </div>
-    <div class="col-md-3 col-sm-6">
+    <div class="col-4 col-sm-4 col-md-3">
         <div class="stat-card">
             <div class="stat-card-header">
                 <div class="stat-card-icon green"><i class="bi bi-check2-circle"></i></div>
@@ -2748,7 +2748,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
             <div class="stat-card-value"><?php echo number_format($ordersStats['delivered_orders']); ?></div>
         </div>
     </div>
-    <div class="col-md-3 col-sm-6">
+    <div class="col-4 col-sm-4 col-md-3">
         <div class="stat-card">
             <div class="stat-card-header">
                 <div class="stat-card-icon purple"><i class="bi bi-cash-stack"></i></div>
