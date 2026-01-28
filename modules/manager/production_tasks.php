@@ -1143,7 +1143,7 @@ try {
                         </div>
                         <div class="col-md-9">
                             <label class="form-label">وصف وتفاصيل و ملاحظات الاوردر</label>
-                            <input type="text" class="form-control" name="details" placeholder="أدخل التفاصيل والتعليمات اللازمة للعمال.">
+                            <textarea class="form-control" name="details" rows="3" placeholder="أدخل التفاصيل والتعليمات اللازمة للعمال."></textarea>
                         </div>
                         <div class="col-12" id="productsSection">
                             <label class="form-label fw-bold">المنتجات والكميات</label>
