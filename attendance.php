@@ -361,8 +361,7 @@ $lang = isset($translations) ? $translations : [];
                 </div>
                 <div class="card-body text-center">
                     <button type="button" class="btn btn-success btn-lg w-100" id="checkInBtn" data-action="check_in" 
-                            <?php echo !$canCheckIn ? 'disabled' : ''; ?>
-                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent; min-height: 48px;">
+                            <?php echo !$canCheckIn ? 'disabled' : ''; ?>>
                         <i class="bi bi-camera me-2"></i>
                         <?php echo $canCheckIn ? 'تسجيل الحضور' : 'تم تسجيل الحضور'; ?>
                     </button>
@@ -384,8 +383,7 @@ $lang = isset($translations) ? $translations : [];
                 </div>
                 <div class="card-body text-center">
                     <button type="button" class="btn btn-danger btn-lg w-100" id="checkOutBtn" data-action="check_out"
-                            <?php echo !$canCheckOut ? 'disabled' : ''; ?>
-                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent; min-height: 48px;">
+                            <?php echo !$canCheckOut ? 'disabled' : ''; ?>>
                         <i class="bi bi-camera me-2"></i>
                         <?php echo $canCheckOut ? 'تسجيل الانصراف' : 'لا يمكن تسجيل الانصراف'; ?>
                     </button>
@@ -660,7 +658,7 @@ $lang = isset($translations) ? $translations : [];
                 </div>
                 <p class="mt-2 text-muted">جاري تحميل الكاميرا...</p>
             </div>
-            <video id="videoCard" autoplay playsinline muted style="width: 100%; border-radius: 8px; background: #000; display: none;"></video>
+            <video id="videoCard" autoplay playsinline muted style="width: 100%; border-radius: 8px; background: #000;"></video>
             <canvas id="canvasCard" style="display: none;"></canvas>
             <div id="cameraErrorCard" class="alert alert-danger" style="display: none;">
                 <i class="bi bi-exclamation-triangle me-2"></i>
@@ -696,114 +694,6 @@ $lang = isset($translations) ? $translations : [];
         id: <?php echo $currentUser['id']; ?>,
         role: '<?php echo htmlspecialchars($currentUser['role']); ?>'
     };
-    
-    // حل بديل مباشر للأزرار على الموبايل
-    document.addEventListener('DOMContentLoaded', function() {
-        // إعادة المحاولة عدة مرات لضمان تحميل الكود
-        let attempts = 0;
-        const maxAttempts = 10;
-        
-        function tryAttachButtons() {
-            attempts++;
-            const checkInBtn = document.getElementById('checkInBtn');
-            const checkOutBtn = document.getElementById('checkOutBtn');
-            
-            if ((checkInBtn || checkOutBtn) && attempts < maxAttempts) {
-                // التحقق من أن attendance.js تم تحميله
-                if (typeof openCamera === 'function') {
-                    console.log('attendance.js loaded, using main handlers');
-                    return; // الكود الرئيسي سيتولى الأمر
-                }
-                
-                // حل بديل مباشر
-                if (checkInBtn && !checkInBtn.dataset.fallbackAttached) {
-                    checkInBtn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log('Fallback checkInBtn handler');
-                        if (!checkInBtn.disabled) {
-                            // استخدام openCamera إذا كانت متاحة، وإلا فتح البطاقة مباشرة
-                            if (typeof window.openCamera === 'function') {
-                                try {
-                                    window.openCamera('check_in');
-                                } catch (error) {
-                                    console.error('Error calling openCamera:', error);
-                                    // Fallback: فتح البطاقة مباشرة
-                                    openCardDirectly();
-                                }
-                            } else {
-                                // Fallback: فتح البطاقة مباشرة
-                                openCardDirectly();
-                            }
-                        }
-                        return false;
-                        
-                        function openCardDirectly() {
-                            const card = document.getElementById('cameraCard');
-                            if (card) {
-                                card.classList.remove('d-none');
-                                card.classList.add('d-md-none');
-                                card.style.setProperty('display', 'block', 'important');
-                                card.style.setProperty('visibility', 'visible', 'important');
-                                card.style.setProperty('opacity', '1', 'important');
-                                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                console.log('Card opened via fallback handler');
-                            } else {
-                                console.error('cameraCard not found');
-                                alert('حدث خطأ: لم يتم العثور على بطاقة الكاميرا');
-                            }
-                        }
-                    }, true);
-                    checkInBtn.dataset.fallbackAttached = 'true';
-                }
-                
-                if (checkOutBtn && !checkOutBtn.dataset.fallbackAttached) {
-                    checkOutBtn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log('Fallback checkOutBtn handler');
-                        if (!checkOutBtn.disabled) {
-                            // استخدام openCamera إذا كانت متاحة، وإلا فتح البطاقة مباشرة
-                            if (typeof window.openCamera === 'function') {
-                                try {
-                                    window.openCamera('check_out');
-                                } catch (error) {
-                                    console.error('Error calling openCamera:', error);
-                                    // Fallback: فتح البطاقة مباشرة
-                                    openCardDirectly();
-                                }
-                            } else {
-                                // Fallback: فتح البطاقة مباشرة
-                                openCardDirectly();
-                            }
-                        }
-                        return false;
-                        
-                        function openCardDirectly() {
-                            const card = document.getElementById('cameraCard');
-                            if (card) {
-                                card.classList.remove('d-none');
-                                card.classList.add('d-md-none');
-                                card.style.setProperty('display', 'block', 'important');
-                                card.style.setProperty('visibility', 'visible', 'important');
-                                card.style.setProperty('opacity', '1', 'important');
-                                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                console.log('Card opened via fallback handler');
-                            } else {
-                                console.error('cameraCard not found');
-                                alert('حدث خطأ: لم يتم العثور على بطاقة الكاميرا');
-                            }
-                        }
-                    }, true);
-                    checkOutBtn.dataset.fallbackAttached = 'true';
-                }
-            } else if (attempts < maxAttempts) {
-                setTimeout(tryAttachButtons, 200);
-            }
-        }
-        
-        tryAttachButtons();
-    });
 </script>
 <script src="<?php echo ASSETS_URL; ?>js/attendance.js"></script>
 <script src="<?php echo ASSETS_URL; ?>js/attendance_notifications.js"></script>
@@ -813,19 +703,6 @@ $lang = isset($translations) ? $translations : [];
 @media (max-width: 768px) {
     #cameraModal {
         display: none !important;
-    }
-    
-    /* ضمان أن Card يمكن إظهاره على الموبايل */
-    #cameraCard {
-        display: none; /* افتراضي مخفي، سيتم إظهاره بواسطة JavaScript */
-    }
-    
-    /* عند فتح البطاقة، يجب أن تظهر */
-    #cameraCard[style*="display: block"],
-    #cameraCard[style*="display:block"] {
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
     }
 }
 

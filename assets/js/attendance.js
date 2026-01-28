@@ -1252,67 +1252,68 @@ function initAttendanceButtons() {
         } else {
             // إضافة event listeners متعددة لضمان العمل على جميع الأجهزة
             checkInBtn.addEventListener('click', function(e) {
-            console.log('checkInBtn clicked', { 
-                disabled: checkInBtn.disabled,
-                isMobile: isMobile()
-            });
-            e.preventDefault();
-            e.stopPropagation();
-            
-            if (checkInBtn.disabled) {
-                console.warn('checkInBtn is disabled');
-                return false;
-            }
-            
-            // تعيين الإجراء وفتح modal/card
-            try {
-                openCamera('check_in');
-            } catch (error) {
-                console.error('Error opening camera for check_in:', error);
-                alert('حدث خطأ في فتح الكاميرا. يرجى المحاولة مرة أخرى.');
-            }
-            return false;
-        }, true); // استخدام capture phase
-        
-        // إضافة touchstart للموبايل أيضاً
-        checkInBtn.addEventListener('touchstart', function(e) {
-            console.log('checkInBtn touchstart', { 
-                disabled: checkInBtn.disabled,
-                isMobile: isMobile()
-            });
-            e.preventDefault();
-            e.stopPropagation();
-            
-            if (checkInBtn.disabled) {
-                console.warn('checkInBtn is disabled');
-                return false;
-            }
-            
-            // تعيين الإجراء وفتح modal/card
-            try {
-                openCamera('check_in');
-            } catch (error) {
-                console.error('Error opening camera for check_in:', error);
-                alert('حدث خطأ في فتح الكاميرا. يرجى المحاولة مرة أخرى.');
-            }
-            return false;
-        }, { passive: false, capture: true });
-        
-        // إضافة mousedown أيضاً كحل بديل
-        checkInBtn.addEventListener('mousedown', function(e) {
-            if (isMobile()) {
+                console.log('checkInBtn clicked', { 
+                    disabled: checkInBtn.disabled,
+                    isMobile: isMobile()
+                });
                 e.preventDefault();
                 e.stopPropagation();
-                if (!checkInBtn.disabled) {
+                
+                if (checkInBtn.disabled) {
+                    console.warn('checkInBtn is disabled');
+                    return false;
+                }
+                
+                // تعيين الإجراء وفتح modal/card
+                try {
                     openCamera('check_in');
+                } catch (error) {
+                    console.error('Error opening camera for check_in:', error);
+                    alert('حدث خطأ في فتح الكاميرا. يرجى المحاولة مرة أخرى.');
                 }
                 return false;
-            }
-        }, true);
-        
-        // وضع علامة أن event listeners تم إضافتها
-        checkInBtn.dataset.listenerAttached = 'true';
-        console.log('checkInBtn event listeners added');
+            }, true); // استخدام capture phase
+            
+            // إضافة touchstart للموبايل أيضاً
+            checkInBtn.addEventListener('touchstart', function(e) {
+                console.log('checkInBtn touchstart', { 
+                    disabled: checkInBtn.disabled,
+                    isMobile: isMobile()
+                });
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (checkInBtn.disabled) {
+                    console.warn('checkInBtn is disabled');
+                    return false;
+                }
+                
+                // تعيين الإجراء وفتح modal/card
+                try {
+                    openCamera('check_in');
+                } catch (error) {
+                    console.error('Error opening camera for check_in:', error);
+                    alert('حدث خطأ في فتح الكاميرا. يرجى المحاولة مرة أخرى.');
+                }
+                return false;
+            }, { passive: false, capture: true });
+            
+            // إضافة mousedown أيضاً كحل بديل
+            checkInBtn.addEventListener('mousedown', function(e) {
+                if (isMobile()) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!checkInBtn.disabled) {
+                        openCamera('check_in');
+                    }
+                    return false;
+                }
+            }, true);
+            
+            // وضع علامة أن event listeners تم إضافتها
+            checkInBtn.dataset.listenerAttached = 'true';
+            console.log('checkInBtn event listeners added');
+        }
     } else {
         console.error('checkInBtn not found!');
     }
