@@ -282,6 +282,7 @@ try {
             $sql = "SELECT 
                         id,
                         name,
+                        category,
                         quantity,
                         COALESCE(unit, 'قطعة') as unit,
                         unit_price,
@@ -300,6 +301,12 @@ try {
                 $searchParam = '%' . $search . '%';
                 $params[] = $searchParam;
                 $params[] = $searchParam;
+            }
+            
+            // فلتر الصنف
+            if ($categoryFilter) {
+                $sql .= " AND category = ?";
+                $params[] = $categoryFilter;
             }
             
             // فلاتر السعر والكمية
@@ -365,6 +372,7 @@ try {
     $externalResults = [];
     foreach ($externalProducts as $product) {
         $productName = $product['name'] ?? 'غير محدد';
+        $category = $product['category'] ?? '—';
         $quantity = (float)($product['quantity'] ?? 0);
         $unit = $product['unit'] ?? 'قطعة';
         $unitPrice = floatval($product['unit_price'] ?? 0);
@@ -373,6 +381,7 @@ try {
         $externalResults[] = [
             'id' => (int)$product['id'],
             'name' => htmlspecialchars($productName),
+            'category' => htmlspecialchars($category),
             'quantity' => $quantity,
             'unit' => htmlspecialchars($unit),
             'unit_price' => $unitPrice,

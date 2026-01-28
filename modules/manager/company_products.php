@@ -29,6 +29,46 @@ $db = db();
 $error = '';
 $success = '';
 
+// إنشاء جدول الأصناف إذا لم يكن موجوداً وإضافة الأصناف الافتراضية
+try {
+    $categoriesTableExists = $db->queryOne("SHOW TABLES LIKE 'product_categories'");
+    if (empty($categoriesTableExists)) {
+        $db->execute("
+            CREATE TABLE IF NOT EXISTS `product_categories` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `name` varchar(100) NOT NULL,
+              `is_default` tinyint(1) DEFAULT 0,
+              `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `name` (`name`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        
+        // إضافة الأصناف الافتراضية
+        $defaultCategories = ['صابون', 'زيت زيتون', 'كريمات', 'زيوت', 'اخري'];
+        foreach ($defaultCategories as $catName) {
+            try {
+                $db->execute(
+                    "INSERT INTO product_categories (name, is_default) VALUES (?, 1)",
+                    [$catName]
+                );
+            } catch (Exception $e) {
+                // الصنف موجود بالفعل
+            }
+        }
+    }
+} catch (Exception $e) {
+    error_log('Error creating product_categories table: ' . $e->getMessage());
+}
+
+// الحصول على قائمة الأصناف
+$productCategories = [];
+try {
+    $productCategories = $db->query("SELECT id, name FROM product_categories ORDER BY is_default DESC, name ASC");
+} catch (Exception $e) {
+    error_log('Error fetching product categories: ' . $e->getMessage());
+}
+
 // الحصول على رسائل النجاح والخطأ من session (بعد redirect)
 $sessionSuccess = getSuccessMessage();
 if ($sessionSuccess) {
@@ -49,6 +89,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quantity = max(0, floatval($_POST['quantity'] ?? 0));
         $unitPrice = max(0, floatval($_POST['unit_price'] ?? 0));
         $unit = trim($_POST['unit'] ?? 'قطعة');
+        $categoryId = intval($_POST['category_id'] ?? 0);
+        $customCategory = trim($_POST['custom_category'] ?? '');
         
         if ($name === '') {
             $error = 'يرجى إدخال اسم المنتج.';
@@ -72,17 +114,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // العمود موجود بالفعل
                 }
                 
+                // معالجة الصنف
+                $categoryName = 'منتجات خارجية';
+                if ($categoryId > 0) {
+                    $category = $db->queryOne("SELECT name FROM product_categories WHERE id = ?", [$categoryId]);
+                    if ($category) {
+                        $categoryName = $category['name'];
+                    }
+                } elseif (!empty($customCategory)) {
+                    // حفظ الصنف المخصص في جدول الأصناف
+                    try {
+                        $db->execute(
+                            "INSERT INTO product_categories (name, is_default) VALUES (?, 0)",
+                            [$customCategory]
+                        );
+                        $categoryName = $customCategory;
+                    } catch (Exception $e) {
+                        // الصنف موجود بالفعل
+                        $categoryName = $customCategory;
+                    }
+                }
+                
                 $db->execute(
                     "INSERT INTO products (name, category, product_type, quantity, unit, unit_price, status)
-                     VALUES (?, 'منتجات خارجية', 'external', ?, ?, ?, 'active')",
-                    [$name, $quantity, $unit, $unitPrice]
+                     VALUES (?, ?, 'external', ?, ?, ?, 'active')",
+                    [$name, $categoryName, $quantity, $unit, $unitPrice]
                 );
                 
                 $productId = $db->getLastInsertId();
                 logAudit($currentUser['id'], 'create_external_product', 'product', $productId, null, [
                     'name' => $name,
                     'quantity' => $quantity,
-                    'unit_price' => $unitPrice
+                    'unit_price' => $unitPrice,
+                    'category' => $categoryName
                 ]);
                 
                 // منع التكرار باستخدام redirect
@@ -121,6 +185,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $quantity = max(0, floatval($_POST['quantity'] ?? 0));
             $unitPrice = max(0, floatval($_POST['unit_price'] ?? 0));
             $unit = trim($_POST['unit'] ?? 'قطعة');
+            $categoryId = intval($_POST['category_id'] ?? 0);
+            $customCategory = trim($_POST['custom_category'] ?? '');
             
             if ($productId <= 0 || $name === '') {
                 $error = 'بيانات غير صحيحة.';
@@ -134,16 +200,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
             } else {
                 try {
-                    $db->execute(
-                        "UPDATE products SET name = ?, quantity = ?, unit = ?, unit_price = ?, updated_at = NOW()
-                         WHERE id = ? AND product_type = 'external'",
-                        [$name, $quantity, $unit, $unitPrice, $productId]
-                    );
+                    // معالجة الصنف
+                    $categoryName = null; // null يعني عدم التغيير
+                    if ($categoryId > 0) {
+                        $category = $db->queryOne("SELECT name FROM product_categories WHERE id = ?", [$categoryId]);
+                        if ($category) {
+                            $categoryName = $category['name'];
+                        }
+                    } elseif (!empty($customCategory)) {
+                        // حفظ الصنف المخصص في جدول الأصناف
+                        try {
+                            $db->execute(
+                                "INSERT INTO product_categories (name, is_default) VALUES (?, 0)",
+                                [$customCategory]
+                            );
+                            $categoryName = $customCategory;
+                        } catch (Exception $e) {
+                            // الصنف موجود بالفعل
+                            $categoryName = $customCategory;
+                        }
+                    }
+                    
+                    if ($categoryName !== null) {
+                        $db->execute(
+                            "UPDATE products SET name = ?, category = ?, quantity = ?, unit = ?, unit_price = ?, updated_at = NOW()
+                             WHERE id = ? AND product_type = 'external'",
+                            [$name, $categoryName, $quantity, $unit, $unitPrice, $productId]
+                        );
+                    } else {
+                        $db->execute(
+                            "UPDATE products SET name = ?, quantity = ?, unit = ?, unit_price = ?, updated_at = NOW()
+                             WHERE id = ? AND product_type = 'external'",
+                            [$name, $quantity, $unit, $unitPrice, $productId]
+                        );
+                    }
                     
                     logAudit($currentUser['id'], 'update_external_product', 'product', $productId, null, [
                         'name' => $name,
                         'quantity' => $quantity,
-                        'unit_price' => $unitPrice
+                        'unit_price' => $unitPrice,
+                        'category' => $categoryName
                     ]);
                     
                     // منع التكرار باستخدام redirect
@@ -216,6 +312,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'تعذر حذف المنتج الخارجي. يرجى المحاولة لاحقاً.'
                     );
                 }
+            }
+        }
+    } elseif ($action === 'update_factory_product_category') {
+        $batchId = intval($_POST['batch_id'] ?? 0);
+        $categoryId = intval($_POST['category_id'] ?? 0);
+        $customCategory = trim($_POST['custom_category'] ?? '');
+        
+        if ($batchId <= 0) {
+            $error = 'بيانات غير صحيحة.';
+            preventDuplicateSubmission(
+                null,
+                ['page' => 'company_products'],
+                null,
+                'manager',
+                $error
+            );
+        } else {
+            try {
+                // معالجة الصنف
+                $categoryName = null;
+                if ($categoryId > 0) {
+                    $category = $db->queryOne("SELECT name FROM product_categories WHERE id = ?", [$categoryId]);
+                    if ($category) {
+                        $categoryName = $category['name'];
+                    }
+                } elseif (!empty($customCategory)) {
+                    // حفظ الصنف المخصص في جدول الأصناف
+                    try {
+                        $db->execute(
+                            "INSERT INTO product_categories (name, is_default) VALUES (?, 0)",
+                            [$customCategory]
+                        );
+                        $categoryName = $customCategory;
+                    } catch (Exception $e) {
+                        // الصنف موجود بالفعل
+                        $categoryName = $customCategory;
+                    }
+                }
+                
+                if ($categoryName !== null) {
+                    // تحديث الصنف في جدول products المرتبط بـ finished_products
+                    $finishedProduct = $db->queryOne("
+                        SELECT product_id FROM finished_products WHERE id = ?
+                    ", [$batchId]);
+                    
+                    if ($finishedProduct && $finishedProduct['product_id']) {
+                        $db->execute(
+                            "UPDATE products SET category = ? WHERE id = ?",
+                            [$categoryName, $finishedProduct['product_id']]
+                        );
+                    }
+                }
+                
+                logAudit($currentUser['id'], 'update_factory_product_category', 'finished_product', $batchId, null, [
+                    'category' => $categoryName
+                ]);
+                
+                preventDuplicateSubmission(
+                    'تم تحديث صنف المنتج بنجاح.',
+                    ['page' => 'company_products'],
+                    null,
+                    'manager'
+                );
+            } catch (Exception $e) {
+                error_log('update_factory_product_category error: ' . $e->getMessage());
+                preventDuplicateSubmission(
+                    null,
+                    ['page' => 'company_products'],
+                    null,
+                    'manager',
+                    'تعذر تحديث صنف المنتج. يرجى المحاولة لاحقاً.'
+                );
             }
         }
     }
@@ -1045,16 +1213,17 @@ foreach ($factoryProducts as $product) {
                         <input type="text" 
                                class="form-control form-control-sm" 
                                id="factorySearchInput" 
-                               placeholder="اسم المنتج، رقم تشغيلة، فئة..." 
+                               placeholder="اسم المنتج، رقم تشغيلة..." 
                                autocomplete="off">
                     </div>
-                    <div class="col-md-2">
-                        <label class="form-label small mb-1"><i class="bi bi-folder me-1"></i>الفئة</label>
-                        <input type="text" 
-                               class="form-control form-control-sm" 
-                               id="factoryCategoryFilter" 
-                               placeholder="الفئة..." 
-                               autocomplete="off">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1"><i class="bi bi-folder me-1"></i>الصنف</label>
+                        <select class="form-control form-control-sm" id="factoryCategoryFilter">
+                            <option value="">جميع الأصناف</option>
+                            <?php foreach ($productCategories as $cat): ?>
+                                <option value="<?php echo htmlspecialchars($cat['name']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <div class="col-md-2">
                         <label class="form-label small mb-1"><i class="bi bi-currency-dollar me-1"></i>سعر من</label>
@@ -1065,7 +1234,7 @@ foreach ($factoryProducts as $product) {
                                step="0.01" 
                                min="0">
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <label class="form-label small mb-1"><i class="bi bi-currency-dollar me-1"></i>سعر إلى</label>
                         <input type="number" 
                                class="form-control form-control-sm" 
@@ -1073,11 +1242,6 @@ foreach ($factoryProducts as $product) {
                                placeholder="إلى" 
                                step="0.01" 
                                min="0">
-                    </div>
-                    <div class="col-md-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" id="resetFactoryFiltersBtn">
-                            <i class="bi bi-arrow-counterclockwise me-1"></i>إعادة تعيين
-                        </button>
                     </div>
                 </div>
             </div>
@@ -1293,11 +1457,12 @@ foreach ($factoryProducts as $product) {
                             <?php if ($batchNumber && $batchNumber !== '—'): ?>
                                 <?php
                                     $viewUrl = getRelativeUrl('production.php?page=batch_numbers&batch_number=' . urlencode($batchNumber));
+                                    $batchId = $product['id'] ?? 0;
                                 ?>
                                 <div class="product-actions" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
                                     <button type="button" 
                                             class="btn-view js-batch-details" 
-                                            style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #0c2c80; color: white; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
+                                            style="border: none; cursor: pointer; flex: 1; min-width: calc(33.33% - 7px); background: #0c2c80; color: white; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
                                             data-batch="<?php echo htmlspecialchars($batchNumber); ?>"
                                             data-product="<?php echo htmlspecialchars($productName); ?>"
                                             data-view-url="<?php echo htmlspecialchars($viewUrl); ?>">
@@ -1305,11 +1470,19 @@ foreach ($factoryProducts as $product) {
                                     </button>
                                     <button type="button" 
                                             class="btn-view js-print-barcode" 
-                                            style="border: none; cursor: pointer; flex: 1; min-width: calc(50% - 5px); background: #28a745; color: white; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
+                                            style="border: none; cursor: pointer; flex: 1; min-width: calc(33.33% - 7px); background: #28a745; color: white; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
                                             data-batch="<?php echo htmlspecialchars($batchNumber); ?>"
                                             data-product="<?php echo htmlspecialchars($productName); ?>"
                                             data-quantity="<?php echo htmlspecialchars($quantity); ?>">
                                         <i class="bi bi-printer me-1"></i>طباعة الباركود
+                                    </button>
+                                    <button type="button" 
+                                            class="btn-view js-edit-factory-category" 
+                                            style="border: none; cursor: pointer; flex: 1; min-width: calc(33.33% - 7px); background: #ffc107; color: #000; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
+                                            data-batch-id="<?php echo $batchId; ?>"
+                                            data-product="<?php echo htmlspecialchars($productName); ?>"
+                                            data-category="<?php echo htmlspecialchars($category); ?>">
+                                        <i class="bi bi-pencil me-1"></i>تعديل الصنف
                                     </button>
                                 </div>
                             <?php else: ?>
@@ -1415,6 +1588,15 @@ foreach ($factoryProducts as $product) {
                                autocomplete="off">
                     </div>
                     <div class="col-md-2">
+                        <label class="form-label small mb-1"><i class="bi bi-folder me-1"></i>الصنف</label>
+                        <select class="form-control form-control-sm" id="externalCategoryFilter">
+                            <option value="">جميع الأصناف</option>
+                            <?php foreach ($productCategories as $cat): ?>
+                                <option value="<?php echo htmlspecialchars($cat['name']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
                         <label class="form-label small mb-1"><i class="bi bi-currency-dollar me-1"></i>سعر من</label>
                         <input type="number" 
                                class="form-control form-control-sm" 
@@ -1441,7 +1623,7 @@ foreach ($factoryProducts as $product) {
                                step="0.01" 
                                min="0">
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-1">
                         <label class="form-label small mb-1"><i class="bi bi-box me-1"></i>كمية إلى</label>
                         <input type="number" 
                                class="form-control form-control-sm" 
@@ -1449,11 +1631,6 @@ foreach ($factoryProducts as $product) {
                                placeholder="إلى" 
                                step="0.01" 
                                min="0">
-                    </div>
-                    <div class="col-md-1">
-                        <button type="button" class="btn btn-sm btn-outline-secondary w-100" id="resetExternalFiltersBtn">
-                            <i class="bi bi-arrow-counterclockwise"></i>
-                        </button>
                     </div>
                 </div>
             </div>
@@ -1506,7 +1683,8 @@ foreach ($factoryProducts as $product) {
                                         data-name="<?php echo htmlspecialchars($product['name'], ENT_QUOTES); ?>"
                                         data-quantity="<?php echo $product['quantity']; ?>"
                                         data-unit="<?php echo htmlspecialchars($product['unit'] ?? 'قطعة', ENT_QUOTES); ?>"
-                                        data-price="<?php echo $product['unit_price']; ?>">
+                                        data-price="<?php echo $product['unit_price']; ?>"
+                                        data-category="<?php echo htmlspecialchars($product['category'] ?? '', ENT_QUOTES); ?>">
                                     <i class="bi bi-pencil me-1"></i>تعديل
                                 </button>
                                 <button type="button" 
@@ -1536,12 +1714,25 @@ foreach ($factoryProducts as $product) {
                 <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة منتج خارجي جديد</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" id="addExternalProductForm">
                 <input type="hidden" name="action" value="create_external_product">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">اسم المنتج <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" name="product_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الصنف <span class="text-danger">*</span></label>
+                        <select class="form-control" name="category_id" id="add_category_id" required>
+                            <option value="">اختر الصنف</option>
+                            <?php foreach ($productCategories as $cat): ?>
+                                <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="add_custom_category_div" style="display: none;">
+                        <label class="form-label">أدخل الصنف يدوياً <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="custom_category" id="add_custom_category" placeholder="أدخل اسم الصنف">
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
@@ -1576,13 +1767,26 @@ foreach ($factoryProducts as $product) {
                 <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>تعديل منتج خارجي</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" id="editExternalProductForm">
                 <input type="hidden" name="action" value="update_external_product">
                 <input type="hidden" name="product_id" id="edit_product_id">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">اسم المنتج <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" name="product_name" id="edit_product_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الصنف <span class="text-danger">*</span></label>
+                        <select class="form-control" name="category_id" id="edit_category_id" required>
+                            <option value="">اختر الصنف</option>
+                            <?php foreach ($productCategories as $cat): ?>
+                                <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="edit_custom_category_div" style="display: none;">
+                        <label class="form-label">أدخل الصنف يدوياً <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="custom_category" id="edit_custom_category" placeholder="أدخل اسم الصنف">
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
@@ -1602,6 +1806,46 @@ foreach ($factoryProducts as $product) {
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
                     <button type="submit" class="btn btn-primary-custom">حفظ التغييرات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal تعديل صنف منتج المصنع -->
+<!-- Modal للكمبيوتر فقط -->
+<div class="modal fade d-none d-md-block" id="editFactoryProductCategoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>تعديل صنف منتج المصنع</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="editFactoryCategoryForm">
+                <input type="hidden" name="action" value="update_factory_product_category">
+                <input type="hidden" name="batch_id" id="edit_factory_batch_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم المنتج</label>
+                        <input type="text" class="form-control" id="edit_factory_product_name" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الصنف <span class="text-danger">*</span></label>
+                        <select class="form-control" name="category_id" id="edit_factory_category_id" required>
+                            <option value="">اختر الصنف</option>
+                            <?php foreach ($productCategories as $cat): ?>
+                                <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="edit_factory_custom_category_div" style="display: none;">
+                        <label class="form-label">أدخل الصنف يدوياً <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="custom_category" id="edit_factory_custom_category" placeholder="أدخل اسم الصنف">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-warning">حفظ التغييرات</button>
                 </div>
             </form>
         </div>
@@ -1721,6 +1965,19 @@ foreach ($factoryProducts as $product) {
                 <label class="form-label">اسم المنتج <span class="text-danger">*</span></label>
                 <input type="text" class="form-control" name="product_name" required>
             </div>
+            <div class="mb-3">
+                <label class="form-label">الصنف <span class="text-danger">*</span></label>
+                <select class="form-control" name="category_id" id="addCard_category_id" required>
+                    <option value="">اختر الصنف</option>
+                    <?php foreach ($productCategories as $cat): ?>
+                        <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-3" id="addCard_custom_category_div" style="display: none;">
+                <label class="form-label">أدخل الصنف يدوياً <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="custom_category" id="addCard_custom_category" placeholder="أدخل اسم الصنف">
+            </div>
             <div class="row">
                 <div class="col-6 mb-3">
                     <label class="form-label">الكمية</label>
@@ -1755,6 +2012,19 @@ foreach ($factoryProducts as $product) {
             <div class="mb-3">
                 <label class="form-label">اسم المنتج <span class="text-danger">*</span></label>
                 <input type="text" class="form-control" name="product_name" id="editCard_product_name" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">الصنف <span class="text-danger">*</span></label>
+                <select class="form-control" name="category_id" id="editCard_category_id" required>
+                    <option value="">اختر الصنف</option>
+                    <?php foreach ($productCategories as $cat): ?>
+                        <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="mb-3" id="editCard_custom_category_div" style="display: none;">
+                <label class="form-label">أدخل الصنف يدوياً <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="custom_category" id="editCard_custom_category" placeholder="أدخل اسم الصنف">
             </div>
             <div class="row">
                 <div class="col-6 mb-3">
@@ -2923,6 +3193,7 @@ function initEditExternalButtons() {
             const quantity = this.dataset.quantity;
             const unit = this.dataset.unit;
             const price = this.dataset.price;
+            const category = this.dataset.category || '';
             
             document.getElementById('edit_product_id').value = id;
             closeAllForms();
@@ -2937,6 +3208,17 @@ function initEditExternalButtons() {
                     document.getElementById('editCard_unit').value = unit;
                     document.getElementById('editCard_unit_price').value = price;
                     
+                    // تحديد الصنف
+                    const categorySelect = document.getElementById('editCard_category_id');
+                    if (categorySelect && category) {
+                        for (let i = 0; i < categorySelect.options.length; i++) {
+                            if (categorySelect.options[i].textContent.trim() === category.trim()) {
+                                categorySelect.selectedIndex = i;
+                                break;
+                            }
+                        }
+                    }
+                    
                     card.style.display = 'block';
                     setTimeout(function() {
                         scrollToElement(card);
@@ -2949,6 +3231,22 @@ function initEditExternalButtons() {
                 document.getElementById('edit_quantity').value = quantity;
                 document.getElementById('edit_unit').value = unit;
                 document.getElementById('edit_unit_price').value = price;
+                
+                // تحديد الصنف
+                const categorySelect = document.getElementById('edit_category_id');
+                if (categorySelect && category) {
+                    for (let i = 0; i < categorySelect.options.length; i++) {
+                        if (categorySelect.options[i].textContent.trim() === category.trim()) {
+                            categorySelect.selectedIndex = i;
+                            // إظهار حقل الإدخال اليدوي إذا كان "اخري"
+                            if (categorySelect.options[i].textContent.trim() === 'اخري') {
+                                const customDiv = document.getElementById('edit_custom_category_div');
+                                if (customDiv) customDiv.style.display = 'block';
+                            }
+                            break;
+                        }
+                    }
+                }
                 
                 if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
                     new bootstrap.Modal(document.getElementById('editExternalProductModal')).show();
@@ -3055,8 +3353,8 @@ function initEditExternalButtons() {
             params.append('search', factorySearchInput.value.trim());
         }
         
-        if (factoryCategoryFilter && factoryCategoryFilter.value.trim()) {
-            params.append('category', factoryCategoryFilter.value.trim());
+        if (factoryCategoryFilter && factoryCategoryFilter.value) {
+            params.append('category', factoryCategoryFilter.value);
         }
         
         if (factoryMinPrice && factoryMinPrice.value) {
@@ -3089,6 +3387,10 @@ function initEditExternalButtons() {
         
         if (externalSearchInput && externalSearchInput.value.trim()) {
             params.append('search', externalSearchInput.value.trim());
+        }
+        
+        if (externalCategoryFilter && externalCategoryFilter.value) {
+            params.append('category', externalCategoryFilter.value);
         }
         
         if (externalMinPrice && externalMinPrice.value) {
@@ -3185,6 +3487,14 @@ function initEditExternalButtons() {
                                 data-quantity="${escapeHtml(quantity)}">
                             <i class="bi bi-printer me-1"></i>طباعة الباركود
                         </button>
+                        <button type="button" 
+                                class="btn-view js-edit-factory-category" 
+                                style="border: none; cursor: pointer; flex: 1; min-width: calc(33.33% - 7px); background: #ffc107; color: #000; padding: 10px 16px; border-radius: 10px; font-weight: bold; font-size: 13px;"
+                                data-batch-id="${product.id || 0}"
+                                data-product="${escapeHtml(productName)}"
+                                data-category="${escapeHtml(category)}">
+                            <i class="bi bi-pencil me-1"></i>تعديل الصنف
+                        </button>
                     </div>
                 `
                 : `
@@ -3201,7 +3511,7 @@ function initEditExternalButtons() {
                     <div class="product-name">${escapeHtml(productName)}</div>
                     ${batchDisplay}
                     ${barcodeHTML}
-                    <div class="product-detail-row"><span>الفئة:</span> <span>${escapeHtml(category)}</span></div>
+                    <div class="product-detail-row"><span>الصنف:</span> <span>${escapeHtml(category)}</span></div>
                     <div class="product-detail-row"><span>تاريخ الإنتاج:</span> <span>${escapeHtml(productionDate)}</span></div>
                     <div class="product-detail-row"><span>الكمية:</span> <span><strong>${quantity}</strong></span></div>
                     <div class="product-detail-row"><span>سعر الوحدة:</span> <span>${formatCurrency(unitPrice)}</span></div>
@@ -3242,6 +3552,7 @@ function initEditExternalButtons() {
             const unit = product.unit || 'قطعة';
             const unitPrice = parseFloat(product.unit_price || 0);
             const totalValue = parseFloat(product.total_value || 0);
+            const category = product.category || '—';
             
             const canEditExternal = <?php echo json_encode($currentUser['role'] !== 'accountant'); ?>;
             const actionsHTML = canEditExternal
@@ -3254,7 +3565,8 @@ function initEditExternalButtons() {
                                 data-name="${escapeHtml(productName)}"
                                 data-quantity="${product.quantity}"
                                 data-unit="${escapeHtml(unit)}"
-                                data-price="${product.unit_price}">
+                                data-price="${product.unit_price}"
+                                data-category="${escapeHtml(category)}">
                             <i class="bi bi-pencil me-1"></i>تعديل
                         </button>
                         <button type="button" 
@@ -3275,6 +3587,7 @@ function initEditExternalButtons() {
                     </div>
                     <div class="product-name">${escapeHtml(productName)}</div>
                     <div style="color: #94a3b8; font-size: 13px; margin-bottom: 10px;">منتج خارجي</div>
+                    <div class="product-detail-row"><span>الصنف:</span> <span>${escapeHtml(category)}</span></div>
                     <div class="product-detail-row"><span>الكمية:</span> <span><strong>${quantity} ${escapeHtml(unit)}</strong></span></div>
                     <div class="product-detail-row"><span>سعر الوحدة:</span> <span>${formatCurrency(unitPrice)}</span></div>
                     <div class="product-detail-row"><span>الإجمالي:</span> <span><strong class="text-success">${formatCurrency(totalValue)}</strong></span></div>
@@ -3401,7 +3714,7 @@ function initEditExternalButtons() {
     }
     
     if (factoryCategoryFilter) {
-        factoryCategoryFilter.addEventListener('input', performFactorySearch);
+        factoryCategoryFilter.addEventListener('change', performFactorySearch);
     }
     
     if (factoryMinPrice) {
@@ -3412,19 +3725,13 @@ function initEditExternalButtons() {
         factoryMaxPrice.addEventListener('input', performFactorySearch);
     }
     
-    if (resetFactoryFiltersBtn) {
-        resetFactoryFiltersBtn.addEventListener('click', function() {
-            if (factorySearchInput) factorySearchInput.value = '';
-            if (factoryCategoryFilter) factoryCategoryFilter.value = '';
-            if (factoryMinPrice) factoryMinPrice.value = '';
-            if (factoryMaxPrice) factoryMaxPrice.value = '';
-            performFactorySearch();
-        });
-    }
-    
     // إرفاق event listeners للمنتجات الخارجية
     if (externalSearchInput) {
         externalSearchInput.addEventListener('input', performExternalSearch);
+    }
+    
+    if (externalCategoryFilter) {
+        externalCategoryFilter.addEventListener('change', performExternalSearch);
     }
     
     if (externalMinPrice) {
@@ -3442,17 +3749,158 @@ function initEditExternalButtons() {
     if (externalMaxQuantity) {
         externalMaxQuantity.addEventListener('input', performExternalSearch);
     }
+})();
+
+// ===== معالجة اختيار الصنف "اخري" =====
+(function() {
+    // معالجة نموذج إضافة منتج خارجي
+    const addCategorySelect = document.getElementById('add_category_id');
+    const addCustomCategoryDiv = document.getElementById('add_custom_category_div');
+    const addCustomCategoryInput = document.getElementById('add_custom_category');
     
-    if (resetExternalFiltersBtn) {
-        resetExternalFiltersBtn.addEventListener('click', function() {
-            if (externalSearchInput) externalSearchInput.value = '';
-            if (externalMinPrice) externalMinPrice.value = '';
-            if (externalMaxPrice) externalMaxPrice.value = '';
-            if (externalMinQuantity) externalMinQuantity.value = '';
-            if (externalMaxQuantity) externalMaxQuantity.value = '';
-            performExternalSearch();
+    if (addCategorySelect) {
+        addCategorySelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const isOther = selectedOption && selectedOption.textContent.trim() === 'اخري';
+            
+            if (addCustomCategoryDiv) {
+                addCustomCategoryDiv.style.display = isOther ? 'block' : 'none';
+            }
+            if (addCustomCategoryInput) {
+                addCustomCategoryInput.required = isOther;
+                if (!isOther) {
+                    addCustomCategoryInput.value = '';
+                }
+            }
         });
     }
+    
+    // معالجة نموذج تعديل منتج خارجي
+    const editCategorySelect = document.getElementById('edit_category_id');
+    const editCustomCategoryDiv = document.getElementById('edit_custom_category_div');
+    const editCustomCategoryInput = document.getElementById('edit_custom_category');
+    
+    if (editCategorySelect) {
+        editCategorySelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const isOther = selectedOption && selectedOption.textContent.trim() === 'اخري';
+            
+            if (editCustomCategoryDiv) {
+                editCustomCategoryDiv.style.display = isOther ? 'block' : 'none';
+            }
+            if (editCustomCategoryInput) {
+                editCustomCategoryInput.required = isOther;
+                if (!isOther) {
+                    editCustomCategoryInput.value = '';
+                }
+            }
+        });
+    }
+    
+    // معالجة نموذج تعديل صنف منتج المصنع
+    const editFactoryCategorySelect = document.getElementById('edit_factory_category_id');
+    const editFactoryCustomCategoryDiv = document.getElementById('edit_factory_custom_category_div');
+    const editFactoryCustomCategoryInput = document.getElementById('edit_factory_custom_category');
+    
+    if (editFactoryCategorySelect) {
+        editFactoryCategorySelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const isOther = selectedOption && selectedOption.textContent.trim() === 'اخري';
+            
+            if (editFactoryCustomCategoryDiv) {
+                editFactoryCustomCategoryDiv.style.display = isOther ? 'block' : 'none';
+            }
+            if (editFactoryCustomCategoryInput) {
+                editFactoryCustomCategoryInput.required = isOther;
+                if (!isOther) {
+                    editFactoryCustomCategoryInput.value = '';
+                }
+            }
+        });
+    }
+    
+    // معالجة نموذج إضافة منتج خارجي للموبايل
+    const addCardCategorySelect = document.getElementById('addCard_category_id');
+    const addCardCustomCategoryDiv = document.getElementById('addCard_custom_category_div');
+    const addCardCustomCategoryInput = document.getElementById('addCard_custom_category');
+    
+    if (addCardCategorySelect) {
+        addCardCategorySelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const isOther = selectedOption && selectedOption.textContent.trim() === 'اخري';
+            
+            if (addCardCustomCategoryDiv) {
+                addCardCustomCategoryDiv.style.display = isOther ? 'block' : 'none';
+            }
+            if (addCardCustomCategoryInput) {
+                addCardCustomCategoryInput.required = isOther;
+                if (!isOther) {
+                    addCardCustomCategoryInput.value = '';
+                }
+            }
+        });
+    }
+    
+    // معالجة نموذج تعديل منتج خارجي للموبايل
+    const editCardCategorySelect = document.getElementById('editCard_category_id');
+    const editCardCustomCategoryDiv = document.getElementById('editCard_custom_category_div');
+    const editCardCustomCategoryInput = document.getElementById('editCard_custom_category');
+    
+    if (editCardCategorySelect) {
+        editCardCategorySelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const isOther = selectedOption && selectedOption.textContent.trim() === 'اخري';
+            
+            if (editCardCustomCategoryDiv) {
+                editCardCustomCategoryDiv.style.display = isOther ? 'block' : 'none';
+            }
+            if (editCardCustomCategoryInput) {
+                editCardCustomCategoryInput.required = isOther;
+                if (!isOther) {
+                    editCardCustomCategoryInput.value = '';
+                }
+            }
+        });
+    }
+    
+    // معالجة زر تعديل صنف منتج المصنع
+    document.addEventListener('click', function(e) {
+        const editBtn = e.target.closest('.js-edit-factory-category');
+        if (editBtn) {
+            const batchId = editBtn.getAttribute('data-batch-id');
+            const productName = editBtn.getAttribute('data-product');
+            const currentCategory = editBtn.getAttribute('data-category');
+            
+            if (batchId && document.getElementById('edit_factory_batch_id')) {
+                document.getElementById('edit_factory_batch_id').value = batchId;
+                document.getElementById('edit_factory_product_name').value = productName || '';
+                
+                // تحديد الصنف الحالي في القائمة المنسدلة
+                if (editFactoryCategorySelect && currentCategory) {
+                    // البحث عن الصنف في القائمة
+                    for (let i = 0; i < editFactoryCategorySelect.options.length; i++) {
+                        if (editFactoryCategorySelect.options[i].textContent.trim() === currentCategory.trim()) {
+                            editFactoryCategorySelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+                
+                // إخفاء حقل الإدخال اليدوي
+                if (editFactoryCustomCategoryDiv) {
+                    editFactoryCustomCategoryDiv.style.display = 'none';
+                }
+                if (editFactoryCustomCategoryInput) {
+                    editFactoryCustomCategoryInput.value = '';
+                    editFactoryCustomCategoryInput.required = false;
+                }
+                
+                // فتح النموذج
+                const modal = new bootstrap.Modal(document.getElementById('editFactoryProductCategoryModal'));
+                modal.show();
+            }
+        }
+    });
 })();
 </script>
 

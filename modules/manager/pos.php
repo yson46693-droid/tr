@@ -950,6 +950,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // استخدام tempCustomerId لإنشاء الفاتورة (لأن invoices table مرتبط بـ customers)
                 // تمرير created_from_pos = true لأن هذه فاتورة من نقطة البيع
+                // تحديد posType حسب دور المستخدم (manager أو accountant) للعداد التصاعدي
+                $userRole = $currentUser['role'] ?? '';
+                $posType = ($userRole === 'manager' || $userRole === 'accountant') ? $userRole : 'manager';
+                
                 $invoiceResult = createInvoice(
                     $tempCustomerId,
                     $currentUser['id'],
@@ -960,7 +964,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $invoiceNotes,
                     $currentUser['id'],
                     $dueDate,
-                    true  // created_from_pos = true
+                    true,  // created_from_pos = true
+                    $posType  // posType للعداد التصاعدي يبدأ من 1
                 );
                 
                 // تسجيل بعد createInvoice

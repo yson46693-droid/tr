@@ -718,6 +718,7 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 // تمرير created_from_pos = true لأن هذه فاتورة من نقطة البيع
+                // تمرير posType = 'sales' لأن هذه فاتورة من نقطة البيع الخاصة بالمندوب
                 $invoiceResult = createInvoice(
                     $customerId,
                     $currentUser['id'],
@@ -728,7 +729,8 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     $notes,
                     $currentUser['id'],
                     $dueDate,  // تمرير تاريخ الاستحقاق
-                    true  // created_from_pos = true
+                    true,  // created_from_pos = true
+                    'sales'  // posType = 'sales' للمندوب (رقم عشوائي مكون من 5 أرقام)
                 );
 
                 if (empty($invoiceResult['success'])) {

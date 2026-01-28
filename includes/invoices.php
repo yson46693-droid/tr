@@ -14,8 +14,20 @@ require_once __DIR__ . '/notifications.php';
 
 /**
  * إنشاء فاتورة جديدة
+ * 
+ * @param int $customerId معرف العميل
+ * @param int|null $salesRepId معرف مندوب المبيعات
+ * @param string $date تاريخ الفاتورة
+ * @param array $items عناصر الفاتورة
+ * @param float $taxRate نسبة الضريبة
+ * @param float $discountAmount مبلغ الخصم
+ * @param string|null $notes ملاحظات
+ * @param int|null $createdBy معرف المستخدم الذي أنشأ الفاتورة
+ * @param string|null $dueDate تاريخ الاستحقاق
+ * @param bool $createdFromPos هل تم إنشاء الفاتورة من نقطة البيع
+ * @param string|null $posType نوع نقطة البيع: 'sales' للمندوب، 'manager' أو 'accountant' للمدير/المحاسب
  */
-function createInvoice($customerId, $salesRepId, $date, $items, $taxRate = 0, $discountAmount = 0, $notes = null, $createdBy = null, $dueDate = null, $createdFromPos = false) {
+function createInvoice($customerId, $salesRepId, $date, $items, $taxRate = 0, $discountAmount = 0, $notes = null, $createdBy = null, $dueDate = null, $createdFromPos = false, $posType = null) {
     try {
         $db = db();
         
@@ -74,8 +86,22 @@ function createInvoice($customerId, $salesRepId, $date, $items, $taxRate = 0, $d
             }
         }
         
+        // تحديد نوع نقطة البيع تلقائياً إذا لم يتم تحديده
+        if ($posType === null && $createdFromPos) {
+            require_once __DIR__ . '/auth.php';
+            $currentUser = getCurrentUser();
+            if ($currentUser) {
+                $userRole = $currentUser['role'] ?? '';
+                if ($userRole === 'sales') {
+                    $posType = 'sales';
+                } elseif ($userRole === 'manager' || $userRole === 'accountant') {
+                    $posType = $userRole;
+                }
+            }
+        }
+        
         // توليد رقم فاتورة
-        $invoiceNumber = generateInvoiceNumber();
+        $invoiceNumber = generateInvoiceNumber($posType);
         
         // التحقق النهائي من عدم تكرار رقم الفاتورة قبل الإدراج
         // هذا يضمن عدم التكرار حتى في حالة الطلبات المتزامنة
@@ -87,7 +113,7 @@ function createInvoice($customerId, $salesRepId, $date, $items, $taxRate = 0, $d
         if ($existingInvoice) {
             // إذا كان الرقم موجوداً، توليد رقم جديد
             error_log("Warning: Invoice number {$invoiceNumber} already exists, generating new number");
-            $invoiceNumber = generateInvoiceNumber();
+            $invoiceNumber = generateInvoiceNumber($posType);
             
             // التحقق مرة أخرى
             $existingInvoice = $db->queryOne(
@@ -155,7 +181,7 @@ function createInvoice($customerId, $salesRepId, $date, $items, $taxRate = 0, $d
                 error_log("Duplicate invoice number detected: {$invoiceNumber}, generating new number");
                 
                 // توليد رقم جديد
-                $invoiceNumber = generateInvoiceNumber();
+                $invoiceNumber = generateInvoiceNumber($posType);
                 
                 // محاولة الإدراج مرة أخرى
                 $retryParams = [
@@ -222,11 +248,25 @@ function createInvoice($customerId, $salesRepId, $date, $items, $taxRate = 0, $d
  * توليد رقم فاتورة فريد (يضمن عدم تكرار الأرقام حتى لو كان البيع لنفس العميل)
  * يتم التحقق من عدم التكرار بغض النظر عن العميل أو المنتجات
  * يستخدم transaction مع SELECT FOR UPDATE لضمان عدم التكرار في حالة الطلبات المتزامنة
+ * 
+ * @param string|null $posType نوع نقطة البيع: 'manager' أو 'accountant' للعداد التصاعدي، 'sales' للرقم العشوائي، null للنظام القديم
+ * @return string رقم الفاتورة
  */
-function generateInvoiceNumber() {
+function generateInvoiceNumber($posType = null) {
     $db = db();
     $conn = $db->getConnection();
     
+    // إذا كانت الفاتورة من نقطة البيع الخاصة بالمندوب، استخدم رقم عشوائي مكون من 5 أرقام
+    if ($posType === 'sales') {
+        return generateRandomInvoiceNumber();
+    }
+    
+    // إذا كانت الفاتورة من نقطة البيع الخاصة بالمدير/المحاسب، استخدم عداد تصاعدي يبدأ من 1
+    if ($posType === 'manager' || $posType === 'accountant') {
+        return generateSequentialInvoiceNumber();
+    }
+    
+    // النظام القديم (للتوافق مع الاستخدامات الأخرى)
     $year = date('Y');
     $month = date('m');
     $prefix = "INV-{$year}{$month}";
@@ -375,6 +415,215 @@ function generateInvoiceNumber() {
         // إذا كان موجوداً، أضف رقم عشوائي إضافي
         $fallbackNumber = sprintf("{$prefix}-%04d-%s%s-%s-%s", rand(1000, 9999), $timestamp, $microtime, $random, bin2hex(random_bytes(2)));
         return $fallbackNumber;
+    }
+}
+
+/**
+ * توليد رقم فاتورة عشوائي مكون من 5 أرقام (لنقطة البيع الخاصة بالمندوب)
+ */
+function generateRandomInvoiceNumber() {
+    $db = db();
+    
+    // استخدام transaction مع SELECT FOR UPDATE لضمان عدم التكرار
+    $transactionStarted = false;
+    if (!$db->inTransaction()) {
+        $db->beginTransaction();
+        $transactionStarted = true;
+    }
+    
+    try {
+        $maxAttempts = 100;
+        $attempt = 0;
+        
+        while ($attempt < $maxAttempts) {
+            // توليد رقم عشوائي مكون من 5 أرقام (من 10000 إلى 99999)
+            $randomNumber = rand(10000, 99999);
+            $invoiceNumber = (string)$randomNumber;
+            
+            // التحقق من عدم وجود فاتورة بنفس الرقم
+            $existing = $db->queryOne(
+                "SELECT id FROM invoices WHERE invoice_number = ? LIMIT 1 FOR UPDATE",
+                [$invoiceNumber]
+            );
+            
+            if (!$existing) {
+                // الرقم فريد، يمكن استخدامه
+                if ($transactionStarted) {
+                    $db->commit();
+                }
+                error_log("Generated random invoice number: {$invoiceNumber}");
+                return $invoiceNumber;
+            }
+            
+            $attempt++;
+        }
+        
+        // إذا فشلت جميع المحاولات، استخدم timestamp + رقم عشوائي
+        $timestamp = substr(time(), -4);
+        $random = rand(10, 99);
+        $invoiceNumber = $timestamp . $random;
+        
+        // التحقق النهائي
+        $existing = $db->queryOne(
+            "SELECT id FROM invoices WHERE invoice_number = ? LIMIT 1",
+            [$invoiceNumber]
+        );
+        
+        if ($transactionStarted) {
+            $db->commit();
+        }
+        
+        if (!$existing) {
+            error_log("Generated random invoice number with timestamp fallback: {$invoiceNumber}");
+            return $invoiceNumber;
+        }
+        
+        // إذا كان موجوداً، أضف رقم عشوائي إضافي
+        $invoiceNumber = $timestamp . rand(100, 999);
+        error_log("Generated random invoice number with extended fallback: {$invoiceNumber}");
+        return $invoiceNumber;
+        
+    } catch (Throwable $e) {
+        if ($transactionStarted) {
+            try {
+                $db->rollback();
+            } catch (Throwable $rollbackError) {
+                // تجاهل خطأ rollback
+            }
+        }
+        
+        error_log("Error generating random invoice number: " . $e->getMessage());
+        
+        // استخدام طريقة احتياطية
+        $randomNumber = rand(10000, 99999);
+        $existing = $db->queryOne(
+            "SELECT id FROM invoices WHERE invoice_number = ? LIMIT 1",
+            [(string)$randomNumber]
+        );
+        
+        if (!$existing) {
+            return (string)$randomNumber;
+        }
+        
+        // إذا كان موجوداً، استخدم timestamp
+        $timestamp = substr(time(), -5);
+        return $timestamp;
+    }
+}
+
+/**
+ * توليد رقم فاتورة عداد تصاعدي يبدأ من 1 (لنقطة البيع الخاصة بالمدير/المحاسب)
+ */
+function generateSequentialInvoiceNumber() {
+    $db = db();
+    
+    // استخدام transaction مع SELECT FOR UPDATE لضمان عدم التكرار
+    $transactionStarted = false;
+    if (!$db->inTransaction()) {
+        $db->beginTransaction();
+        $transactionStarted = true;
+    }
+    
+    try {
+        // البحث عن آخر رقم فاتورة من نوع العداد التصاعدي (أرقام فقط بدون prefix)
+        // نبحث عن أرقام تبدأ من 1 وتكون أرقام فقط (بدون أي prefix أو format)
+        // نستثني الأرقام من 10000 إلى 99999 لأنها من نقطة البيع الخاصة بالمندوب (أرقام عشوائية)
+        $result = $db->queryOne(
+            "SELECT invoice_number, id FROM invoices 
+             WHERE invoice_number REGEXP '^[0-9]+$'
+             AND CAST(invoice_number AS UNSIGNED) < 10000
+             ORDER BY CAST(invoice_number AS UNSIGNED) DESC, id DESC LIMIT 1
+             FOR UPDATE"
+        );
+        
+        $serial = 1;
+        
+        if ($result && !empty($result['invoice_number'])) {
+            $lastInvoiceNumber = $result['invoice_number'];
+            // التحقق من أن الرقم هو رقم صحيح
+            if (preg_match('/^\d+$/', $lastInvoiceNumber)) {
+                $lastSerial = intval($lastInvoiceNumber);
+                if ($lastSerial > 0) {
+                    $serial = $lastSerial + 1;
+                }
+            }
+        }
+        
+        // التأكد من عدم وجود فاتورة بنفس الرقم
+        $maxAttempts = 1000;
+        $attempt = 0;
+        $invoiceNumber = (string)$serial;
+        
+        while ($attempt < $maxAttempts) {
+            $existing = $db->queryOne(
+                "SELECT id FROM invoices WHERE invoice_number = ? LIMIT 1 FOR UPDATE",
+                [$invoiceNumber]
+            );
+            
+            if (!$existing) {
+                // الرقم فريد، يمكن استخدامه
+                if ($transactionStarted) {
+                    $db->commit();
+                }
+                error_log("Generated sequential invoice number: {$invoiceNumber}");
+                return $invoiceNumber;
+            }
+            
+            // الرقم موجود، جرب الرقم التالي
+            $serial++;
+            $invoiceNumber = (string)$serial;
+            $attempt++;
+        }
+        
+        // في حالة فشل جميع المحاولات (مستحيل تقريباً)، استخدم timestamp
+        $timestamp = time();
+        $invoiceNumber = (string)$timestamp;
+        
+        // التحقق النهائي
+        $existing = $db->queryOne(
+            "SELECT id FROM invoices WHERE invoice_number = ? LIMIT 1",
+            [$invoiceNumber]
+        );
+        
+        if ($transactionStarted) {
+            $db->commit();
+        }
+        
+        if (!$existing) {
+            error_log("Generated sequential invoice number with timestamp fallback: {$invoiceNumber}");
+            return $invoiceNumber;
+        }
+        
+        // إذا كان موجوداً (مستحيل تقريباً)، أضف رقم عشوائي
+        $invoiceNumber = (string)($timestamp . rand(100, 999));
+        error_log("Generated sequential invoice number with extended fallback: {$invoiceNumber}");
+        return $invoiceNumber;
+        
+    } catch (Throwable $e) {
+        if ($transactionStarted) {
+            try {
+                $db->rollback();
+            } catch (Throwable $rollbackError) {
+                // تجاهل خطأ rollback
+            }
+        }
+        
+        error_log("Error generating sequential invoice number: " . $e->getMessage());
+        
+        // استخدام طريقة احتياطية
+        $serial = 1;
+        $existing = $db->queryOne(
+            "SELECT id FROM invoices WHERE invoice_number = ? LIMIT 1",
+            [(string)$serial]
+        );
+        
+        if (!$existing) {
+            return (string)$serial;
+        }
+        
+        // إذا كان موجوداً، استخدم timestamp
+        $timestamp = time();
+        return (string)$timestamp;
     }
 }
 
