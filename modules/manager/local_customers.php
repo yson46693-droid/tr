@@ -8138,7 +8138,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fetchCustomers(1);
         });
         
-        // البحث الفوري عند الكتابة - فوري تماماً بدون أي تأخير
+        // البحث الفوري عند الكتابة - ديناميكي مباشر
         customerSearchInput.addEventListener('input', function(e) {
             // التأكد من أن القيمة موجودة
             var searchValue = this.value;
@@ -8150,32 +8150,28 @@ document.addEventListener('DOMContentLoaded', function() {
             // إلغاء أي طلب سابق قيد الانتظار
             if (searchTimeout) {
                 clearTimeout(searchTimeout);
-                if (window.cancelAnimationFrame) {
-                    cancelAnimationFrame(searchTimeout);
-                }
                 searchTimeout = null;
             }
             
-            // البحث الفوري تماماً بدون أي تأخير - استخدام requestAnimationFrame
-            // هذا يضمن البحث الفوري مع تجنب الطلبات الزائدة أثناء الكتابة السريعة
-            if (window.requestAnimationFrame) {
-                searchTimeout = requestAnimationFrame(function() {
-                    fetchCustomers(1);
-                    searchTimeout = null;
-                });
-            } else {
-                // Fallback للمتصفحات القديمة - استخدام timeout 0 للبحث الفوري
-                searchTimeout = setTimeout(function() {
-                    fetchCustomers(1);
-                    searchTimeout = null;
-                }, 0);
-            }
+            // البحث الفوري مع debounce قصير (300ms) لتجنب الطلبات الزائدة أثناء الكتابة السريعة
+            // هذا يضمن البحث الديناميكي المباشر مع تحسين الأداء
+            searchTimeout = setTimeout(function() {
+                fetchCustomers(1);
+                searchTimeout = null;
+            }, 300);
         });
         
-        // إضافة event listener للـ keydown للتأكد من أن الكتابة تعمل
+        // البحث الفوري أيضاً عند الضغط على Enter
         customerSearchInput.addEventListener('keydown', function(e) {
-            // السماح بجميع المفاتيح
-            return true;
+            if (e.key === 'Enter' || e.keyCode === 13) {
+                e.preventDefault();
+                // إلغاء أي timeout قيد الانتظار والبحث فوراً
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                    searchTimeout = null;
+                }
+                fetchCustomers(1);
+            }
         });
     }
     
@@ -8185,47 +8181,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (debtStatusFilter) {
         debtStatusFilter.addEventListener('change', function() {
+            // إلغاء أي timeout قيد الانتظار
             if (searchTimeout) {
                 clearTimeout(searchTimeout);
-                if (window.cancelAnimationFrame) {
-                    cancelAnimationFrame(searchTimeout);
-                }
+                searchTimeout = null;
             }
-            // البحث الفوري بدون تأخير
-            if (window.requestAnimationFrame) {
-                searchTimeout = requestAnimationFrame(function() {
-                    fetchCustomers(1);
-                    searchTimeout = null;
-                });
-            } else {
-                searchTimeout = setTimeout(function() {
-                    fetchCustomers(1);
-                    searchTimeout = null;
-                }, 0);
-            }
+            // البحث الفوري عند تغيير الفلتر
+            fetchCustomers(1);
         });
     }
     
     if (regionFilter) {
         regionFilter.addEventListener('change', function() {
+            // إلغاء أي timeout قيد الانتظار
             if (searchTimeout) {
                 clearTimeout(searchTimeout);
-                if (window.cancelAnimationFrame) {
-                    cancelAnimationFrame(searchTimeout);
-                }
+                searchTimeout = null;
             }
-            // البحث الفوري بدون تأخير
-            if (window.requestAnimationFrame) {
-                searchTimeout = requestAnimationFrame(function() {
-                    fetchCustomers(1);
-                    searchTimeout = null;
-                });
-            } else {
-                searchTimeout = setTimeout(function() {
-                    fetchCustomers(1);
-                    searchTimeout = null;
-                }, 0);
-            }
+            // البحث الفوري عند تغيير الفلتر
+            fetchCustomers(1);
         });
     }
     

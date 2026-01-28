@@ -41,17 +41,21 @@ try {
     
     $supplierTypeCheck = $db->queryOne("SHOW COLUMNS FROM suppliers LIKE 'type'");
     if (empty($supplierTypeCheck)) {
-        $db->execute("ALTER TABLE suppliers ADD COLUMN type ENUM('honey', 'packaging', 'nuts', 'olive_oil', 'derivatives', 'beeswax', 'sesame') NULL DEFAULT NULL AFTER supplier_code");
+        $db->execute("ALTER TABLE suppliers ADD COLUMN type ENUM('honey', 'packaging', 'nuts', 'olive_oil', 'derivatives', 'beeswax', 'sesame', 'date', 'soap') NULL DEFAULT NULL AFTER supplier_code");
     } else {
-        // التحقق من وجود 'sesame' في ENUM وتحديثه إذا لم يكن موجوداً
+        // التحقق من وجود أنواع الموردين في ENUM وتحديثه إذا لم تكن موجودة
         $typeColumn = $db->queryOne("SHOW COLUMNS FROM suppliers WHERE Field = 'type'");
         if ($typeColumn) {
             $typeEnum = $typeColumn['Type'];
-            if (stripos($typeEnum, 'sesame') === false) {
+            $needsUpdate = false;
+            if (stripos($typeEnum, 'sesame') === false || stripos($typeEnum, 'date') === false || stripos($typeEnum, 'soap') === false) {
+                $needsUpdate = true;
+            }
+            if ($needsUpdate) {
                 try {
-                    $db->execute("ALTER TABLE suppliers MODIFY COLUMN type ENUM('honey', 'packaging', 'nuts', 'olive_oil', 'derivatives', 'beeswax', 'sesame') NULL DEFAULT NULL");
+                    $db->execute("ALTER TABLE suppliers MODIFY COLUMN type ENUM('honey', 'packaging', 'nuts', 'olive_oil', 'derivatives', 'beeswax', 'sesame', 'date', 'soap') NULL DEFAULT NULL");
                 } catch (Exception $e) {
-                    error_log("Error adding 'sesame' to supplier type enum: " . $e->getMessage());
+                    error_log("Error adding supplier types to enum: " . $e->getMessage());
                 }
             }
         }
@@ -290,6 +294,9 @@ $supplierSupplyCategoryLabels = [
     'derivatives' => 'المشتقات',
     'nuts' => 'المكسرات',
     'packaging' => 'أدوات التعبئة',
+    'sesame' => 'السمسم',
+    'date' => 'البلح',
+    'soap' => 'الصابون',
     'raw' => 'المواد الخام',
     'other' => 'مواد أخرى',
 ];

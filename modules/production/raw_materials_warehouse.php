@@ -849,7 +849,9 @@ $supplierTypeMap = [
     'olive_oil' => 'olive_oil',
     'beeswax' => 'beeswax',
     'derivatives' => 'derivatives',
-    'nuts' => 'nuts'
+    'nuts' => 'nuts',
+    'sesame' => 'sesame',
+    'date' => 'date'
 ];
 
 $currentSupplierType = $supplierTypeMap[$section] ?? null;
@@ -1144,6 +1146,133 @@ if (!function_exists('ensureSesameStockTable')) {
     }
 }
 
+// تعريف دالة إنشاء جدول البلح
+if (!function_exists('ensureDateStockTable')) {
+    function ensureDateStockTable(bool $forceRetry = false): bool
+    {
+        static $checked = false;
+        static $ready = false;
+        
+        if ($forceRetry) {
+            $checked = false;
+            $ready = false;
+        }
+        
+        if ($checked) {
+            return $ready;
+        }
+        
+        $checked = true;
+        
+        try {
+            $db = db();
+            if (!$db) {
+                error_log("ensureDateStockTable: Database connection failed");
+                return false;
+            }
+            
+            // التحقق من وجود الجدول
+            $dateStockCheck = $db->queryOne("SHOW TABLES LIKE 'date_stock'");
+            if (!empty($dateStockCheck)) {
+                $ready = true;
+                return $ready;
+            }
+            
+            // التحقق من وجود جدول suppliers أولاً
+            $suppliersCheck = $db->queryOne("SHOW TABLES LIKE 'suppliers'");
+            if (empty($suppliersCheck)) {
+                error_log("ensureDateStockTable: suppliers table does not exist. Cannot create date_stock table.");
+                $ready = false;
+                return false;
+            }
+            
+            // محاولة إنشاء الجدول مع Foreign Key constraint
+            try {
+                $db->execute("
+                    CREATE TABLE IF NOT EXISTS `date_stock` (
+                      `id` int(11) NOT NULL AUTO_INCREMENT,
+                      `supplier_id` int(11) NOT NULL,
+                      `quantity` decimal(10,3) NOT NULL DEFAULT 0.000 COMMENT 'الكمية بالكيلوجرام',
+                      `notes` text DEFAULT NULL,
+                      `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                      `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+                      PRIMARY KEY (`id`),
+                      KEY `supplier_id_idx` (`supplier_id`),
+                      CONSTRAINT `date_stock_ibfk_1` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ");
+            } catch (Exception $createError) {
+                error_log("ensureDateStockTable: Failed to create table with FK constraint: " . $createError->getMessage());
+                // محاولة إنشاء الجدول بدون Foreign Key constraint
+                try {
+                    $db->execute("
+                        CREATE TABLE IF NOT EXISTS `date_stock` (
+                          `id` int(11) NOT NULL AUTO_INCREMENT,
+                          `supplier_id` int(11) NOT NULL,
+                          `quantity` decimal(10,3) NOT NULL DEFAULT 0.000 COMMENT 'الكمية بالكيلوجرام',
+                          `notes` text DEFAULT NULL,
+                          `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                          `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+                          PRIMARY KEY (`id`),
+                          KEY `supplier_id_idx` (`supplier_id`)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    ");
+                    error_log("ensureDateStockTable: Created table without FK constraint");
+                } catch (Exception $createError2) {
+                    error_log("ensureDateStockTable: Failed to create table without FK constraint: " . $createError2->getMessage());
+                    throw $createError2;
+                }
+            }
+            
+            // التحقق مرة أخرى من أن الجدول تم إنشاؤه ويمكن الوصول إليه
+            $verifyCheck = $db->queryOne("SHOW TABLES LIKE 'date_stock'");
+            if (!empty($verifyCheck)) {
+                try {
+                    $columnsCheck = $db->queryOne("SHOW COLUMNS FROM date_stock LIKE 'supplier_id'");
+                    if (!empty($columnsCheck)) {
+                        $ready = true;
+                        error_log("ensureDateStockTable: date_stock table created and verified successfully");
+                    } else {
+                        error_log("ensureDateStockTable: Table exists but required columns are missing");
+                        $ready = false;
+                    }
+                } catch (Exception $colError) {
+                    error_log("ensureDateStockTable: Error checking table columns: " . $colError->getMessage());
+                    $ready = false;
+                }
+            } else {
+                error_log("ensureDateStockTable: Failed to verify date_stock table creation");
+                $ready = false;
+            }
+        } catch (Exception $e) {
+            error_log("Error ensuring date_stock table: " . $e->getMessage());
+            error_log("Error stack trace: " . $e->getTraceAsString());
+            $ready = false;
+        }
+        
+        return $ready;
+    }
+}
+
+// البلح المتاح للاستخدام في القوالب
+$availableDateForTemplates = [];
+if (!isset($dateStockTableReady)) {
+    $dateStockTableReady = ensureDateStockTable();
+}
+if ($dateStockTableReady) {
+    try {
+        $availableDateForTemplates = $db->query(
+            "SELECT ds.quantity, s.name AS supplier_name
+             FROM date_stock ds
+             INNER JOIN suppliers s ON ds.supplier_id = s.id
+             WHERE ds.quantity > 0
+             ORDER BY s.name"
+        );
+    } catch (Exception $e) {
+        error_log("Error loading available date for templates: " . $e->getMessage());
+    }
+}
+
 // السمسم المتاح للاستخدام في القوالب
 $availableSesameForTemplates = [];
 if (!isset($sesameStockTableReady)) {
@@ -1276,7 +1405,7 @@ $rawWarehouseReport['total_suppliers'] = (int)($rawReportQueryOne($db, "
     SELECT COUNT(*) AS total 
     FROM suppliers 
     WHERE status = 'active' 
-      AND type IN ('honey', 'olive_oil', 'beeswax', 'derivatives', 'nuts', 'sesame')
+      AND type IN ('honey', 'olive_oil', 'beeswax', 'derivatives', 'nuts', 'sesame', 'date')
 ")['total'] ?? 0);
 
 // Honey summary
@@ -1780,6 +1909,75 @@ if ($sesameSummary || $tahiniSummary) {
     $rawWarehouseReport['zero_items'] += $zeroItems;
 }
 
+// Date (Dates/Balah) summary
+$dateSummary = null;
+if ($dateStockTableReady) {
+    $dateSummary = $rawReportQueryOne($db, "
+        SELECT 
+            COALESCE(SUM(quantity), 0) AS total_quantity,
+            COUNT(*) AS records,
+            COUNT(DISTINCT supplier_id) AS suppliers,
+            SUM(CASE WHEN COALESCE(quantity,0) <= 0 THEN 1 ELSE 0 END) AS zero_items
+        FROM date_stock
+    ");
+}
+
+if ($dateSummary) {
+    $sectionKey = 'date';
+    $rawWarehouseReport['sections_order'][] = $sectionKey;
+    
+    $topDateItems = [];
+    if ($dateStockTableReady && ($dateSummary['total_quantity'] ?? 0) > 0) {
+        $topDateQuery = $rawReportQuery($db, "
+            SELECT 
+                s.name AS supplier_name,
+                ds.quantity,
+                ds.notes
+            FROM date_stock ds
+            LEFT JOIN suppliers s ON ds.supplier_id = s.id
+            WHERE ds.quantity > 0
+            ORDER BY ds.quantity DESC
+            LIMIT 10
+        ");
+        foreach ($topDateQuery as $item) {
+            $topDateItems[] = [
+                'label' => ($item['supplier_name'] ?? 'مورد غير محدد'),
+                'value' => (float)($item['quantity'] ?? 0),
+                'unit' => 'كجم',
+                'decimals' => 3
+            ];
+        }
+    }
+    
+    $rawWarehouseReport['sections'][$sectionKey] = [
+        'title' => 'البلح',
+        'records' => (int)($dateSummary['records'] ?? 0),
+        'metrics' => [
+            [
+                'label' => 'إجمالي مخزون البلح',
+                'value' => (float)($dateSummary['total_quantity'] ?? 0),
+                'unit' => 'كجم',
+                'decimals' => 3
+            ],
+            [
+                'label' => 'عدد السجلات',
+                'value' => (int)($dateSummary['records'] ?? 0),
+                'unit' => null,
+                'decimals' => 0
+            ],
+            [
+                'label' => 'عدد الموردين',
+                'value' => (int)($dateSummary['suppliers'] ?? 0),
+                'unit' => null,
+                'decimals' => 0
+            ]
+        ],
+        'top_items' => $topDateItems
+    ];
+    $rawWarehouseReport['total_records'] += (int)($dateSummary['records'] ?? 0);
+    $rawWarehouseReport['zero_items'] += (int)($dateSummary['zero_items'] ?? 0);
+}
+
 $rawWarehouseReport['sections_count'] = count($rawWarehouseReport['sections']);
 
 // ======= معالجة العمليات (تم تعطيل كود إنشاء الجداول القديم) =======
@@ -2279,7 +2477,7 @@ if (empty($templateRawMaterialsCheck)) {
             CREATE TABLE IF NOT EXISTS `template_raw_materials` (
               `id` int(11) NOT NULL AUTO_INCREMENT,
               `template_id` int(11) NOT NULL,
-              `material_type` enum('honey_raw','honey_filtered','olive_oil','beeswax','derivatives','nuts','sesame','other') NOT NULL COMMENT 'نوع المادة الخام',
+              `material_type` enum('honey_raw','honey_filtered','olive_oil','beeswax','derivatives','nuts','sesame','date','other') NOT NULL COMMENT 'نوع المادة الخام',
               `material_name` varchar(255) NOT NULL COMMENT 'اسم المادة (للمواد الأخرى)',
               `supplier_id` int(11) DEFAULT NULL COMMENT 'المورد الخاص بالمادة',
               `honey_variety` varchar(50) DEFAULT NULL COMMENT 'نوع العسل (سدر، جبلي، إلخ)',
@@ -2309,15 +2507,15 @@ if (empty($templateRawMaterialsCheck)) {
             }
         }
         
-        // تحديث enum material_type لإضافة 'sesame' إذا لم يكن موجوداً
+        // تحديث enum material_type لإضافة 'sesame' و 'date' إذا لم يكونا موجودين
         try {
             $materialTypeColumn = $db->queryOne("SHOW COLUMNS FROM template_raw_materials WHERE Field = 'material_type'");
             if ($materialTypeColumn) {
                 $typeEnum = $materialTypeColumn['Type'];
-                if (strpos($typeEnum, 'sesame') === false) {
+                if (strpos($typeEnum, 'sesame') === false || strpos($typeEnum, 'date') === false) {
                     $db->execute("
                         ALTER TABLE `template_raw_materials` 
-                        MODIFY COLUMN `material_type` enum('honey_raw','honey_filtered','olive_oil','beeswax','derivatives','nuts','sesame','other') NOT NULL COMMENT 'نوع المادة الخام'
+                        MODIFY COLUMN `material_type` enum('honey_raw','honey_filtered','olive_oil','beeswax','derivatives','nuts','sesame','date','other') NOT NULL COMMENT 'نوع المادة الخام'
                     ");
                 }
             }
@@ -2357,9 +2555,9 @@ try {
     if ($supplierTypeColumn) {
         $typeEnum = $supplierTypeColumn['Type'];
         $needsUpdate = false;
-        $newEnum = "enum('honey','olive_oil','beeswax','derivatives','packaging','nuts','sesame')";
+        $newEnum = "enum('honey','olive_oil','beeswax','derivatives','packaging','nuts','sesame','date','soap')";
         
-        if (strpos($typeEnum, 'nuts') === false || strpos($typeEnum, 'sesame') === false) {
+        if (strpos($typeEnum, 'nuts') === false || strpos($typeEnum, 'sesame') === false || strpos($typeEnum, 'date') === false || strpos($typeEnum, 'soap') === false) {
             $needsUpdate = true;
         }
         
@@ -2382,7 +2580,8 @@ $supplierTypeMap = [
     'beeswax' => 'beeswax',
     'derivatives' => 'derivatives',
     'nuts' => 'nuts',
-    'sesame' => 'sesame'
+    'sesame' => 'sesame',
+    'date' => 'date'
 ];
 
 $currentSupplierType = $supplierTypeMap[$section] ?? null;
@@ -2717,7 +2916,7 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $sectionRedirect = $_POST['redirect_section'] ?? $materialCategory;
             $stockSource = $_POST['stock_source'] ?? 'single';
             
-            $validCategories = ['honey', 'olive_oil', 'beeswax', 'derivatives', 'nuts', 'sesame', 'tahini'];
+            $validCategories = ['honey', 'olive_oil', 'beeswax', 'derivatives', 'nuts', 'sesame', 'tahini', 'date'];
             if (!in_array($sectionRedirect, $validCategories, true)) {
                 $sectionRedirect = $materialCategory;
             }
@@ -3715,6 +3914,132 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
+        // عمليات البلح
+        elseif ($action === 'add_single_date') {
+            if (!$dateStockTableReady) {
+                $dateStockTableReady = ensureDateStockTable(true);
+            }
+            if (!$dateStockTableReady) {
+                $error = 'لا يمكن الوصول إلى جدول مخزون البلح. يرجى المحاولة لاحقاً أو التواصل مع الدعم.';
+            }
+            
+            $supplierId = intval($_POST['supplier_id'] ?? 0);
+            $quantity = floatval($_POST['quantity'] ?? 0);
+            $notes = trim($_POST['notes'] ?? '');
+            $supplyStockId = null;
+            
+            if (!empty($error)) {
+                // keep $error as is
+            } elseif ($supplierId <= 0) {
+                $error = 'يجب اختيار المورد';
+            } elseif ($quantity <= 0) {
+                $error = 'يجب إدخال كمية صحيحة';
+            } else {
+                $existing = $db->queryOne("SELECT * FROM date_stock WHERE supplier_id = ?", [$supplierId]);
+                
+                if ($existing) {
+                    $db->execute("UPDATE date_stock SET quantity = quantity + ?, notes = ?, updated_at = NOW() WHERE supplier_id = ?", [$quantity, $notes ?: $existing['notes'], $supplierId]);
+                    if (isset($existing['id'])) {
+                        $supplyStockId = (int)$existing['id'];
+                    }
+                } else {
+                    $insertResult = $db->execute("INSERT INTO date_stock (supplier_id, quantity, notes) VALUES (?, ?, ?)", [$supplierId, $quantity, $notes ?: null]);
+                    if (!empty($insertResult['insert_id'])) {
+                        $supplyStockId = (int)$insertResult['insert_id'];
+                    }
+                }
+                
+                logAudit($currentUser['id'], 'add_single_date', 'date_stock', $supplierId, null, ['quantity' => $quantity]);
+
+                $supplierRow = $db->queryOne("SELECT name FROM suppliers WHERE id = ? LIMIT 1", [$supplierId]);
+                $supplierName = $supplierRow['name'] ?? null;
+                $detailsParts = ['إضافة بلح'];
+                if ($notes !== '') {
+                    $detailsParts[] = 'ملاحظات: ' . mb_substr($notes, 0, 120, 'UTF-8');
+                }
+                recordProductionSupplyLog([
+                    'material_category' => 'date',
+                    'material_label' => 'بلح',
+                    'stock_source' => 'date_stock',
+                    'stock_id' => $supplyStockId,
+                    'supplier_id' => $supplierId,
+                    'supplier_name' => $supplierName,
+                    'quantity' => $quantity,
+                    'unit' => 'كجم',
+                    'details' => implode(' | ', $detailsParts),
+                    'recorded_by' => $currentUser['id'] ?? null,
+                ]);
+                
+                preventDuplicateSubmission(
+                    'تم إضافة البلح بنجاح',
+                    ['page' => 'raw_materials_warehouse', 'section' => 'date'],
+                    null,
+                    $dashboardSlug
+                );
+            }
+        }
+        
+        // تسجيل تالف بلح
+        elseif ($action === 'damage_date') {
+            if (!$dateStockTableReady) {
+                $dateStockTableReady = ensureDateStockTable(true);
+            }
+            if (!$dateStockTableReady) {
+                $error = 'لا يمكن الوصول إلى جدول مخزون البلح. يرجى المحاولة لاحقاً أو التواصل مع الدعم.';
+            }
+            
+            $stockId = intval($_POST['stock_id'] ?? 0);
+            $quantity = floatval($_POST['quantity'] ?? 0);
+            $reason = trim($_POST['reason'] ?? '');
+            
+            if (!empty($error)) {
+                // keep $error as is
+            } elseif ($stockId <= 0) {
+                $error = 'معرف المخزون غير صحيح';
+            } elseif ($quantity <= 0) {
+                $error = 'يجب إدخال كمية صحيحة';
+            } elseif (empty($reason)) {
+                $error = 'يجب إدخال سبب التلف';
+            } else {
+                try {
+                    $db->beginTransaction();
+                    
+                    $stock = $db->queryOne("SELECT * FROM date_stock WHERE id = ?", [$stockId]);
+                    if (!$stock) {
+                        throw new Exception('سجل المخزون غير موجود');
+                    }
+                    
+                    if ($stock['quantity'] < $quantity) {
+                        throw new Exception('الكمية المطلوبة أكبر من المتاحة');
+                    }
+                    
+                    // خصم الكمية
+                    $db->execute("UPDATE date_stock SET quantity = quantity - ?, updated_at = NOW() WHERE id = ?", [$quantity, $stockId]);
+                    
+                    // تسجيل في سجل التالف
+                    $db->execute(
+                        "INSERT INTO damaged_materials (material_category, material_type, stock_id, supplier_id, quantity, reason, recorded_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        ['date', 'بلح', $stockId, $stock['supplier_id'], $quantity, $reason, $currentUser['id']]
+                    );
+                    
+                    logAudit($currentUser['id'], 'damage_date', 'date_stock', $stockId, null, ['quantity' => $quantity, 'reason' => $reason]);
+                    
+                    $db->commit();
+                    
+                    preventDuplicateSubmission(
+                        sprintf('تم تسجيل %.3f كجم كمية تالفة من البلح', $quantity),
+                        ['page' => 'raw_materials_warehouse', 'section' => 'date'],
+                        null,
+                        $dashboardSlug
+                    );
+                } catch (Exception $e) {
+                    $db->rollBack();
+                    error_log('Error recording damaged date: ' . $e->getMessage());
+                    $error = 'حدث خطأ أثناء تسجيل التالف: ' . $e->getMessage();
+                }
+            }
+        }
+        
         // إنشاء مكسرات مشكلة
         elseif ($action === 'create_mixed_nuts') {
             $batchName = trim($_POST['batch_name'] ?? '');
@@ -3862,6 +4187,7 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 'derivatives'    => 'مشتق',
                 'nuts'           => 'مكسرات',
                 'sesame'         => 'سمسم',
+                'date'           => 'بلح',
                 'other'          => 'مادة أخرى'
             ];
 
@@ -4927,6 +5253,12 @@ function openBeeswaxDamageModal(id, supplier, quantity) {
             <a class="nav-link <?php echo $section === 'sesame' ? 'active' : ''; ?>" 
                href="?page=raw_materials_warehouse&section=sesame">
                 <i class="bi bi-circle-fill"></i>السمسم
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?php echo $section === 'date' ? 'active' : ''; ?>" 
+               href="?page=raw_materials_warehouse&section=date">
+                <i class="bi bi-tree-fill"></i>البلح
             </a>
         </li>
     </ul>
@@ -9294,6 +9626,426 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                 const modalInstance = new bootstrap.Modal(modal);
                 modalInstance.show();
             }
+        }
+    }
+    </script>
+    
+    <?php
+} elseif ($section === 'date') {
+    // جلب موردي البلح
+    $dateSuppliers = [];
+    try {
+        $dateSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status = 'active' AND type = 'date' ORDER BY name");
+    } catch (Exception $e) {
+        error_log('Failed to load date suppliers: ' . $e->getMessage());
+        $dateSuppliers = [];
+    }
+    
+    $dateSectionTableError = !$dateStockTableReady;
+    $dateStock = [];
+    $dateStats = [
+        'total_quantity' => 0,
+        'suppliers_count' => 0
+    ];
+    
+    if (!$dateSectionTableError) {
+        try {
+            $dateStock = $db->query("
+                SELECT ds.*, s.name as supplier_name, s.phone as supplier_phone 
+                FROM date_stock ds
+                INNER JOIN suppliers s ON ds.supplier_id = s.id
+                WHERE ds.quantity > 0
+                ORDER BY s.name
+            ");
+        } catch (Exception $e) {
+            error_log('Failed to load date stock: ' . $e->getMessage());
+            $dateStock = [];
+            $dateSectionTableError = true;
+        }
+        
+        if (!$dateSectionTableError) {
+            try {
+                $dateStats = [
+                    'total_quantity' => $db->queryOne("SELECT COALESCE(SUM(quantity), 0) as total FROM date_stock")['total'] ?? 0,
+                    'suppliers_count' => $db->queryOne("SELECT COUNT(DISTINCT supplier_id) as total FROM date_stock")['total'] ?? 0
+                ];
+            } catch (Exception $e) {
+                error_log('Failed to load date stats: ' . $e->getMessage());
+                $dateStats = [
+                    'total_quantity' => 0,
+                    'suppliers_count' => 0
+                ];
+                $dateSectionTableError = true;
+            }
+        }
+    }
+    ?>
+    
+    <?php $dateActionsDisabledAttr = $dateSectionTableError ? 'disabled' : ''; ?>
+    
+    <!-- إحصائيات البلح -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small mb-1">إجمالي الكمية</div>
+                        <div class="h4 mb-0"><?php echo number_format($dateStats['total_quantity'], 2); ?> <small>كجم</small></div>
+                    </div>
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);">
+                        <i class="bi bi-tree-fill"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-muted small mb-1">عدد الموردين</div>
+                        <div class="h4 mb-0"><?php echo $dateStats['suppliers_count']; ?></div>
+                    </div>
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);">
+                        <i class="bi bi-people"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <?php if ($dateSectionTableError): ?>
+        <div class="alert alert-warning">
+            <i class="bi bi-info-circle me-2"></i>
+            لا يمكن الوصول إلى جدول مخزون البلح حالياً. لن يعمل هذا القسم حتى يتم إنشاء الجدول في قاعدة البيانات.
+        </div>
+    <?php endif; ?>
+    
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header text-white d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);">
+                    <h5 class="mb-0"><i class="bi bi-tree-fill me-2"></i>مخزون البلح</h5>
+                    <button class="btn btn-light btn-sm" onclick="showAddDateModal()" <?php echo $dateActionsDisabledAttr; ?>>
+                        <i class="bi bi-plus-circle me-1"></i>إضافة
+                    </button>
+                </div>
+                <div class="card-body">
+                    <?php if ($dateSectionTableError): ?>
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-exclamation-circle fs-1 d-block mb-3 text-warning"></i>
+                            يرجى التأكد من إعداد قاعدة البيانات بشكل صحيح.
+                        </div>
+                    <?php elseif (empty($dateStock)): ?>
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                            لا يوجد مخزون بلح
+                        </div>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>المورد</th>
+                                        <th class="text-center">الكمية (كجم)</th>
+                                        <th class="text-center">الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($dateStock as $stock): ?>
+                                        <tr>
+                                            <td>
+                                                <strong><?php echo htmlspecialchars($stock['supplier_name']); ?></strong>
+                                                <?php if ($stock['supplier_phone']): ?>
+                                                    <br><small class="text-muted"><?php echo htmlspecialchars($stock['supplier_phone']); ?></small>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="text-center"><strong style="color: #8B4513;"><?php echo number_format($stock['quantity'], 3); ?></strong></td>
+                                            <td class="text-center">
+                                                <div class="btn-group" role="group">
+                                                    <button class="btn btn-sm btn-danger"
+                                                            onclick="openDamageDateModal(<?php echo $stock['id']; ?>, 'بلح', '<?php echo htmlspecialchars($stock['supplier_name'], ENT_QUOTES); ?>', <?php echo $stock['quantity']; ?>)"
+                                                            <?php echo ($stock['quantity'] <= 0 || $dateSectionTableError) ? 'disabled' : ''; ?>>
+                                                        <i class="bi bi-exclamation-triangle"></i> تالف
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal إضافة بلح -->
+    <div class="modal fade d-none d-md-block" id="addDateModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header text-white" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);">
+                    <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>إضافة بلح</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <input type="hidden" name="action" value="add_single_date">
+                    <input type="hidden" name="submit_token" value="">
+                    <div class="modal-body scrollable-modal-body">
+                        <?php if ($dateSectionTableError): ?>
+                            <div class="alert alert-warning">
+                                لا يمكن إضافة بلح جديد قبل إنشاء جدول المخزون في قاعدة البيانات.
+                            </div>
+                        <?php endif; ?>
+                        <div class="mb-3">
+                            <label class="form-label">المورد <span class="text-danger">*</span></label>
+                            <select name="supplier_id" class="form-select" required>
+                                <option value="">اختر المورد</option>
+                                <?php foreach ($dateSuppliers as $supplier): ?>
+                                    <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">الكمية (كجم) <span class="text-danger">*</span></label>
+                            <input type="number" step="0.001" min="0.001" name="quantity" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">ملاحظات</label>
+                            <textarea name="notes" class="form-control" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn text-white" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);" <?php echo $dateActionsDisabledAttr; ?>>
+                            <i class="bi bi-check-circle me-1"></i>إضافة
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Card إضافة بلح للموبايل -->
+    <div class="card shadow-sm mb-4 d-md-none" id="addDateCard" style="display: none;">
+        <div class="card-header text-white" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);">
+            <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>إضافة بلح</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="action" value="add_single_date">
+                <input type="hidden" name="submit_token" value="">
+                <?php if ($dateSectionTableError): ?>
+                    <div class="alert alert-warning">
+                        لا يمكن إضافة بلح جديد قبل إنشاء جدول المخزون في قاعدة البيانات.
+                    </div>
+                <?php endif; ?>
+                <div class="mb-3">
+                    <label class="form-label">المورد <span class="text-danger">*</span></label>
+                    <select name="supplier_id" class="form-select" required>
+                        <option value="">اختر المورد</option>
+                        <?php foreach ($dateSuppliers as $supplier): ?>
+                            <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية (كجم) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.001" min="0.001" name="quantity" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">ملاحظات</label>
+                    <textarea name="notes" class="form-control" rows="3"></textarea>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddDateCard()">إلغاء</button>
+                    <button type="submit" class="btn text-white" style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);" <?php echo $dateActionsDisabledAttr; ?>>
+                        <i class="bi bi-check-circle me-1"></i>إضافة
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal تسجيل تالف للبلح -->
+    <div class="modal fade d-none d-md-block" id="damageDateModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>تسجيل كمية تالفة - بلح</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <input type="hidden" name="action" value="damage_date">
+                    <input type="hidden" name="stock_id" id="damage_date_stock_id">
+                    <div class="modal-body scrollable-modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">المورد</label>
+                            <input type="text" class="form-control" id="damage_date_supplier" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">الكمية المتاحة</label>
+                            <input type="text" class="form-control" id="damage_date_available" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">الكمية التالفة (كجم) <span class="text-danger">*</span></label>
+                            <input type="number" step="0.001" min="0.001" name="quantity" id="damage_date_quantity" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                            <textarea name="reason" id="damage_date_reason" class="form-control" rows="3" required></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-danger" id="damage_date_submit">
+                            <i class="bi bi-exclamation-triangle me-1"></i>تسجيل التالف
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Card تسجيل تالف للبلح للموبايل -->
+    <div class="card shadow-sm mb-4 d-md-none" id="damageDateCard" style="display: none;">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>تسجيل كمية تالفة - بلح</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                <input type="hidden" name="action" value="damage_date">
+                <input type="hidden" name="stock_id" id="damage_date_stock_id_card">
+                <div class="mb-3">
+                    <label class="form-label">المورد</label>
+                    <input type="text" class="form-control" id="damage_date_supplier_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية المتاحة</label>
+                    <input type="text" class="form-control" id="damage_date_available_card" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الكمية التالفة (كجم) <span class="text-danger">*</span></label>
+                    <input type="number" step="0.001" min="0.001" name="quantity" id="damage_date_quantity_card" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">سبب التلف <span class="text-danger">*</span></label>
+                    <textarea name="reason" id="damage_date_reason_card" class="form-control" rows="3" required></textarea>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary" onclick="closeDamageDateCard()">إلغاء</button>
+                    <button type="submit" class="btn btn-danger" id="damage_date_submit_card">
+                        <i class="bi bi-exclamation-triangle me-1"></i>تسجيل التالف
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+    const dateActionsDisabled = <?php echo $dateSectionTableError ? 'true' : 'false'; ?>;
+
+    function showAddDateModal() {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            const card = document.getElementById('addDateCard');
+            if (card) {
+                card.style.display = 'block';
+                setTimeout(function() {
+                    scrollToElement(card);
+                }, 50);
+            }
+        } else {
+            const modal = document.getElementById('addDateModal');
+            if (modal) {
+                const modalInstance = new bootstrap.Modal(modal);
+                modalInstance.show();
+            }
+        }
+    }
+
+    function closeAddDateCard() {
+        const card = document.getElementById('addDateCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
+        }
+    }
+
+    function openDamageDateModal(id, materialType, supplier, quantity) {
+        if (typeof closeAllForms === 'function') {
+            closeAllForms();
+        }
+        
+        if (dateActionsDisabled) {
+            alert('لا يمكن تسجيل التالف حالياً لعدم توفر جدول البلح.');
+            return;
+        }
+        
+        const qty = parseFloat(quantity) || 0;
+        const isMobileDevice = isMobile();
+        
+        if (isMobileDevice) {
+            const card = document.getElementById('damageDateCard');
+            if (!card) return;
+            
+            const stockIdInput = document.getElementById('damage_date_stock_id_card');
+            const supplierInput = document.getElementById('damage_date_supplier_card');
+            const availableInput = document.getElementById('damage_date_available_card');
+            const qtyInput = document.getElementById('damage_date_quantity_card');
+            const reasonInput = document.getElementById('damage_date_reason_card');
+            const submitBtn = document.getElementById('damage_date_submit_card');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (availableInput) availableInput.value = qty.toFixed(3) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            card.style.display = 'block';
+            setTimeout(function() {
+                scrollToElement(card);
+            }, 50);
+        } else {
+            const stockIdInput = document.getElementById('damage_date_stock_id');
+            const supplierInput = document.getElementById('damage_date_supplier');
+            const availableInput = document.getElementById('damage_date_available');
+            const qtyInput = document.getElementById('damage_date_quantity');
+            const reasonInput = document.getElementById('damage_date_reason');
+            const submitBtn = document.getElementById('damage_date_submit');
+            
+            if (stockIdInput) stockIdInput.value = id;
+            if (supplierInput) supplierInput.value = supplier;
+            if (availableInput) availableInput.value = qty.toFixed(3) + ' كجم';
+            if (qtyInput) {
+                qtyInput.value = '';
+                qtyInput.max = qty > 0 ? qty.toFixed(3) : null;
+                qtyInput.disabled = qty <= 0;
+            }
+            if (reasonInput) reasonInput.value = '';
+            if (submitBtn) submitBtn.disabled = qty <= 0;
+            
+            new bootstrap.Modal(document.getElementById('damageDateModal')).show();
+        }
+    }
+
+    function closeDamageDateCard() {
+        const card = document.getElementById('damageDateCard');
+        if (card) {
+            card.style.display = 'none';
+            const form = card.querySelector('form');
+            if (form) form.reset();
         }
     }
     </script>
