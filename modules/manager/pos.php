@@ -3998,6 +3998,8 @@ try {
             const sanitizedQty = sanitizeNumber(item.quantity);
             const sanitizedPrice = sanitizeNumber(item.unit_price);
             const sanitizedAvailable = sanitizeNumber(item.available);
+            // عرض السعر بصيغة عشرية صحيحة (مثل 1.25)
+            const priceDisplay = sanitizedPrice % 1 === 0 ? sanitizedPrice.toString() : sanitizedPrice.toFixed(2);
             return `
                 <tr data-cart-row data-product-id="${item.product_id}">
                     <td data-label="المنتج">
@@ -4012,7 +4014,7 @@ try {
                         </div>
                     </td>
                     <td data-label="سعر الوحدة">
-                        <input type="number" step="1" min="0" class="form-control pos-price-input" data-cart-price data-product-id="${item.product_id}" value="${sanitizedPrice}" dir="ltr" style="text-align: left; width: 100%;">
+                        <input type="number" step="0.01" min="0" class="form-control pos-price-input" data-cart-price data-product-id="${item.product_id}" value="${priceDisplay}" dir="ltr" style="text-align: left; width: 100%;">
                     </td>
                     <td data-label="الإجمالي" class="fw-semibold">${formatCurrency(sanitizedQty * sanitizedPrice)}</td>
                     <td data-label="إجراءات" class="text-end">
@@ -4091,7 +4093,7 @@ try {
     function updateUnitPrice(productId, value, skipRender = false) {
         const item = cart.find((entry) => entry.product_id === productId);
         if (!item) return;
-        // السماح بإدخال الأرقام العشرية حتى مع step="1"
+        // السماح بإدخال الأرقام العشرية (مثل 1.25)
         let price = sanitizeNumber(value);
         if (price < 0) price = 0;
         // تقريب إلى رقمين عشريين فقط عند الحفظ النهائي
@@ -4104,9 +4106,14 @@ try {
             const row = document.querySelector(`tr[data-product-id="${productId}"]`);
             if (row) {
                 const totalCell = row.querySelector('td[data-label="الإجمالي"]');
+                const priceInput = row.querySelector('[data-cart-price]');
                 if (totalCell) {
                     const qty = sanitizeNumber(item.quantity);
                     totalCell.textContent = formatCurrency(qty * price);
+                }
+                // تحديث قيمة حقل السعر بصيغة عشرية صحيحة
+                if (priceInput) {
+                    priceInput.value = price % 1 === 0 ? price.toString() : price.toFixed(2);
                 }
             }
         } else {
@@ -4208,7 +4215,8 @@ try {
                 // تحديث القيمة النهائية عند فقدان التركيز
                 const finalPrice = sanitizeNumber(priceInput.value);
                 if (finalPrice >= 0) {
-                    priceInput.value = finalPrice; // عرض القيمة بدون .00 إذا كانت صحيحة
+                    // عرض القيمة بصيغة عشرية صحيحة (مثل 1.25)
+                    priceInput.value = finalPrice % 1 === 0 ? finalPrice.toString() : finalPrice.toFixed(2);
                     updateUnitPrice(productId, finalPrice, false);
                 }
             }
@@ -4251,7 +4259,7 @@ try {
     if (elements.partialInput) {
         // معالجة input (مطابق لحقل سعر الوحدة)
         // لا نقوم بأي معالجة إضافية هنا، فقط تحديث الملخص
-        // السماح بإدخال الأرقام العشرية حتى مع step="1" (مثل حقل السعر)
+        // السماح بإدخال الأرقام العشرية (مثل حقل السعر)
         elements.partialInput.addEventListener('input', function() {
             // التأكد من أن الحقل في وضع LTR أثناء الإدخال
             elements.partialInput.style.direction = 'ltr';
