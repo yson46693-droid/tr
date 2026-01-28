@@ -40,6 +40,14 @@ try {
         $db->execute("ALTER TABLE tasks ADD COLUMN task_type VARCHAR(50) NULL DEFAULT 'general' AFTER status");
         error_log('Added task_type column to tasks table in production/tasks.php');
     }
+    
+    // التحقق من وجود عمود unit في جدول tasks وإضافته إذا لم يكن موجوداً
+    $unitColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'unit'");
+    if (empty($unitColumn)) {
+        // إضافة الحقل بعد quantity
+        $db->execute("ALTER TABLE tasks ADD COLUMN unit VARCHAR(50) NULL DEFAULT 'قطعة' AFTER quantity");
+        error_log('Added unit column to tasks table in production/tasks.php');
+    }
 } catch (Exception $e) {
     error_log('Error checking/adding columns in production/tasks.php: ' . $e->getMessage());
 }
@@ -259,6 +267,12 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 // استخدام trim مباشرة بدلاً من tasksSafeString لأن tasksSafeString قد يحذف القيمة
                 $productName = trim((string)$rawProductName);
                 $quantity = isset($input['quantity']) ? (float) $input['quantity'] : 0.0;
+                $unit = tasksSafeString($input['unit'] ?? 'قطعة');
+                // التحقق من أن الوحدة من القيم المسموحة
+                $allowedUnits = ['قطعة', 'كرتونة', 'شرينك', 'جرام', 'كيلو'];
+                if (!in_array($unit, $allowedUnits, true)) {
+                    $unit = 'قطعة'; // القيمة الافتراضية
+                }
                 $taskType = $input['task_type'] ?? 'general';
                 $notes = tasksSafeString($input['notes'] ?? '');
                 
@@ -509,7 +523,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 if ($displayProductName !== '') {
                     $productInfo = 'المنتج: ' . $displayProductName;
                     if ($quantity > 0) {
-                        $productInfo .= ' - الكمية: ' . number_format($quantity, 2);
+                        $productInfo .= ' - الكمية: ' . number_format($quantity, 2) . ' ' . $unit;
                     }
                     
                     // إضافة معلومات المنتج إلى notes
@@ -525,6 +539,11 @@ function tasksHandleAction(string $action, array $input, array $context): array
                     $values[] = $quantity;
                     $placeholders[] = '?';
                 }
+
+                // حفظ الوحدة دائماً إذا كانت موجودة
+                $columns[] = 'unit';
+                $values[] = $unit;
+                $placeholders[] = '?';
 
                 if ($notes !== '') {
                     $columns[] = 'notes';
@@ -883,7 +902,7 @@ if ($unifiedTemplatesExists && $productTemplatesExists) {
 
 $taskSql = "SELECT t.id, t.title, t.description, t.assigned_to, t.created_by, t.priority, t.status,
     t.due_date, t.completed_at, t.received_at, t.started_at, t.related_type, t.related_id,
-    t.product_id, t.template_id, t.quantity, t.notes, t.created_at, t.updated_at,
+    t.product_id, t.template_id, t.quantity, t.unit, t.notes, t.created_at, t.updated_at,
     t.product_name,
     uAssign.full_name AS assigned_to_name,
     uCreate.full_name AS created_by_name,
@@ -1423,7 +1442,14 @@ function tasksHtml(string $value): string
                                             echo '<span class="text-muted">-</span>';
                                         }
                                     ?></td>
-                                    <td><?php echo isset($task['quantity']) && $task['quantity'] !== null ? number_format((float) $task['quantity'], 2) . ' قطعة' : '<span class="text-muted">-</span>'; ?></td>
+                                    <td><?php 
+                                        if (isset($task['quantity']) && $task['quantity'] !== null) {
+                                            $unit = !empty($task['unit']) ? $task['unit'] : 'قطعة';
+                                            echo number_format((float) $task['quantity'], 2) . ' ' . htmlspecialchars($unit);
+                                        } else {
+                                            echo '<span class="text-muted">-</span>';
+                                        }
+                                    ?></td>
                                     <td>
                                         <?php 
                                         if (!empty($task['all_workers'])) {
@@ -1621,6 +1647,16 @@ function tasksHtml(string $value): string
                                 <label class="form-label">الكمية <span class="text-danger">*</span></label>
                                 <input type="number" step="0.01" min="0.01" class="form-control" name="quantity" id="quantity" placeholder="0.00">
                             </div>
+                            <div class="col-md-6">
+                                <label class="form-label">الوحدة</label>
+                                <select class="form-select" name="unit" id="unit">
+                                    <option value="قطعة">قطعة</option>
+                                    <option value="كرتونة">كرتونة</option>
+                                    <option value="شرينك">شرينك</option>
+                                    <option value="جرام">جرام</option>
+                                    <option value="كيلو">كيلو</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="form-text mt-2">سيتم إنشاء العنوان تلقائيًا بناءً على المنتج والكمية.</div>
                     </div>
@@ -1718,6 +1754,16 @@ function tasksHtml(string $value): string
                 <div class="mb-3">
                     <label class="form-label">الكمية <span class="text-danger">*</span></label>
                     <input type="number" step="0.01" min="0.01" class="form-control" name="quantity" id="quantity_card" placeholder="0.00">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">الوحدة</label>
+                    <select class="form-select" name="unit" id="unit_card">
+                        <option value="قطعة">قطعة</option>
+                        <option value="كرتونة">كرتونة</option>
+                        <option value="شرينك">شرينك</option>
+                        <option value="جرام">جرام</option>
+                        <option value="كيلو">كيلو</option>
+                    </select>
                 </div>
                 <div class="form-text">سيتم إنشاء العنوان تلقائيًا بناءً على المنتج والكمية.</div>
             </div>
@@ -1828,6 +1874,8 @@ function tasksHtml(string $value): string
         const productId = parseInt(productSelect.value, 10);
         const quantity = quantityInput ? parseFloat(quantityInput.value) : 0;
         const productNameInput = document.getElementById('product_name');
+        const unitSelect = document.getElementById('unit');
+        const unit = unitSelect ? unitSelect.value : 'قطعة';
         
         // الحصول على اسم المنتج من الحقل النصي أولاً (إذا كان المستخدم أدخله يدوياً)
         let productName = '';
@@ -1861,7 +1909,7 @@ function tasksHtml(string $value): string
 
         // تحديث العنوان إذا كان هناك منتج وكمية (حتى لو كان product_id سالباً)
         if (productName && quantity > 0) {
-            titleInput.value = 'إنتاج ' + sanitizeText(productName) + ' - ' + quantity.toFixed(2) + ' قطعة';
+            titleInput.value = 'إنتاج ' + sanitizeText(productName) + ' - ' + quantity.toFixed(2) + ' ' + unit;
         } else if (productName && quantity <= 0) {
             titleInput.value = 'إنتاج ' + sanitizeText(productName);
         } else if (!productName && quantity > 0) {
@@ -1926,6 +1974,12 @@ function tasksHtml(string $value): string
     // إضافة event listener لتحديث العنوان عند تغيير الكمية
     if (quantityInput) {
         quantityInput.addEventListener('input', updateProductionTitle);
+    }
+    
+    // إضافة event listener لتحديث العنوان عند تغيير الوحدة
+    const unitSelect = document.getElementById('unit');
+    if (unitSelect) {
+        unitSelect.addEventListener('change', updateProductionTitle);
     }
     
     // إضافة event listener لتحديث العنوان عند تغيير اسم المنتج يدوياً
@@ -2117,7 +2171,7 @@ function tasksHtml(string $value): string
                 <p>${description}</p>
             </div>
             ${productName ? `<div class="mb-3"><strong>المنتج:</strong> ${productName}</div>` : ''}
-            ${quantity ? `<div class="mb-3"><strong>الكمية:</strong> ${quantity} قطعة</div>` : ''}
+            ${quantity ? `<div class="mb-3"><strong>الكمية:</strong> ${quantity} ${unit}</div>` : ''}
             <div class="row mb-3">
                 <div class="col-md-6"><strong>المخصص إلى:</strong> ${assignedTo}</div>
                 <div class="col-md-6"><strong>أنشئت بواسطة:</strong> ${createdBy}</div>
