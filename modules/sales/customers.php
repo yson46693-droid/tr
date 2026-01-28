@@ -5163,7 +5163,7 @@ document.addEventListener('DOMContentLoaded', function () {
 <!-- البحث -->
 <div class="card shadow-sm mb-4 customers-search-card">
     <div class="card-body">
-        <form method="GET" action="" class="row g-2 g-md-3 align-items-end">
+        <form method="GET" action="" id="customerSearchForm" class="row g-2 g-md-3 align-items-end">
             <input type="hidden" name="page" value="customers">
             <?php if ($section): ?>
                 <input type="hidden" name="section" value="<?php echo htmlspecialchars($section); ?>">
@@ -5180,7 +5180,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         id="customerSearch"
                         name="search"
                         value="<?php echo htmlspecialchars($search); ?>"
-                        placeholder="بحث سريع بالاسم أو الهاتف"
+                        placeholder="بحث في جميع بيانات العميل"
                         autocomplete="off"
                     >
                 </div>
@@ -5208,9 +5208,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 </select>
             </div>
             <div class="col-6 col-md-3 col-lg-2 d-grid">
-                <button type="submit" class="btn btn-primary btn-sm">
-                    <i class="bi bi-search me-1"></i>
-                    <span>بحث</span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClearFilters">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>
+                    <span>مسح</span>
                 </button>
             </div>
         </form>
@@ -5233,7 +5233,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <th>الإجراءات</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="customersTableBody">
                     <?php if (empty($customers)): ?>
                         <tr>
                             <td colspan="8" class="text-center text-muted">لا توجد عملاء</td>
@@ -5381,8 +5381,7 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
         
         <!-- Pagination -->
-        <?php if ($totalPages > 1): ?>
-        <nav aria-label="Page navigation" class="mt-3">
+        <nav id="customersPagination" aria-label="Page navigation" class="mt-3" style="<?php echo $totalPages <= 1 ? 'display: none;' : ''; ?>">
             <ul class="pagination justify-content-center">
                 <li class="page-item <?php echo $pageNum <= 1 ? 'disabled' : ''; ?>">
                     <a class="page-link" href="<?php echo $baseQueryString; ?>&p=<?php echo $pageNum - 1; ?><?php echo $search ? '&search=' . urlencode($search) : ''; ?>&debt_status=<?php echo urlencode($debtStatus); ?>">
@@ -5421,7 +5420,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 </li>
             </ul>
         </nav>
-        <?php endif; ?>
     </div>
 </div>
 
@@ -6600,6 +6598,157 @@ function printDebtorCustomers() {
     const printUrl = (basePath ? basePath + '/' : '/') + 'print_debtor_customers.php';
     window.open(printUrl, '_blank');
 }
+
+// ===== البحث الفوري في العملاء =====
+(function() {
+    const searchInput = document.getElementById('customerSearch');
+    const searchForm = document.getElementById('customerSearchForm');
+    const tableBody = document.getElementById('customersTableBody');
+    const paginationContainer = document.getElementById('customersPagination');
+    const btnClearFilters = document.getElementById('btnClearFilters');
+    const filterStatus = document.getElementById('debtStatusFilter');
+    const filterRegion = document.getElementById('regionFilter');
+    
+    let searchTimeout = null;
+    let currentAbortController = null;
+    let currentPage = <?php echo $pageNum; ?>;
+    
+    if (!searchInput || !tableBody) {
+        return;
+    }
+    
+    // دالة لجلب معاملات البحث
+    function getFilterParams() {
+        const o = {};
+        o.search = (searchInput && searchInput.value.trim()) || '';
+        o.debt_status = (filterStatus && filterStatus.value) || 'all';
+        o.region_id = (filterRegion && filterRegion.value) || '';
+        return o;
+    }
+    
+    // دالة تحميل العملاء
+    function loadCustomers(page) {
+        currentPage = page;
+        const fp = getFilterParams();
+        
+        // إلغاء أي طلب سابق
+        if (currentAbortController) {
+            currentAbortController.abort();
+        }
+        currentAbortController = new AbortController();
+        
+        // إظهار مؤشر التحميل
+        tableBody.innerHTML = '<tr><td colspan="8" class="text-center"><div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">جاري التحميل...</span></div></td></tr>';
+        
+        // بناء المعاملات
+        const params = new URLSearchParams();
+        params.append('p', page);
+        if (fp.search) params.append('search', fp.search);
+        if (fp.debt_status && fp.debt_status !== 'all') params.append('debt_status', fp.debt_status);
+        if (fp.region_id) params.append('region_id', fp.region_id);
+        
+        // إرسال الطلب
+        fetch('<?php echo getRelativeUrl("api/search_customers.php"); ?>?' + params.toString(), {
+            method: 'GET',
+            credentials: 'include',
+            signal: currentAbortController.signal
+        })
+        .then(function(response) {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
+        .then(function(data) {
+            if (data.success) {
+                tableBody.innerHTML = data.tableRows;
+                if (paginationContainer) {
+                    paginationContainer.innerHTML = data.pagination;
+                    paginationContainer.style.display = data.totalPages > 1 ? 'block' : 'none';
+                }
+                
+                // تحديث URL بدون إعادة تحميل
+                const url = new URL(window.location);
+                url.searchParams.set('page', 'customers');
+                url.searchParams.set('p', page);
+                if (fp.search) url.searchParams.set('search', fp.search);
+                else url.searchParams.delete('search');
+                if (fp.debt_status && fp.debt_status !== 'all') url.searchParams.set('debt_status', fp.debt_status);
+                else url.searchParams.delete('debt_status');
+                if (fp.region_id) url.searchParams.set('region_id', fp.region_id);
+                else url.searchParams.delete('region_id');
+                window.history.pushState({}, '', url);
+            } else {
+                tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">' + (data.message || 'حدث خطأ في البحث') + '</td></tr>';
+            }
+        })
+        .catch(function(error) {
+            if (error.name === 'AbortError') return;
+            console.error('Error loading customers:', error);
+            tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">حدث خطأ في تحميل البيانات</td></tr>';
+        })
+        .finally(function() {
+            currentAbortController = null;
+        });
+    }
+    
+    // منع إرسال النموذج التقليدي
+    if (searchForm) {
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (searchTimeout) clearTimeout(searchTimeout);
+            loadCustomers(1);
+        });
+    }
+    
+    // البحث الفوري عند الكتابة (مع debouncing)
+    searchInput.addEventListener('input', function() {
+        if (searchTimeout) clearTimeout(searchTimeout);
+        if (currentAbortController) currentAbortController.abort();
+        searchTimeout = setTimeout(function() { 
+            loadCustomers(1); 
+        }, 300);
+    });
+    
+    // البحث عند الضغط على Enter
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault();
+            if (searchTimeout) clearTimeout(searchTimeout);
+            loadCustomers(1);
+        }
+    });
+    
+    // البحث الفوري عند تغيير الفلاتر
+    if (filterStatus) {
+        filterStatus.addEventListener('change', function() {
+            if (searchTimeout) clearTimeout(searchTimeout);
+            if (currentAbortController) currentAbortController.abort();
+            loadCustomers(1);
+        });
+    }
+    
+    if (filterRegion) {
+        filterRegion.addEventListener('change', function() {
+            if (searchTimeout) clearTimeout(searchTimeout);
+            if (currentAbortController) currentAbortController.abort();
+            loadCustomers(1);
+        });
+    }
+    
+    // زر مسح الفلاتر
+    if (btnClearFilters) {
+        btnClearFilters.addEventListener('click', function() {
+            searchInput.value = '';
+            if (filterStatus) filterStatus.value = 'all';
+            if (filterRegion) filterRegion.value = '';
+            if (searchTimeout) clearTimeout(searchTimeout);
+            if (currentAbortController) currentAbortController.abort();
+            loadCustomers(1);
+        });
+    }
+    
+    // جعل الدالة متاحة عالمياً للاستخدام من pagination
+    window.loadCustomers = loadCustomers;
+})();
 </script>
 <script src="<?php echo ASSETS_URL; ?>js/customer_export.js?v=<?php echo time(); ?>"></script>
 <?php endif; // end if ($section === 'company') from line 4121 ?>

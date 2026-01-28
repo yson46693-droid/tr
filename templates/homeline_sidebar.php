@@ -88,20 +88,6 @@ $menuItems = [];
 switch ($role) {
     case 'manager':
         $menuItems = [
-            [
-                'title' => isset($lang['dashboard']) ? $lang['dashboard'] : 'لوحة التحكم',
-                'icon' => 'bi-speedometer2',
-                'url' => $baseUrl . 'manager.php',
-                'active' => ($currentPage === 'manager.php' && ($currentPageParam === 'overview' || $currentPageParam === '')),
-                'badge' => null
-            ],
-            [
-                'title' => 'الشات',
-                'icon' => 'bi-chat-dots',
-                'url' => $baseUrl . 'manager.php?page=chat',
-                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'chat'),
-                'badge' => null
-            ],
             ['divider' => true, 'title' => isset($lang['management']) ? $lang['management'] : 'الإدارة'],
             [
                 'title' => 'العملاء المحليين',
@@ -278,26 +264,27 @@ switch ($role) {
                 'url' => $baseUrl . 'manager.php?page=security',
                 'active' => ($currentPage === 'manager.php' && in_array($currentPageParam, ['security', 'permissions'])),
                 'badge' => null
+            ],
+            ['divider' => true, 'title' => 'عام'],
+            [
+                'title' => isset($lang['dashboard']) ? $lang['dashboard'] : 'لوحة التحكم',
+                'icon' => 'bi-speedometer2',
+                'url' => $baseUrl . 'manager.php',
+                'active' => ($currentPage === 'manager.php' && ($currentPageParam === 'overview' || $currentPageParam === '')),
+                'badge' => null
+            ],
+            [
+                'title' => 'الشات',
+                'icon' => 'bi-chat-dots',
+                'url' => $baseUrl . 'manager.php?page=chat',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'chat'),
+                'badge' => null
             ]
         ];
         break;
         
     case 'accountant':
         $menuItems = [
-            [
-                'title' => isset($lang['dashboard']) ? $lang['dashboard'] : 'لوحة التحكم',
-                'icon' => 'bi-speedometer2',
-                'url' => $baseUrl . 'accountant.php',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === ''),
-                'badge' => null
-            ],
-            [
-                'title' => 'الشات',
-                'icon' => 'bi-chat-dots',
-                'url' => $baseUrl . 'accountant.php?page=chat',
-                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'chat'),
-                'badge' => null
-            ],
             ['divider' => true, 'title' => isset($lang['accounting_section']) ? $lang['accounting_section'] : 'المحاسبة'],
             [
                 'title' => 'العملاء المحليين',
@@ -465,6 +452,21 @@ switch ($role) {
                 'icon' => 'bi-upc-scan',
                 'url' => $baseUrl . 'accountant.php?page=batch_reader',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'batch_reader'),
+                'badge' => null
+            ],
+            ['divider' => true, 'title' => 'عام'],
+            [
+                'title' => isset($lang['dashboard']) ? $lang['dashboard'] : 'لوحة التحكم',
+                'icon' => 'bi-speedometer2',
+                'url' => $baseUrl . 'accountant.php',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === ''),
+                'badge' => null
+            ],
+            [
+                'title' => 'الشات',
+                'icon' => 'bi-chat-dots',
+                'url' => $baseUrl . 'accountant.php?page=chat',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'chat'),
                 'badge' => null
             ]
         ];
