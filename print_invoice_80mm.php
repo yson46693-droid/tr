@@ -222,9 +222,13 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 .invoice-header-80mm {
     text-align: center;
-    margin-bottom: 8px;
-    padding-bottom: 8px;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
     border-bottom: 2px solid #000;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    page-break-inside: avoid;
+    break-inside: avoid;
 }
 
 .company-name-80mm {
@@ -246,7 +250,9 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 .invoice-divider {
     border-top: 1px solid #000;
-    margin: 6px 0;
+    margin: 4px 0;
+    page-break-inside: avoid;
+    break-inside: avoid;
 }
 
 .invoice-info-80mm,
@@ -281,14 +287,18 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-section-80mm {
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     overflow-x: visible;
     width: 100%;
+    page-break-inside: avoid;
+    break-inside: avoid;
 }
 
 .items-section-80mm table {
     max-width: 100%;
     overflow: visible;
+    page-break-inside: avoid;
+    break-inside: avoid;
 }
 
 .items-table-80mm {
@@ -322,15 +332,17 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm td {
-    padding: 4px 3px;
+    padding: 3px 2px;
     text-align: center;
     border-bottom: 1px solid #000;
     border-left: 1px solid #000;
     font-size: 9px;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    line-height: 1.3;
+    line-height: 1.2;
     vertical-align: top;
+    page-break-inside: avoid;
+    break-inside: avoid;
 }
 
 .items-table-80mm td:first-child {
@@ -373,11 +385,13 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .summary-row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
     font-size: 10px;
     padding: 2px 0;
     word-wrap: break-word;
     overflow-wrap: break-word;
+    page-break-inside: avoid;
+    break-inside: avoid;
 }
 
 .summary-row .label {
@@ -431,9 +445,11 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 .invoice-footer-80mm {
     text-align: center;
-    margin-top: 8px;
-    padding-top: 8px;
+    margin-top: 6px;
+    padding-top: 6px;
     border-top: 1px solid #000;
+    page-break-inside: avoid;
+    break-inside: avoid;
 }
 
 .thanks {
@@ -450,7 +466,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 @media print {
     @page {
         size: 80mm auto;
-        margin: 3mm;
+        margin: 2mm;
     }
 
     * {
@@ -459,34 +475,69 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
         color-adjust: exact !important;
     }
 
-    body {
-        margin: 0;
-        padding: 0;
+    html, body {
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
         background: #ffffff !important;
         font-size: 10px;
+        orphans: 3;
+        widows: 3;
     }
 
     .invoice-80mm {
-        margin: 0;
-        padding: 3mm;
-        box-shadow: none;
-        width: 100%;
-        max-width: 100%;
-        overflow: visible;
+        margin: 0 !important;
+        padding: 2mm !important;
+        box-shadow: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow: visible !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+    }
+
+    .invoice-header-80mm,
+    .invoice-info-80mm,
+    .customer-info-80mm,
+    .items-section-80mm,
+    .summary-section-80mm,
+    .notes-section-80mm,
+    .invoice-footer-80mm {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
     }
 
     .items-table-80mm {
         width: 100% !important;
         max-width: 100% !important;
         font-size: 9px !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    .items-table-80mm thead {
+        display: table-header-group !important;
+    }
+
+    .items-table-80mm tbody {
+        display: table-row-group !important;
+    }
+
+    .items-table-80mm tr {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
     }
 
     .items-table-80mm th,
     .items-table-80mm td {
         font-size: 9px !important;
-        padding: 4px 2px !important;
+        padding: 3px 2px !important;
         border: 1px solid #000 !important;
         border-collapse: collapse !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
     }
 
     .items-table-80mm th {
@@ -502,6 +553,8 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     .info-row,
     .summary-row {
         font-size: 10px !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
     }
 
     .section-title {
@@ -509,6 +562,8 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
         background: #f0f0f0 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
     }
 }
 </style>
