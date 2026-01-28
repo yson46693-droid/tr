@@ -1364,7 +1364,7 @@ function tasksHtml(string $value): string
                                 <th>المخصص إلى</th>
                                 <th>الأولوية</th>
                                 <th>الحالة</th>
-                                <th>تاريخ الاستحقاق</th>
+                                <th>تاريخ التسليم</th>
                                 <th>أنشئت بواسطة</th>
                                 <th style="width: 180px;">الإجراءات</th>
                             </tr>
@@ -1592,7 +1592,7 @@ function tasksHtml(string $value): string
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">تاريخ الاستحقاق</label>
+                            <label class="form-label">تاريخ التسليم</label>
                             <input type="date" class="form-control" name="due_date">
                         </div>
                     </div>
@@ -1692,7 +1692,7 @@ function tasksHtml(string $value): string
                 </select>
             </div>
             <div class="mb-3">
-                <label class="form-label">تاريخ الاستحقاق</label>
+                <label class="form-label">تاريخ التسليم</label>
                 <input type="date" class="form-control" name="due_date">
             </div>
 
@@ -2133,7 +2133,7 @@ function tasksHtml(string $value): string
                 </div>
             </div>
             <div class="row mb-3">
-                <div class="col-md-6"><strong>تاريخ الاستحقاق:</strong> ${dueDate}</div>
+                <div class="col-md-6"><strong>تاريخ التسليم:</strong> ${dueDate}</div>
                 <div class="col-md-6"><strong>تاريخ الإنشاء:</strong> ${createdAt}</div>
             </div>
             ${notes ? `<div class="mb-3"><strong>ملاحظات:</strong><p>${notes}</p></div>` : ''}

@@ -465,7 +465,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             </tr>
             <?php if ($dueDate): ?>
             <tr>
-                <td>تاريخ الاستحقاق:</td>
+                <td>تاريخ التسليم:</td>
                 <td style="font-weight: 600;"><?php echo date('Y-m-d', strtotime($dueDate)); ?></td>
             </tr>
             <?php endif; ?>
