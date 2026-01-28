@@ -214,7 +214,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     max-width: 80mm;
     width: 100%;
     margin: 0 auto;
-    padding: 4mm;
+    padding: 2mm;
     background: #ffffff;
     color: #000;
     font-size: 10px;
@@ -227,8 +227,10 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 .invoice-header-80mm {
     text-align: center;
-    margin-bottom: 6px;
-    padding-bottom: 6px;
+    margin-bottom: 5px;
+    margin-top: 0;
+    padding-bottom: 5px;
+    padding-top: 0;
     border-bottom: 2px solid #000;
     word-wrap: break-word;
     overflow-wrap: break-word;
@@ -262,7 +264,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 .invoice-info-80mm,
 .customer-info-80mm {
-    margin-bottom: 8px;
+    margin-bottom: 5px;
 }
 
 .section-title {
@@ -292,7 +294,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-section-80mm {
-    margin-bottom: 6px;
+    margin-bottom: 5px;
     overflow-x: visible;
     width: 100%;
     page-break-inside: avoid;
@@ -439,7 +441,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .text-info { color: #17a2b8; }
 
 .notes-section-80mm {
-    margin-bottom: 8px;
+    margin-bottom: 5px;
 }
 
 .notes-text {
@@ -455,8 +457,8 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 .invoice-footer-80mm {
     text-align: center;
-    margin-top: 6px;
-    padding-top: 6px;
+    margin-top: 5px;
+    padding-top: 5px;
     border-top: 1px solid #000;
     page-break-inside: avoid;
     break-inside: avoid;
@@ -464,8 +466,8 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 .thanks {
     font-weight: 700;
-    font-size: 10px;
-    margin-bottom: 4px;
+    font-size: 12px;
+    margin-bottom: 5px;
 }
 
 .terms {
@@ -497,7 +499,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
     .invoice-80mm {
         margin: 0 !important;
-        padding: 2mm !important;
+        padding: 1mm !important;
         box-shadow: none !important;
         width: 100% !important;
         max-width: 100% !important;
@@ -506,6 +508,23 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
         break-inside: avoid !important;
         page-break-after: avoid !important;
         break-after: avoid !important;
+    }
+    
+    .invoice-header-80mm {
+        margin-top: 0 !important;
+        padding-top: 2mm !important;
+    }
+    
+    .thanks {
+        font-size: 12px !important;
+        font-weight: 700 !important;
+    }
+    
+    .terms {
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        color: #000 !important;
+        line-height: 1.5 !important;
     }
 
     .invoice-header-80mm,
