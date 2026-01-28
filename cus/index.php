@@ -1524,6 +1524,7 @@ ob_start();
     <!-- Helper Functions - يجب تحميلها قبل محتوى local_customers.php -->
     <script>
     // تعريف دوال مساعدة مطلوبة - يجب أن تكون متاحة قبل تحميل local_customers.php
+    // انتظار تحميل Bootstrap قبل تعريف الدوال التي تستخدمه
     (function() {
         'use strict';
         
@@ -1543,7 +1544,7 @@ ob_start();
         
         window.scrollToElement = window.doScrollToElement;
         
-        // دالة لإغلاق جميع النماذج
+        // دالة لإغلاق جميع النماذج - مع التحقق من Bootstrap
         window.closeAllForms = function() {
             const cards = ['importLocalCustomersCard', 'addLocalCustomerCard', 'customerExportCard', 
                           'localCustomerPurchaseHistoryCard', 'deleteLocalCustomerCard', 
@@ -1561,10 +1562,18 @@ ob_start();
                            'collectPaymentModal', 'viewLocationModal', 'addRegionFromLocalCustomerModal'];
             modals.forEach(function(modalId) {
                 const modal = document.getElementById(modalId);
-                if (modal && typeof bootstrap !== 'undefined') {
-                    const modalInstance = bootstrap.Modal.getInstance(modal);
-                    if (modalInstance) {
-                        modalInstance.hide();
+                if (modal) {
+                    // التحقق من Bootstrap بعد تحميله
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                        const modalInstance = bootstrap.Modal.getInstance(modal);
+                        if (modalInstance) {
+                            modalInstance.hide();
+                        }
+                    } else {
+                        // Fallback: إخفاء modal يدوياً
+                        modal.classList.remove('show');
+                        modal.style.display = 'none';
+                        document.body.classList.remove('modal-open');
                     }
                 }
             });
@@ -1680,8 +1689,8 @@ ob_start();
         });
     }
     
-    if (typeof window.showImportLocalCustomersModal === 'undefined') {
-        window.showImportLocalCustomersModal = function() {
+    // تعريف دالة showImportLocalCustomersModal على window
+    window.showImportLocalCustomersModal = function() {
             doCloseAllForms();
             if (checkIsMobile()) {
                 const card = document.getElementById('importLocalCustomersCard');
@@ -1727,8 +1736,8 @@ ob_start();
         };
     }
     
-    if (typeof window.showAddLocalCustomerModal === 'undefined') {
-        window.showAddLocalCustomerModal = function() {
+    // تعريف دالة showAddLocalCustomerModal على window
+    window.showAddLocalCustomerModal = function() {
             doCloseAllForms();
             if (checkIsMobile()) {
                 const card = document.getElementById('addLocalCustomerCard');
@@ -8399,14 +8408,36 @@ document.addEventListener('DOMContentLoaded', function() {
     // لا يوجد sidebar أو dashboard-wrapper في PWA المستقل - تم إزالة الكود الخاص به
     
 }); // End of DOMContentLoaded
+
+// التأكد من أن جميع الدوال متاحة بعد تحميل الصفحة
+window.addEventListener('load', function() {
+    // التحقق من أن Bootstrap محمّل
+    if (typeof bootstrap === 'undefined') {
+        console.error('Bootstrap JS لم يتم تحميله!');
+    }
+    
+    // التحقق من أن جميع الدوال الأساسية متاحة
+    const requiredFunctions = [
+        'showImportLocalCustomersModal',
+        'showAddLocalCustomerModal',
+        'showCustomerExportModal',
+        'printDebtorCustomers',
+        'showAddRegionFromLocalCustomerModal',
+        'showEditLocalCustomerModal',
+        'showCollectPaymentModal',
+        'showLocalCustomerPurchaseHistoryModal',
+        'showDeleteLocalCustomerModal',
+        'showLocalCustomerReturnModal'
+    ];
+    
+    requiredFunctions.forEach(function(funcName) {
+        if (typeof window[funcName] !== 'function') {
+            console.warn('الدالة ' + funcName + ' غير متاحة!');
+        }
+    });
+});
 </script>
 
-    <!-- jQuery -->
-    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-    
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
     <!-- PWA Service Worker -->
     <script>
     if ('serviceWorker' in navigator) {

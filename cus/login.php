@@ -239,7 +239,7 @@ if (!defined('APP_NAME')) {
                         <div class="text-center mb-4">
                             <i class="bi bi-shield-lock-fill text-primary" style="font-size: 3rem;"></i>
                             <h3 class="mt-3 mb-1">تسجيل الدخول</h3>
-                            <p class="text-muted">العملاء المحليين - للمدير والمحاسب فقط</p>
+                            <p class="text-muted">تطبيق عملاء الشركه</p>
                         </div>
                         
                         <?php if ($error): ?>
