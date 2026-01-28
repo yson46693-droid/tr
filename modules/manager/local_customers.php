@@ -8223,6 +8223,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 toggleLocalSearchClearBtn();
                 if (searchTimeout) { clearTimeout(searchTimeout); searchTimeout = null; }
+                if (currentFetchController) { currentFetchController.abort(); }
                 fetchCustomers(1);
             });
         }
@@ -8235,6 +8236,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (rf) rf.value = '';
                 toggleLocalSearchClearBtn();
                 if (searchTimeout) { clearTimeout(searchTimeout); searchTimeout = null; }
+                if (currentFetchController) { currentFetchController.abort(); }
                 fetchCustomers(1);
                 var u = new URL(window.location.href);
                 u.searchParams.set('page', 'local_customers');
@@ -8250,14 +8252,19 @@ document.addEventListener('DOMContentLoaded', function() {
             var v = this.value;
             if (v === undefined || v === null) { this.value = ''; v = ''; }
             toggleLocalSearchClearBtn();
-            if (searchTimeout) { clearTimeout(searchTimeout); searchTimeout = null; }
-            fetchCustomers(1);
+            // Debouncing: تأخير الطلب 300ms لتقليل عدد الطلبات
+            if (searchTimeout) { clearTimeout(searchTimeout); }
+            if (currentFetchController) { currentFetchController.abort(); }
+            searchTimeout = setTimeout(function() { 
+                fetchCustomers(1); 
+            }, 300);
         });
 
         customerSearchInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' || e.keyCode === 13) {
                 e.preventDefault();
                 if (searchTimeout) { clearTimeout(searchTimeout); searchTimeout = null; }
+                if (currentFetchController) { currentFetchController.abort(); }
                 fetchCustomers(1);
             }
         });
@@ -8276,6 +8283,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 clearTimeout(searchTimeout);
                 searchTimeout = null;
             }
+            if (currentFetchController) {
+                currentFetchController.abort();
+            }
             // البحث الفوري عند تغيير الفلتر
             fetchCustomers(1);
         });
@@ -8287,6 +8297,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (searchTimeout) {
                 clearTimeout(searchTimeout);
                 searchTimeout = null;
+            }
+            if (currentFetchController) {
+                currentFetchController.abort();
             }
             // البحث الفوري عند تغيير الفلتر
             fetchCustomers(1);
