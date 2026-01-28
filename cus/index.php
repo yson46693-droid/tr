@@ -8411,8 +8411,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // البحث الفوري عند تغيير الفلاتر
     var debtStatusFilter = document.getElementById('debtStatusFilter');
     var regionFilter = document.getElementById('regionFilter');
-    var dateFromFilter = document.getElementById('dateFromFilter');
-    var dateToFilter = document.getElementById('dateToFilter');
     
     if (debtStatusFilter) {
         debtStatusFilter.addEventListener('change', function() {
@@ -8434,30 +8432,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 searchTimeout = null;
             }
             // البحث الفوري عند تغيير الفلتر
-            fetchCustomers(1);
-        });
-    }
-    
-    if (dateFromFilter) {
-        dateFromFilter.addEventListener('change', function() {
-            // إلغاء أي timeout قيد الانتظار
-            if (searchTimeout) {
-                clearTimeout(searchTimeout);
-                searchTimeout = null;
-            }
-            // البحث الفوري عند تغيير التاريخ
-            fetchCustomers(1);
-        });
-    }
-    
-    if (dateToFilter) {
-        dateToFilter.addEventListener('change', function() {
-            // إلغاء أي timeout قيد الانتظار
-            if (searchTimeout) {
-                clearTimeout(searchTimeout);
-                searchTimeout = null;
-            }
-            // البحث الفوري عند تغيير التاريخ
             fetchCustomers(1);
         });
     }
