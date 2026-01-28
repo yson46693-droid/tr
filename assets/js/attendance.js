@@ -781,6 +781,8 @@ async function updateTimeSummary() {
 
 // معالجة فتح الـ modal
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('Attendance.js: DOMContentLoaded event fired');
+    
     const cameraModal = document.getElementById('cameraModal');
     const checkInBtn = document.getElementById('checkInBtn');
     const checkOutBtn = document.getElementById('checkOutBtn');
@@ -789,10 +791,25 @@ document.addEventListener('DOMContentLoaded', function() {
     const submitBtn = document.getElementById('submitBtn');
     const cancelBtn = document.getElementById('cancelBtn');
     
-    // التحقق من وجود العناصر
-    if (!cameraModal) {
-        console.error('Camera modal not found');
+    console.log('Attendance.js: Elements found:', {
+        cameraModal: !!cameraModal,
+        checkInBtn: !!checkInBtn,
+        checkOutBtn: !!checkOutBtn,
+        captureBtn: !!captureBtn,
+        retakeBtn: !!retakeBtn,
+        submitBtn: !!submitBtn,
+        cancelBtn: !!cancelBtn
+    });
+    
+    // التحقق من وجود الأزرار الأساسية
+    if (!checkInBtn && !checkOutBtn) {
+        console.error('Attendance buttons not found');
         return;
+    }
+    
+    // التحقق من وجود cameraModal (قد لا يكون موجوداً على الموبايل)
+    if (!cameraModal) {
+        console.warn('Camera modal not found - mobile mode expected');
     }
     
     // دالة لإزالة backdrop
@@ -808,7 +825,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // عند فتح الـ modal (للكمبيوتر فقط)
-    cameraModal.addEventListener('show.bs.modal', function(event) {
+    if (cameraModal) {
+        cameraModal.addEventListener('show.bs.modal', function(event) {
         const button = event.relatedTarget;
         
         // إذا لم يكن button موجوداً (أي تم فتح الـ modal برمجياً)، استخدم currentAction
@@ -845,8 +863,8 @@ document.addEventListener('DOMContentLoaded', function() {
         cameraModal.dataset.backdropInterval = backdropInterval;
     });
     
-    // عند اكتمال فتح الـ modal (بعد أن يكون مرئياً تماماً) - مهم جداً للموبايل
-    cameraModal.addEventListener('shown.bs.modal', function(event) {
+        // عند اكتمال فتح الـ modal (بعد أن يكون مرئياً تماماً) - مهم جداً للموبايل
+        cameraModal.addEventListener('shown.bs.modal', function(event) {
         // كشف ما إذا كان الجهاز موبايل
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
@@ -912,8 +930,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // عند إغلاق الـ modal
-    cameraModal.addEventListener('hidden.bs.modal', function() {
+        // عند إغلاق الـ modal
+        cameraModal.addEventListener('hidden.bs.modal', function() {
         stopCamera();
         capturedPhoto = null;
         currentAction = null;
@@ -931,10 +949,11 @@ document.addEventListener('DOMContentLoaded', function() {
             delete cameraModal.dataset.backdropInterval;
         }
         
-        // إزالة backdrop نهائياً
-        const backdrops = document.querySelectorAll('.modal-backdrop');
-        backdrops.forEach(backdrop => backdrop.remove());
-    });
+            // إزالة backdrop نهائياً
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            backdrops.forEach(backdrop => backdrop.remove());
+        });
+    }
     
     // دالة لفتح الكاميرا (Modal للكمبيوتر أو Card للموبايل)
     function openCamera(action) {
@@ -1099,27 +1118,37 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // إضافة event listeners للأزرار مع التحقق من حالة التعطيل
     if (checkInBtn) {
+        console.log('Adding event listener to checkInBtn');
         checkInBtn.addEventListener('click', function(e) {
+            console.log('checkInBtn clicked', { disabled: checkInBtn.disabled });
             if (checkInBtn.disabled) {
                 e.preventDefault();
                 e.stopPropagation();
                 return false;
             }
             // تعيين الإجراء وفتح modal/card
+            console.log('Calling openCamera with check_in');
             openCamera('check_in');
         });
+    } else {
+        console.error('checkInBtn not found!');
     }
     
     if (checkOutBtn) {
+        console.log('Adding event listener to checkOutBtn');
         checkOutBtn.addEventListener('click', function(e) {
+            console.log('checkOutBtn clicked', { disabled: checkOutBtn.disabled });
             if (checkOutBtn.disabled) {
                 e.preventDefault();
                 e.stopPropagation();
                 return false;
             }
             // تعيين الإجراء وفتح modal/card
+            console.log('Calling openCamera with check_out');
             openCamera('check_out');
         });
+    } else {
+        console.error('checkOutBtn not found!');
     }
     
     // أحداث الأزرار (Modal)
