@@ -404,6 +404,15 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             رقم الاوردر: <?php echo htmlspecialchars($taskNumber); ?>
         </div>
         
+        <?php if (!empty($customerName)): ?>
+        <table class="info-table" style="margin: 12px 0;">
+            <tr>
+                <td>اسم العميل:</td>
+                <td style="font-weight: 600;"><?php echo htmlspecialchars($customerName); ?></td>
+            </tr>
+        </table>
+        <?php endif; ?>
+        
         <div class="section-title">تفاصيل الاوردر</div>
         <?php if (!empty($products)): ?>
         <table class="products-table">

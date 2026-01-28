@@ -1426,7 +1426,7 @@ try {
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
             </div>
-            <form method="POST" id="changeStatusForm">
+            <form method="POST" id="changeStatusForm" action="">
                 <input type="hidden" name="action" value="update_task_status">
                 <input type="hidden" name="task_id" id="changeStatusTaskId">
                 <div class="modal-body">
@@ -1676,12 +1676,23 @@ function updateQuantityStep(index) {
     <?php endif; ?>
 })();
 
-// دالة لفتح modal تغيير الحالة
-function openChangeStatusModal(taskId, currentStatus) {
-    const modal = new bootstrap.Modal(document.getElementById('changeStatusModal'));
+// دالة لفتح modal تغيير الحالة - يجب أن تكون في النطاق العام
+window.openChangeStatusModal = function(taskId, currentStatus) {
+    const modalElement = document.getElementById('changeStatusModal');
+    if (!modalElement) {
+        console.error('Modal element not found');
+        return;
+    }
+    
+    const modal = new bootstrap.Modal(modalElement);
     const taskIdInput = document.getElementById('changeStatusTaskId');
     const currentStatusDisplay = document.getElementById('currentStatusDisplay');
     const newStatusSelect = document.getElementById('newStatus');
+    
+    if (!taskIdInput || !currentStatusDisplay || !newStatusSelect) {
+        console.error('Required elements not found');
+        return;
+    }
     
     // تعيين معرف المهمة
     taskIdInput.value = taskId;
@@ -1714,7 +1725,7 @@ function openChangeStatusModal(taskId, currentStatus) {
     
     // فتح الـ modal
     modal.show();
-}
+};
 
 // لا حاجة لإعادة التحميل التلقائي - preventDuplicateSubmission يتولى ذلك
 </script>
