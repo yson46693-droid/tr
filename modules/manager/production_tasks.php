@@ -1205,12 +1205,12 @@ try {
                 <table class="table dashboard-table dashboard-table--no-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
+                            <th>رقم الطلب</th>
                             <th>العنوان</th>
-                            <th>الموظف</th>
-                            <th>الحالة</th>
+                            <th>الموظفين</th>
+                            <th>الحاله</th>
                             <th>الأولوية</th>
-                            <th>تاريخ الاستحقاق</th>
-                            <th>تاريخ الإنشاء</th>
+                            <th>تاريخ التسليم</th>
                             <th>إجراءات</th>
                         </tr>
                     </thead>
@@ -1302,7 +1302,7 @@ try {
                                                     <input type="hidden" name="action" value="cancel_task">
                                                     <input type="hidden" name="task_id" value="<?php echo (int)$task['id']; ?>">
                                                     <button type="submit" class="btn btn-outline-danger btn-sm">
-                                                        <i class="bi bi-x-circle me-1"></i>إلغاء المهمة
+                                                        <i class="bi bi-x-circle me-1"></i> 
                                                     </button>
                                                 </form>
                                             <?php endif; ?>
