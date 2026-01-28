@@ -228,20 +228,24 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .company-name-80mm {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 700;
     margin-bottom: 4px;
     text-transform: uppercase;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .company-address-80mm,
 .company-phone-80mm {
-    font-size: 9px;
+    font-size: 10px;
     margin-bottom: 2px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .invoice-divider {
-    border-top: 1px dashed #000;
+    border-top: 1px solid #000;
     margin: 6px 0;
 }
 
@@ -278,26 +282,39 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 .items-section-80mm {
     margin-bottom: 8px;
+    overflow-x: visible;
+    width: 100%;
+}
+
+.items-section-80mm table {
+    max-width: 100%;
+    overflow: visible;
 }
 
 .items-table-80mm {
     width: 100%;
     border-collapse: collapse;
-    font-size: 8px;
+    font-size: 9px;
     margin-top: 4px;
+    table-layout: fixed;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .items-table-80mm thead {
     background: #f0f0f0;
-    border-bottom: 1px solid #000;
+    border-bottom: 2px solid #000;
 }
 
 .items-table-80mm th {
-    padding: 4px 2px;
+    padding: 5px 3px;
     text-align: center;
     font-weight: 700;
-    font-size: 8px;
-    border-left: 1px solid #ddd;
+    font-size: 9px;
+    border-left: 1px solid #000;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.3;
 }
 
 .items-table-80mm th:first-child {
@@ -305,11 +322,15 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm td {
-    padding: 3px 2px;
+    padding: 4px 3px;
     text-align: center;
-    border-bottom: 1px dotted #ddd;
-    border-left: 1px solid #ddd;
-    font-size: 8px;
+    border-bottom: 1px solid #000;
+    border-left: 1px solid #000;
+    font-size: 9px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.3;
+    vertical-align: top;
 }
 
 .items-table-80mm td:first-child {
@@ -318,12 +339,14 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm .col-product {
-    width: 35%;
+    width: 32%;
     text-align: right;
+    padding-right: 4px;
 }
 
 .items-table-80mm .col-batch {
-    width: 15%;
+    width: 18%;
+    font-size: 8px;
 }
 
 .items-table-80mm .col-qty {
@@ -331,14 +354,16 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm .col-price {
-    width: 18%;
+    width: 19%;
     text-align: left;
+    padding-left: 4px;
 }
 
 .items-table-80mm .col-total {
-    width: 20%;
+    width: 19%;
     text-align: left;
     font-weight: 600;
+    padding-left: 4px;
 }
 
 .summary-section-80mm {
@@ -349,32 +374,40 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     display: flex;
     justify-content: space-between;
     margin-bottom: 3px;
-    font-size: 9px;
+    font-size: 10px;
     padding: 2px 0;
-}
-
-.summary-row.total {
-    border-top: 1px solid #000;
-    border-bottom: 1px solid #000;
-    padding: 4px 0;
-    margin-top: 4px;
-    font-weight: 700;
-    font-size: 10px;
-}
-
-.summary-row.due {
-    font-weight: 700;
-    font-size: 10px;
-    margin-top: 4px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .summary-row .label {
     font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 8px;
 }
 
 .summary-row .value {
     text-align: left;
     flex: 1;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    min-width: 0;
+}
+
+.summary-row.total {
+    border-top: 2px solid #000;
+    border-bottom: 2px solid #000;
+    padding: 4px 0;
+    margin-top: 4px;
+    font-weight: 700;
+    font-size: 11px;
+}
+
+.summary-row.due {
+    font-weight: 700;
+    font-size: 11px;
+    margin-top: 4px;
 }
 
 .text-success { color: #28a745; }
@@ -386,18 +419,21 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .notes-text {
-    font-size: 8px;
+    font-size: 9px;
     padding: 4px;
     background: #f9f9f9;
-    border: 1px solid #ddd;
+    border: 1px solid #000;
     margin-top: 4px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.4;
 }
 
 .invoice-footer-80mm {
     text-align: center;
     margin-top: 8px;
     padding-top: 8px;
-    border-top: 1px dashed #000;
+    border-top: 1px solid #000;
 }
 
 .thanks {
@@ -414,23 +450,65 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 @media print {
     @page {
         size: 80mm auto;
-        margin: 5mm;
+        margin: 3mm;
+    }
+
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
     }
 
     body {
         margin: 0;
         padding: 0;
-        background: #ffffff;
+        background: #ffffff !important;
+        font-size: 10px;
     }
 
     .invoice-80mm {
         margin: 0;
-        padding: 0;
+        padding: 3mm;
         box-shadow: none;
+        width: 100%;
+        max-width: 100%;
+        overflow: visible;
+    }
+
+    .items-table-80mm {
+        width: 100% !important;
+        max-width: 100% !important;
+        font-size: 9px !important;
+    }
+
+    .items-table-80mm th,
+    .items-table-80mm td {
+        font-size: 9px !important;
+        padding: 4px 2px !important;
+        border: 1px solid #000 !important;
+        border-collapse: collapse !important;
+    }
+
+    .items-table-80mm th {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
 
     .no-print {
         display: none !important;
+    }
+
+    .info-row,
+    .summary-row {
+        font-size: 10px !important;
+    }
+
+    .section-title {
+        font-size: 12px !important;
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
 }
 </style>
