@@ -243,7 +243,10 @@ if (isset($_GET['id'])) {
                     <?php else: ?>
                         <?php foreach ($invoices as $invoice): ?>
                             <?php
-                            $remaining = $invoice['total_amount'] - $invoice['paid_amount'];
+                            // استخدام remaining_amount من قاعدة البيانات إذا كان موجوداً، وإلا حسابها
+                            $remaining = isset($invoice['remaining_amount']) && $invoice['remaining_amount'] !== null
+                                ? (float)$invoice['remaining_amount']
+                                : max(0, (float)$invoice['total_amount'] - (float)$invoice['paid_amount']);
                             ?>
                             <tr>
                                 <td>

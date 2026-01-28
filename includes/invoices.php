@@ -738,6 +738,16 @@ function getInvoice($invoiceId) {
             }
         }
         unset($item);
+        
+        // حساب remaining_amount إذا لم يكن موجوداً في قاعدة البيانات
+        if (!isset($invoice['remaining_amount']) || $invoice['remaining_amount'] === null) {
+            $totalAmount = (float)($invoice['total_amount'] ?? 0);
+            $paidAmount = (float)($invoice['paid_amount'] ?? 0);
+            $invoice['remaining_amount'] = max(0, round($totalAmount - $paidAmount, 2));
+        } else {
+            // التأكد من أن remaining_amount هو رقم صحيح
+            $invoice['remaining_amount'] = (float)$invoice['remaining_amount'];
+        }
     }
     
     return $invoice;
@@ -1075,7 +1085,21 @@ function getInvoices($filters = [], $limit = 50, $offset = 0) {
     $params[] = $limit;
     $params[] = $offset;
     
-    return $db->query($sql, $params);
+    $invoices = $db->query($sql, $params);
+    
+    // حساب remaining_amount لكل فاتورة إذا لم يكن موجوداً
+    foreach ($invoices as &$invoice) {
+        if (!isset($invoice['remaining_amount']) || $invoice['remaining_amount'] === null) {
+            $totalAmount = (float)($invoice['total_amount'] ?? 0);
+            $paidAmount = (float)($invoice['paid_amount'] ?? 0);
+            $invoice['remaining_amount'] = max(0, round($totalAmount - $paidAmount, 2));
+        } else {
+            $invoice['remaining_amount'] = (float)$invoice['remaining_amount'];
+        }
+    }
+    unset($invoice);
+    
+    return $invoices;
 }
 
 /**

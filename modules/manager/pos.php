@@ -1141,14 +1141,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw $historyError;
                 }
 
-                // لا يتم تحديث الفاتورة بعد إنشائها من نقطة البيع
-                // الفاتورة يجب أن تبقى على تفاصيلها الأصلية ولا يتم تحديثها أبداً
-                // تم تعطيل التحديث التالي لضمان عدم تحديث فواتير نقطة البيع
-                /*
                 // تحديث الفاتورة بالمبلغ المدفوع والمبلغ المتبقي
                 // نستخدم totalPaidAmount (نقدي + رصيد دائن) للفاتورة
-                $invoiceUpdateSql = "UPDATE invoices SET paid_amount = ?, remaining_amount = ?, status = ?, updated_at = NOW()";
-                $invoiceUpdateParams = [$totalPaidAmount, $dueAmount, $invoiceStatus];
+                // عند الدفع الكامل، totalPaidAmount = netTotal
+                $finalPaidAmount = ($invoiceStatus === 'paid') ? $netTotal : $totalPaidAmount;
+                
+                // التحقق من وجود عمود remaining_amount
+                $hasRemainingColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'remaining_amount'"));
+                if (!$hasRemainingColumn) {
+                    try {
+                        $db->execute("ALTER TABLE invoices ADD COLUMN remaining_amount DECIMAL(15,2) DEFAULT NULL COMMENT 'المبلغ المتبقي' AFTER paid_amount");
+                        $hasRemainingColumn = true;
+                    } catch (Throwable $e) {
+                        error_log('Error adding remaining_amount column: ' . $e->getMessage());
+                    }
+                }
+                
+                $invoiceUpdateSql = "UPDATE invoices SET paid_amount = ?, status = ?, updated_at = NOW()";
+                $invoiceUpdateParams = [$finalPaidAmount, $invoiceStatus];
+                
+                if ($hasRemainingColumn) {
+                    $invoiceUpdateSql .= ", remaining_amount = ?";
+                    $invoiceUpdateParams[] = $dueAmount;
+                }
                 
                 // إضافة مبلغ credit_used إذا كان هناك عمود credit_used
                 $hasCreditUsedColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'credit_used'"));
@@ -1167,9 +1182,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 
+                // إضافة فلاج paid_from_credit إذا كان هناك استخدام من الرصيد الدائن
+                $hasPaidFromCreditColumn = !empty($db->queryOne("SHOW COLUMNS FROM invoices LIKE 'paid_from_credit'"));
+                if ($hasPaidFromCreditColumn && $creditUsed > 0) {
+                    $invoiceUpdateSql .= ", paid_from_credit = ?";
+                    $invoiceUpdateParams[] = 1;
+                }
+                
                 $invoiceUpdateParams[] = $invoiceId;
                 $db->execute($invoiceUpdateSql . " WHERE id = ?", $invoiceUpdateParams);
-                */
 
                 // تسجيل الإيراد في خزنة الشركة (accountant_transactions)
                 // مهم: نستخدم فقط المبلغ النقدي الفعلي (effectivePaidAmount) وليس creditUsed

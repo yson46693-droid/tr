@@ -212,12 +212,17 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .invoice-80mm {
     font-family: 'Tajawal', 'Arial', 'Helvetica', sans-serif;
     max-width: 80mm;
+    width: 100%;
     margin: 0 auto;
-    padding: 5mm;
+    padding: 4mm;
     background: #ffffff;
     color: #000;
     font-size: 10px;
     line-height: 1.4;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    page-break-inside: avoid;
+    break-inside: avoid;
 }
 
 .invoice-header-80mm {
@@ -304,27 +309,32 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .items-table-80mm {
     width: 100%;
     border-collapse: collapse;
-    font-size: 9px;
+    font-size: 8px;
     margin-top: 4px;
     table-layout: fixed;
     word-wrap: break-word;
     overflow-wrap: break-word;
+    border-spacing: 0;
 }
 
 .items-table-80mm thead {
     background: #f0f0f0;
-    border-bottom: 2px solid #000;
+    border-bottom: 1px solid #000;
+}
+
+.items-table-80mm thead th {
+    background: #f0f0f0;
 }
 
 .items-table-80mm th {
-    padding: 5px 3px;
+    padding: 3px 1px;
     text-align: center;
     font-weight: 700;
-    font-size: 9px;
+    font-size: 8px;
     border-left: 1px solid #000;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    line-height: 1.3;
+    line-height: 1.2;
 }
 
 .items-table-80mm th:first-child {
@@ -332,14 +342,14 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm td {
-    padding: 3px 2px;
+    padding: 2px 1px;
     text-align: center;
     border-bottom: 1px solid #000;
     border-left: 1px solid #000;
-    font-size: 9px;
+    font-size: 8px;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    line-height: 1.2;
+    line-height: 1.1;
     vertical-align: top;
     page-break-inside: avoid;
     break-inside: avoid;
@@ -351,14 +361,14 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm .col-product {
-    width: 32%;
+    width: 30%;
     text-align: right;
-    padding-right: 4px;
+    padding-right: 1px;
 }
 
 .items-table-80mm .col-batch {
-    width: 18%;
-    font-size: 8px;
+    width: 20%;
+    font-size: 7px;
 }
 
 .items-table-80mm .col-qty {
@@ -368,14 +378,14 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .items-table-80mm .col-price {
     width: 19%;
     text-align: left;
-    padding-left: 4px;
+    padding-left: 1px;
 }
 
 .items-table-80mm .col-total {
     width: 19%;
     text-align: left;
     font-weight: 600;
-    padding-left: 4px;
+    padding-left: 1px;
 }
 
 .summary-section-80mm {
@@ -466,7 +476,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 @media print {
     @page {
         size: 80mm auto;
-        margin: 2mm;
+        margin: 1mm;
     }
 
     * {
@@ -512,9 +522,10 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     .items-table-80mm {
         width: 100% !important;
         max-width: 100% !important;
-        font-size: 9px !important;
+        font-size: 8px !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
+        border-spacing: 0 !important;
     }
 
     .items-table-80mm thead {
@@ -532,12 +543,37 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
     .items-table-80mm th,
     .items-table-80mm td {
-        font-size: 9px !important;
-        padding: 3px 2px !important;
+        font-size: 8px !important;
+        padding: 2px 1px !important;
         border: 1px solid #000 !important;
         border-collapse: collapse !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
+        line-height: 1.1 !important;
+    }
+
+    .items-table-80mm .col-product {
+        width: 30% !important;
+        padding-right: 1px !important;
+    }
+
+    .items-table-80mm .col-batch {
+        width: 20% !important;
+        font-size: 7px !important;
+    }
+
+    .items-table-80mm .col-qty {
+        width: 12% !important;
+    }
+
+    .items-table-80mm .col-price {
+        width: 19% !important;
+        padding-left: 1px !important;
+    }
+
+    .items-table-80mm .col-total {
+        width: 19% !important;
+        padding-left: 1px !important;
     }
 
     .items-table-80mm th {
