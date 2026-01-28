@@ -3753,6 +3753,9 @@ function closeViewLocationCard() {
 document.addEventListener('DOMContentLoaded', function () {
     // ===== تنظيف فوري شامل للـ backdrop و body و sidebar عند تحميل الصفحة - حل جذري =====
     
+    // تعريف dashboardWrapper مرة واحدة
+    var dashboardWrapper = document.querySelector('.dashboard-wrapper');
+    
     // 1. التحقق من عدم وجود نماذج مفتوحة وإزالة backdrops
     const openModals = document.querySelectorAll('.modal.show, .modal.showing');
     if (openModals.length === 0) {
@@ -3773,7 +3776,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     
     // 2. إصلاح جذري لمشكلة overlay الـ sidebar على الموبايل
-    const dashboardWrapper = document.querySelector('.dashboard-wrapper');
     if (dashboardWrapper) {
         // إزالة class sidebar-open إذا كان موجوداً
         dashboardWrapper.classList.remove('sidebar-open');
@@ -7625,6 +7627,9 @@ document.addEventListener('DOMContentLoaded', function() {
     var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     var initDelay = isMobile ? 100 : 0; // تأخير 100ms على الجوال لتجنب التجمد
     
+    // تعريف dashboardWrapper مرة واحدة لاستخدامه في جميع الأماكن
+    var dashboardWrapper = document.querySelector('.dashboard-wrapper');
+    
     setTimeout(function() {
         var deleteModal = document.getElementById('deleteLocalCustomerModal');
         if (deleteModal) {
@@ -7781,7 +7786,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.body.style.position = '';
                     
                     // إزالة class sidebar-open إذا كان موجوداً (إصلاح مشكلة overlay الـ sidebar)
-                    const dashboardWrapper = document.querySelector('.dashboard-wrapper');
                     if (dashboardWrapper) {
                         dashboardWrapper.classList.remove('sidebar-open');
                         document.body.classList.remove('sidebar-open');
@@ -8723,7 +8727,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 // إغلاق الشريط الجانبي فوراً
-                const dashboardWrapper = document.querySelector('.dashboard-wrapper');
                 if (dashboardWrapper && dashboardWrapper.classList.contains('sidebar-open')) {
                     dashboardWrapper.classList.remove('sidebar-open');
                     document.body.classList.remove('sidebar-open');
@@ -8740,7 +8743,6 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(fixSidebarLinksOnMobile, 1000);
     
     // إعادة إصلاح الروابط عند فتح الشريط الجانبي
-    const dashboardWrapper = document.querySelector('.dashboard-wrapper');
     if (dashboardWrapper) {
         const observer = new MutationObserver(function(mutations) {
             mutations.forEach(function(mutation) {
