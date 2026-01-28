@@ -198,15 +198,15 @@ if (isset($_GET['id'])) {
 <!-- البحث -->
 <div class="card shadow-sm mb-4">
     <div class="card-body">
-        <form method="GET" class="row g-3">
+        <form method="GET" class="row g-3" id="searchForm">
             <input type="hidden" name="page" value="invoices">
             <div class="col-md-4">
                 <label class="form-label">البحث برقم الفاتورة</label>
                 <div class="input-group">
-                    <input type="text" class="form-control" name="invoice_number" 
+                    <input type="text" class="form-control" name="invoice_number" id="invoiceSearchInput"
                            value="<?php echo htmlspecialchars($filters['invoice_number'] ?? ''); ?>" 
-                           placeholder="INV-...">
-                    <button type="submit" class="btn btn-primary">
+                           placeholder="INV-..." autocomplete="off">
+                    <button type="submit" class="btn btn-primary" id="searchButton">
                         <i class="bi bi-search"></i> بحث
                     </button>
                 </div>
@@ -218,7 +218,7 @@ if (isset($_GET['id'])) {
 <!-- قائمة الفواتير -->
 <div class="card shadow-sm">
     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">قائمة الفواتير (<?php echo $totalInvoices; ?>)</h5>
+        <h5 class="mb-0">قائمة الفواتير (<span id="totalInvoicesCount"><?php echo $totalInvoices; ?></span>)</h5>
     </div>
     <div class="card-body">
         <div class="table-responsive dashboard-table-wrapper">
@@ -235,7 +235,7 @@ if (isset($_GET['id'])) {
                         <th>الإجراءات</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="invoicesTableBody">
                     <?php if (empty($invoices)): ?>
                         <tr>
                             <td colspan="8" class="text-center text-muted">لا توجد فواتير</td>
@@ -327,6 +327,7 @@ if (isset($_GET['id'])) {
         </div>
         
         <!-- Pagination -->
+        <div id="invoicesPagination">
         <?php if ($totalPages > 1): ?>
         <nav aria-label="Page navigation" class="mt-3">
             <ul class="pagination justify-content-center flex-wrap">
@@ -370,6 +371,7 @@ if (isset($_GET['id'])) {
             </ul>
         </nav>
         <?php endif; ?>
+        </div>
     </div>
 </div>
 
@@ -785,5 +787,134 @@ async function shareInvoiceToChat(invoiceId) {
         button.innerHTML = originalHtml;
     }
 }
+
+// البحث الديناميكي في الفواتير
+(function() {
+    const searchInput = document.getElementById('invoiceSearchInput');
+    const searchForm = document.getElementById('searchForm');
+    const tableBody = document.getElementById('invoicesTableBody');
+    const paginationContainer = document.getElementById('invoicesPagination');
+    const totalCountSpan = document.getElementById('totalInvoicesCount');
+    
+    let searchTimeout = null;
+    let currentAbortController = null;
+    let currentPage = <?php echo $page; ?>;
+    
+    if (!searchInput || !tableBody) {
+        return;
+    }
+    
+    // منع الإرسال الافتراضي للنموذج
+    if (searchForm) {
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            loadInvoices(1);
+        });
+    }
+    
+    // البحث الديناميكي عند الكتابة
+    searchInput.addEventListener('input', function() {
+        const searchValue = this.value.trim();
+        
+        // إلغاء أي timeout سابق
+        if (searchTimeout) {
+            clearTimeout(searchTimeout);
+        }
+        
+        // إلغاء أي طلب AJAX سابق
+        if (currentAbortController) {
+            currentAbortController.abort();
+        }
+        
+        // البحث بعد 300ms من توقف المستخدم عن الكتابة (debounce)
+        searchTimeout = setTimeout(function() {
+            loadInvoices(1);
+        }, 300);
+    });
+    
+    // البحث عند الضغط على Enter
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault();
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            loadInvoices(1);
+        }
+    });
+    
+    // دالة تحميل الفواتير
+    function loadInvoices(page) {
+        const searchValue = searchInput.value.trim();
+        currentPage = page;
+        
+        // إلغاء أي طلب سابق
+        if (currentAbortController) {
+            currentAbortController.abort();
+        }
+        
+        // إنشاء AbortController جديد
+        currentAbortController = new AbortController();
+        
+        // إظهار مؤشر التحميل
+        tableBody.innerHTML = '<tr><td colspan="8" class="text-center"><div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">جاري التحميل...</span></div></td></tr>';
+        
+        // بناء URL للبحث
+        const params = new URLSearchParams();
+        params.append('invoice_number', searchValue);
+        params.append('p', page);
+        
+        // إرسال طلب AJAX
+        fetch('<?php echo getRelativeUrl("api/search_invoices.php"); ?>?' + params.toString(), {
+            method: 'GET',
+            credentials: 'include',
+            signal: currentAbortController.signal
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // تحديث الجدول
+                tableBody.innerHTML = data.tableRows;
+                
+                // تحديث Pagination
+                if (paginationContainer) {
+                    paginationContainer.innerHTML = data.pagination;
+                }
+                
+                // تحديث العدد الإجمالي
+                if (totalCountSpan) {
+                    totalCountSpan.textContent = data.totalInvoices;
+                }
+                
+                // تحديث URL بدون إعادة تحميل الصفحة
+                const url = new URL(window.location);
+                url.searchParams.set('invoice_number', searchValue);
+                url.searchParams.set('p', page);
+                window.history.pushState({}, '', url);
+            } else {
+                tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">' + (data.message || 'حدث خطأ في البحث') + '</td></tr>';
+            }
+        })
+        .catch(error => {
+            if (error.name === 'AbortError') {
+                // تم إلغاء الطلب، لا حاجة لعرض رسالة خطأ
+                return;
+            }
+            console.error('Error loading invoices:', error);
+            tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">حدث خطأ في تحميل البيانات</td></tr>';
+        })
+        .finally(() => {
+            currentAbortController = null;
+        });
+    }
+    
+    // جعل دالة loadInvoices متاحة عالمياً للاستخدام من Pagination
+    window.loadInvoices = loadInvoices;
+})();
 </script>
 

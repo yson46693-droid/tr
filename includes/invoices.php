@@ -1131,6 +1131,11 @@ function getInvoicesCount($filters = []) {
         $params[] = $filters['date_to'];
     }
     
+    if (!empty($filters['invoice_number'])) {
+        $sql .= " AND invoice_number LIKE ?";
+        $params[] = "%{$filters['invoice_number']}%";
+    }
+    
     $result = $db->queryOne($sql, $params);
     return $result['count'] ?? 0;
 }

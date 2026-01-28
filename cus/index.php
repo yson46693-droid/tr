@@ -8385,7 +8385,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fetchCustomers(1);
         });
         
-        // البحث الفوري عند الكتابة - ديناميكي مباشر
+        // البحث الفوري عند الكتابة - فوري تماماً مع كل حرف
         customerSearchInput.addEventListener('input', function(e) {
             // التأكد من أن القيمة موجودة
             var searchValue = this.value;
@@ -8394,29 +8394,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 searchValue = '';
             }
             
-            // إلغاء أي طلب سابق قيد الانتظار
-            if (searchTimeout) {
-                clearTimeout(searchTimeout);
-                searchTimeout = null;
-            }
-            
-            // البحث الفوري مع debounce قصير (300ms) لتجنب الطلبات الزائدة أثناء الكتابة السريعة
-            // هذا يضمن البحث الديناميكي المباشر مع تحسين الأداء
-            searchTimeout = setTimeout(function() {
-                fetchCustomers(1);
-                searchTimeout = null;
-            }, 300);
+            // إلغاء أي طلب سابق قيد التنفيذ فوراً (يستخدم AbortController في fetchCustomers)
+            // البحث فوري تماماً بدون أي تأخير - مع كل حرف يتم إدخاله
+            fetchCustomers(1);
         });
         
         // البحث الفوري أيضاً عند الضغط على Enter
         customerSearchInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' || e.keyCode === 13) {
                 e.preventDefault();
-                // إلغاء أي timeout قيد الانتظار والبحث فوراً
-                if (searchTimeout) {
-                    clearTimeout(searchTimeout);
-                    searchTimeout = null;
-                }
                 fetchCustomers(1);
             }
         });
