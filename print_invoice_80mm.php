@@ -248,44 +248,57 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 <style>
 /* التصميم الأساسي */
 .invoice-wrapper-80mm {
-    width: 100%;
+    width: 80mm;
     max-width: 80mm;
     margin: 0 auto;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 .invoice-80mm {
     font-family: 'Tajawal', 'Arial', 'Helvetica', sans-serif;
-    width: 100%;
+    width: 80mm;
     max-width: 80mm;
     margin: 0;
     padding: 0;
     background: #ffffff;
     color: #000;
-    font-size: 10px;
-    line-height: 1.4;
+    font-size: 9px;
+    line-height: 1.3;
     box-sizing: border-box;
+    overflow: hidden;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 /* رأس الفاتورة */
 .invoice-header-80mm {
     text-align: center;
-    padding: 3mm 1mm 2mm 1mm;
+    padding: 2mm 0.5mm 1.5mm 0.5mm;
     border-bottom: 2px solid #000;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    word-wrap: break-word;
 }
 
 .company-name-80mm {
-    font-size: 16px;
+    font-size: 13px;
     font-weight: 700;
-    margin-bottom: 3px;
+    margin-bottom: 2px;
     text-transform: uppercase;
     line-height: 1.2;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .company-address-80mm,
 .company-phone-80mm {
-    font-size: 10px;
-    margin-bottom: 2px;
-    line-height: 1.3;
+    font-size: 8px;
+    margin-bottom: 1px;
+    line-height: 1.2;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 /* الفواصل */
@@ -297,32 +310,41 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 /* معلومات الفاتورة والعميل */
 .invoice-info-80mm,
 .customer-info-80mm {
-    padding: 2mm 1mm;
+    padding: 1.5mm 0.5mm;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .section-title {
     font-weight: 700;
-    font-size: 11px;
-    margin-bottom: 4px;
+    font-size: 9px;
+    margin-bottom: 3px;
     text-align: center;
     background: #f0f0f0;
-    padding: 3px 2px;
+    padding: 2px 1px;
     border: 1px solid #ddd;
+    width: 100%;
+    box-sizing: border-box;
+    word-wrap: break-word;
 }
 
 .info-row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 3px;
-    font-size: 10px;
-    line-height: 1.4;
+    margin-bottom: 2px;
+    font-size: 8px;
+    line-height: 1.3;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .info-row .label {
     font-weight: 600;
-    margin-left: 6px;
+    margin-left: 3px;
     white-space: nowrap;
     flex-shrink: 0;
+    font-size: 8px;
 }
 
 .info-row .value {
@@ -330,14 +352,19 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     flex: 1;
     font-weight: 500;
     min-width: 0;
+    font-size: 8px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .info-row-dual {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 3px;
-    gap: 6px;
-    font-size: 10px;
+    margin-bottom: 2px;
+    gap: 3px;
+    font-size: 8px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .info-row-dual .info-item {
@@ -346,36 +373,44 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     justify-content: space-between;
     align-items: center;
     min-width: 0;
+    overflow: hidden;
 }
 
 .info-row-dual .info-item .label {
     font-weight: 600;
-    margin-left: 3px;
+    margin-left: 2px;
     white-space: nowrap;
     flex-shrink: 0;
-    font-size: 10px;
+    font-size: 8px;
 }
 
 .info-row-dual .info-item .value {
     text-align: left;
     flex: 1;
     font-weight: 500;
-    font-size: 10px;
+    font-size: 8px;
     min-width: 0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 /* جدول المنتجات */
 .items-section-80mm {
-    padding: 2mm 1mm;
+    padding: 1.5mm 0.5mm;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .items-table-80mm {
     width: 100%;
+    max-width: 100%;
     border-collapse: collapse;
-    font-size: 9px;
-    margin-top: 3px;
+    font-size: 7px;
+    margin-top: 2px;
     table-layout: fixed;
     border-spacing: 0;
+    box-sizing: border-box;
 }
 
 .items-table-80mm thead {
@@ -384,12 +419,14 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm th {
-    padding: 4px 2px;
+    padding: 2px 1px;
     text-align: center;
     font-weight: 700;
-    font-size: 9px;
+    font-size: 7px;
     border-left: 1px solid #000;
-    line-height: 1.3;
+    line-height: 1.2;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .items-table-80mm th:first-child {
@@ -397,14 +434,16 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm td {
-    padding: 3px 2px;
+    padding: 2px 1px;
     text-align: center;
     border-bottom: 1px solid #000;
     border-left: 1px solid #000;
-    font-size: 9px;
-    line-height: 1.3;
+    font-size: 7px;
+    line-height: 1.2;
     vertical-align: top;
     font-weight: 500;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .items-table-80mm td:first-child {
@@ -413,14 +452,14 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm .col-product {
-    width: 30%;
+    width: 28%;
     text-align: right;
-    padding-right: 2px;
+    padding-right: 1px;
 }
 
 .items-table-80mm .col-batch {
-    width: 20%;
-    font-size: 8px;
+    width: 18%;
+    font-size: 6px;
 }
 
 .items-table-80mm .col-qty {
@@ -428,65 +467,74 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm .col-price {
-    width: 19%;
+    width: 21%;
     text-align: left;
-    padding-left: 2px;
+    padding-left: 1px;
 }
 
 .items-table-80mm .col-total {
-    width: 19%;
+    width: 21%;
     text-align: left;
     font-weight: 600;
-    padding-left: 2px;
+    padding-left: 1px;
 }
 
 /* الملخص المالي */
 .summary-section-80mm {
-    padding: 2mm 1mm;
+    padding: 1.5mm 0.5mm;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .summary-row {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 3px;
-    font-size: 10px;
-    line-height: 1.4;
+    margin-bottom: 2px;
+    font-size: 8px;
+    line-height: 1.3;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .summary-row .label {
     font-weight: 600;
-    margin-left: 6px;
+    margin-left: 3px;
     white-space: nowrap;
     flex-shrink: 0;
+    font-size: 8px;
 }
 
 .summary-row .value {
     text-align: left;
     flex: 1;
     font-weight: 500;
+    font-size: 8px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .summary-row.total {
     border-top: 2px solid #000;
     border-bottom: 2px solid #000;
-    padding: 4px 0;
-    margin: 4px 0;
+    padding: 3px 0;
+    margin: 3px 0;
     font-weight: 700;
-    font-size: 11px;
+    font-size: 9px;
 }
 
 .summary-row.due {
     font-weight: 700;
-    font-size: 12px;
-    margin-top: 4px;
-    padding-top: 3px;
+    font-size: 10px;
+    margin-top: 3px;
+    padding-top: 2px;
     border-top: 1px solid #000;
 }
 
 .summary-row.due .remaining-amount {
-    font-size: 13px;
+    font-size: 10px;
     font-weight: 700;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
     color: #000;
 }
 
@@ -496,36 +544,47 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 /* الملاحظات */
 .notes-section-80mm {
-    padding: 2mm 1mm;
+    padding: 1.5mm 0.5mm;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .notes-text {
-    font-size: 9px;
-    padding: 4px;
+    font-size: 7px;
+    padding: 3px;
     background: #f9f9f9;
     border: 1px solid #000;
-    margin-top: 4px;
-    line-height: 1.4;
+    margin-top: 3px;
+    line-height: 1.3;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 /* تذييل الفاتورة */
 .invoice-footer-80mm {
     text-align: center;
-    padding: 2mm 1mm 1mm 1mm;
+    padding: 1.5mm 0.5mm 1mm 0.5mm;
     border-top: 1px solid #000;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .thanks {
     font-weight: 700;
-    font-size: 12px;
-    margin-bottom: 4px;
+    font-size: 10px;
+    margin-bottom: 3px;
+    word-wrap: break-word;
 }
 
 .terms {
-    font-size: 11px;
+    font-size: 9px;
     color: #000;
     font-weight: 600;
-    line-height: 1.5;
+    line-height: 1.4;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 /* أنماط الطباعة */
@@ -546,31 +605,54 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
         margin: 0 !important;
         padding: 0 !important;
         background: #ffffff !important;
-        width: 80mm;
+        width: 80mm !important;
+        max-width: 80mm !important;
+        overflow: hidden !important;
     }
 
     .invoice-wrapper-80mm {
-        width: 100% !important;
-        max-width: 100% !important;
+        width: 80mm !important;
+        max-width: 80mm !important;
         margin: 0 !important;
+        overflow: hidden !important;
     }
 
     .invoice-80mm {
         margin: 0 !important;
         padding: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
+        width: 80mm !important;
+        max-width: 80mm !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+    }
+    
+    .invoice-header-80mm,
+    .invoice-info-80mm,
+    .customer-info-80mm,
+    .items-section-80mm,
+    .summary-section-80mm,
+    .notes-section-80mm,
+    .invoice-footer-80mm {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
     }
 
     .invoice-header-80mm {
-        padding: 2mm 0.5mm 1.5mm 0.5mm !important;
+        padding: 1.5mm 0.5mm 1mm 0.5mm !important;
         margin: 0 !important;
     }
 
     .company-name-80mm {
-        font-size: 15px !important;
+        font-size: 12px !important;
+    }
+    
+    .company-address-80mm,
+    .company-phone-80mm {
+        font-size: 7px !important;
     }
 
     .invoice-info-80mm,
@@ -578,18 +660,24 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     .items-section-80mm,
     .summary-section-80mm,
     .notes-section-80mm {
-        padding: 1.5mm 0.5mm !important;
+        padding: 1mm 0.5mm !important;
     }
 
     .items-table-80mm {
-        font-size: 9px !important;
+        font-size: 7px !important;
+        width: 100% !important;
+        max-width: 100% !important;
     }
 
     .items-table-80mm th,
     .items-table-80mm td {
-        font-size: 9px !important;
-        padding: 3px 1px !important;
+        font-size: 7px !important;
+        padding: 2px 1px !important;
         border: 1px solid #000 !important;
+    }
+    
+    .items-table-80mm .col-batch {
+        font-size: 6px !important;
     }
 
     .items-table-80mm th {
@@ -601,21 +689,46 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
         font-weight: 500 !important;
     }
 
+    .info-row,
+    .info-row-dual,
+    .summary-row {
+        font-size: 8px !important;
+    }
+    
+    .info-row .label,
+    .info-row .value,
+    .info-row-dual .info-item .label,
+    .info-row-dual .info-item .value {
+        font-size: 8px !important;
+    }
+
     .summary-row.due .remaining-amount {
         color: #000 !important;
-        font-size: 13px !important;
+        font-size: 10px !important;
         font-weight: 700 !important;
+    }
+    
+    .summary-row.total {
+        font-size: 9px !important;
     }
 
     .terms {
-        font-size: 11px !important;
+        font-size: 9px !important;
         color: #000 !important;
         font-weight: 600 !important;
+    }
+    
+    .thanks {
+        font-size: 10px !important;
     }
 
     .section-title {
         background: #f0f0f0 !important;
-        font-size: 11px !important;
+        font-size: 9px !important;
+    }
+    
+    .notes-text {
+        font-size: 7px !important;
     }
 
     .no-print {
