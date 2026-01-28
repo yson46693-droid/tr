@@ -1133,7 +1133,7 @@ try {
     <?php endif; ?>
 
     <div class="row g-3 mb-4">
-        <div class="col-md-2 col-sm-6">
+        <div class="col-md-4 col-sm-6">
             <div class="card border-primary h-100">
                 <div class="card-body text-center py-3">
                     <div class="text-muted small mb-1">إجمالي المهام</div>
@@ -1141,7 +1141,7 @@ try {
                 </div>
             </div>
         </div>
-        <div class="col-md-2 col-sm-6">
+        <div class="col-md-4 col-sm-6">
             <div class="card border-warning h-100">
                 <div class="card-body text-center py-3">
                     <div class="text-muted small mb-1">معلقة</div>
@@ -1149,7 +1149,7 @@ try {
                 </div>
             </div>
         </div>
-        <div class="col-md-2 col-sm-6">
+        <div class="col-md-4 col-sm-6">
             <div class="card border-info h-100">
                 <div class="card-body text-center py-3">
                     <div class="text-muted small mb-1">مستلمة</div>
@@ -1157,7 +1157,7 @@ try {
                 </div>
             </div>
         </div>
-        <div class="col-md-2 col-sm-6">
+        <div class="col-md-4 col-sm-6">
             <div class="card border-info h-100">
                 <div class="card-body text-center py-3">
                     <div class="text-muted small mb-1">قيد التنفيذ</div>
@@ -1165,7 +1165,7 @@ try {
                 </div>
             </div>
         </div>
-        <div class="col-md-2 col-sm-6">
+        <div class="col-md-4 col-sm-6">
             <div class="card border-success h-100">
                 <div class="card-body text-center py-3">
                     <div class="text-muted small mb-1">مكتملة</div>
@@ -1173,7 +1173,7 @@ try {
                 </div>
             </div>
         </div>
-        <div class="col-md-2 col-sm-6">
+        <div class="col-md-4 col-sm-6">
             <div class="card border-danger h-100">
                 <div class="card-body text-center py-3">
                     <div class="text-muted small mb-1">ملغاة</div>
