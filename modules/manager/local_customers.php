@@ -1181,28 +1181,19 @@ if ($debtStatus === 'debtor') {
 }
 
 if ($search) {
-    $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR c.id LIKE ?)";
-    $countSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?) OR id LIKE ?)";
-    $statsSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?) OR id LIKE ?)";
+    $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR c.id LIKE ?
+        OR EXISTS (SELECT 1 FROM local_customer_phones lcp WHERE lcp.customer_id = c.id AND lcp.phone LIKE ?)
+        OR u.full_name LIKE ?)";
+    $countSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?) OR id LIKE ?
+        OR EXISTS (SELECT 1 FROM local_customer_phones lcp WHERE lcp.customer_id = local_customers.id AND lcp.phone LIKE ?)
+        OR created_by IN (SELECT id FROM users WHERE full_name LIKE ?))";
+    $statsSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?) OR id LIKE ?
+        OR EXISTS (SELECT 1 FROM local_customer_phones lcp WHERE lcp.customer_id = local_customers.id AND lcp.phone LIKE ?)
+        OR created_by IN (SELECT id FROM users WHERE full_name LIKE ?))";
     $searchParam = '%' . $search . '%';
-    // params for $sql
-    $params[] = $searchParam;
-    $params[] = $searchParam;
-    $params[] = $searchParam;
-    $params[] = $searchParam;
-    $params[] = $searchParam;
-    // params for $countSql
-    $countParams[] = $searchParam;
-    $countParams[] = $searchParam;
-    $countParams[] = $searchParam;
-    $countParams[] = $searchParam;
-    $countParams[] = $searchParam;
-    // params for $statsSql
-    $statsParams[] = $searchParam;
-    $statsParams[] = $searchParam;
-    $statsParams[] = $searchParam;
-    $statsParams[] = $searchParam;
-    $statsParams[] = $searchParam;
+    for ($i = 0; $i < 7; $i++) { $params[] = $searchParam; }
+    for ($i = 0; $i < 7; $i++) { $countParams[] = $searchParam; }
+    for ($i = 0; $i < 7; $i++) { $statsParams[] = $searchParam; }
 }
 
 // فلتر المنطقة
@@ -1831,7 +1822,7 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                             autocomplete="off"
                             aria-label="بحث عن العملاء المحليين"
                         >
-                        <button type="button" class="btn btn-link local-search-clear" id="localSearchClearBtn" title="مسح البحث" style="display: none;">
+                        <button type="button" class="btn btn-link local-search-clear" id="localSearchClearBtn" title="مسح البحث" style="display: <?php echo $search !== '' ? 'inline-block' : 'none'; ?>;">
                             <i class="bi bi-x-circle-fill text-muted"></i>
                         </button>
                         <span class="local-search-hint small text-muted">اكتب أي حرف — النتائج تظهر فور التوقف عن الكتابة</span>
@@ -2058,40 +2049,38 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
         </div>
         
         <!-- Pagination -->
+        <?php
+        $paginationExtra = ($search ? '&search=' . urlencode($search) : '') . '&debt_status=' . urlencode($debtStatus) . ($regionFilter !== null ? '&region_id=' . (int)$regionFilter : '');
+        ?>
         <nav id="customersPagination" aria-label="Page navigation" class="mt-3" style="<?php echo $totalPages <= 1 ? 'display: none;' : ''; ?>">
             <ul class="pagination justify-content-center">
                 <li class="page-item <?php echo $pageNum <= 1 ? 'disabled' : ''; ?>">
-                    <a class="page-link" href="?page=local_customers&p=<?php echo $pageNum - 1; ?><?php echo $search ? '&search=' . urlencode($search) : ''; ?>&debt_status=<?php echo urlencode($debtStatus); ?>">
+                    <a class="page-link" href="?page=local_customers&p=<?php echo $pageNum - 1; ?><?php echo $paginationExtra; ?>">
                         <i class="bi bi-chevron-right"></i>
                     </a>
                 </li>
-                
                 <?php
                 $startPage = max(1, $pageNum - 2);
                 $endPage = min($totalPages, $pageNum + 2);
-                
                 if ($startPage > 1): ?>
-                    <li class="page-item"><a class="page-link" href="?page=local_customers&p=1<?php echo $search ? '&search=' . urlencode($search) : ''; ?>&debt_status=<?php echo urlencode($debtStatus); ?>">1</a></li>
+                    <li class="page-item"><a class="page-link" href="?page=local_customers&p=1<?php echo $paginationExtra; ?>">1</a></li>
                     <?php if ($startPage > 2): ?>
                         <li class="page-item disabled"><span class="page-link">...</span></li>
                     <?php endif; ?>
                 <?php endif; ?>
-                
                 <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
                     <li class="page-item <?php echo $i == $pageNum ? 'active' : ''; ?>">
-                        <a class="page-link" href="?page=local_customers&p=<?php echo $i; ?><?php echo $search ? '&search=' . urlencode($search) : ''; ?>&debt_status=<?php echo urlencode($debtStatus); ?>"><?php echo $i; ?></a>
+                        <a class="page-link" href="?page=local_customers&p=<?php echo $i; ?><?php echo $paginationExtra; ?>"><?php echo $i; ?></a>
                     </li>
                 <?php endfor; ?>
-                
                 <?php if ($endPage < $totalPages): ?>
                     <?php if ($endPage < $totalPages - 1): ?>
                         <li class="page-item disabled"><span class="page-link">...</span></li>
                     <?php endif; ?>
-                    <li class="page-item"><a class="page-link" href="?page=local_customers&p=<?php echo $totalPages; ?><?php echo $search ? '&search=' . urlencode($search) : ''; ?>&debt_status=<?php echo urlencode($debtStatus); ?>"><?php echo $totalPages; ?></a></li>
+                    <li class="page-item"><a class="page-link" href="?page=local_customers&p=<?php echo $totalPages; ?><?php echo $paginationExtra; ?>"><?php echo $totalPages; ?></a></li>
                 <?php endif; ?>
-                
                 <li class="page-item <?php echo $pageNum >= $totalPages ? 'disabled' : ''; ?>">
-                    <a class="page-link" href="?page=local_customers&p=<?php echo $pageNum + 1; ?><?php echo $search ? '&search=' . urlencode($search) : ''; ?>&debt_status=<?php echo urlencode($debtStatus); ?>">
+                    <a class="page-link" href="?page=local_customers&p=<?php echo $pageNum + 1; ?><?php echo $paginationExtra; ?>">
                         <i class="bi bi-chevron-left"></i>
                     </a>
                 </li>
@@ -7346,9 +7335,9 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
         touch-action: manipulation !important;
     }
     
-    /* ضمان أن حقل البحث قابل للتفاعل */
+    /* ضمان أن حقل البحث المتقدم قابل للتفاعل */
     body:not(.modal-open):not(.sidebar-open) #customerSearch,
-    body:not(.modal-open):not(.sidebar-open) .customers-search-card {
+    body:not(.modal-open):not(.sidebar-open) .local-search-advanced {
         pointer-events: auto !important;
         touch-action: manipulation !important;
     }
@@ -7738,7 +7727,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const interactiveSelectors = [
                     '.btn', 'button', 'input', 'select', 'textarea', 'a',
                     '.card', '.table tbody tr', '.dashboard-table-wrapper',
-                    '#customerSearch', '.customers-search-card'
+                    '#customerSearch', '.local-search-advanced'
                 ];
                 
                 interactiveSelectors.forEach(function(selector) {
@@ -7904,14 +7893,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // ===== البحث الفوري المتقدم بدون إعادة تحميل في صفحة العملاء المحليين =====
+    // ===== البحث المتقدم اللحظي - نتائج فورية فور التوقف عن الكتابة =====
     var currentRole = '<?php echo htmlspecialchars($currentRole); ?>';
     var customerSearchInput = document.getElementById('customerSearch');
-    var searchForm = customerSearchInput ? customerSearchInput.closest('form') : null;
+    var searchForm = document.getElementById('localCustomersSearchForm') || (customerSearchInput ? customerSearchInput.closest('form') : null);
     var searchTimeout = null;
     var currentPage = 1;
     var isLoading = false;
-    var currentFetchController = null; // لإلغاء الطلبات السابقة
+    var currentFetchController = null;
+    var localSearchClearBtn = document.getElementById('localSearchClearBtn');
+    var localSearchResetBtn = document.getElementById('localSearchResetBtn');
+
+    function toggleLocalSearchClearBtn() {
+        if (!localSearchClearBtn) return;
+        localSearchClearBtn.style.display = (customerSearchInput && customerSearchInput.value.trim()) ? 'inline-block' : 'none';
+    }
     
     // دالة لتنسيق العملة (نسخة JavaScript من formatCurrency)
     function formatCurrency(amount) {
@@ -8214,40 +8210,59 @@ document.addEventListener('DOMContentLoaded', function() {
             }, false);
         }
         
-        // منع الإرسال الافتراضي للنموذج
         searchForm.addEventListener('submit', function(e) {
             e.preventDefault();
             fetchCustomers(1);
         });
-        
-        // البحث الديناميكي عند الكتابة مع debounce
-        var searchTimeout = null;
-        customerSearchInput.addEventListener('input', function(e) {
-            // التأكد من أن القيمة موجودة
-            var searchValue = this.value;
-            if (searchValue === undefined || searchValue === null) {
-                this.value = '';
-                searchValue = '';
-            }
-            
-            // إلغاء أي timeout سابق
-            if (searchTimeout) {
-                clearTimeout(searchTimeout);
-            }
-            
-            // البحث بعد 300ms من توقف المستخدم عن الكتابة (debounce)
-            searchTimeout = setTimeout(function() {
+
+        if (localSearchClearBtn) {
+            localSearchClearBtn.addEventListener('click', function() {
+                if (customerSearchInput) {
+                    customerSearchInput.value = '';
+                    customerSearchInput.focus();
+                }
+                toggleLocalSearchClearBtn();
+                if (searchTimeout) { clearTimeout(searchTimeout); searchTimeout = null; }
                 fetchCustomers(1);
-            }, 300);
+            });
+        }
+        if (localSearchResetBtn) {
+            localSearchResetBtn.addEventListener('click', function() {
+                if (customerSearchInput) customerSearchInput.value = '';
+                var df = document.getElementById('debtStatusFilter');
+                var rf = document.getElementById('regionFilter');
+                if (df) df.value = 'all';
+                if (rf) rf.value = '';
+                toggleLocalSearchClearBtn();
+                if (searchTimeout) { clearTimeout(searchTimeout); searchTimeout = null; }
+                fetchCustomers(1);
+                var u = new URL(window.location.href);
+                u.searchParams.set('page', 'local_customers');
+                u.searchParams.delete('search');
+                u.searchParams.delete('p');
+                u.searchParams.delete('debt_status');
+                u.searchParams.delete('region_id');
+                window.history.replaceState({}, '', u.toString());
+            });
+        }
+
+        customerSearchInput.addEventListener('input', function() {
+            var v = this.value;
+            if (v === undefined || v === null) { this.value = ''; v = ''; }
+            toggleLocalSearchClearBtn();
+            if (searchTimeout) clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(function() { fetchCustomers(1); }, 280);
         });
-        
-        // البحث الفوري أيضاً عند الضغط على Enter
+
         customerSearchInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' || e.keyCode === 13) {
                 e.preventDefault();
+                if (searchTimeout) { clearTimeout(searchTimeout); searchTimeout = null; }
                 fetchCustomers(1);
             }
         });
+
+        toggleLocalSearchClearBtn();
     }
     
     // البحث الفوري عند تغيير الفلاتر

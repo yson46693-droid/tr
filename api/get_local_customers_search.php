@@ -119,23 +119,17 @@ try {
         $countSql .= " AND (balance IS NULL OR balance <= 0)";
     }
     
-    // البحث
+    // البحث في جميع بيانات العميل: الاسم، الهاتف، العنوان، المنطقة، الرقم، الهواتف الإضافية، من أضاف العميل
     if ($search) {
-        $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR c.id LIKE ?)";
-        $countSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?) OR id LIKE ?)";
+        $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR c.id LIKE ?
+            OR EXISTS (SELECT 1 FROM local_customer_phones lcp WHERE lcp.customer_id = c.id AND lcp.phone LIKE ?)
+            OR u.full_name LIKE ?)";
+        $countSql .= " AND (name LIKE ? OR phone LIKE ? OR address LIKE ? OR region_id IN (SELECT id FROM regions WHERE name LIKE ?) OR id LIKE ?
+            OR EXISTS (SELECT 1 FROM local_customer_phones lcp WHERE lcp.customer_id = local_customers.id AND lcp.phone LIKE ?)
+            OR created_by IN (SELECT id FROM users WHERE full_name LIKE ?))";
         $searchParam = '%' . $search . '%';
-        // params for $sql
-        $params[] = $searchParam;
-        $params[] = $searchParam;
-        $params[] = $searchParam;
-        $params[] = $searchParam;
-        $params[] = $searchParam;
-        // params for $countSql
-        $countParams[] = $searchParam;
-        $countParams[] = $searchParam;
-        $countParams[] = $searchParam;
-        $countParams[] = $searchParam;
-        $countParams[] = $searchParam;
+        for ($i = 0; $i < 7; $i++) { $params[] = $searchParam; }
+        for ($i = 0; $i < 7; $i++) { $countParams[] = $searchParam; }
     }
     
     // فلتر المنطقة
