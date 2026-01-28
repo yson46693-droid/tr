@@ -31,17 +31,33 @@ $customerPhone   = $invoiceData['customer_phone']   ?? '';
 $customerAddress = $invoiceData['customer_address'] ?? '';
 $repName         = $invoiceData['sales_rep_name']   ?? null;
 
-$subtotal        = $invoiceData['subtotal'] ?? 0;
-$discount        = $invoiceData['discount_amount'] ?? 0;
-$total           = $invoiceData['total_amount'] ?? 0;
-$paidAmount      = $invoiceData['paid_amount'] ?? 0;
-$dueAmount       = isset($invoiceData['remaining_amount']) && $invoiceData['remaining_amount'] !== null 
-    ? (float)$invoiceData['remaining_amount'] 
-    : max(0, $total - $paidAmount);
-if ($total > 0 && $paidAmount <= 0.01 && $dueAmount <= 0.01) {
-    $dueAmount = $total;
-}
+$subtotal        = (float)($invoiceData['subtotal'] ?? 0);
+$discount        = (float)($invoiceData['discount_amount'] ?? 0);
+$total           = (float)($invoiceData['total_amount'] ?? 0);
+$paidAmount      = (float)($invoiceData['paid_amount'] ?? 0);
 $creditUsed      = (float)($invoiceData['credit_used'] ?? 0);
+
+// حساب المبلغ المتبقي بشكل صحيح
+// إذا كان remaining_amount موجوداً في قاعدة البيانات، نستخدمه
+// وإلا نحسبه من total - paid_amount
+if (isset($invoiceData['remaining_amount']) && $invoiceData['remaining_amount'] !== null) {
+    $dueAmount = (float)$invoiceData['remaining_amount'];
+    // التأكد من أن القيمة منطقية (لا يمكن أن تكون سالبة أو أكبر من الإجمالي)
+    if ($dueAmount < 0) {
+        $dueAmount = 0;
+    } elseif ($dueAmount > $total) {
+        $dueAmount = max(0, $total - $paidAmount);
+    }
+} else {
+    // حساب المتبقي من الإجمالي - المدفوع
+    $dueAmount = max(0, round($total - $paidAmount, 2));
+}
+
+// التأكد من أن المتبقي = 0 إذا كان المدفوع >= الإجمالي
+if ($paidAmount >= $total || abs($paidAmount - $total) < 0.01) {
+    $dueAmount = 0;
+}
+
 $notes           = trim((string)($invoiceData['notes'] ?? ''));
 
 $statusLabelsMap = [
@@ -65,50 +81,71 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     </div>
 
     <div class="invoice-info-80mm">
-        <div class="info-row">
-            <span class="label">فاتورة رقم:</span>
-            <span class="value"><?php echo htmlspecialchars($invoiceData['invoice_number']); ?></span>
-        </div>
-        <div class="info-row">
-            <span class="label">التاريخ:</span>
-            <span class="value"><?php echo $issueDate; ?></span>
+        <div class="info-row-dual">
+            <div class="info-item">
+                <span class="label">فاتورة رقم:</span>
+                <span class="value"><?php echo htmlspecialchars($invoiceData['invoice_number']); ?></span>
+            </div>
+            <div class="info-item">
+                <span class="label">التاريخ:</span>
+                <span class="value"><?php echo $issueDate; ?></span>
+            </div>
         </div>
         <?php if ($dueDate !== 'أجل غير مسمى'): ?>
-        <div class="info-row">
-            <span class="label">تاريخ الاستحقاق:</span>
-            <span class="value"><?php echo $dueDate; ?></span>
+        <div class="info-row-dual">
+            <div class="info-item">
+                <span class="label">تاريخ الاستحقاق:</span>
+                <span class="value"><?php echo $dueDate; ?></span>
+            </div>
+            <div class="info-item">
+                <span class="label">الحالة:</span>
+                <span class="value"><?php echo $statusLabel; ?></span>
+            </div>
         </div>
-        <?php endif; ?>
+        <?php else: ?>
         <div class="info-row">
             <span class="label">الحالة:</span>
             <span class="value"><?php echo $statusLabel; ?></span>
         </div>
+        <?php endif; ?>
     </div>
 
     <div class="invoice-divider"></div>
 
     <div class="customer-info-80mm">
         <div class="section-title">بيانات العميل</div>
-        <div class="info-row">
-            <span class="label">الاسم:</span>
-            <span class="value"><?php echo htmlspecialchars($customerName); ?></span>
+        <div class="info-row-dual">
+            <div class="info-item">
+                <span class="label">الاسم:</span>
+                <span class="value"><?php echo htmlspecialchars($customerName); ?></span>
+            </div>
+            <?php if (!empty($customerPhone)): ?>
+            <div class="info-item">
+                <span class="label">الهاتف:</span>
+                <span class="value"><?php echo htmlspecialchars($customerPhone); ?></span>
+            </div>
+            <?php else: ?>
+            <div class="info-item"></div>
+            <?php endif; ?>
         </div>
-        <?php if (!empty($customerPhone)): ?>
-        <div class="info-row">
-            <span class="label">الهاتف:</span>
-            <span class="value"><?php echo htmlspecialchars($customerPhone); ?></span>
-        </div>
-        <?php endif; ?>
-        <?php if (!empty($customerAddress)): ?>
-        <div class="info-row">
-            <span class="label">العنوان:</span>
-            <span class="value"><?php echo htmlspecialchars($customerAddress); ?></span>
-        </div>
-        <?php endif; ?>
-        <?php if ($repName): ?>
-        <div class="info-row">
-            <span class="label">المندوب:</span>
-            <span class="value"><?php echo htmlspecialchars($repName); ?></span>
+        <?php if (!empty($customerAddress) || $repName): ?>
+        <div class="info-row-dual">
+            <?php if (!empty($customerAddress)): ?>
+            <div class="info-item">
+                <span class="label">العنوان:</span>
+                <span class="value"><?php echo htmlspecialchars($customerAddress); ?></span>
+            </div>
+            <?php else: ?>
+            <div class="info-item"></div>
+            <?php endif; ?>
+            <?php if ($repName): ?>
+            <div class="info-item">
+                <span class="label">المندوب:</span>
+                <span class="value"><?php echo htmlspecialchars($repName); ?></span>
+            </div>
+            <?php else: ?>
+            <div class="info-item"></div>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
     </div>
@@ -187,7 +224,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
         <?php endif; ?>
         <div class="summary-row due">
             <span class="label">المتبقي:</span>
-            <span class="value <?php echo $dueAmount > 0 ? 'text-danger' : 'text-success'; ?>">
+            <span class="value <?php echo $dueAmount > 0.01 ? 'text-danger' : 'text-success'; ?> remaining-amount">
                 <?php echo formatCurrency($dueAmount); ?>
             </span>
         </div>
@@ -280,17 +317,60 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     display: flex;
     justify-content: space-between;
     margin-bottom: 3px;
-    font-size: 9px;
+    font-size: 10px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .info-row .label {
     font-weight: 600;
     margin-left: 8px;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .info-row .value {
     text-align: left;
     flex: 1;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    min-width: 0;
+    font-weight: 500;
+}
+
+.info-row-dual {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+    gap: 8px;
+    font-size: 10px;
+}
+
+.info-row-dual .info-item {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.info-row-dual .info-item .label {
+    font-weight: 600;
+    margin-left: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-size: 10px;
+}
+
+.info-row-dual .info-item .value {
+    text-align: left;
+    flex: 1;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    min-width: 0;
+    font-weight: 500;
+    font-size: 10px;
 }
 
 .items-section-80mm {
@@ -311,7 +391,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 .items-table-80mm {
     width: 100%;
     border-collapse: collapse;
-    font-size: 8px;
+    font-size: 9px;
     margin-top: 4px;
     table-layout: fixed;
     word-wrap: break-word;
@@ -329,14 +409,14 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 }
 
 .items-table-80mm th {
-    padding: 3px 1px;
+    padding: 4px 2px;
     text-align: center;
     font-weight: 700;
-    font-size: 8px;
+    font-size: 9px;
     border-left: 1px solid #000;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    line-height: 1.2;
+    line-height: 1.3;
 }
 
 .items-table-80mm th:first-child {
@@ -432,8 +512,14 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
 .summary-row.due {
     font-weight: 700;
-    font-size: 11px;
+    font-size: 12px;
     margin-top: 4px;
+}
+
+.summary-row.due .remaining-amount {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
 }
 
 .text-success { color: #28a745; }
@@ -541,10 +627,19 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
     .items-table-80mm {
         width: 100% !important;
         max-width: 100% !important;
-        font-size: 8px !important;
+        font-size: 9px !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
         border-spacing: 0 !important;
+    }
+    
+    .info-row-dual {
+        font-size: 10px !important;
+    }
+    
+    .info-row-dual .info-item .label,
+    .info-row-dual .info-item .value {
+        font-size: 10px !important;
     }
 
     .items-table-80mm thead {
@@ -578,7 +673,7 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
 
     .items-table-80mm .col-batch {
         width: 20% !important;
-        font-size: 7px !important;
+        font-size: 8px !important;
     }
 
     .items-table-80mm .col-qty {
