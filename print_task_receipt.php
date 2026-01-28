@@ -44,6 +44,7 @@ $taskNumber = $taskId;
 $taskTitle = $task['title'] ?? 'مهمة إنتاج';
 $productName = $task['product_name'] ?? $task['product_name_from_db'] ?? '';
 $quantity = isset($task['quantity']) && $task['quantity'] !== null ? (float) $task['quantity'] : 0;
+$unit = !empty($task['unit']) ? $task['unit'] : 'قطعة'; // الوحدة من قاعدة البيانات
 $description = $task['description'] ?? '';
 $notes = $task['notes'] ?? '';
 $priority = $task['priority'] ?? 'normal';
@@ -89,8 +90,17 @@ if (!empty($notes)) {
 if (empty($products) && !empty($productName)) {
     $products[] = [
         'name' => $productName,
-        'quantity' => $quantity > 0 ? $quantity : null
+        'quantity' => $quantity > 0 ? $quantity : null,
+        'unit' => $unit // إضافة الوحدة من قاعدة البيانات
     ];
+} else {
+    // إضافة الوحدة للمنتجات المتعددة إذا لم تكن موجودة
+    foreach ($products as &$product) {
+        if (!isset($product['unit']) || empty($product['unit'])) {
+            $product['unit'] = $unit; // استخدام الوحدة من قاعدة البيانات كقيمة افتراضية
+        }
+    }
+    unset($product); // إزالة المرجع
 }
 
 // تسميات الحالة والأولوية
@@ -405,10 +415,16 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             <tbody>
                 <?php 
                 $totalQuantity = 0;
+                $displayUnit = $unit; // الوحدة الافتراضية من قاعدة البيانات
                 foreach ($products as $product): 
                     $productQty = $product['quantity'] ?? null;
+                    $productUnit = !empty($product['unit']) ? $product['unit'] : $unit; // استخدام وحدة المنتج أو الوحدة الافتراضية
                     if ($productQty !== null) {
                         $totalQuantity += $productQty;
+                        // استخدام وحدة أول منتج للعرض الإجمالي
+                        if ($displayUnit === $unit) {
+                            $displayUnit = $productUnit;
+                        }
                     }
                 ?>
                 <tr>
@@ -416,7 +432,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                     <td class="product-quantity">
                         <?php 
                         if ($productQty !== null) {
-                            echo number_format($productQty, 2) . ' قطعة';
+                            echo number_format($productQty, 2) . ' ' . htmlspecialchars($productUnit);
                         } else {
                             echo '<span style="color: #999;">-</span>';
                         }
@@ -427,7 +443,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                 <?php if (count($products) > 1 && $totalQuantity > 0): ?>
                 <tr style="border-top: 2px solid #000; font-weight: 700;">
                     <td style="text-align: left; padding-top: 10px;">الإجمالي:</td>
-                    <td style="text-align: center; padding-top: 10px;"><?php echo number_format($totalQuantity, 2); ?> قطعة</td>
+                    <td style="text-align: center; padding-top: 10px;"><?php echo number_format($totalQuantity, 2) . ' ' . htmlspecialchars($displayUnit); ?></td>
                 </tr>
                 <?php endif; ?>
             </tbody>
