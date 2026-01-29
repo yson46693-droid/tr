@@ -1082,25 +1082,34 @@ $is80mm = (isset($printFormat) && $printFormat === '80mm');
     }
 }
 
-/* تنسيق طباعة 80mm — نفس التصميم مع لوجو الشركة، أبعاد مضغوطة للورق الحراري */
+/* تنسيق طباعة 80mm — المحتوى يملأ عرض 80mm بالكامل، أبعاد مضغوطة للورق الحراري */
 .invoice-wrapper.invoice-80mm-print {
     font-size: 8px;
     line-height: 1.15;
-    max-width: 80mm;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     overflow: hidden;
+    box-sizing: border-box;
 }
 
 .invoice-wrapper.invoice-80mm-print .invoice-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     padding: 4px 4px;
     border-radius: 4px;
+    box-sizing: border-box;
 }
 
 .invoice-wrapper.invoice-80mm-print .invoice-header {
+    width: 100%;
     flex-direction: column;
     align-items: center;
     text-align: center;
     gap: 4px;
     margin-bottom: 6px;
+    box-sizing: border-box;
 }
 
 .invoice-wrapper.invoice-80mm-print .brand-block {
@@ -1160,9 +1169,12 @@ $is80mm = (isset($printFormat) && $printFormat === '80mm');
 }
 
 .invoice-wrapper.invoice-80mm-print .info-grid {
+    width: 100%;
+    max-width: 100%;
     grid-template-columns: 1fr;
     gap: 4px;
     margin-bottom: 6px;
+    box-sizing: border-box;
 }
 
 .invoice-wrapper.invoice-80mm-print .info-card {
@@ -1183,13 +1195,18 @@ $is80mm = (isset($printFormat) && $printFormat === '80mm');
 }
 
 .invoice-wrapper.invoice-80mm-print .items-table {
+    width: 100%;
+    max-width: 100%;
     overflow: hidden;
     margin-bottom: 6px;
+    box-sizing: border-box;
 }
 
 .invoice-wrapper.invoice-80mm-print .items-table table {
     width: 100%;
+    max-width: 100%;
     table-layout: fixed;
+    box-sizing: border-box;
 }
 
 .invoice-wrapper.invoice-80mm-print .items-table th {
@@ -1216,9 +1233,12 @@ $is80mm = (isset($printFormat) && $printFormat === '80mm');
 }
 
 .invoice-wrapper.invoice-80mm-print .summary-grid {
+    width: 100%;
+    max-width: 100%;
     grid-template-columns: 1fr;
     gap: 4px;
     margin: 6px 0;
+    box-sizing: border-box;
 }
 
 .invoice-wrapper.invoice-80mm-print .summary-card {
@@ -1256,14 +1276,19 @@ $is80mm = (isset($printFormat) && $printFormat === '80mm');
 
 @media print {
     .invoice-wrapper.invoice-80mm-print {
-        max-width: 80mm !important;
+        width: 100% !important;
+        max-width: 100% !important;
         overflow: hidden !important;
     }
     .invoice-wrapper.invoice-80mm-print .invoice-card {
+        width: 100% !important;
+        max-width: 100% !important;
         padding: 3px 3px !important;
     }
     .invoice-wrapper.invoice-80mm-print .items-table,
     .invoice-wrapper.invoice-80mm-print .items-table table {
+        width: 100% !important;
+        max-width: 100% !important;
         overflow: hidden !important;
     }
 }

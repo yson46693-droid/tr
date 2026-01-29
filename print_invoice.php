@@ -69,14 +69,27 @@ $companyName = COMPANY_NAME;
         }
         
         <?php if ($printFormat === '80mm'): ?>
+        body {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        body .container-fluid {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            max-width: 80mm !important;
+            margin: 0 auto !important;
+        }
         .no-print {
             max-width: 80mm;
             margin: 0 auto 15px auto;
-            padding: 0 10px;
+            padding: 0 0 10px 0 !important;
         }
         
         .invoice-container {
             border: none;
+            width: 80mm !important;
+            max-width: 80mm !important;
+            min-width: 80mm !important;
         }
         <?php endif; ?>
 
