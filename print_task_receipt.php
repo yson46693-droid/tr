@@ -421,7 +421,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                 <td><?php echo htmlspecialchars($priorityLabel); ?></td>
             </tr>
             <tr>
-                <td>تاريخ :</td>
+                <td>الطلب :</td>
                 <td><?php echo date('m-d', strtotime($createdAt)) . ' | ' . date('h:i A', strtotime($createdAt)); ?></td>
                 <td>تسليم:</td>
                 <td><?php echo $dueDate ? date('m-d', strtotime($dueDate)) : '-'; ?></td>
