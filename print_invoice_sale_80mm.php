@@ -92,7 +92,7 @@ $companyName = COMPANY_NAME;
                 overflow: hidden !important;
                 box-shadow: none !important;
             }
-            @page { size: 80mm auto; margin: 3mm; }
+            @page { size: 80mm auto; margin: 2mm; }
         }
     </style>
 </head>

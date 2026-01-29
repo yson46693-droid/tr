@@ -1087,7 +1087,7 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
 @media print {
     @page {
         size: 80mm auto;
-        margin: 5mm;
+        margin: 2mm;
     }
 
     html, body {
@@ -1097,6 +1097,7 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
         overflow-x: hidden !important;
         width: 80mm !important;
         max-width: 80mm !important;
+        font-size: 9px !important;
     }
 
     .invoice-wrapper {
@@ -1105,17 +1106,19 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
         margin: 0 !important;
         padding: 0 !important;
         overflow: hidden !important;
+        box-sizing: border-box !important;
     }
 
     .invoice-card {
         box-shadow: none !important;
         border: none !important;
-        padding: 6px !important;
+        padding: 4px !important;
         border-radius: 0 !important;
         page-break-inside: avoid !important;
         width: 100% !important;
         max-width: 100% !important;
         overflow: hidden !important;
+        box-sizing: border-box !important;
     }
 
     .invoice-card::before {
@@ -1125,27 +1128,28 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     .invoice-header {
         page-break-inside: avoid !important;
         flex-direction: column !important;
-        gap: 8px !important;
-        margin-bottom: 12px !important;
+        gap: 4px !important;
+        margin-bottom: 6px !important;
     }
 
     .brand-block {
         flex-direction: row !important;
-        gap: 8px !important;
+        gap: 4px !important;
     }
 
     .logo-placeholder {
-        width: 40px !important;
-        height: 40px !important;
-        font-size: 20px !important;
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 14px !important;
+        flex-shrink: 0 !important;
     }
 
     .company-name {
-        font-size: 16px !important;
+        font-size: 12px !important;
     }
 
     .company-subtitle {
-        font-size: 10px !important;
+        font-size: 8px !important;
     }
 
     .invoice-meta {
@@ -1153,80 +1157,84 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     }
 
     .invoice-title {
-        font-size: 14px !important;
+        font-size: 11px !important;
     }
 
     .invoice-number {
-        font-size: 10px !important;
+        font-size: 8px !important;
     }
 
     .invoice-number span {
-        font-size: 14px !important;
+        font-size: 11px !important;
     }
 
     .invoice-meta-grid {
         grid-template-columns: repeat(3, 1fr) !important;
-        gap: 2px !important;
+        gap: 1px !important;
     }
 
     .meta-item {
-        padding: 4px 4px !important;
-        font-size: 9px !important;
+        padding: 2px 3px !important;
+        font-size: 7px !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
     }
 
     .meta-item span,
     .meta-item strong {
-        font-size: 9px !important;
+        font-size: 7px !important;
     }
 
     .info-grid {
         grid-template-columns: 1fr !important;
-        gap: 8px !important;
-        margin-bottom: 12px !important;
-    }
-
-    .info-card {
-        padding: 8px !important;
-    }
-
-    .info-title {
-        font-size: 11px !important;
+        gap: 4px !important;
         margin-bottom: 6px !important;
     }
 
+    .info-card {
+        padding: 4px !important;
+    }
+
+    .info-title {
+        font-size: 9px !important;
+        margin-bottom: 2px !important;
+    }
+
     .info-item {
-        font-size: 10px !important;
-        margin-bottom: 4px !important;
+        font-size: 8px !important;
+        margin-bottom: 2px !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
     }
 
     .items-table {
         page-break-inside: auto !important;
-        margin-bottom: 8px !important;
+        margin-bottom: 4px !important;
         overflow: hidden !important;
         width: 100% !important;
         max-width: 100% !important;
     }
 
     .items-table table {
-        font-size: 8px !important;
+        font-size: 7px !important;
         width: 100% !important;
         max-width: 100% !important;
         table-layout: fixed !important;
     }
 
-    /* توزيع الأعمدة في الطباعة لظهور الكل دون سكرول: عمود المنتج أصغر */
+    /* عمود المنتج أصغر لظهور الكمية وسعر الوحدة والإجمالي ضمن 80mm */
     .items-table th.col-product {
-        width: 32% !important;
+        width: 26% !important;
     }
 
     .items-table th {
-        padding: 3px 2px !important;
-        font-size: 8px !important;
+        padding: 2px 1px !important;
+        font-size: 7px !important;
     }
 
     .items-table td {
-        padding: 3px 2px !important;
-        font-size: 8px !important;
+        padding: 2px 1px !important;
+        font-size: 7px !important;
     }
 
     .items-table td.product-cell,
@@ -1237,12 +1245,12 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     }
 
     .items-table .product-name-wrap {
-        font-size: 7px !important;
-        line-height: 1.15 !important;
+        font-size: 6px !important;
+        line-height: 1.1 !important;
     }
 
     .items-table .product-notes-wrap {
-        font-size: 6px !important;
+        font-size: 5px !important;
     }
 
     .items-table tbody tr {
@@ -1253,52 +1261,56 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
     .summary-grid {
         page-break-inside: avoid !important;
         grid-template-columns: 1fr !important;
-        gap: 8px !important;
-        margin: 12px 0 !important;
+        gap: 4px !important;
+        margin: 6px 0 !important;
     }
 
     .summary-card {
-        padding: 8px !important;
+        padding: 4px !important;
         min-height: auto !important;
     }
 
     .summary-title {
-        font-size: 11px !important;
+        font-size: 9px !important;
     }
 
     .summary-row {
-        font-size: 10px !important;
-        gap: 8px !important;
+        font-size: 8px !important;
+        gap: 4px !important;
     }
 
     .summary-row strong {
-        font-size: 11px !important;
+        font-size: 9px !important;
     }
 
     .invoice-footer {
-        padding-top: 8px !important;
+        padding-top: 4px !important;
     }
 
     .invoice-footer .thanks {
-        font-size: 11px !important;
+        font-size: 9px !important;
     }
 
     .invoice-footer .terms {
-        font-size: 9px !important;
+        font-size: 7px !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
     }
 
     .invoice-footer .invoice-notes {
-        margin-top: 8px !important;
-        padding-top: 8px !important;
+        margin-top: 4px !important;
+        padding-top: 4px !important;
     }
 
     .invoice-footer .invoice-notes .notes-label {
-        font-size: 10px !important;
+        font-size: 8px !important;
     }
 
     .invoice-footer .invoice-notes .notes-text {
-        font-size: 9px !important;
-        padding: 6px 8px !important;
+        font-size: 7px !important;
+        padding: 3px 4px !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
     }
 
     .btn, .no-print, .card-header, .sidebar, .navbar {
