@@ -2118,7 +2118,6 @@ foreach ($factoryProducts as $product) {
                             <?php else: ?>
                                 <option value="1">عسل</option>
                                 <option value="2">زيت زيتون</option>
-                                <option value="3">كريمات</option>
                                 <option value="4">زيوت</option>
                                 <option value="5">اخري</option>
                             <?php endif; ?>
