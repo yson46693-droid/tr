@@ -156,7 +156,6 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
                 <thead>
                     <tr>
                         <th class="col-product">المنتج</th>
-                        <th class="col-batch">رقم التشغيلة</th>
                         <th class="col-qty">الكمية</th>
                         <th class="col-price">السعر</th>
                         <th class="col-total">الإجمالي</th>
@@ -165,17 +164,15 @@ $statusLabel = $statusLabelsMap[$status] ?? 'مسودة';
                 <tbody>
                     <?php 
                     if (empty($invoiceData['items']) || !is_array($invoiceData['items'])) {
-                        echo '<tr><td colspan="5" style="text-align: center; padding: 8px;">لا توجد منتجات</td></tr>';
+                        echo '<tr><td colspan="4" style="text-align: center; padding: 8px;">لا توجد منتجات</td></tr>';
                     } else {
                         foreach ($invoiceData['items'] as $item): 
                             $quantity   = isset($item['quantity']) ? number_format($item['quantity'], 2) : '0.00';
                             $unitPrice  = isset($item['unit_price']) ? formatCurrency($item['unit_price']) : formatCurrency(0);
                             $totalPrice = isset($item['total_price']) ? formatCurrency($item['total_price']) : formatCurrency(0);
-                            $batchNumber = $item['batch_number'] ?? null;
                     ?>
                     <tr>
                         <td class="col-product"><?php echo htmlspecialchars($item['product_name'] ?? 'منتج'); ?></td>
-                        <td class="col-batch"><?php echo $batchNumber ? htmlspecialchars($batchNumber) : '-'; ?></td>
                         <td class="col-qty"><?php echo $quantity; ?></td>
                         <td class="col-price"><?php echo $unitPrice; ?></td>
                         <td class="col-total"><?php echo $totalPrice; ?></td>

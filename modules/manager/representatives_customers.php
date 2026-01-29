@@ -2277,7 +2277,6 @@ function displayRepReturnHistory(history, tableBody) {
                            data-batch-numbers='${JSON.stringify(item.batch_numbers || [])}'>
                 </td>
                 <td>${item.invoice_number || '-'}</td>
-                <td>${(item.batch_numbers || []).join(', ') || '-'}</td>
                 <td>${escapeHtml(item.product_name || '-')}</td>
                 <td>${parseFloat(item.quantity || 0).toFixed(2)}</td>
                 <td>${parseFloat(item.returned_quantity || 0).toFixed(2)}</td>
@@ -3645,7 +3644,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <input type="checkbox" id="repSelectAllItems" onchange="repToggleAllItems()">
                                     </th>
                                     <th>رقم الفاتورة</th>
-                                    <th>رقم التشغيلة</th>
                                     <th>اسم المنتج</th>
                                     <th>الكمية المشتراة</th>
                                     <th>الكمية المرتجعة</th>

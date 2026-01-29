@@ -1902,7 +1902,6 @@ $collectionsLabel = $isSalesUser ? 'تحصيلاتي' : 'إجمالي التحص
                                         <tr>
                                             <th style="width: 15%;">رقم الفاتورة</th>
                                             <th style="width: 25%;">اسم المنتج</th>
-                                            <th style="width: 20%;">رقم التشغيلة</th>
                                             <th style="width: 10%;">الكمية</th>
                                             <th style="width: 15%;">السعر</th>
                                             <th style="width: 15%;">الإجمالي</th>
@@ -2096,21 +2095,10 @@ document.addEventListener('DOMContentLoaded', function () {
             rows.forEach(function (row) {
                 if (row.products && Array.isArray(row.products) && row.products.length > 0) {
                     row.products.forEach(function (product) {
-                        // معالجة batch_numbers (يمكن أن يكون مصفوفة أو نص)
-                        var batchNumbersStr = '';
-                        if (product.batch_numbers) {
-                            if (Array.isArray(product.batch_numbers)) {
-                                batchNumbersStr = product.batch_numbers.join(', ');
-                            } else {
-                                batchNumbersStr = product.batch_numbers;
-                            }
-                        }
-                        
                         allProducts.push({
                             invoice_number: row.invoice_number || '—',
                             invoice_date: row.invoice_date || '—',
                             product_name: product.product_name || '—',
-                            batch_numbers: batchNumbersStr,
                             quantity: parseFloat(product.quantity || 0),
                             unit_price: parseFloat(product.unit_price || 0),
                             total_price: parseFloat(product.quantity || 0) * parseFloat(product.unit_price || 0)
@@ -2123,7 +2111,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (allProducts.length === 0) {
             var emptyRow = document.createElement('tr');
             var emptyCell = document.createElement('td');
-            emptyCell.colSpan = 6;
+            emptyCell.colSpan = 5;
             emptyCell.className = 'text-center text-muted py-4';
             emptyCell.textContent = 'لا توجد منتجات.';
             emptyRow.appendChild(emptyCell);
@@ -2136,12 +2124,6 @@ document.addEventListener('DOMContentLoaded', function () {
             tr.innerHTML = `
                 <td class="fw-bold text-primary">${product.invoice_number}</td>
                 <td class="fw-semibold">${product.product_name}</td>
-                <td>
-                    ${product.batch_numbers ? 
-                        '<span class="badge bg-info text-dark">' + product.batch_numbers + '</span>' : 
-                        '<span class="text-muted">—</span>'
-                    }
-                </td>
                 <td>${product.quantity.toFixed(2)}</td>
                 <td>${formatCurrency(product.unit_price)}</td>
                 <td class="fw-semibold">${formatCurrency(product.total_price)}</td>

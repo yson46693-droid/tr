@@ -40,7 +40,6 @@ if ($isReturnDocument) {
         $quantity = isset($item['quantity']) ? (float)$item['quantity'] : 0;
         $unitPrice = isset($item['unit_price']) ? (float)$item['unit_price'] : 0;
         $notes = trim((string)($item['notes'] ?? ''));
-        $batchNumber = $item['batch_number'] ?? null;
         $condition = $item['condition'] ?? null;
         
         return [
@@ -49,7 +48,6 @@ if ($isReturnDocument) {
             'quantity'     => $quantity,
             'unit_price'   => $unitPrice,
             'total_price'  => $item['total_price'] ?? ($quantity * $unitPrice),
-            'batch_number' => $batchNumber,
             'condition'    => $condition,
             'notes'        => $notes,
         ];
@@ -259,22 +257,6 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
                         <th style="width: 30%;">المنتج</th>
                         <?php if ($isReturnDocument): ?>
                             <th style="width: 15%; text-align: center;">الحالة</th>
-                            <?php 
-                            // عرض عمود رقم التشغيلة إذا كان هناك أي عنصر يحتوي على رقم تشغيلة
-                            $hasBatchNumbers = false;
-                            if (!empty($invoiceData['items']) && is_array($invoiceData['items'])) {
-                                foreach ($invoiceData['items'] as $item) {
-                                    if (!empty($item['batch_number'])) {
-                                        $hasBatchNumbers = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if ($hasBatchNumbers): ?>
-                                <th style="width: 15%; text-align: center;">رقم التشغيلة</th>
-                            <?php endif; ?>
-                        <?php else: ?>
-                            <th style="width: 20%; text-align: center;">رقم التشغيلة</th>
                         <?php endif; ?>
                         <th style="width: 12%; text-align: center;">الكمية</th>
                         <th style="width: 15%; text-align: end;">سعر الوحدة</th>
@@ -283,25 +265,7 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
                 </thead>
                 <tbody>
                     <?php 
-                    // حساب عدد الأعمدة
-                    $hasBatchNumbers = false;
-                    if (!empty($invoiceData['items']) && is_array($invoiceData['items'])) {
-                        foreach ($invoiceData['items'] as $item) {
-                            if (!empty($item['batch_number'])) {
-                                $hasBatchNumbers = true;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if ($isReturnDocument) {
-                        $colspan = 5; // المنتج، الحالة، الكمية، سعر الوحدة، الإجمالي
-                        if ($hasBatchNumbers) {
-                            $colspan = 6; // إضافة عمود رقم التشغيلة
-                        }
-                    } else {
-                        $colspan = 5; // المنتج، رقم التشغيلة، الكمية، سعر الوحدة، الإجمالي
-                    }
+                    $colspan = $isReturnDocument ? 5 : 4; // المنتج [، الحالة]، الكمية، سعر الوحدة، الإجمالي
                     
                     if (empty($invoiceData['items']) || !is_array($invoiceData['items'])) {
                         echo '<tr><td colspan="' . $colspan . '" style="text-align: center; padding: 20px; color: #64748b;">لا توجد منتجات في هذا المرتجع</td></tr>';
@@ -311,7 +275,6 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
                             $unitPrice  = isset($item['unit_price']) ? formatCurrency($item['unit_price']) : formatCurrency(0);
                             $totalPrice = isset($item['total_price']) ? formatCurrency($item['total_price']) : formatCurrency(0);
                             $description = trim((string)($item['description'] ?? ''));
-                            $batchNumber = $item['batch_number'] ?? null;
                             $condition = $item['condition'] ?? null;
                             $notes = trim((string)($item['notes'] ?? ''));
                     ?>
@@ -340,27 +303,6 @@ $returnTypeLabel = $isReturnDocument ? ($returnTypeLabels[$returnMetadata['retur
                                     ?>
                                     <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; color: <?php echo $conditionInfo['color']; ?>; background: <?php echo $conditionInfo['bg']; ?>;">
                                         <?php echo htmlspecialchars($conditionInfo['label']); ?>
-                                    </span>
-                                <?php else: ?>
-                                    <span style="color: #9ca3af;">-</span>
-                                <?php endif; ?>
-                            </td>
-                            <?php if ($hasBatchNumbers): ?>
-                                <td style="text-align: center; vertical-align: middle;">
-                                    <?php if (!empty($batchNumber)): ?>
-                                        <span style="font-size: 12px; color: #0f4c81; font-weight: 600; background: #e0f2fe; padding: 4px 8px; border-radius: 6px; display: inline-block;">
-                                            <?php echo htmlspecialchars($batchNumber); ?>
-                                        </span>
-                                    <?php else: ?>
-                                        <span style="color: #9ca3af;">-</span>
-                                    <?php endif; ?>
-                                </td>
-                            <?php endif; ?>
-                        <?php else: ?>
-                            <td style="text-align: center; vertical-align: middle;">
-                                <?php if (!empty($batchNumber)): ?>
-                                    <span style="font-size: 12px; color: #0f4c81; font-weight: 600; background: #e0f2fe; padding: 4px 8px; border-radius: 6px; display: inline-block;">
-                                        <?php echo htmlspecialchars($batchNumber); ?>
                                     </span>
                                 <?php else: ?>
                                     <span style="color: #9ca3af;">-</span>
