@@ -429,7 +429,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                 <tr>
                     <th style="width: 45%;">المنتج</th>
                     <th style="width: 30%; text-align: center;">الكمية</th>
-                    <th style="width: 25%; text-align: center;">الإجمالي(ج.م)س</th>
+                    <th style="width: 25%; text-align: center;">الإجمالي(ج.م)</th>
                 </tr>
             </thead>
             <tbody>
