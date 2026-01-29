@@ -415,10 +415,16 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         
         <table class="info-table customer-priority-row" style="margin: 12px 0;">
             <tr>
-                <td> العميل:</td>
+                <td>العميل:</td>
                 <td><?php echo !empty($customerName) ? htmlspecialchars($customerName) : '-'; ?></td>
                 <td>الأولوية:</td>
                 <td><?php echo htmlspecialchars($priorityLabel); ?></td>
+            </tr>
+            <tr>
+                <td>تاريخ :</td>
+                <td><?php echo date('m-d', strtotime($createdAt)) . ' | ' . date('h:i A', strtotime($createdAt)); ?></td>
+                <td>تسليم:</td>
+                <td><?php echo $dueDate ? date('m-d', strtotime($dueDate)) : '-'; ?></td>
             </tr>
         </table>
         
@@ -480,23 +486,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             </tr>
         </table>
         <?php endif; ?>
-        
-        <div class="divider"></div>
-        
-        <div class="section-title">تفاصيل إضافية</div>
-        <table class="info-table">
-            <tr>
-                <td>تاريخ الطلب:</td>
-                <td style="font-weight: 600;"><?php echo date('Y-m-d', strtotime($createdAt)) . ' | ' . date('h:i A', strtotime($createdAt)); ?></td>
-            </tr>
-            <?php if ($dueDate): ?>
-            <tr>
-                <td>التسليم:</td>
-                <td style="font-weight: 600;"><?php echo date('Y-m-d', strtotime($dueDate)); ?></td>
-            </tr>
-            <?php endif; ?>
-        </table>
-        <?php if (!empty($notes)): ?>
+                <?php if (!empty($notes)): ?>
         <div class="section-title">ملاحظات</div>
         <div class="task-details">
             <div style="font-size: 14px; line-height: 1.8; padding: 4px 0; font-weight: 500; color: #000;">
