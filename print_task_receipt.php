@@ -485,18 +485,13 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         
         <div class="section-title">تفاصيل إضافية</div>
         <table class="info-table">
-          
-            <tr>
-                <td>منشئ الطلب:</td>
-                <td style="font-weight: 600;"><?php echo htmlspecialchars($createdBy); ?></td>
-            </tr>
             <tr>
                 <td>تاريخ الطلب:</td>
                 <td style="font-weight: 600;"><?php echo date('Y-m-d', strtotime($createdAt)) . ' | ' . date('h:i A', strtotime($createdAt)); ?></td>
             </tr>
             <?php if ($dueDate): ?>
             <tr>
-                <td>تاريخ التسليم:</td>
+                <td>التسليم:</td>
                 <td style="font-weight: 600;"><?php echo date('Y-m-d', strtotime($dueDate)); ?></td>
             </tr>
             <?php endif; ?>

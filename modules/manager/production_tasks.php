@@ -1313,7 +1313,6 @@ try {
                         <tr>
                             <th>رقم الطلب</th>
                             <th>العنوان</th>
-                            <th>الموظفين</th>
                             <th>الحاله</th>
                             <th>الأولوية</th>
                             <th>تاريخ التسليم</th>
@@ -1329,9 +1328,7 @@ try {
                             <?php foreach ($recentTasks as $index => $task): ?>
                                 <tr>
                                     <td><strong>#<?php echo (int)$task['id']; ?></strong></td>
-                                    <td>
-                                        <strong><?php echo htmlspecialchars($task['title']); ?></strong>
-                                        <?php 
+                                    <td>                                        <?php 
                                         // عرض منشئ المهمة إذا كان المحاسب أو المدير
                                         if (isset($task['creator_name']) && ($isAccountant || $isManager)) {
                                             $creatorRoleLabel = '';
@@ -1360,21 +1357,6 @@ try {
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php 
-                                        if (!empty($task['all_workers'])) {
-                                            $workersList = $task['all_workers'];
-                                            if (count($workersList) > 1) {
-                                                echo '<span class="badge bg-info me-1">' . count($workersList) . ' عمال</span><br>';
-                                                echo '<small class="text-muted">' . htmlspecialchars(implode(', ', $workersList)) . '</small>';
-                                            } else {
-                                                echo htmlspecialchars($workersList[0]);
-                                            }
-                                        } else {
-                                            echo htmlspecialchars($task['assigned_name'] ?? 'غير محدد');
-                                        }
-                                        ?>
-                                    </td>
-                                    <td>
                                         <?php
                                         $statusKey = $task['status'] ?? '';
                                         $statusMeta = $statusStyles[$statusKey] ?? ['class' => 'secondary', 'label' => 'غير معروفة'];
@@ -1396,14 +1378,14 @@ try {
                                     <td>
                                         <div class="btn-group btn-group-sm" role="group">
                                             <?php if ($isAccountant || $isManager || $isAdmin || $isProduction || $isDeveloper): ?>
-                                                <a href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank" class="btn btn-outline-primary" title="طباعة إيصال المهمة">
+                                                <a href="<?php echo getRelativeUrl('print_task_receipt.php?id=' . (int) $task['id']); ?>" target="_blank" class="btn btn-outline-primary" title="طباعة الاوردر">
                                                     <i class="bi bi-printer"></i>
                                                 </a>
                                             <?php endif; ?>
                                             
                                             <?php if ($isAccountant || $isManager): ?>
                                                 <button type="button" class="btn btn-outline-info btn-sm" onclick="openChangeStatusModal(<?php echo (int)$task['id']; ?>, '<?php echo htmlspecialchars($task['status'], ENT_QUOTES, 'UTF-8'); ?>')" title="تغيير حالة الطلب">
-                                                    <i class="bi bi-gear me-1"></i>تغيير الحالة
+                                                    <i class="bi bi-gear me-1"></i> 
                                                 </button>
                                             <?php endif; ?>
                                             
@@ -1414,7 +1396,7 @@ try {
                                                     <input type="hidden" name="action" value="cancel_task">
                                                     <input type="hidden" name="task_id" value="<?php echo (int)$task['id']; ?>">
                                                     <button type="submit" class="btn btn-outline-danger btn-sm">
-                                                        <i class="bi bi-trash me-1"></i>حذف المهمة
+                                                        <i class="bi bi-trash me-1"></i> 
                                                     </button>
                                                 </form>
                                             <?php endif; ?>
