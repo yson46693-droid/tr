@@ -415,7 +415,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         
         <table class="info-table customer-priority-row" style="margin: 12px 0;">
             <tr>
-                <td>اسم العميل:</td>
+                <td> العميل:</td>
                 <td><?php echo !empty($customerName) ? htmlspecialchars($customerName) : '-'; ?></td>
                 <td>الأولوية:</td>
                 <td><?php echo htmlspecialchars($priorityLabel); ?></td>
@@ -427,8 +427,9 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
         <table class="products-table">
             <thead>
                 <tr>
-                    <th style="width: 60%;">المنتج</th>
-                    <th style="width: 40%; text-align: center;">الكمية</th>
+                    <th style="width: 45%;">المنتج</th>
+                    <th style="width: 30%; text-align: center;">الكمية</th>
+                    <th style="width: 25%; text-align: center;">الإجمالي(ج.م)س</th>
                 </tr>
             </thead>
             <tbody>
@@ -438,6 +439,7 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                 foreach ($products as $product): 
                     $productQty = $product['quantity'] ?? null;
                     $productUnit = !empty($product['unit']) ? $product['unit'] : $unit; // استخدام وحدة المنتج أو الوحدة الافتراضية
+                    $productPrice = isset($product['price']) && $product['price'] !== null && $product['price'] !== '' ? (float)$product['price'] : null;
                     if ($productQty !== null) {
                         $totalQuantity += $productQty;
                         // استخدام وحدة أول منتج للعرض الإجمالي
@@ -452,6 +454,15 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                         <?php 
                         if ($productQty !== null) {
                             echo number_format($productQty, 2) . ' ' . htmlspecialchars($productUnit);
+                        } else {
+                            echo '<span style="color: #999;">-</span>';
+                        }
+                        ?>
+                    </td>
+                    <td class="product-quantity" style="text-align: center; font-weight: 600;">
+                        <?php 
+                        if ($productPrice !== null) {
+                            echo number_format($productPrice, 2);
                         } else {
                             echo '<span style="color: #999;">-</span>';
                         }

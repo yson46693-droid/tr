@@ -329,10 +329,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $productQuantity = null;
                 }
                 
+                $productPrice = null;
+                $priceInput = isset($productData['price']) ? trim((string)$productData['price']) : '';
+                if ($priceInput !== '' && is_numeric(str_replace(',', '.', $priceInput))) {
+                    $productPrice = (float)str_replace(',', '.', $priceInput);
+                    if ($productPrice < 0) {
+                        $productPrice = null;
+                    }
+                }
                 $products[] = [
                     'name' => $productName,
                     'quantity' => $productQuantity,
-                    'unit' => $productUnit
+                    'unit' => $productUnit,
+                    'price' => $productPrice
                 ];
             }
         }
@@ -363,7 +372,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($productName !== '' && !$error) {
                     $products[] = [
                         'name' => $productName,
-                        'quantity' => $productQuantity
+                        'quantity' => $productQuantity,
+                        'price' => null
                     ];
                 }
             }
@@ -1242,11 +1252,11 @@ try {
                             <div id="productsContainer">
                                 <div class="product-row mb-3 p-3 border rounded" data-product-index="0">
                                     <div class="row g-2">
-                                        <div class="col-md-5">
+                                        <div class="col-md-4">
                                             <label class="form-label small">اسم المنتج</label>
                                             <input type="text" class="form-control product-name-input" name="products[0][name]" placeholder="أدخل اسم المنتج أو القالب" list="templateSuggestions" autocomplete="off">
                                         </div>
-                                        <div class="col-md-3">
+                                        <div class="col-md-2">
                                             <label class="form-label small">الكمية</label>
                                             <input type="number" class="form-control product-quantity-input" name="products[0][quantity]" step="1" min="0" placeholder="مثال: 120" id="product-quantity-0">
                                         </div>
@@ -1260,6 +1270,10 @@ try {
                                                 <option value="شرينك">شرينك</option>
                                                 <option value="قطعة" selected>قطعة</option>
                                             </select>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="form-label small">السعر</label>
+                                            <input type="number" class="form-control" name="products[0][price]" step="0.01" min="0" placeholder="0.00" id="product-price-0">
                                         </div>
                                         <div class="col-md-2 d-flex align-items-end">
                                             <button type="button" class="btn btn-danger btn-sm w-100 remove-product-btn" style="display: none;">
@@ -1611,11 +1625,11 @@ document.addEventListener('DOMContentLoaded', function () {
         newRow.setAttribute('data-product-index', productIndex);
         newRow.innerHTML = `
             <div class="row g-2">
-                <div class="col-md-5">
+                <div class="col-md-4">
                     <label class="form-label small">اسم المنتج</label>
                     <input type="text" class="form-control product-name-input" name="products[${productIndex}][name]" placeholder="أدخل اسم المنتج أو القالب" list="templateSuggestions" autocomplete="off">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small">الكمية</label>
                     <input type="number" class="form-control product-quantity-input" name="products[${productIndex}][quantity]" step="1" min="0" placeholder="مثال: 120" id="product-quantity-${productIndex}">
                 </div>
@@ -1629,6 +1643,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         <option value="شرينك">شرينك</option>
                         <option value="قطعة" selected>قطعة</option>
                     </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">السعر</label>
+                    <input type="number" class="form-control" name="products[${productIndex}][price]" step="0.01" min="0" placeholder="0.00" id="product-price-${productIndex}">
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <button type="button" class="btn btn-danger btn-sm w-100 remove-product-btn">
