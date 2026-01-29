@@ -1786,17 +1786,28 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
         return !!document.getElementById('changeStatusCardCollapse');
     }
 
-    function openChangeStatusCard(taskIdInner, currentStatusInner) {
+    function openChangeStatusCard(taskIdInner, currentStatusInner, retryCount = 0) {
         // في بعض حالات AJAX navigation قد لا تكون عناصر البطاقة موجودة
-        ensureChangeStatusCardExists();
+        if (!ensureChangeStatusCardExists()) {
+            console.error('Failed to create change status card');
+            return false;
+        }
 
+        // إعطاء DOM وقت للتحديث بعد إنشاء العناصر
         const collapseEl = document.getElementById('changeStatusCardCollapse');
         const taskIdInput = document.getElementById('changeStatusCardTaskId');
         const currentStatusDisplay = document.getElementById('currentStatusCardDisplay');
         const newStatusSelect = document.getElementById('newStatusCard');
 
         if (!collapseEl || !taskIdInput || !currentStatusDisplay || !newStatusSelect) {
-            console.error('Change status card elements not found');
+            // محاولة مرة أخرى بعد تأخير قصير (حد أقصى محاولتين)
+            if (retryCount < 2) {
+                setTimeout(() => {
+                    openChangeStatusCard(taskIdInner, currentStatusInner, retryCount + 1);
+                }, 100);
+                return false;
+            }
+            console.error('Change status card elements not found after retries');
             return false;
         }
 

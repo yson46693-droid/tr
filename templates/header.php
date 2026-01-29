@@ -3447,36 +3447,37 @@ if (ob_get_level() > 0) {
         
         // تحديد الصفحات الشائعة حسب دور المستخدم
         const role = '<?php echo htmlspecialchars($currentUser['role'] ?? '', ENT_QUOTES, 'UTF-8'); ?>';
-        const baseUrl = '<?php echo getDashboardUrl($currentUser['role'] ?? ''); ?>';
+        // الحصول على base URL بدون اسم الملف (فقط /dashboard/)
+        const basePath = '<?php echo rtrim(getDashboardUrl(null), '/'); ?>';
         
         let commonPages = [];
         
         switch(role) {
             case 'manager':
                 commonPages = [
-                    baseUrl + 'manager.php',
-                    baseUrl + 'manager.php?page=chat',
-                    baseUrl + 'manager.php?page=product_templates'
+                    basePath + '/manager.php',
+                    basePath + '/manager.php?page=chat',
+                    basePath + '/manager.php?page=product_templates'
                 ];
                 break;
             case 'sales':
                 commonPages = [
-                    baseUrl + 'sales.php',
-                    baseUrl + 'sales.php?page=customers',
-                    baseUrl + 'sales.php?page=customer_orders'
+                    basePath + '/sales.php',
+                    basePath + '/sales.php?page=customers',
+                    basePath + '/sales.php?page=customer_orders'
                 ];
                 break;
             case 'production':
                 commonPages = [
-                    baseUrl + 'production.php',
-                    baseUrl + 'production.php?page=tasks',
-                    baseUrl + 'production.php?page=chat'
+                    basePath + '/production.php',
+                    basePath + '/production.php?page=tasks',
+                    basePath + '/production.php?page=chat'
                 ];
                 break;
             case 'accountant':
                 commonPages = [
-                    baseUrl + 'accountant.php',
-                    baseUrl + 'accountant.php?page=reports'
+                    basePath + '/accountant.php',
+                    basePath + '/accountant.php?page=reports'
                 ];
                 break;
         }

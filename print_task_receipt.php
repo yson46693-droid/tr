@@ -251,6 +251,20 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             font-size: 14px;
         }
         
+        .info-table.customer-priority-row td:nth-child(1),
+        .info-table.customer-priority-row td:nth-child(3) {
+            font-weight: 700;
+            width: 15%;
+            color: #000;
+        }
+        .info-table.customer-priority-row td:nth-child(2),
+        .info-table.customer-priority-row td:nth-child(4) {
+            font-weight: 600;
+            text-align: right;
+            color: #000;
+            width: 35%;
+        }
+        
         .products-table {
             width: 100%;
             border-collapse: collapse;
@@ -395,23 +409,18 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             </a>
         </div>
         
-        <div class="receipt-header">
-            <h1>إيصال اوردر إنتاج</h1>
-            <div class="company-name"><?php echo htmlspecialchars($companyName); ?></div>
-        </div>
-        
         <div class="task-number">
             رقم الاوردر: <?php echo htmlspecialchars($taskNumber); ?>
         </div>
         
-        <?php if (!empty($customerName)): ?>
-        <table class="info-table" style="margin: 12px 0;">
+        <table class="info-table customer-priority-row" style="margin: 12px 0;">
             <tr>
                 <td>اسم العميل:</td>
-                <td style="font-weight: 600;"><?php echo htmlspecialchars($customerName); ?></td>
+                <td><?php echo !empty($customerName) ? htmlspecialchars($customerName) : '-'; ?></td>
+                <td>الأولوية:</td>
+                <td><?php echo htmlspecialchars($priorityLabel); ?></td>
             </tr>
         </table>
-        <?php endif; ?>
         
         <div class="section-title">تفاصيل الاوردر</div>
         <?php if (!empty($products)): ?>
@@ -460,15 +469,6 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
             </tr>
         </table>
         <?php endif; ?>
-        
-        <div class="divider"></div>
-        
-        <table class="info-table">
-            <tr>
-                <td>الأولوية:</td>
-                <td style="font-weight: 600;"><?php echo htmlspecialchars($priorityLabel); ?></td>
-            </tr>
-        </table>
         
         <div class="divider"></div>
         
