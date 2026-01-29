@@ -1082,10 +1082,10 @@ $is80mm = (isset($printFormat) && $printFormat === '80mm');
     }
 }
 
-/* تنسيق طباعة 80mm — المحتوى يملأ عرض 80mm بالكامل، أبعاد مضغوطة للورق الحراري */
+/* تنسيق طباعة 80mm — المحتوى يملأ عرض 80mm بالكامل، أبعاد مضغوطة جداً للورق الحراري */
 .invoice-wrapper.invoice-80mm-print {
-    font-size: 8px;
-    line-height: 1.15;
+    font-size: 7px;
+    line-height: 1.1;
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -1097,8 +1097,8 @@ $is80mm = (isset($printFormat) && $printFormat === '80mm');
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    padding: 4px 4px;
-    border-radius: 4px;
+    padding: 2px 3px;
+    border-radius: 2px;
     box-sizing: border-box;
 }
 
@@ -1107,35 +1107,37 @@ $is80mm = (isset($printFormat) && $printFormat === '80mm');
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 4px;
-    margin-bottom: 6px;
+    gap: 2px;
+    margin-bottom: 3px;
     box-sizing: border-box;
 }
 
 .invoice-wrapper.invoice-80mm-print .brand-block {
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
 }
 
 .invoice-wrapper.invoice-80mm-print .logo-placeholder {
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    font-size: 14px;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    font-size: 12px;
 }
 
 .invoice-wrapper.invoice-80mm-print .company-logo-img {
-    padding: 2px;
+    padding: 1px;
 }
 
 .invoice-wrapper.invoice-80mm-print .company-name {
-    font-size: 12px;
-    line-height: 1.2;
+    font-size: 10px;
+    line-height: 1.1;
+    margin: 0;
 }
 
 .invoice-wrapper.invoice-80mm-print .company-subtitle {
-    font-size: 7px;
+    font-size: 6px;
     margin-top: 0;
+    line-height: 1.1;
 }
 
 .invoice-wrapper.invoice-80mm-print .invoice-meta {
@@ -1143,53 +1145,55 @@ $is80mm = (isset($printFormat) && $printFormat === '80mm');
 }
 
 .invoice-wrapper.invoice-80mm-print .invoice-title {
-    font-size: 9px;
+    font-size: 8px;
+    margin-bottom: 1px;
 }
 
 .invoice-wrapper.invoice-80mm-print .invoice-number {
-    font-size: 7px;
+    font-size: 6px;
+    margin-bottom: 1px;
 }
 
 .invoice-wrapper.invoice-80mm-print .invoice-number span {
-    font-size: 10px;
+    font-size: 9px;
 }
 
 .invoice-wrapper.invoice-80mm-print .invoice-meta-grid {
     grid-template-columns: 1fr;
-    gap: 2px;
+    gap: 1px;
 }
 
 .invoice-wrapper.invoice-80mm-print .meta-item {
-    padding: 2px 4px;
-    font-size: 7px;
+    padding: 1px 3px;
+    font-size: 6px;
 }
 
 .invoice-wrapper.invoice-80mm-print .meta-item strong {
-    font-size: 8px;
+    font-size: 7px;
 }
 
 .invoice-wrapper.invoice-80mm-print .info-grid {
     width: 100%;
     max-width: 100%;
     grid-template-columns: 1fr;
-    gap: 4px;
-    margin-bottom: 6px;
+    gap: 2px;
+    margin-bottom: 3px;
     box-sizing: border-box;
 }
 
 .invoice-wrapper.invoice-80mm-print .info-card {
-    padding: 4px 6px;
+    padding: 2px 4px;
 }
 
 .invoice-wrapper.invoice-80mm-print .info-title {
-    font-size: 8px;
-    margin-bottom: 3px;
+    font-size: 7px;
+    margin-bottom: 1px;
 }
 
 .invoice-wrapper.invoice-80mm-print .info-item {
-    font-size: 7px;
-    margin-bottom: 1px;
-    line-height: 1.2;
+    font-size: 6px;
+    margin-bottom: 0;
+    line-height: 1.1;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
@@ -1198,7 +1202,7 @@ $is80mm = (isset($printFormat) && $printFormat === '80mm');
     width: 100%;
     max-width: 100%;
     overflow: hidden;
-    margin-bottom: 6px;
+    margin-bottom: 3px;
     box-sizing: border-box;
 }
 
@@ -1210,68 +1214,74 @@ $is80mm = (isset($printFormat) && $printFormat === '80mm');
 }
 
 .invoice-wrapper.invoice-80mm-print .items-table th {
-    padding: 2px 3px;
-    font-size: 7px;
+    padding: 1px 2px;
+    font-size: 6px;
 }
 
 .invoice-wrapper.invoice-80mm-print .items-table td {
-    padding: 2px 3px;
-    font-size: 7px;
+    padding: 1px 2px;
+    font-size: 6px;
     overflow: hidden;
 }
 
 .invoice-wrapper.invoice-80mm-print .items-table .product-name {
-    font-size: 7px;
+    font-size: 6px;
     margin-bottom: 0;
+    line-height: 1.1;
     word-break: break-word;
     overflow-wrap: break-word;
 }
 
 .invoice-wrapper.invoice-80mm-print .items-table td div[style*="font-size: 12px"] {
-    font-size: 6px !important;
+    font-size: 5px !important;
     margin-top: 0 !important;
+    line-height: 1.1 !important;
 }
 
 .invoice-wrapper.invoice-80mm-print .summary-grid {
     width: 100%;
     max-width: 100%;
     grid-template-columns: 1fr;
-    gap: 4px;
-    margin: 6px 0;
+    gap: 2px;
+    margin: 3px 0;
     box-sizing: border-box;
 }
 
 .invoice-wrapper.invoice-80mm-print .summary-card {
-    padding: 4px 6px;
+    padding: 2px 4px;
 }
 
 .invoice-wrapper.invoice-80mm-print .summary-title {
-    font-size: 8px;
+    font-size: 7px;
+    margin-bottom: 1px;
 }
 
 .invoice-wrapper.invoice-80mm-print .summary-row {
-    font-size: 7px;
+    font-size: 6px;
+    margin-bottom: 0;
 }
 
 .invoice-wrapper.invoice-80mm-print .summary-row strong {
-    font-size: 8px;
+    font-size: 7px;
 }
 
 .invoice-wrapper.invoice-80mm-print .invoice-footer .thanks {
-    font-size: 8px;
+    font-size: 7px;
+    margin-bottom: 1px;
 }
 
 .invoice-wrapper.invoice-80mm-print .invoice-footer .terms {
-    font-size: 7px;
+    font-size: 6px;
 }
 
 .invoice-wrapper.invoice-80mm-print .notes-title,
 .invoice-wrapper.invoice-80mm-print .notes-text {
-    font-size: 7px;
+    font-size: 6px;
+    line-height: 1.1;
 }
 
 .invoice-wrapper.invoice-80mm-print .invoice-footer {
-    padding-top: 4px;
+    padding-top: 2px;
 }
 
 @media print {
@@ -1283,7 +1293,22 @@ $is80mm = (isset($printFormat) && $printFormat === '80mm');
     .invoice-wrapper.invoice-80mm-print .invoice-card {
         width: 100% !important;
         max-width: 100% !important;
-        padding: 3px 3px !important;
+        padding: 2px 2px !important;
+    }
+    .invoice-wrapper.invoice-80mm-print .invoice-header {
+        margin-bottom: 2px !important;
+        gap: 1px !important;
+    }
+    .invoice-wrapper.invoice-80mm-print .info-grid {
+        gap: 1px !important;
+        margin-bottom: 2px !important;
+    }
+    .invoice-wrapper.invoice-80mm-print .items-table {
+        margin-bottom: 2px !important;
+    }
+    .invoice-wrapper.invoice-80mm-print .summary-grid {
+        gap: 1px !important;
+        margin: 2px 0 !important;
     }
     .invoice-wrapper.invoice-80mm-print .items-table,
     .invoice-wrapper.invoice-80mm-print .items-table table {
