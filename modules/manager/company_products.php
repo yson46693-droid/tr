@@ -46,7 +46,7 @@ try {
     }
     
     // إضافة الأصناف الافتراضية إذا لم تكن موجودة
-    $defaultCategories = ['صابون', 'زيت زيتون', 'كريمات', 'زيوت', 'اخري'];
+    $defaultCategories = ['عسل', 'زيت زيتون', 'كريمات', 'زيوت', 'اخري'];
     foreach ($defaultCategories as $catName) {
         try {
             $existing = $db->queryOne("SELECT id FROM product_categories WHERE name = ?", [$catName]);
@@ -74,7 +74,7 @@ try {
         
         // إذا كانت القائمة فارغة، إضافة الأصناف الافتراضية
         if (empty($productCategories)) {
-            $defaultCategories = ['صابون', 'زيت زيتون', 'كريمات', 'زيوت', 'اخري'];
+            $defaultCategories = ['عسل', 'زيت زيتون', 'كريمات', 'زيوت', 'اخري'];
             foreach ($defaultCategories as $catName) {
                 try {
                     $db->execute(
@@ -99,7 +99,7 @@ try {
 // في حالة عدم وجود أصناف، استخدام قائمة افتراضية
 if (empty($productCategories)) {
     $productCategories = [
-        ['id' => 1, 'name' => 'صابون'],
+        ['id' => 1, 'name' => 'عسل'],
         ['id' => 2, 'name' => 'زيت زيتون'],
         ['id' => 3, 'name' => 'كريمات'],
         ['id' => 4, 'name' => 'زيوت'],
@@ -1402,7 +1402,7 @@ foreach ($factoryProducts as $product) {
                                             <option value="<?php echo intval($cat['id']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
                                         <?php endforeach; ?>
                                     <?php else: ?>
-                                        <option value="1">صابون</option>
+                                        <option value="1">عسل</option>
                                         <option value="2">زيت زيتون</option>
                                         <option value="3">كريمات</option>
                                         <option value="4">زيوت</option>
@@ -1471,7 +1471,7 @@ foreach ($factoryProducts as $product) {
                                     <option value="<?php echo htmlspecialchars($cat['name']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
                                 <?php endforeach; ?>
                             <?php else: ?>
-                                <option value="صابون">صابون</option>
+                                <option value="عسل">عسل</option>
                                 <option value="زيت زيتون">زيت زيتون</option>
                                 <option value="كريمات">كريمات</option>
                                 <option value="زيوت">زيوت</option>
@@ -1850,7 +1850,7 @@ foreach ($factoryProducts as $product) {
                                     <option value="<?php echo htmlspecialchars($cat['name']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
                                 <?php endforeach; ?>
                             <?php else: ?>
-                                <option value="صابون">صابون</option>
+                                <option value="عسل">عسل</option>
                                 <option value="زيت زيتون">زيت زيتون</option>
                                 <option value="كريمات">كريمات</option>
                                 <option value="زيوت">زيوت</option>
@@ -1992,7 +1992,7 @@ foreach ($factoryProducts as $product) {
                                     <option value="<?php echo intval($cat['id']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
                                 <?php endforeach; ?>
                             <?php else: ?>
-                                <option value="1">صابون</option>
+                                <option value="1">عسل</option>
                                 <option value="2">زيت زيتون</option>
                                 <option value="3">كريمات</option>
                                 <option value="4">زيوت</option>
@@ -2054,7 +2054,7 @@ foreach ($factoryProducts as $product) {
                                     <option value="<?php echo intval($cat['id']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
                                 <?php endforeach; ?>
                             <?php else: ?>
-                                <option value="1">صابون</option>
+                                <option value="1">عسل</option>
                                 <option value="2">زيت زيتون</option>
                                 <option value="3">كريمات</option>
                                 <option value="4">زيوت</option>
@@ -2116,7 +2116,7 @@ foreach ($factoryProducts as $product) {
                                     <option value="<?php echo intval($cat['id']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
                                 <?php endforeach; ?>
                             <?php else: ?>
-                                <option value="1">صابون</option>
+                                <option value="1">عسل</option>
                                 <option value="2">زيت زيتون</option>
                                 <option value="3">كريمات</option>
                                 <option value="4">زيوت</option>
@@ -2260,7 +2260,7 @@ foreach ($factoryProducts as $product) {
                             <option value="<?php echo intval($cat['id']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <option value="1">صابون</option>
+                        <option value="1">عسل</option>
                         <option value="2">زيت زيتون</option>
                         <option value="3">كريمات</option>
                         <option value="4">زيوت</option>
@@ -2316,7 +2316,7 @@ foreach ($factoryProducts as $product) {
                             <option value="<?php echo intval($cat['id']); ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <option value="1">صابون</option>
+                        <option value="1">عسل</option>
                         <option value="2">زيت زيتون</option>
                         <option value="3">كريمات</option>
                         <option value="4">زيوت</option>
