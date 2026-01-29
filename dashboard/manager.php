@@ -263,25 +263,26 @@ if ($page === 'representatives_customers' &&
     }
 }
 
-// معالجة AJAX لجلب رصيد المندوب من صفحة company_cash
-if ($page === 'company_cash' && isset($_GET['ajax']) && $_GET['ajax'] === 'get_sales_rep_balance') {
-    // تحميل الملفات الأساسية فقط
-    require_once __DIR__ . '/../includes/config.php';
-    require_once __DIR__ . '/../includes/db.php';
-    require_once __DIR__ . '/../includes/auth.php';
-    require_once __DIR__ . '/../includes/audit_log.php';
-    require_once __DIR__ . '/../includes/notifications.php';
-    require_once __DIR__ . '/../includes/approval_system.php';
-    require_once __DIR__ . '/../includes/path_helper.php';
-    
-    requireRole(['manager', 'accountant', 'developer']);
-    
-    // تحميل ملف company_cash.php مباشرة للتعامل مع AJAX
-    $modulePath = __DIR__ . '/../modules/manager/company_cash.php';
-    if (file_exists($modulePath)) {
-        // الملف نفسه سيتعامل مع AJAX ويخرج JSON
-        include $modulePath;
-        exit; // إيقاف التنفيذ بعد معالجة AJAX
+// معالجة AJAX لصفحة company_cash (رصيد المندوب أو جدول المعاملات بدون ريفريش)
+if ($page === 'company_cash' && isset($_GET['ajax'])) {
+    $ajaxAction = $_GET['ajax'];
+    if ($ajaxAction === 'get_sales_rep_balance' || $ajaxAction === 'transactions_list') {
+        // تحميل الملفات الأساسية فقط قبل أي إخراج
+        require_once __DIR__ . '/../includes/config.php';
+        require_once __DIR__ . '/../includes/db.php';
+        require_once __DIR__ . '/../includes/auth.php';
+        require_once __DIR__ . '/../includes/audit_log.php';
+        require_once __DIR__ . '/../includes/notifications.php';
+        require_once __DIR__ . '/../includes/approval_system.php';
+        require_once __DIR__ . '/../includes/path_helper.php';
+        
+        requireRole(['manager', 'accountant', 'developer']);
+        
+        $modulePath = __DIR__ . '/../modules/manager/company_cash.php';
+        if (file_exists($modulePath)) {
+            include $modulePath;
+            exit;
+        }
     }
 }
 

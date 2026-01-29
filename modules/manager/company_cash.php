@@ -1520,7 +1520,10 @@ document.addEventListener('DOMContentLoaded', function() {
         function buildAjaxUrl(href) {
             if (!href || href === '#' || href === '') return null;
             var sep = href.indexOf('?') >= 0 ? '&' : '?';
-            return href + sep + 'ajax=transactions_list';
+            var withAjax = href + sep + 'ajax=transactions_list';
+            if (withAjax.indexOf('http') === 0) return withAjax;
+            var base = window.location.origin + window.location.pathname;
+            return (withAjax.charAt(0) === '?' ? base + withAjax : base + '?' + withAjax);
         }
         function loadTransactionsList(url, pushState) {
             if (!url) return;
@@ -1549,10 +1552,13 @@ document.addEventListener('DOMContentLoaded', function() {
         transactionsListEl.addEventListener('click', function(e) {
             var link = e.target.closest('a.page-link');
             if (!link || !link.href || link.closest('.page-item.disabled')) return;
-            if (link.getAttribute('href').indexOf('page=company_cash') === -1) return;
+            var href = link.getAttribute('href') || link.href || '';
+            if (href.indexOf('page=company_cash') === -1) return;
             e.preventDefault();
-            var ajaxUrl = buildAjaxUrl(link.getAttribute('href'));
+            e.stopPropagation();
+            var ajaxUrl = buildAjaxUrl(href);
             if (ajaxUrl) loadTransactionsList(ajaxUrl, true);
+            return false;
         });
         window.addEventListener('popstate', function(e) {
             if (window.location.search.indexOf('page=company_cash') >= 0) {

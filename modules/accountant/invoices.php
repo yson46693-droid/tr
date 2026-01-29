@@ -374,6 +374,13 @@ if (isset($_GET['id'])) {
                                                         <i class="bi bi-receipt me-2"></i>طباعة 80mm
                                                     </a>
                                                 </li>
+                                                <li>
+                                                    <a class="dropdown-item" 
+                                                       href="<?php echo getRelativeUrl('print_invoice_sale_80mm.php?id=' . $invoice['id'] . '&print=1'); ?>" 
+                                                       target="_blank">
+                                                        <i class="bi bi-file-earmark-text me-2"></i>فاتورة بيع
+                                                    </a>
+                                                </li>
                                             </ul>
                                         </div>
                                         <button type="button" 
