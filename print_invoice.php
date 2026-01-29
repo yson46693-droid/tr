@@ -186,13 +186,9 @@ $companyName = COMPANY_NAME;
                 define('ACCESS_ALLOWED', true);
             }
             
-            // استخدام old-recipt.php للطباعة A4
-            if ($printFormat === 'a4') {
-                include __DIR__ . '/old-recipt.php';
-            } else {
-                // استخدام تصميم 80mm
-                include __DIR__ . '/print_invoice_80mm.php';
-            }
+            // استخدام نفس تصميم الفاتورة (مع لوجو الشركة) للطباعة A4 و 80mm
+            $printFormat = $printFormat ?? 'a4';
+            include __DIR__ . '/old-recipt.php';
             ?>
         </div>
     </div>
