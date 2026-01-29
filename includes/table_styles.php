@@ -121,6 +121,16 @@ if (!defined('GLOBAL_TABLE_STYLES_RENDERED') && !$isAjaxRequest && !$headersSent
             font-weight: 600;
         }
 
+        /* أزرار بحجم الأيقونة فقط (إجراءات الجدول) */
+        .dashboard-table tbody td .btn-icon-only,
+        .dashboard-table tbody td .btn-icon-only.btn-sm {
+            min-height: 0 !important;
+            padding: 0.15rem 0.35rem !important;
+            font-size: 0.75rem !important;
+            line-height: 1 !important;
+            width: auto !important;
+        }
+
         .dashboard-table tfoot td {
             padding: 0.9rem 1.1rem;
             border-top: 1px solid var(--global-table-border);
