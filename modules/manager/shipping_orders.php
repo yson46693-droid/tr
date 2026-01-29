@@ -133,6 +133,41 @@ try {
     error_log('shipping_orders: failed ensuring shipping_company_order_items table -> ' . $tableError->getMessage());
 }
 
+// جدول تحصيلات شركات الشحن (مماثل لـ local_collections)
+try {
+    $collectionsTableExists = $db->queryOne("SHOW TABLES LIKE 'shipping_company_collections'");
+    if (empty($collectionsTableExists)) {
+        $db->execute(
+            "CREATE TABLE IF NOT EXISTS `shipping_company_collections` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `collection_number` varchar(50) DEFAULT NULL COMMENT 'رقم التحصيل',
+                `shipping_company_id` int(11) NOT NULL COMMENT 'معرف شركة الشحن',
+                `amount` decimal(15,2) NOT NULL COMMENT 'المبلغ المحصل',
+                `date` date NOT NULL COMMENT 'تاريخ التحصيل',
+                `payment_method` enum('cash','bank','cheque','other') DEFAULT 'cash' COMMENT 'طريقة الدفع',
+                `reference_number` varchar(50) DEFAULT NULL COMMENT 'رقم مرجعي',
+                `notes` text DEFAULT NULL COMMENT 'ملاحظات',
+                `collected_by` int(11) NOT NULL COMMENT 'من قام بالتحصيل',
+                `status` enum('pending','approved','rejected') DEFAULT 'pending' COMMENT 'حالة التحصيل',
+                `approved_by` int(11) DEFAULT NULL COMMENT 'من وافق على التحصيل',
+                `approved_at` timestamp NULL DEFAULT NULL COMMENT 'تاريخ الموافقة',
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `collection_number` (`collection_number`),
+                KEY `shipping_company_id` (`shipping_company_id`),
+                KEY `collected_by` (`collected_by`),
+                KEY `date` (`date`),
+                KEY `status` (`status`),
+                CONSTRAINT `shipping_company_collections_company_fk` FOREIGN KEY (`shipping_company_id`) REFERENCES `shipping_companies` (`id`) ON DELETE CASCADE,
+                CONSTRAINT `shipping_company_collections_collected_fk` FOREIGN KEY (`collected_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='جدول التحصيلات من شركات الشحن'"
+        );
+    }
+} catch (Throwable $e) {
+    error_log('shipping_orders: shipping_company_collections table -> ' . $e->getMessage());
+}
+
 function generateShippingOrderNumber(Database $db): string
 {
     $year = date('Y');
@@ -273,6 +308,216 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        redirectAfterPost('shipping_orders', [], [], 'manager');
+        exit;
+    }
+
+    if ($action === 'edit_shipping_company_balance') {
+        $companyId = isset($_POST['company_id']) ? (int)$_POST['company_id'] : 0;
+        $balance = isset($_POST['balance']) ? cleanFinancialValue($_POST['balance'], true) : null;
+
+        if ($companyId <= 0) {
+            $_SESSION[$sessionErrorKey] = 'معرف شركة الشحن غير صالح.';
+        } elseif ($balance === null) {
+            $_SESSION[$sessionErrorKey] = 'يجب إدخال قيمة الرصيد.';
+        } else {
+            try {
+                $company = $db->queryOne("SELECT id, name FROM shipping_companies WHERE id = ?", [$companyId]);
+                if (!$company) {
+                    throw new InvalidArgumentException('شركة الشحن غير موجودة.');
+                }
+                $db->execute(
+                    "UPDATE shipping_companies SET balance = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
+                    [$balance, $currentUser['id'] ?? null, $companyId]
+                );
+                logAudit(
+                    $currentUser['id'] ?? null,
+                    'edit_shipping_company_balance',
+                    'shipping_company',
+                    $companyId,
+                    null,
+                    ['balance' => $balance, 'company_name' => $company['name'] ?? '']
+                );
+                $_SESSION[$sessionSuccessKey] = 'تم تحديث ديون شركة الشحن بنجاح.';
+            } catch (InvalidArgumentException $e) {
+                $_SESSION[$sessionErrorKey] = $e->getMessage();
+            } catch (Throwable $e) {
+                error_log('shipping_orders: edit company balance -> ' . $e->getMessage());
+                $_SESSION[$sessionErrorKey] = 'تعذر تحديث الرصيد. يرجى المحاولة لاحقاً.';
+            }
+        }
+        redirectAfterPost('shipping_orders', [], [], 'manager');
+        exit;
+    }
+
+    if ($action === 'collect_from_shipping_company') {
+        $companyId = isset($_POST['company_id']) ? (int)$_POST['company_id'] : 0;
+        $amount = isset($_POST['amount']) ? cleanFinancialValue($_POST['amount']) : 0;
+        $collectionType = isset($_POST['collection_type']) ? trim($_POST['collection_type']) : 'direct';
+
+        if ($companyId <= 0) {
+            $_SESSION[$sessionErrorKey] = 'معرف شركة الشحن غير صالح.';
+        } elseif ($amount <= 0) {
+            $_SESSION[$sessionErrorKey] = 'يجب إدخال مبلغ تحصيل أكبر من صفر.';
+        } elseif (!in_array($collectionType, ['direct', 'management'])) {
+            $_SESSION[$sessionErrorKey] = 'نوع التحصيل غير صالح.';
+        } else {
+            $transactionStarted = false;
+            try {
+                $db->beginTransaction();
+                $transactionStarted = true;
+
+                $company = $db->queryOne(
+                    "SELECT id, name, balance FROM shipping_companies WHERE id = ? FOR UPDATE",
+                    [$companyId]
+                );
+                if (!$company) {
+                    throw new InvalidArgumentException('لم يتم العثور على شركة الشحن.');
+                }
+                $currentBalance = (float)($company['balance'] ?? 0);
+                if ($currentBalance <= 0) {
+                    throw new InvalidArgumentException('لا توجد ديون نشطة على هذه الشركة.');
+                }
+                if ($amount > $currentBalance) {
+                    throw new InvalidArgumentException('المبلغ المدخل أكبر من ديون الشركة الحالية.');
+                }
+                $newBalance = round(max($currentBalance - $amount, 0), 2);
+
+                $db->execute(
+                    "UPDATE shipping_companies SET balance = ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
+                    [$newBalance, $currentUser['id'] ?? null, $companyId]
+                );
+
+                logAudit(
+                    $currentUser['id'] ?? null,
+                    'collect_shipping_company_debt',
+                    'shipping_company',
+                    $companyId,
+                    null,
+                    ['collected_amount' => $amount, 'previous_balance' => $currentBalance, 'new_balance' => $newBalance]
+                );
+
+                $collectionNumber = null;
+                $collectionId = null;
+                $collectionsTableExists = $db->queryOne("SHOW TABLES LIKE 'shipping_company_collections'");
+                if (!empty($collectionsTableExists)) {
+                    $hasStatusColumn = !empty($db->queryOne("SHOW COLUMNS FROM shipping_company_collections LIKE 'status'"));
+                    $hasCollectionNumberColumn = !empty($db->queryOne("SHOW COLUMNS FROM shipping_company_collections LIKE 'collection_number'"));
+                    $hasNotesColumn = !empty($db->queryOne("SHOW COLUMNS FROM shipping_company_collections LIKE 'notes'"));
+
+                    if ($hasCollectionNumberColumn) {
+                        $year = date('Y');
+                        $month = date('m');
+                        $lastCollection = $db->queryOne(
+                            "SELECT collection_number FROM shipping_company_collections WHERE collection_number LIKE ? ORDER BY collection_number DESC LIMIT 1 FOR UPDATE",
+                            ["SHIP-COL-{$year}{$month}-%"]
+                        );
+                        $serial = 1;
+                        if (!empty($lastCollection['collection_number'])) {
+                            $parts = explode('-', $lastCollection['collection_number']);
+                            $serial = (int)($parts[3] ?? 0) + 1;
+                        }
+                        $collectionNumber = sprintf("SHIP-COL-%s%s-%04d", $year, $month, $serial);
+                    }
+
+                    $collectionDate = date('Y-m-d');
+                    $collectionColumns = ['shipping_company_id', 'amount', 'date', 'payment_method', 'collected_by'];
+                    $collectionValues = [$companyId, $amount, $collectionDate, 'cash', $currentUser['id'] ?? null];
+                    $collectionPlaceholders = array_fill(0, count($collectionColumns), '?');
+
+                    if ($hasCollectionNumberColumn && $collectionNumber !== null) {
+                        array_unshift($collectionColumns, 'collection_number');
+                        array_unshift($collectionValues, $collectionNumber);
+                        array_unshift($collectionPlaceholders, '?');
+                    }
+                    if ($hasNotesColumn) {
+                        $collectionColumns[] = 'notes';
+                        $collectionValues[] = 'تحصيل من صفحة طلبات الشحن';
+                        $collectionPlaceholders[] = '?';
+                    }
+                    if ($hasStatusColumn) {
+                        $collectionColumns[] = 'status';
+                        $collectionValues[] = 'approved';
+                        $collectionPlaceholders[] = '?';
+                    }
+
+                    $db->execute(
+                        "INSERT INTO shipping_company_collections (" . implode(', ', $collectionColumns) . ") VALUES (" . implode(', ', $collectionPlaceholders) . ")",
+                        $collectionValues
+                    );
+                    $collectionId = $db->getLastInsertId();
+                    logAudit(
+                        $currentUser['id'] ?? null,
+                        'add_shipping_company_collection',
+                        'shipping_company_collection',
+                        $collectionId,
+                        null,
+                        ['collection_number' => $collectionNumber, 'shipping_company_id' => $companyId, 'amount' => $amount]
+                    );
+                }
+
+                $accountantTableExists = $db->queryOne("SHOW TABLES LIKE 'accountant_transactions'");
+                if (!empty($accountantTableExists)) {
+                    $companyName = $company['name'] ?? 'شركة شحن';
+                    $description = ($collectionType === 'management')
+                        ? 'تحصيل للإدارة من شركة شحن: ' . $companyName
+                        : 'تحصيل من شركة شحن: ' . $companyName;
+                    $referenceNumber = $collectionNumber ?? ('SHIP-CUST-' . $companyId . '-' . date('YmdHis'));
+
+                    $transactionColumns = [
+                        'transaction_type', 'amount', 'description', 'reference_number', 'payment_method',
+                        'status', 'created_by', 'approved_by', 'approved_at'
+                    ];
+                    $transactionValues = [
+                        'income', $amount, $description, $referenceNumber, 'cash',
+                        'approved', $currentUser['id'] ?? null, $currentUser['id'] ?? null, date('Y-m-d H:i:s')
+                    ];
+
+                    $hasShippingCompanyIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM accountant_transactions LIKE 'shipping_company_id'"));
+                    if ($hasShippingCompanyIdColumn) {
+                        $transactionColumns[] = 'shipping_company_id';
+                        $transactionValues[] = $companyId;
+                    }
+                    $hasShippingCollectionIdColumn = !empty($db->queryOne("SHOW COLUMNS FROM accountant_transactions LIKE 'shipping_company_collection_id'"));
+                    if ($hasShippingCollectionIdColumn && $collectionId !== null) {
+                        $transactionColumns[] = 'shipping_company_collection_id';
+                        $transactionValues[] = $collectionId;
+                    }
+                    $placeholders = array_fill(0, count($transactionColumns), '?');
+                    $db->execute(
+                        "INSERT INTO accountant_transactions (" . implode(', ', $transactionColumns) . ") VALUES (" . implode(', ', $placeholders) . ")",
+                        $transactionValues
+                    );
+                    logAudit(
+                        $currentUser['id'] ?? null,
+                        'add_income_from_shipping_company_collection',
+                        'accountant_transaction',
+                        $db->getLastInsertId(),
+                        null,
+                        ['shipping_company_id' => $companyId, 'amount' => $amount, 'reference_number' => $referenceNumber]
+                    );
+                }
+
+                $db->commit();
+                $transactionStarted = false;
+                $msg = 'تم تحصيل المبلغ بنجاح.';
+                if (!empty($collectionNumber)) {
+                    $msg .= ' رقم التحصيل: ' . $collectionNumber . '.';
+                }
+                $_SESSION[$sessionSuccessKey] = $msg;
+            } catch (InvalidArgumentException $e) {
+                if ($transactionStarted) {
+                    $db->rollback();
+                }
+                $_SESSION[$sessionErrorKey] = $e->getMessage();
+            } catch (Throwable $e) {
+                if ($transactionStarted) {
+                    $db->rollback();
+                }
+                error_log('shipping_orders: collect from shipping company -> ' . $e->getMessage());
+                $_SESSION[$sessionErrorKey] = 'حدث خطأ أثناء تحصيل المبلغ. يرجى المحاولة مرة أخرى.';
+            }
+        }
         redirectAfterPost('shipping_orders', [], [], 'manager');
         exit;
     }
@@ -2908,10 +3153,14 @@ $hasShippingCompanies = !empty($shippingCompanies);
                             <th>الهاتف</th>
                             <th>الحالة</th>
                             <th>ديون الشركة</th>
+                            <th style="width: 220px;">الإجراءات</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($shippingCompanies as $company): ?>
+                        <?php foreach ($shippingCompanies as $company):
+                            $companyBalance = (float)($company['balance'] ?? 0);
+                            $balanceFormatted = formatCurrency($companyBalance);
+                        ?>
                             <tr>
                                 <td><?php echo htmlspecialchars($company['name']); ?></td>
                                 <td><?php echo $company['phone'] ? htmlspecialchars($company['phone']) : '<span class="text-muted">غير متوفر</span>'; ?></td>
@@ -2922,8 +3171,29 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                         <span class="badge bg-secondary">غير نشطة</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="fw-semibold text-<?php echo ($company['balance'] ?? 0) > 0 ? 'danger' : 'muted'; ?>">
-                                    <?php echo formatCurrency((float)($company['balance'] ?? 0)); ?>
+                                <td class="fw-semibold text-<?php echo $companyBalance > 0 ? 'danger' : 'muted'; ?>">
+                                    <?php echo $balanceFormatted; ?>
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="showEditShippingCompanyBalanceModal(this)"
+                                                data-company-id="<?php echo (int)$company['id']; ?>"
+                                                data-company-name="<?php echo htmlspecialchars($company['name']); ?>"
+                                                data-company-balance="<?php echo $companyBalance; ?>"
+                                                title="تعديل ديون الشركة">
+                                            <i class="bi bi-pencil me-1"></i>تعديل الديون
+                                        </button>
+                                        <button type="button" class="btn btn-sm <?php echo $companyBalance > 0 ? 'btn-success' : 'btn-outline-secondary'; ?>"
+                                                onclick="showCollectFromShippingCompanyModal(this)"
+                                                data-company-id="<?php echo (int)$company['id']; ?>"
+                                                data-company-name="<?php echo htmlspecialchars($company['name']); ?>"
+                                                data-company-balance="<?php echo $companyBalance; ?>"
+                                                data-company-balance-formatted="<?php echo htmlspecialchars($balanceFormatted); ?>"
+                                                <?php echo $companyBalance <= 0 ? ' disabled' : ''; ?>
+                                                title="تحصيل من شركة الشحن">
+                                            <i class="bi bi-cash-coin me-1"></i>تحصيل
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -3288,6 +3558,166 @@ $hasShippingCompanies = !empty($shippingCompanies);
     </div>
 </div>
 
+<!-- Modal تعديل ديون شركة الشحن - للكمبيوتر -->
+<div class="modal fade d-none d-md-block" id="editShippingCompanyBalanceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>تعديل ديون شركة الشحن</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="edit_shipping_company_balance">
+                <input type="hidden" name="company_id" id="editBalanceCompanyId">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <div class="fw-semibold text-muted">شركة الشحن</div>
+                        <div class="fs-5" id="editBalanceCompanyName">-</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="editBalanceAmount">ديون الشركة (الرصيد) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="editBalanceAmount" name="balance" step="0.01" required>
+                        <div class="form-text">القيمة الموجبة = دين على الشركة، الصفر = لا ديون.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ التعديل</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal تحصيل من شركة الشحن - للكمبيوتر (مماثل لتحصيل العميل المحلي) -->
+<div class="modal fade d-none d-md-block" id="collectFromShippingCompanyModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-cash-coin me-2"></i>تحصيل من شركة الشحن</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <form method="POST">
+                <input type="hidden" name="action" value="collect_from_shipping_company">
+                <input type="hidden" name="company_id" id="collectCompanyId">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <div class="fw-semibold text-muted">شركة الشحن</div>
+                        <div class="fs-5 collection-shipping-company-name">-</div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="fw-semibold text-muted">الديون الحالية</div>
+                        <div class="fs-5 text-warning collection-shipping-current-debt">-</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="collectShippingAmount">مبلغ التحصيل <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="collectShippingAmount" name="amount" step="0.01" min="0.01" required>
+                        <div class="form-text">لن يتم قبول مبلغ أكبر من قيمة الديون الحالية.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">نوع التحصيل <span class="text-danger">*</span></label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <div class="form-check p-2 border rounded h-100" style="cursor: pointer;" onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor=''">
+                                    <input class="form-check-input" type="radio" name="collection_type" id="collectShippingTypeDirect" value="direct" checked>
+                                    <label class="form-check-label w-100" for="collectShippingTypeDirect" style="cursor: pointer;">
+                                        <div class="fw-semibold mb-1"><i class="bi bi-cash-stack me-1 text-success"></i>مباشر</div>
+                                        <small class="text-muted d-block">تحصيل مباشر في خزنة الشركة</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check p-2 border rounded h-100" style="cursor: pointer;" onmouseover="this.style.backgroundColor='#f8f9fa'" onmouseout="this.style.backgroundColor=''">
+                                    <input class="form-check-input" type="radio" name="collection_type" id="collectShippingTypeManagement" value="management">
+                                    <label class="form-check-label w-100" for="collectShippingTypeManagement" style="cursor: pointer;">
+                                        <div class="fw-semibold mb-1"><i class="bi bi-building me-1 text-primary"></i>للإدارة</div>
+                                        <small class="text-muted d-block">تحصيل للإدارة وتوريدات</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">تحصيل المبلغ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Card للموبايل - تعديل ديون شركة الشحن -->
+<div class="card shadow-sm mb-4 d-md-none" id="editShippingCompanyBalanceCard" style="display: none;">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>تعديل ديون شركة الشحن</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="edit_shipping_company_balance">
+            <input type="hidden" name="company_id" id="editBalanceCardCompanyId">
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">شركة الشحن</div>
+                <div class="fs-5" id="editBalanceCardCompanyName">-</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="editBalanceCardAmount">ديون الشركة (الرصيد)</label>
+                <input type="number" class="form-control" id="editBalanceCardAmount" name="balance" step="0.01" required>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">حفظ التعديل</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditBalanceCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Card للموبايل - تحصيل من شركة الشحن -->
+<div class="card shadow-sm mb-4 d-md-none" id="collectFromShippingCompanyCard" style="display: none;">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-cash-coin me-2"></i>تحصيل من شركة الشحن</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="action" value="collect_from_shipping_company">
+            <input type="hidden" name="company_id" id="collectCardCompanyId">
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">شركة الشحن</div>
+                <div class="fs-5" id="collectCardCompanyName">-</div>
+            </div>
+            <div class="mb-3">
+                <div class="fw-semibold text-muted">الديون الحالية</div>
+                <div class="fs-5 text-warning" id="collectCardCurrentDebt">-</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="collectCardAmount">مبلغ التحصيل <span class="text-danger">*</span></label>
+                <input type="number" class="form-control" id="collectCardAmount" name="amount" step="0.01" min="0.01" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">نوع التحصيل</label>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <div class="form-check p-2 border rounded">
+                            <input class="form-check-input" type="radio" name="collection_type" id="collectCardTypeDirect" value="direct" checked>
+                            <label class="form-check-label" for="collectCardTypeDirect">مباشر</label>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-check p-2 border rounded">
+                            <input class="form-check-input" type="radio" name="collection_type" id="collectCardTypeManagement" value="management">
+                            <label class="form-check-label" for="collectCardTypeManagement">للإدارة</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">تحصيل المبلغ</button>
+                <button type="button" class="btn btn-secondary" onclick="closeCollectFromShippingCard()">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Card للموبايل - إضافة شركة شحن -->
 <div class="card shadow-sm mb-4 d-md-none" id="addShippingCompanyCard" style="display: none;">
     <div class="card-header bg-primary text-white">
@@ -3400,7 +3830,7 @@ function closeAllForms() {
         }
     });
     
-    const modals = ['addShippingCompanyModal', 'addLocalCustomerModal', 'deliveryModal'];
+    const modals = ['addShippingCompanyModal', 'addLocalCustomerModal', 'deliveryModal', 'editShippingCompanyBalanceModal', 'collectFromShippingCompanyModal'];
     
     // إضافة deliveryCard
     const deliveryCard = document.getElementById('deliveryCard');
@@ -3458,6 +3888,88 @@ function showAddLocalCustomerModal() {
             modalInstance.show();
         }
     }
+}
+
+function showEditShippingCompanyBalanceModal(button) {
+    if (!button) return;
+    closeAllForms();
+    var companyId = button.getAttribute('data-company-id');
+    var companyName = button.getAttribute('data-company-name');
+    var balance = button.getAttribute('data-company-balance') || '0';
+    if (isMobile()) {
+        var card = document.getElementById('editShippingCompanyBalanceCard');
+        if (card) {
+            var idInput = document.getElementById('editBalanceCardCompanyId');
+            var nameEl = document.getElementById('editBalanceCardCompanyName');
+            var amountInput = document.getElementById('editBalanceCardAmount');
+            if (idInput) idInput.value = companyId || '';
+            if (nameEl) nameEl.textContent = companyName || '-';
+            if (amountInput) amountInput.value = balance;
+            card.style.display = 'block';
+            setTimeout(function() { scrollToElement(card); }, 50);
+        }
+    } else {
+        var modal = document.getElementById('editShippingCompanyBalanceModal');
+        if (modal) {
+            var idInput = document.getElementById('editBalanceCompanyId');
+            var nameEl = document.getElementById('editBalanceCompanyName');
+            var amountInput = document.getElementById('editBalanceAmount');
+            if (idInput) idInput.value = companyId || '';
+            if (nameEl) nameEl.textContent = companyName || '-';
+            if (amountInput) amountInput.value = balance;
+            var modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+function closeEditBalanceCard() {
+    var card = document.getElementById('editShippingCompanyBalanceCard');
+    if (card) card.style.display = 'none';
+}
+
+function showCollectFromShippingCompanyModal(button) {
+    if (!button) return;
+    closeAllForms();
+    var companyId = button.getAttribute('data-company-id');
+    var companyName = button.getAttribute('data-company-name');
+    var balanceRaw = button.getAttribute('data-company-balance') || '0';
+    var balanceFormatted = button.getAttribute('data-company-balance-formatted') || balanceRaw;
+    var numericBalance = parseFloat(balanceRaw) || 0;
+    if (isMobile()) {
+        var card = document.getElementById('collectFromShippingCompanyCard');
+        if (card) {
+            var idInput = document.getElementById('collectCardCompanyId');
+            var nameEl = document.getElementById('collectCardCompanyName');
+            var debtEl = document.getElementById('collectCardCurrentDebt');
+            var amountInput = document.getElementById('collectCardAmount');
+            if (idInput) idInput.value = companyId || '';
+            if (nameEl) nameEl.textContent = companyName || '-';
+            if (debtEl) debtEl.textContent = balanceFormatted;
+            if (amountInput) { amountInput.value = ''; amountInput.max = numericBalance; }
+            card.style.display = 'block';
+            setTimeout(function() { scrollToElement(card); }, 50);
+        }
+    } else {
+        var modal = document.getElementById('collectFromShippingCompanyModal');
+        if (modal) {
+            var idInput = document.getElementById('collectCompanyId');
+            var nameEl = modal.querySelector('.collection-shipping-company-name');
+            var debtEl = modal.querySelector('.collection-shipping-current-debt');
+            var amountInput = document.getElementById('collectShippingAmount');
+            if (idInput) idInput.value = companyId || '';
+            if (nameEl) nameEl.textContent = companyName || '-';
+            if (debtEl) debtEl.textContent = balanceFormatted;
+            if (amountInput) { amountInput.value = ''; amountInput.max = numericBalance; }
+            var modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+        }
+    }
+}
+
+function closeCollectFromShippingCard() {
+    var card = document.getElementById('collectFromShippingCompanyCard');
+    if (card) card.style.display = 'none';
 }
 
 function showDeliveryModal(button) {
