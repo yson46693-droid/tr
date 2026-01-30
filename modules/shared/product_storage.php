@@ -111,16 +111,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 } else {
                     $fp = $db->queryOne(
-                        "SELECT fp.id, fp.batch_number, fp.quantity_produced, fp.product_name, pr.name AS pr_name, pr.id AS product_id
+                        "SELECT fp.id, fp.batch_number, fp.quantity_produced,
+                                COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name, 'منتج مصنع') AS product_name,
+                                COALESCE(fp.product_id, bn.product_id) AS product_id
                          FROM finished_products fp
-                         LEFT JOIN products pr ON fp.product_id = pr.id
+                         LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                         LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
                          WHERE fp.id = ? AND (fp.quantity_produced IS NULL OR fp.quantity_produced > 0)",
                         [$productSourceId]
                     );
                     if (!$fp) {
                         $error = 'الدفعة غير موجودة أو غير متاحة.';
                     } else {
-                        $productName = !empty(trim($fp['product_name'] ?? '')) ? trim($fp['product_name']) : ($fp['pr_name'] ?? 'دفعة ' . ($fp['batch_number'] ?? ''));
+                        $productName = $fp['product_name'] ?: ('دفعة ' . ($fp['batch_number'] ?? ''));
                         $unit = 'قطعة';
                         $batchId = (int)$fp['id'];
                         $productId = !empty($fp['product_id']) ? (int)$fp['product_id'] : null;
@@ -223,18 +226,28 @@ try {
     error_log('product_storage external: ' . $e->getMessage());
 }
 
-// دفعات المصنع (منتجات نهائية)
+// دفعات المصنع (منتجات نهائية) - نفس منطق صفحة منتجات الشركة مع batch_numbers
 $factoryProducts = [];
 try {
     $fpExists = $db->queryOne("SHOW TABLES LIKE 'finished_products'");
     if ($fpExists) {
+        $orderColumn = 'fp.id';
+        try {
+            $col = $db->queryOne("SHOW COLUMNS FROM finished_products LIKE 'production_date'");
+            if (!empty($col)) {
+                $orderColumn = 'fp.production_date DESC, fp.id';
+            }
+        } catch (Exception $e) { /* استخدم id فقط */ }
         $factoryProducts = $db->query("
-            SELECT fp.id, fp.batch_number, fp.quantity_produced,
+            SELECT fp.id,
+                   fp.batch_number,
+                   fp.quantity_produced,
                    COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name, 'منتج مصنع') AS product_name
             FROM finished_products fp
-            LEFT JOIN products pr ON fp.product_id = pr.id
+            LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+            LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
             WHERE (fp.quantity_produced IS NULL OR fp.quantity_produced > 0)
-            ORDER BY fp.production_date DESC, fp.id DESC
+            ORDER BY " . $orderColumn . " DESC
             LIMIT 500
         ");
     }
@@ -415,11 +428,15 @@ if ($isManagerOrAccountant) {
                         <table class="table table-sm table-hover">
                             <thead><tr><th>الدفعة</th><th>المنتج</th><th>الكمية</th></tr></thead>
                             <tbody>
-                                <?php foreach ($factoryProducts as $p): ?>
+                                <?php foreach ($factoryProducts as $p):
+                                    $batchNum = trim($p['batch_number'] ?? '');
+                                    $prodName = trim($p['product_name'] ?? '');
+                                    if ($prodName === '' && $batchNum === '') $prodName = 'دفعة #' . (int)($p['id'] ?? 0);
+                                ?>
                                 <tr>
-                                    <td><?php echo htmlspecialchars($p['batch_number'] ?? ''); ?></td>
-                                    <td><?php echo htmlspecialchars($p['product_name'] ?? ''); ?></td>
-                                    <td><?php echo htmlspecialchars($p['quantity_produced'] ?? ''); ?></td>
+                                    <td><?php echo htmlspecialchars($batchNum ?: '—'); ?></td>
+                                    <td><?php echo htmlspecialchars($prodName ?: '—'); ?></td>
+                                    <td><?php echo htmlspecialchars($p['quantity_produced'] ?? '—'); ?></td>
                                 </tr>
                                 <?php endforeach; ?>
                                 <?php if (empty($factoryProducts)): ?>
@@ -445,7 +462,13 @@ if ($isManagerOrAccountant) {
     var toManualName = document.getElementById('to_manual_name');
 
     var externalData = <?php echo json_encode(array_map(function($p) { return ['id' => (int)$p['id'], 'name' => $p['name'], 'unit' => $p['unit']]; }, $externalProducts)); ?>;
-    var factoryData = <?php echo json_encode(array_map(function($p) { return ['id' => (int)$p['id'], 'name' => ($p['batch_number'] ?? '') . ' - ' . ($p['product_name'] ?? '')]; }, $factoryProducts)); ?>;
+    var factoryData = <?php echo json_encode(array_map(function($p) {
+        $batch = trim($p['batch_number'] ?? '');
+        $name = trim($p['product_name'] ?? '');
+        $label = $batch !== '' ? $batch . ' - ' . $name : $name;
+        if ($label === '') $label = 'دفعة #' . (int)($p['id'] ?? 0);
+        return ['id' => (int)$p['id'], 'name' => $label];
+    }, $factoryProducts)); ?>;
 
     function fillProductSelect() {
         var type = transferType.value;
