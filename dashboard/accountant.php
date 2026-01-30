@@ -186,6 +186,17 @@ $currentUser = getCurrentUser();
 $db = db();
 $page = $_GET['page'] ?? 'dashboard';
 
+// توجيه صفحة الخزنة (financial) إلى خزنة المحاسب (accountant_cash) لتفادي تعطّل الصفحة
+if ($page === 'financial' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    $redirectUrl = getDashboardUrl() . 'accountant.php?page=accountant_cash';
+    if (!headers_sent()) {
+        header('Location: ' . $redirectUrl, true, 302);
+        exit;
+    }
+    echo '<script>window.location.replace("' . htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') . '");</script><noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8') . '"></noscript>';
+    exit;
+}
+
 // معالجة POST لصفحة representatives_customers قبل أي شيء
 if ($page === 'representatives_customers' && 
     $_SERVER['REQUEST_METHOD'] === 'POST' && 

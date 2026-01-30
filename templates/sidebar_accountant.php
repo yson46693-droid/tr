@@ -37,17 +37,10 @@ $baseUrl = getDashboardUrl();
             </li>
             
             <li class="nav-item">
-                <a class="nav-link" href="<?php echo $baseUrl; ?>accountant.php?page=financial">
-                    <i class="bi bi-safe"></i>
-                    <span><?php echo $lang['menu_financial']; ?></span>
-                </a>
-            </li>
-
-            <li class="nav-item">
                 <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'accountant_cash') ? 'active' : ''; ?>"
                    href="<?php echo $baseUrl; ?>accountant.php?page=accountant_cash">
-                    <i class="bi bi-safe2"></i>
-                    <span>خزنة المحاسب</span>
+                    <i class="bi bi-safe"></i>
+                    <span><?php echo $lang['menu_financial']; ?></span>
                 </a>
             </li>
 
