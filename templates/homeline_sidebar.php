@@ -146,7 +146,7 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => 'جداول التحصيل - عملاء الشركة',
+                'title' => 'جداول التحصيل ',
                 'icon' => 'bi-calendar-check',
                 'url' => $baseUrl . 'manager.php?page=company_payment_schedules',
                 'active' => ($currentPage === 'manager.php' && $currentPageParam === 'company_payment_schedules'),
@@ -357,7 +357,7 @@ switch ($role) {
                 'badge' => null
             ],
             [
-                'title' => 'جداول التحصيل - عملاء الشركة',
+                'title' => 'جداول التحصيل ',
                 'icon' => 'bi-calendar-check',
                 'url' => $baseUrl . 'accountant.php?page=company_payment_schedules',
                 'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'company_payment_schedules'),

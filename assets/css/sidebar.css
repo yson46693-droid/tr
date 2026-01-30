@@ -65,6 +65,7 @@
     .dashboard-wrapper.sidebar-open .homeline-sidebar {
         transform: translateX(0);
         box-shadow: var(--shadow-lg);
+        z-index: 1051; /* فوق overlay (1049) لاستقبال النقرات عند فتح الشريط */
     }
     
     .dashboard-wrapper.sidebar-collapsed .homeline-sidebar {

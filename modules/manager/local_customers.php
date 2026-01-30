@@ -7583,10 +7583,14 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
         left: -9999px !important;
     }
     
-    /* ضمان أن overlay الـ sidebar لا يمنع التفاعل إلا عند فتح الـ sidebar فعلياً */
+    /* overlay الـ sidebar: تحت الشريط (1049) حتى تستقبل روابط الشريط النقرات */
     .dashboard-wrapper.sidebar-open::before {
         pointer-events: auto !important;
         z-index: 1049 !important;
+    }
+    /* ضمان أن الشريط الجانبي فوق الـ overlay عند الفتح لتمكين التنقل */
+    .dashboard-wrapper.sidebar-open .homeline-sidebar {
+        z-index: 1051 !important;
     }
     
     /* ضمان أن body قابل للتفاعل عندما لا توجد نماذج مفتوحة ولا sidebar مفتوح */
