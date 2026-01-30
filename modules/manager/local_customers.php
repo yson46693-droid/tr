@@ -8246,6 +8246,15 @@ document.addEventListener('DOMContentLoaded', function() {
     var filterStatus = document.getElementById('debtStatusFilter');
     var filterRegion = document.getElementById('regionFilter');
     
+    // مسار أساسي للـ API يعمل من لوحة المدير والمحاسب (يحسب من مسار الصفحة الحالية)
+    (function() {
+        var p = (window.location.pathname || '').split('/').filter(Boolean);
+        if (p.length > 0 && p[p.length - 1].indexOf('.php') !== -1) p.pop();
+        if (p.length > 0 && p[p.length - 1] === 'dashboard') p.pop();
+        window._localCustomersApiBase = (p.length > 0 ? '/' + p.join('/') : '');
+    })();
+    var localCustomersApiBase = window._localCustomersApiBase || '<?php echo function_exists("getBasePath") ? addslashes(rtrim(getBasePath(), "/")) : ""; ?>';
+    
     var searchTimeout = null;
     var currentAbortController = null;
     var currentPage = <?php echo $pageNum; ?>;
@@ -8277,7 +8286,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (loadingEl) loadingEl.style.display = 'block';
         if (tableWrapper) tableWrapper.style.opacity = '0.5';
         
-        var apiUrl = '<?php echo getRelativeUrl("api/get_local_customers_search.php"); ?>';
+        var apiUrl = (localCustomersApiBase || '') + '/api/get_local_customers_search.php';
         var params = new URLSearchParams();
         params.append('p', currentPage);
         if (fp.search) params.append('search', fp.search);
@@ -8548,8 +8557,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // إظهار حالة التحميل
         showAutocompleteLoading();
         
-        // جلب النتائج من API
-        var apiUrl = '<?php echo getRelativeUrl("fs.php"); ?>';
+        // جلب النتائج من API (نفس المسار الأساسي يعمل من لوحة المدير والمحاسب)
+        var apiUrl = (localCustomersApiBase || '') + '/fs.php';
         console.log('Fetching autocomplete from:', apiUrl + '?q=' + encodeURIComponent(query));
         
         fetch(apiUrl + '?q=' + encodeURIComponent(query), {
