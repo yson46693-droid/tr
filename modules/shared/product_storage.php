@@ -72,99 +72,127 @@ if (!empty($_GET['error'])) {
     $error = trim($_GET['error']);
 }
 
-// معالجة النقل
+// معالجة النقل (يدعم عدة منتجات في طلب واحد)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     if ($action === 'transfer') {
-        $transferType = $_POST['transfer_type'] ?? '';
-        $productSourceId = (int)($_POST['product_source_id'] ?? 0);
-        $quantity = (float)($_POST['quantity'] ?? 0);
         $recipientType = $_POST['recipient_type'] ?? 'user';
         $toUserId = $recipientType === 'user' ? (int)($_POST['to_user_id'] ?? 0) : null;
         $toManualName = $recipientType === 'manual' ? trim($_POST['to_manual_name'] ?? '') : null;
         $notes = trim($_POST['notes'] ?? '');
 
-        $productName = '';
-        $unit = 'قطعة';
-        $productId = null;
-        $batchId = null;
+        $types = isset($_POST['transfer_type']) && is_array($_POST['transfer_type']) ? $_POST['transfer_type'] : [$_POST['transfer_type'] ?? ''];
+        $sources = isset($_POST['product_source_id']) && is_array($_POST['product_source_id']) ? $_POST['product_source_id'] : [$_POST['product_source_id'] ?? ''];
+        $quantities = isset($_POST['quantity']) && is_array($_POST['quantity']) ? $_POST['quantity'] : [$_POST['quantity'] ?? 0];
 
-        if (!in_array($transferType, ['external', 'factory'], true) || $productSourceId <= 0 || $quantity <= 0) {
-            $error = 'بيانات النقل غير صحيحة.';
-        } elseif ($recipientType === 'user' && $toUserId <= 0) {
+        if ($recipientType === 'user' && $toUserId <= 0) {
             $error = 'يرجى اختيار المستخدم المستقبل.';
         } elseif ($recipientType === 'manual' && $toManualName === '') {
             $error = 'يرجى إدخال اسم المستقبل.';
         } else {
-            try {
-                if ($transferType === 'external') {
-                    $row = $db->queryOne(
-                        "SELECT id, name, COALESCE(unit, 'قطعة') AS unit FROM products WHERE id = ? AND (product_type = 'external' OR product_type IS NULL) AND status = 'active'",
-                        [$productSourceId]
-                    );
-                    if (!$row) {
-                        $error = 'المنتج غير موجود أو غير متاح.';
-                    } else {
+            $inserted = 0;
+            $maxRows = max(count($types), count($sources), count($quantities));
+            for ($i = 0; $i < $maxRows; $i++) {
+                $transferType = $types[$i] ?? '';
+                $productSourceRaw = $sources[$i] ?? '';
+                $quantity = (float)($quantities[$i] ?? 0);
+                if (!in_array($transferType, ['external', 'factory'], true) || $quantity <= 0) continue;
+
+                $productName = '';
+                $unit = 'قطعة';
+                $productId = null;
+                $batchId = null;
+
+                try {
+                    if ($transferType === 'external') {
+                        $productSourceId = (int)$productSourceRaw;
+                        if ($productSourceId <= 0) continue;
+                        $row = $db->queryOne(
+                            "SELECT id, name, COALESCE(unit, 'قطعة') AS unit FROM products WHERE id = ? AND (product_type = 'external' OR product_type IS NULL) AND status = 'active'",
+                            [$productSourceId]
+                        );
+                        if (!$row) continue;
                         $productName = $row['name'];
                         $unit = $row['unit'];
                         $productId = (int)$row['id'];
-                    }
-                } else {
-                    $fp = $db->queryOne(
-                        "SELECT fp.id, fp.batch_number, fp.quantity_produced,
-                                COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name, 'منتج مصنع') AS product_name,
-                                COALESCE(fp.product_id, bn.product_id) AS product_id
-                         FROM finished_products fp
-                         LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
-                         LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
-                         WHERE fp.id = ? AND (fp.quantity_produced IS NULL OR fp.quantity_produced > 0)",
-                        [$productSourceId]
-                    );
-                    if (!$fp) {
-                        $error = 'الدفعة غير موجودة أو غير متاحة.';
                     } else {
-                        $productName = $fp['product_name'] ?: ('دفعة ' . ($fp['batch_number'] ?? ''));
-                        $unit = 'قطعة';
-                        $batchId = (int)$fp['id'];
-                        $productId = !empty($fp['product_id']) ? (int)$fp['product_id'] : null;
+                        if (strpos((string)$productSourceRaw, 'internal_') === 0) {
+                            $productSourceId = (int)substr($productSourceRaw, 9);
+                            if ($productSourceId <= 0) continue;
+                            $row = $db->queryOne(
+                                "SELECT id, name, COALESCE(unit, 'قطعة') AS unit FROM products WHERE id = ? AND status = 'active'",
+                                [$productSourceId]
+                            );
+                            if (!$row) continue;
+                            $productName = $row['name'];
+                            $unit = $row['unit'];
+                            $productId = (int)$row['id'];
+                            $batchId = null;
+                        } else {
+                            $batchIdRaw = (string)$productSourceRaw;
+                            if (strpos($batchIdRaw, 'batch_') === 0) {
+                                $productSourceId = (int)substr($batchIdRaw, 6);
+                            } else {
+                                $productSourceId = (int)$batchIdRaw;
+                            }
+                            if ($productSourceId <= 0) continue;
+                            $fp = $db->queryOne(
+                                "SELECT fp.id, fp.batch_number,
+                                        COALESCE(NULLIF(TRIM(fp.product_name), ''), pr.name, 'منتج مصنع') AS product_name,
+                                        COALESCE(fp.product_id, bn.product_id) AS product_id
+                                 FROM finished_products fp
+                                 LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                                 LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
+                                 WHERE fp.id = ? AND (fp.quantity_produced IS NULL OR fp.quantity_produced > 0)",
+                                [$productSourceId]
+                            );
+                            if (!$fp) continue;
+                            $productName = $fp['product_name'] ?: ('دفعة ' . ($fp['batch_number'] ?? ''));
+                            $unit = 'قطعة';
+                            $batchId = (int)$fp['id'];
+                            $productId = !empty($fp['product_id']) ? (int)$fp['product_id'] : null;
+                        }
                     }
-                }
 
-                if ($error === '' && $productName !== '') {
-                    $db->execute(
-                        "INSERT INTO product_transfers (from_user_id, to_type, to_user_id, to_manual_name, transfer_type, product_id, batch_id, product_name, quantity, unit, notes)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        [
-                            $currentUser['id'],
-                            $recipientType,
-                            $toUserId ?: null,
-                            $toManualName ?: null,
-                            $transferType,
-                            $productId,
-                            $batchId,
-                            $productName,
-                            $quantity,
-                            $unit,
-                            $notes ?: null
-                        ]
-                    );
-                    $tid = $db->getLastInsertId();
-                    logAudit($currentUser['id'], 'product_transfer', 'product_transfer', $tid, null, [
-                        'to_type' => $recipientType,
-                        'product_name' => $productName,
-                        'quantity' => $quantity
-                    ]);
-                    preventDuplicateSubmission(
-                        'تم تسجيل نقل المنتج بنجاح.',
-                        ['page' => 'product_storage'],
-                        null,
-                        $currentUser['role'],
-                        null
-                    );
+                    if ($productName !== '') {
+                        $db->execute(
+                            "INSERT INTO product_transfers (from_user_id, to_type, to_user_id, to_manual_name, transfer_type, product_id, batch_id, product_name, quantity, unit, notes)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            [
+                                $currentUser['id'],
+                                $recipientType,
+                                $toUserId ?: null,
+                                $toManualName ?: null,
+                                $transferType,
+                                $productId,
+                                $batchId,
+                                $productName,
+                                $quantity,
+                                $unit,
+                                $notes ?: null
+                            ]
+                        );
+                        $inserted++;
+                        logAudit($currentUser['id'], 'product_transfer', 'product_transfer', $db->getLastInsertId(), null, [
+                            'to_type' => $recipientType,
+                            'product_name' => $productName,
+                            'quantity' => $quantity
+                        ]);
+                    }
+                } catch (Exception $e) {
+                    error_log('product_storage transfer row: ' . $e->getMessage());
                 }
-            } catch (Exception $e) {
-                error_log('product_storage transfer: ' . $e->getMessage());
-                $error = 'تعذر حفظ النقل. يرجى المحاولة لاحقاً.';
+            }
+            if ($inserted > 0) {
+                preventDuplicateSubmission(
+                    $inserted === 1 ? 'تم تسجيل نقل المنتج بنجاح.' : 'تم تسجيل نقل ' . $inserted . ' منتج بنجاح.',
+                    ['page' => 'product_storage'],
+                    null,
+                    $currentUser['role'],
+                    null
+                );
+            } elseif ($error === '') {
+                $error = 'يرجى إضافة منتج واحد على الأقل بكمية صحيحة.';
             }
         }
         if ($error !== '') {
@@ -227,7 +255,7 @@ try {
 }
 
 // دفعات المصنع (منتجات نهائية) - نفس منطق صفحة منتجات الشركة مع batch_numbers
-$factoryProducts = [];
+$factoryBatches = [];
 try {
     $fpExists = $db->queryOne("SHOW TABLES LIKE 'finished_products'");
     if ($fpExists) {
@@ -238,7 +266,7 @@ try {
                 $orderColumn = 'fp.production_date DESC, fp.id';
             }
         } catch (Exception $e) { /* استخدم id فقط */ }
-        $factoryProducts = $db->query("
+        $factoryBatches = $db->query("
             SELECT fp.id,
                    fp.batch_number,
                    fp.quantity_produced,
@@ -253,6 +281,43 @@ try {
     }
 } catch (Exception $e) {
     error_log('product_storage factory: ' . $e->getMessage());
+}
+
+// منتجات المصنع المضافة يدوياً (من جدول products - product_type = internal)
+$internalProducts = [];
+try {
+    $col = $db->queryOne("SHOW COLUMNS FROM products LIKE 'product_type'");
+    if (!empty($col)) {
+        $internalProducts = $db->query("
+            SELECT id, name, quantity, COALESCE(unit, 'قطعة') AS unit
+            FROM products
+            WHERE product_type = 'internal' AND status = 'active'
+            ORDER BY name ASC
+        ");
+    }
+} catch (Exception $e) {
+    error_log('product_storage internal: ' . $e->getMessage());
+}
+
+// قائمة موحدة لعرض "منتجات المصنع" (دفعات + مضافة يدوياً) في التبويب
+$factoryProducts = [];
+foreach ($factoryBatches as $fb) {
+    $factoryProducts[] = [
+        'id' => $fb['id'],
+        'batch_number' => $fb['batch_number'] ?? '',
+        'quantity_produced' => $fb['quantity_produced'] ?? '',
+        'product_name' => $fb['product_name'] ?? '',
+        'source' => 'batch'
+    ];
+}
+foreach ($internalProducts as $ip) {
+    $factoryProducts[] = [
+        'id' => 'internal_' . $ip['id'],
+        'batch_number' => '',
+        'quantity_produced' => $ip['quantity'],
+        'product_name' => $ip['name'],
+        'source' => 'internal'
+    ];
 }
 
 // نقول معلقة للمدير/المحاسب (المنقولة لهم)
@@ -288,33 +353,53 @@ if ($isManagerOrAccountant) {
         <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
     <?php endif; ?>
 
-    <!-- نموذج النقل -->
+    <!-- نموذج النقل (أكثر من منتج) -->
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-primary text-white">
             <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>نقل منتجات</h5>
         </div>
         <div class="card-body">
-            <form method="post" action="">
+            <form method="post" action="" id="transferForm">
                 <input type="hidden" name="action" value="transfer" />
+                <div class="table-responsive mb-3">
+                    <table class="table table-bordered align-middle" id="transferRowsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:22%">نوع المنتج</th>
+                                <th style="width:30%">المنتج / الدفعة</th>
+                                <th style="width:15%">الكمية</th>
+                                <th style="width:8%"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="transferRowsBody">
+                            <tr class="transfer-row">
+                                <td>
+                                    <select name="transfer_type[]" class="form-select form-select-sm row-transfer-type">
+                                        <option value="">-- اختر --</option>
+                                        <option value="external">منتج خارجي</option>
+                                        <option value="factory">دفعة مصنع / منتج مصنع</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select name="product_source_id[]" class="form-select form-select-sm row-product-select">
+                                        <option value="">-- اختر نوع المنتج أولاً --</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="number" name="quantity[]" class="form-control form-control-sm" step="0.001" min="0.001" placeholder="0" />
+                                </td>
+                                <td>
+                                    <button type="button" class="btn btn-outline-danger btn-sm row-remove" title="حذف الصف" disabled><i class="bi bi-dash-lg"></i></button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mb-3">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="addTransferRow"><i class="bi bi-plus-lg me-1"></i>إضافة منتج</button>
+                </div>
+                <hr />
                 <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label">نوع المنتج</label>
-                        <select name="transfer_type" id="transfer_type" class="form-select" required>
-                            <option value="">-- اختر --</option>
-                            <option value="external">منتج خارجي</option>
-                            <option value="factory">دفعة مصنع</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6" id="wrap_product_select">
-                        <label class="form-label">المنتج / الدفعة</label>
-                        <select name="product_source_id" id="product_source_id" class="form-select" required>
-                            <option value="">-- اختر نوع المنتج أولاً --</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">الكمية</label>
-                        <input type="number" name="quantity" class="form-control" step="0.001" min="0.001" required placeholder="0" />
-                    </div>
                     <div class="col-md-4">
                         <label class="form-label">المستلم</label>
                         <select name="recipient_type" id="recipient_type" class="form-select">
@@ -424,23 +509,25 @@ if ($isManagerOrAccountant) {
                     </div>
                 </div>
                 <div class="tab-pane fade" id="tab-factory">
+                    <p class="text-muted small mb-2">دفعات المصنع + المنتجات المضافة يدوياً لمنتجات المصنع</p>
                     <div class="table-responsive">
                         <table class="table table-sm table-hover">
-                            <thead><tr><th>الدفعة</th><th>المنتج</th><th>الكمية</th></tr></thead>
+                            <thead><tr><th>الدفعة / النوع</th><th>المنتج</th><th>الكمية</th></tr></thead>
                             <tbody>
                                 <?php foreach ($factoryProducts as $p):
                                     $batchNum = trim($p['batch_number'] ?? '');
                                     $prodName = trim($p['product_name'] ?? '');
-                                    if ($prodName === '' && $batchNum === '') $prodName = 'دفعة #' . (int)($p['id'] ?? 0);
+                                    if ($prodName === '' && $batchNum === '') $prodName = 'دفعة #' . (is_numeric($p['id'] ?? '') ? $p['id'] : '');
+                                    $typeLabel = (!empty($p['source']) && $p['source'] === 'internal') ? 'مضاف يدوياً' : ($batchNum ?: '—');
                                 ?>
                                 <tr>
-                                    <td><?php echo htmlspecialchars($batchNum ?: '—'); ?></td>
+                                    <td><?php echo htmlspecialchars($typeLabel); ?></td>
                                     <td><?php echo htmlspecialchars($prodName ?: '—'); ?></td>
                                     <td><?php echo htmlspecialchars($p['quantity_produced'] ?? '—'); ?></td>
                                 </tr>
                                 <?php endforeach; ?>
                                 <?php if (empty($factoryProducts)): ?>
-                                <tr><td colspan="3" class="text-muted">لا توجد دفعات مصنع.</td></tr>
+                                <tr><td colspan="3" class="text-muted">لا توجد دفعات أو منتجات مصنع.</td></tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -453,33 +540,80 @@ if ($isManagerOrAccountant) {
 
 <script>
 (function() {
-    var transferType = document.getElementById('transfer_type');
-    var productSelect = document.getElementById('product_source_id');
+    var externalData = <?php echo json_encode(array_map(function($p) { return ['id' => (int)$p['id'], 'name' => $p['name'], 'unit' => $p['unit']]; }, $externalProducts)); ?>;
+    var factoryData = <?php
+        $fd = [];
+        foreach ($factoryBatches as $p) {
+            $batch = trim($p['batch_number'] ?? '');
+            $name = trim($p['product_name'] ?? '');
+            $label = $batch !== '' ? $batch . ' - ' . $name : $name;
+            if ($label === '') $label = 'دفعة #' . (int)($p['id']);
+            $fd[] = ['id' => 'batch_' . (int)$p['id'], 'name' => $label];
+        }
+        foreach ($internalProducts as $p) {
+            $fd[] = ['id' => 'internal_' . (int)$p['id'], 'name' => $p['name']];
+        }
+        echo json_encode($fd);
+    ?>;
+
+    function fillRowProductSelect(selectEl, type) {
+        if (!selectEl) return;
+        selectEl.innerHTML = '<option value="">-- اختر --</option>';
+        if (type === 'external') {
+            externalData.forEach(function(p) { selectEl.innerHTML += '<option value="' + p.id + '">' + (p.name || '') + '</option>'; });
+        } else if (type === 'factory') {
+            factoryData.forEach(function(p) { selectEl.innerHTML += '<option value="' + p.id + '">' + (p.name || '') + '</option>'; });
+        }
+    }
+
+    function onRowTypeChange(row) {
+        var typeSelect = row.querySelector('.row-transfer-type');
+        var productSelect = row.querySelector('.row-product-select');
+        if (typeSelect && productSelect) fillRowProductSelect(productSelect, typeSelect.value);
+    }
+
+    function updateRemoveButtons() {
+        var rows = document.querySelectorAll('#transferRowsBody .transfer-row');
+        rows.forEach(function(row, i) {
+            var btn = row.querySelector('.row-remove');
+            if (btn) btn.disabled = rows.length <= 1;
+        });
+    }
+
+    document.getElementById('addTransferRow').addEventListener('click', function() {
+        var tbody = document.getElementById('transferRowsBody');
+        var firstRow = tbody.querySelector('.transfer-row');
+        if (!firstRow) return;
+        var clone = firstRow.cloneNode(true);
+        clone.querySelector('.row-transfer-type').value = '';
+        clone.querySelector('.row-product-select').innerHTML = '<option value="">-- اختر نوع المنتج أولاً --</option>';
+        clone.querySelector('.row-product-select').value = '';
+        clone.querySelector('input[name="quantity[]"]').value = '';
+        tbody.appendChild(clone);
+        updateRemoveButtons();
+    });
+
+    document.getElementById('transferRowsBody').addEventListener('change', function(e) {
+        if (e.target.classList.contains('row-transfer-type')) {
+            onRowTypeChange(e.target.closest('.transfer-row'));
+        }
+    });
+
+    document.getElementById('transferRowsBody').addEventListener('click', function(e) {
+        if (e.target.closest('.row-remove')) {
+            var row = e.target.closest('.transfer-row');
+            if (row && document.querySelectorAll('#transferRowsBody .transfer-row').length > 1) {
+                row.remove();
+                updateRemoveButtons();
+            }
+        }
+    });
+
     var recipientType = document.getElementById('recipient_type');
     var wrapUser = document.getElementById('wrap_to_user');
     var wrapManual = document.getElementById('wrap_manual_name');
     var toUserId = document.getElementById('to_user_id');
     var toManualName = document.getElementById('to_manual_name');
-
-    var externalData = <?php echo json_encode(array_map(function($p) { return ['id' => (int)$p['id'], 'name' => $p['name'], 'unit' => $p['unit']]; }, $externalProducts)); ?>;
-    var factoryData = <?php echo json_encode(array_map(function($p) {
-        $batch = trim($p['batch_number'] ?? '');
-        $name = trim($p['product_name'] ?? '');
-        $label = $batch !== '' ? $batch . ' - ' . $name : $name;
-        if ($label === '') $label = 'دفعة #' . (int)($p['id'] ?? 0);
-        return ['id' => (int)$p['id'], 'name' => $label];
-    }, $factoryProducts)); ?>;
-
-    function fillProductSelect() {
-        var type = transferType.value;
-        productSelect.innerHTML = '<option value="">-- اختر --</option>';
-        if (type === 'external') {
-            externalData.forEach(function(p) { productSelect.innerHTML += '<option value="' + p.id + '">' + (p.name || '') + '</option>'; });
-        } else if (type === 'factory') {
-            factoryData.forEach(function(p) { productSelect.innerHTML += '<option value="' + p.id + '">' + (p.name || '') + '</option>'; });
-        }
-    }
-
     function toggleRecipient() {
         var isUser = recipientType.value === 'user';
         wrapUser.classList.toggle('d-none', !isUser);
@@ -487,9 +621,8 @@ if ($isManagerOrAccountant) {
         toUserId.required = isUser;
         toManualName.required = !isUser;
     }
-
-    if (transferType) transferType.addEventListener('change', fillProductSelect);
-    if (recipientType) recipientType.addEventListener('change', toggleRecipient);
+    recipientType.addEventListener('change', toggleRecipient);
     toggleRecipient();
+    updateRemoveButtons();
 })();
 </script>
