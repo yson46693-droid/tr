@@ -143,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                  FROM finished_products fp
                                  LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
                                  LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
-                                 WHERE fp.id = ? AND (fp.quantity_produced IS NULL OR fp.quantity_produced > 0)",
+                                 WHERE fp.id = ? AND (fp.quantity_produced > 0)",
                                 [$productSourceId]
                             );
                             if (!$fp) continue;
@@ -241,13 +241,14 @@ try {
     error_log('product_storage users: ' . $e->getMessage());
 }
 
-// منتجات خارجية
+// منتجات خارجية (كمية أكبر من صفر فقط)
 $externalProducts = [];
 try {
     $externalProducts = $db->query("
         SELECT id, name, quantity, COALESCE(unit, 'قطعة') AS unit
         FROM products
         WHERE (product_type = 'external' OR product_type IS NULL) AND status = 'active'
+          AND (quantity > 0)
         ORDER BY name ASC
     ");
 } catch (Exception $e) {
@@ -274,7 +275,7 @@ try {
             FROM finished_products fp
             LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
             LEFT JOIN products pr ON COALESCE(fp.product_id, bn.product_id) = pr.id
-            WHERE (fp.quantity_produced IS NULL OR fp.quantity_produced > 0)
+            WHERE (fp.quantity_produced > 0)
             ORDER BY " . $orderColumn . " DESC
             LIMIT 500
         ");
@@ -283,7 +284,7 @@ try {
     error_log('product_storage factory: ' . $e->getMessage());
 }
 
-// منتجات المصنع المضافة يدوياً (من جدول products - product_type = internal)
+// منتجات المصنع المضافة يدوياً (كمية أكبر من صفر فقط)
 $internalProducts = [];
 try {
     $col = $db->queryOne("SHOW COLUMNS FROM products LIKE 'product_type'");
@@ -292,6 +293,7 @@ try {
             SELECT id, name, quantity, COALESCE(unit, 'قطعة') AS unit
             FROM products
             WHERE product_type = 'internal' AND status = 'active'
+              AND (quantity > 0)
             ORDER BY name ASC
         ");
     }
