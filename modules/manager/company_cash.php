@@ -126,6 +126,20 @@ function ensureFinancialTransactionsTable() {
 ensureAccountantTransactionsTable();
 ensureFinancialTransactionsTable();
 
+// توليد رقم مرجعي عشوائي فريد من 6 أرقام
+function generateUniqueReferenceNumber($db) {
+    $maxAttempts = 20;
+    for ($i = 0; $i < $maxAttempts; $i++) {
+        $ref = (string) mt_rand(100000, 999999);
+        $inAt = $db->queryOne("SELECT 1 FROM accountant_transactions WHERE reference_number = ? LIMIT 1", [$ref]);
+        $inFt = $db->queryOne("SELECT 1 FROM financial_transactions WHERE reference_number = ? LIMIT 1", [$ref]);
+        if (empty($inAt) && empty($inFt)) {
+            return $ref;
+        }
+    }
+    return (string) mt_rand(100000, 999999); // fallback
+}
+
 // معالجة AJAX لجلب رصيد المندوب
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_sales_rep_balance') {
     // تعطيل عرض الأخطاء في المتصفح
@@ -515,7 +529,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     $salesRepName = $salesRep['full_name'] ?? $salesRep['username'];
                     $finalDescription = 'تحصيل من مندوب: ' . $salesRepName;
-                    $referenceNumber = 'COL-REP-' . $salesRepId . '-' . date('YmdHis');
+                    $referenceNumber = generateUniqueReferenceNumber($db);
                     
                     // إضافة تحصيل في جدول accountant_transactions
                     $db->execute(
@@ -596,7 +610,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'add_quick_expense') {
         $amount = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;
         $description = trim($_POST['description'] ?? '');
-        $referenceNumber = trim($_POST['reference_number'] ?? '');
         
         // تحديد دور المستخدم
         $userRole = strtolower($currentUser['role'] ?? '');
@@ -610,16 +623,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $markAsApproved = isset($_POST['mark_as_approved']);
         }
 
-        $_SESSION['financial_form_data'] = [
-            'amount' => $_POST['amount'] ?? '',
-            'description' => $description,
-            'reference_number' => $referenceNumber,
-            'mark_as_approved' => $markAsApproved ? '1' : '0',
-        ];
-
         if ($amount <= 0) {
+            $referenceNumber = (string) mt_rand(100000, 999999);
+            $_SESSION['financial_form_data'] = [
+                'amount' => $_POST['amount'] ?? '',
+                'description' => $description,
+                'reference_number' => $referenceNumber,
+                'mark_as_approved' => $markAsApproved ? '1' : '0',
+            ];
             $_SESSION['financial_error'] = 'يرجى إدخال مبلغ مصروف صحيح.';
         } else {
+            $referenceNumber = generateUniqueReferenceNumber($db);
             try {
                 // إذا كان المدير أو المحاسب، المصروف معتمد تلقائياً
                 if ($isManager || $isAccountant) {
@@ -640,7 +654,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'expense',
                         $amount,
                         $description,
-                        $referenceNumber !== '' ? $referenceNumber : null,
+                        $referenceNumber,
                         $status,
                         $approvedBy,
                         $currentUser['id'],
@@ -657,7 +671,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         "مصروف سريع\nالمبلغ: %s ج.م\nالوصف: %s%s",
                         formatCurrency($amount),
                         $description,
-                        $referenceNumber !== '' ? "\nالرقم المرجعي: " . $referenceNumber : ''
+                        "\nالرقم المرجعي: " . $referenceNumber
                     );
                     
                     $approvalResult = requestApproval('financial', $transactionId, $currentUser['id'], $approvalNotes);
@@ -676,7 +690,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     [
                         'amount' => $amount,
                         'status' => $status,
-                        'reference' => $referenceNumber !== '' ? $referenceNumber : null
+                        'reference' => $referenceNumber
                     ]
                 );
 
@@ -1029,7 +1043,8 @@ $typeColorMap = [
                             <div class="col-12">
                                 <label for="quickExpenseReference" class="form-label">رقم مرجعي</label>
                                 <?php
-                                $generatedRef = 'REF-' . mt_rand(100000, 999999);?>
+                                $generatedRef = (string) mt_rand(100000, 999999);
+                                if (!empty($financialFormData['reference_number'])) $generatedRef = $financialFormData['reference_number']; ?>
                                 <input type="text" class="form-control" id="quickExpenseReference" name="reference_number" value="<?php echo $generatedRef; ?>" readonly style="background:#f5f5f5; cursor:not-allowed;">
                             </div>
                             <div class="col-12">
