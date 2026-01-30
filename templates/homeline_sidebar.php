@@ -167,6 +167,20 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'تشوين المنتجات',
+                'icon' => 'bi-arrow-left-right',
+                'url' => $baseUrl . 'manager.php?page=product_storage',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'product_storage'),
+                'badge' => null
+            ],
+            [
+                'title' => 'المنتجات المنقولة لي',
+                'icon' => 'bi-inbox',
+                'url' => $baseUrl . 'manager.php?page=transferred_to_me',
+                'active' => ($currentPage === 'manager.php' && $currentPageParam === 'transferred_to_me'),
+                'badge' => null
+            ],
+            [
                 'title' => 'مخزن الخامات',
                 'icon' => 'bi-box-seam',
                 'url' => $baseUrl . 'manager.php?page=raw_materials_warehouse',
@@ -364,6 +378,20 @@ switch ($role) {
                 'badge' => null
             ],
             [
+                'title' => 'تشوين المنتجات',
+                'icon' => 'bi-arrow-left-right',
+                'url' => $baseUrl . 'accountant.php?page=product_storage',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'product_storage'),
+                'badge' => null
+            ],
+            [
+                'title' => 'المنتجات المنقولة لي',
+                'icon' => 'bi-inbox',
+                'url' => $baseUrl . 'accountant.php?page=transferred_to_me',
+                'active' => ($currentPage === 'accountant.php' && $currentPageParam === 'transferred_to_me'),
+                'badge' => null
+            ],
+            [
                 'title' => 'مخزن الخامات',
                 'icon' => 'bi-droplet',
                 'url' => $baseUrl . 'accountant.php?page=raw_materials_warehouse',
@@ -516,6 +544,20 @@ switch ($role) {
                 'icon' => 'bi-truck',
                 'url' => $baseUrl . 'sales.php?page=vehicle_inventory',
                 'active' => ($currentPage === 'sales.php' && $currentPageParam === 'vehicle_inventory'),
+                'badge' => null
+            ],
+            [
+                'title' => 'تشوين المنتجات',
+                'icon' => 'bi-arrow-left-right',
+                'url' => $baseUrl . 'sales.php?page=product_storage',
+                'active' => ($currentPage === 'sales.php' && $currentPageParam === 'product_storage'),
+                'badge' => null
+            ],
+            [
+                'title' => 'المنتجات المنقولة لي',
+                'icon' => 'bi-inbox',
+                'url' => $baseUrl . 'sales.php?page=transferred_to_me',
+                'active' => ($currentPage === 'sales.php' && $currentPageParam === 'transferred_to_me'),
                 'badge' => null
             ],
             [
@@ -677,6 +719,20 @@ switch ($role) {
                 'icon' => 'bi-boxes',
                 'url' => $baseUrl . 'production.php?page=inventory',
                 'active' => ($currentPage === 'production.php' && $currentPageParam === 'inventory'),
+                'badge' => null
+            ],
+            [
+                'title' => 'تشوين المنتجات',
+                'icon' => 'bi-arrow-left-right',
+                'url' => $baseUrl . 'production.php?page=product_storage',
+                'active' => ($currentPage === 'production.php' && $currentPageParam === 'product_storage'),
+                'badge' => null
+            ],
+            [
+                'title' => 'المنتجات المنقولة لي',
+                'icon' => 'bi-inbox',
+                'url' => $baseUrl . 'production.php?page=transferred_to_me',
+                'active' => ($currentPage === 'production.php' && $currentPageParam === 'transferred_to_me'),
                 'badge' => null
             ],
             [
