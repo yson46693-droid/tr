@@ -697,7 +697,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($taskId <= 0) {
             $error = 'معرف المهمة غير صحيح.';
-        } elseif (!in_array($newStatus, ['pending', 'received', 'in_progress', 'completed', 'cancelled'], true)) {
+        } elseif (!in_array($newStatus, ['pending', 'in_progress', 'completed', 'cancelled'], true)) {
             $error = 'حالة المهمة غير صحيحة.';
         } else {
             try {
@@ -728,8 +728,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // إضافة timestamps حسب الحالة
                 if ($newStatus === 'completed') {
                     $updateFields[] = 'completed_at = NOW()';
-                } elseif ($newStatus === 'received') {
-                    $updateFields[] = 'received_at = NOW()';
                 } elseif ($newStatus === 'in_progress') {
                     $updateFields[] = 'started_at = NOW()';
                 }
@@ -905,13 +903,6 @@ $statusStyles = [
     'in_progress' => ['class' => 'primary', 'label' => 'قيد التنفيذ'],
     'completed' => ['class' => 'success', 'label' => 'مكتملة'],
     'cancelled' => ['class' => 'danger', 'label' => 'ملغاة']
-];
-
-$priorityStyles = [
-    'low' => ['class' => 'secondary', 'label' => 'منخفضة'],
-    'normal' => ['class' => 'info', 'label' => 'عادية'],
-    'high' => ['class' => 'warning', 'label' => 'مرتفعة'],
-    'urgent' => ['class' => 'danger', 'label' => 'عاجلة']
 ];
 
 try {
@@ -1162,14 +1153,6 @@ try {
         <div class="col-4 col-sm-4 col-md-2">
             <div class="card border-info h-100">
                 <div class="card-body text-center py-2 px-2">
-                    <div class="text-muted small mb-1">مستلمة</div>
-                    <div class="fs-5 text-info fw-semibold"><?php echo $stats['received']; ?></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-4 col-sm-4 col-md-2">
-            <div class="card border-info h-100">
-                <div class="card-body text-center py-2 px-2">
                     <div class="text-muted small mb-1">قيد التنفيذ</div>
                     <div class="fs-5 text-info fw-semibold"><?php echo $stats['in_progress']; ?></div>
                 </div>
@@ -1314,7 +1297,6 @@ try {
                             <th>رقم الطلب</th>
                             <th>الاوردر</th>
                             <th>الحاله</th>
-                            <th>الأولوية</th>
                             <th>تاريخ التسليم</th>
                             <th>إجراءات</th>
                         </tr>
@@ -1322,7 +1304,7 @@ try {
                     <tbody>
                         <?php if (empty($recentTasks)): ?>
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-4">لم يتم إنشاء مهام بعد.</td>
+                                <td colspan="5" class="text-center text-muted py-4">لم يتم إنشاء مهام بعد.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($recentTasks as $index => $task): ?>
@@ -1363,15 +1345,6 @@ try {
                                         ?>
                                         <span class="badge bg-<?php echo htmlspecialchars($statusMeta['class']); ?>">
                                             <?php echo htmlspecialchars($statusMeta['label']); ?>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <?php
-                                        $priorityKey = $task['priority'] ?? '';
-                                        $priorityMeta = $priorityStyles[$priorityKey] ?? ['class' => 'secondary', 'label' => 'غير محدد'];
-                                        ?>
-                                        <span class="badge bg-<?php echo htmlspecialchars($priorityMeta['class']); ?>">
-                                            <?php echo htmlspecialchars($priorityMeta['label']); ?>
                                         </span>
                                     </td>
                                     <td>
@@ -1448,7 +1421,6 @@ try {
                         <select class="form-select" name="status" id="newStatusCard" required>
                             <option value="">-- اختر الحالة --</option>
                             <option value="pending">معلقة</option>
-                            <option value="received">مستلمة</option>
                             <option value="in_progress">قيد التنفيذ</option>
                             <option value="completed">مكتملة</option>
                             <option value="cancelled">ملغاة</option>
@@ -1492,7 +1464,6 @@ try {
                         <select class="form-select" name="status" id="newStatus" required>
                             <option value="">-- اختر الحالة --</option>
                             <option value="pending">معلقة</option>
-                            <option value="received">مستلمة</option>
                             <option value="in_progress">قيد التنفيذ</option>
                             <option value="completed">مكتملة</option>
                             <option value="cancelled">ملغاة</option>
@@ -1783,7 +1754,6 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
                                 <select class="form-select" name="status" id="newStatusCard" required>
                                     <option value="">-- اختر الحالة --</option>
                                     <option value="pending">معلقة</option>
-                                    <option value="received">مستلمة</option>
                                     <option value="in_progress">قيد التنفيذ</option>
                                     <option value="completed">مكتملة</option>
                                     <option value="cancelled">ملغاة</option>

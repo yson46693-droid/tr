@@ -1376,15 +1376,11 @@ function tasksHtml(string $value): string
                     <table class="table dashboard-table dashboard-table--no-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 60px;">#</th>
-                                <th>العنوان</th>
+                                <th style="width: 60px;">رقم الاوردر</th>
                                 <th>المنتج</th>
                                 <th>الكمية</th>
-                                <th>المخصص إلى</th>
-                                <th>الأولوية</th>
                                 <th>الحالة</th>
                                 <th>تاريخ التسليم</th>
-                                <th>أنشئت بواسطة</th>
                                 <th style="width: 180px;">الإجراءات</th>
                             </tr>
                         </thead>
@@ -1428,12 +1424,6 @@ function tasksHtml(string $value): string
                                 ?>
                                 <tr class="<?php echo $overdue ? 'table-danger' : ''; ?>" data-task-id="<?php echo (int) $task['id']; ?>">
                                     <td><?php echo $rowNumber; ?></td>
-                                    <td>
-                                        <strong><?php echo tasksHtml($task['title'] ?? ''); ?></strong>
-                                        <?php if ($overdue): ?>
-                                            <span class="badge bg-danger ms-1">متأخرة</span>
-                                        <?php endif; ?>
-                                    </td>
                                     <td><?php 
                                         $productName = $task['product_name'] ?? '';
                                         if (!empty($productName) && trim($productName) !== '') {
@@ -1450,22 +1440,6 @@ function tasksHtml(string $value): string
                                             echo '<span class="text-muted">-</span>';
                                         }
                                     ?></td>
-                                    <td>
-                                        <?php 
-                                        if (!empty($task['all_workers'])) {
-                                            $workersList = $task['all_workers'];
-                                            if (count($workersList) > 1) {
-                                                echo '<span class="badge bg-info me-1">' . count($workersList) . ' عمال</span><br>';
-                                                echo '<small class="text-muted">' . tasksHtml(implode(', ', $workersList)) . '</small>';
-                                            } else {
-                                                echo tasksHtml($workersList[0]);
-                                            }
-                                        } else {
-                                            echo isset($task['assigned_to_name']) ? tasksHtml($task['assigned_to_name']) : '<span class="text-muted">غير محدد</span>';
-                                        }
-                                        ?>
-                                    </td>
-                                    <td><span class="badge bg-<?php echo $priorityClass; ?>"><?php echo tasksHtml($priorityLabel); ?></span></td>
                                     <td><span class="badge bg-<?php echo $statusClass; ?>"><?php echo tasksHtml($statusLabel); ?></span></td>
                                     <td>
                                         <?php if (!empty($task['due_date'])): ?>
@@ -1474,7 +1448,6 @@ function tasksHtml(string $value): string
                                             <span class="text-muted">-</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td><?php echo isset($task['created_by_name']) ? tasksHtml($task['created_by_name']) : ''; ?></td>
                                     <td>
                                         <div class="btn-group btn-group-sm" role="group">
                                             <?php if ($isProduction): ?>
