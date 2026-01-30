@@ -8996,6 +8996,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-}); // End of DOMContentLoaded
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', doRun);
+  } else {
+    doRun();
+  }
+})(); // End runLocalCustomersWhenReady
 </script>
 <?php endif; ?>

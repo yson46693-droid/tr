@@ -1011,9 +1011,7 @@ if ($isAjaxNavigation) {
                 </div>
 
                 <div class="card shadow-sm mb-4">
-                    <div class="card-header bg-info text-white">
-                        <h5 class="mb-0"><i class="bi bi-bell me-2"></i><?php echo isset($lang['notifications']) ? $lang['notifications'] : 'الإشعارات'; ?></h5>
-                    </div>
+                 
                     <div class="card-body">
                         <?php if (!empty($notifications)): ?>
                         <div class="list-group">
