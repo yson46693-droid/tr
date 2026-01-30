@@ -1397,6 +1397,9 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
 <link rel="stylesheet" href="<?php echo getRelativeUrl('assets/css/responsive-modals.css'); ?>">
 
 <script>
+// تعريف عام لاستخدامه في جميع السكربتات (يتجنب ReferenceError عند تحميل الصفحة من accountant/manager)
+var dashboardWrapper = null;
+
 // تعريفات مؤقتة - سيتم استبدالها بالدوال الكاملة عند تحميل الصفحة
 (function() {
     'use strict';
@@ -4425,8 +4428,8 @@ function loadLocalReturnInvoiceByNumber() {
     if (loadError) { loadError.classList.add('d-none'); loadError.textContent = ''; }
     if (loadSpinner) loadSpinner.classList.remove('d-none');
     if (loadBtn) loadBtn.disabled = true;
-    const basePath = '<?php echo getBasePath(); ?>';
-    const url = basePath + '/api/customer_purchase_history.php?action=get_invoice_by_number&customer_id=' + encodeURIComponent(customerId) + '&invoice_number=' + encodeURIComponent(invoiceNumber) + '&type=local';
+    const apiBaseUrl = '<?php echo getRelativeUrl("api/customer_purchase_history.php"); ?>';
+    const url = apiBaseUrl + (apiBaseUrl.indexOf('?') !== -1 ? '&' : '?') + 'action=get_invoice_by_number&customer_id=' + encodeURIComponent(customerId) + '&invoice_number=' + encodeURIComponent(invoiceNumber) + '&type=local';
     fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
         .then(function(r) {
             if (!r.ok) throw new Error('خطأ في الطلب');
@@ -7827,16 +7830,13 @@ function closeImportLocalCustomersCard() {
     }
 }
 
-// تعريف dashboardWrapper في النطاق العام لاستخدامه في جميع DOMContentLoaded listeners
-var dashboardWrapper = null;
-
+// dashboardWrapper معرّف في بداية الصفحة؛ نعينه هنا عند جاهزية DOM
 document.addEventListener('DOMContentLoaded', function() {
     // تحسين الأداء على الجوال: تأخير الكود غير الضروري
     var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     var initDelay = isMobile ? 100 : 0; // تأخير 100ms على الجوال لتجنب التجمد
     
-    // تعريف dashboardWrapper مرة واحدة لاستخدامه في جميع الأماكن
-    if (!dashboardWrapper) {
+    if (typeof dashboardWrapper === 'undefined' || dashboardWrapper === null) {
         dashboardWrapper = document.querySelector('.dashboard-wrapper');
     }
     
