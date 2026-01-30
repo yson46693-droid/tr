@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * القائمة الجانبية لعمال الإنتاج
  */
@@ -64,6 +64,22 @@ $baseUrl = getDashboardUrl();
                 <a class="nav-link" href="<?php echo getRelativeUrl('attendance.php'); ?>">
                     <i class="bi bi-calendar-check"></i>
                     <span><?php echo isset($lang['menu_attendance']) ? $lang['menu_attendance'] : 'الحضور'; ?></span>
+                </a>
+            </li>
+            
+            <li class="nav-item">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'product_storage') ? 'active' : ''; ?>" 
+                   href="<?php echo $baseUrl; ?>production.php?page=product_storage">
+                    <i class="bi bi-arrow-left-right"></i>
+                    <span>تشوين المنتجات</span>
+                </a>
+            </li>
+            
+            <li class="nav-item">
+                <a class="nav-link <?php echo (isset($_GET['page']) && $_GET['page'] === 'transferred_to_me') ? 'active' : ''; ?>" 
+                   href="<?php echo $baseUrl; ?>production.php?page=transferred_to_me">
+                    <i class="bi bi-inbox"></i>
+                    <span>المنتجات المنقولة لي</span>
                 </a>
             </li>
             

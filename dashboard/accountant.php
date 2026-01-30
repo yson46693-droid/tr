@@ -2222,6 +2222,38 @@ if ($isAjaxNavigation) {
                 }
                 ?>
                 
+            <?php elseif ($page === 'product_storage'): ?>
+                <!-- صفحة تشوين المنتجات -->
+                <?php 
+                $modulePath = __DIR__ . '/../modules/shared/product_storage.php';
+                if (file_exists($modulePath)) {
+                    try {
+                        include $modulePath;
+                    } catch (Throwable $e) {
+                        error_log('Accountant product_storage error: ' . $e->getMessage());
+                        echo '<div class="alert alert-danger">حدث خطأ أثناء تحميل صفحة تشوين المنتجات.</div>';
+                    }
+                } else {
+                    echo '<div class="alert alert-warning">صفحة تشوين المنتجات غير متاحة حالياً</div>';
+                }
+                ?>
+                
+            <?php elseif ($page === 'transferred_to_me'): ?>
+                <!-- صفحة المنتجات المنقولة لي -->
+                <?php 
+                $modulePath = __DIR__ . '/../modules/shared/transferred_to_me.php';
+                if (file_exists($modulePath)) {
+                    try {
+                        include $modulePath;
+                    } catch (Throwable $e) {
+                        error_log('Accountant transferred_to_me error: ' . $e->getMessage());
+                        echo '<div class="alert alert-danger">حدث خطأ أثناء تحميل صفحة المنتجات المنقولة لي.</div>';
+                    }
+                } else {
+                    echo '<div class="alert alert-warning">صفحة المنتجات المنقولة لي غير متاحة حالياً</div>';
+                }
+                ?>
+                
             <?php elseif ($page === 'pos'): ?>
                 <!-- صفحة نقطة البيع -->
                 <?php 

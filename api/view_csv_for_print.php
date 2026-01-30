@@ -383,14 +383,14 @@ try {
         .report-table thead th { 
             background: linear-gradient(135deg, #0f4c81 0%, #3b82f6 100%); 
             color: #ffffff; 
-            padding: 16px 18px; 
-            font-size: 15px; 
+            padding: 5px 10px; 
+            font-size: 11px; 
             font-weight: 700; 
+            line-height: 1.25;
             text-align: right;
             border-bottom: 2px solid rgba(255,255,255,0.2);
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            font-size: 13px;
         }
         .report-table thead th:first-child {
             border-top-right-radius: 12px;
@@ -399,9 +399,10 @@ try {
             border-top-left-radius: 12px;
         }
         .report-table tbody td { 
-            padding: 14px 18px; 
+            padding: 4px 10px; 
             border-bottom: 1px solid #f1f5f9; 
-            font-size: 14px; 
+            font-size: 12px; 
+            line-height: 1.3;
             color: #1e293b; 
             text-align: right;
             font-weight: 500;

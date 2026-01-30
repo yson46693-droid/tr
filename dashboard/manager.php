@@ -2093,6 +2093,28 @@ if ($isAjaxNavigation) {
                 }
                 ?>
                 
+            <?php elseif ($page === 'product_storage'): ?>
+                <!-- صفحة تشوين المنتجات -->
+                <?php 
+                $modulePath = __DIR__ . '/../modules/shared/product_storage.php';
+                if (file_exists($modulePath)) {
+                    include $modulePath;
+                } else {
+                    echo '<div class="alert alert-warning">صفحة تشوين المنتجات غير متاحة حالياً</div>';
+                }
+                ?>
+                
+            <?php elseif ($page === 'transferred_to_me'): ?>
+                <!-- صفحة المنتجات المنقولة لي -->
+                <?php 
+                $modulePath = __DIR__ . '/../modules/shared/transferred_to_me.php';
+                if (file_exists($modulePath)) {
+                    include $modulePath;
+                } else {
+                    echo '<div class="alert alert-warning">صفحة المنتجات المنقولة لي غير متاحة حالياً</div>';
+                }
+                ?>
+                
             <?php elseif ($page === 'product_specifications'): ?>
                 <?php 
                 // إعادة توجيه إلى صفحة قوالب المنتجات مع قسم المواصفات
