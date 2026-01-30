@@ -2707,71 +2707,39 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        if (e.target.closest('.rep-return-btn.js-customer-purchase-history')) {
+        if (e.target.closest('.rep-return-btn.js-customer-purchase-history') || e.target.closest('.js-all-customers-return-products')) {
             e.preventDefault();
             e.stopPropagation();
-            const button = e.target.closest('.rep-return-btn.js-customer-purchase-history');
+            const button = e.target.closest('.rep-return-btn.js-customer-purchase-history') || e.target.closest('.js-all-customers-return-products');
             const customerId = button.getAttribute('data-customer-id');
             const customerName = button.getAttribute('data-customer-name') || '-';
+            
+            window.repReturnCustomerId = customerId;
+            window.repReturnCustomerName = customerName;
+            window.repReturnLoadedData = null;
             
             const returnModal = document.getElementById('repCustomerReturnModal');
             if (returnModal) {
                 const nameElement = returnModal.querySelector('.rep-return-customer-name');
-                const loadingElement = returnModal.querySelector('.rep-return-loading');
-                const contentElement = returnModal.querySelector('.rep-return-content');
-                const errorElement = returnModal.querySelector('.rep-return-error');
-                const tableBody = returnModal.querySelector('.rep-return-table tbody');
-                const customerPhoneEl = returnModal.querySelector('.rep-return-customer-phone');
-                const customerAddressEl = returnModal.querySelector('.rep-return-customer-address');
-                
                 if (nameElement) nameElement.textContent = customerName;
-                if (loadingElement) loadingElement.classList.remove('d-none');
-                if (contentElement) contentElement.classList.add('d-none');
-                if (errorElement) errorElement.classList.add('d-none');
-                if (tableBody) tableBody.innerHTML = '';
+                var invInput = document.getElementById('repReturnInvoiceNumber');
+                if (invInput) invInput.value = '';
+                var loadErr = document.getElementById('repReturnInvoiceLoadError');
+                if (loadErr) { loadErr.classList.add('d-none'); loadErr.textContent = ''; }
+                var loadSpinner = document.getElementById('repReturnInvoiceLoading');
+                if (loadSpinner) loadSpinner.classList.add('d-none');
+                document.getElementById('repReturnInvoiceInfoCard').classList.add('d-none');
+                document.getElementById('repReturnLoadingEl').classList.add('d-none');
+                var errEl = document.getElementById('repReturnErrorEl');
+                if (errEl) { errEl.classList.add('d-none'); errEl.textContent = ''; }
+                document.getElementById('repReturnContentEl').classList.add('d-none');
+                document.getElementById('repCreateReturnBtn').classList.add('d-none');
+                const tableBody = returnModal.querySelector('#repReturnItemsTableBody');
+                if (tableBody) tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">أدخل رقم الفاتورة واضغط «تحميل الفاتورة»</td></tr>';
                 
                 const modalInstance = bootstrap.Modal.getOrCreateInstance(returnModal);
                 modalInstance.show();
-                
-                // جلب بيانات سجل المشتريات للإرجاع من API
-                const basePath = '<?php echo getBasePath(); ?>';
-                const returnUrl = basePath + '/api/customer_purchase_history.php?action=get_history&customer_id=' + encodeURIComponent(customerId);
-                
-                fetchJson(returnUrl)
-                .then(data => {
-                    if (loadingElement) loadingElement.classList.add('d-none');
-                    
-                    if (data.success) {
-                        // تحديث معلومات العميل
-                        if (data.customer) {
-                            if (customerPhoneEl) customerPhoneEl.textContent = data.customer.phone || '-';
-                            if (customerAddressEl) customerAddressEl.textContent = data.customer.address || '-';
-                        }
-                        
-                        // عرض بيانات المشتريات
-                        const purchaseHistory = data.purchase_history || [];
-                        displayRepReturnHistory(purchaseHistory, tableBody);
-                        
-                        if (contentElement) {
-                            contentElement.classList.remove('d-none');
-                        }
-                    } else {
-                        if (errorElement) {
-                            errorElement.textContent = data.message || 'حدث خطأ أثناء تحميل بيانات الإرجاع';
-                            errorElement.classList.remove('d-none');
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading return data:', error);
-                    if (loadingElement) loadingElement.classList.add('d-none');
-                    if (errorElement) {
-                        errorElement.textContent = error.message || 'حدث خطأ أثناء تحميل بيانات الإرجاع';
-                        errorElement.classList.remove('d-none');
-                    }
-                });
             } else {
-                // Fallback: فتح في نافذة جديدة
                 const baseUrl = <?php echo json_encode(getRelativeUrl($dashboardScript), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
                 const returnUrl = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'page=customers&section=company&action=purchase_history&ajax=purchase_history&customer_id=' + encodeURIComponent(customerId);
                 window.open(returnUrl, '_blank');
@@ -3608,8 +3576,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
             </div>
             <div class="modal-body">
-                <!-- معلومات العميل -->
-                <div class="card mb-3">
+                <!-- خطوة 1: إدخال رقم الفاتورة -->
+                <div class="card mb-4 border-success border-2" id="repReturnInvoiceNumberCard">
+                    <div class="card-header bg-success bg-opacity-10">
+                        <label class="form-label fw-bold mb-0 text-success">
+                            <i class="bi bi-receipt me-2"></i>رقم الفاتورة
+                        </label>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-8">
+                                <input type="text" class="form-control form-control-lg" id="repReturnInvoiceNumber" placeholder="أدخل رقم الفاتورة" autocomplete="off">
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" class="btn btn-success btn-lg w-100" id="repReturnLoadInvoiceBtn" onclick="loadRepReturnInvoiceByNumber(false)">
+                                    <i class="bi bi-search me-1"></i>تحميل الفاتورة
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-muted small">يتم التحقق من أن الفاتورة مرتبطة بهذا العميل ثم عرض المنتجات المتاحة للإرجاع.</div>
+                        <div id="repReturnInvoiceLoadError" class="alert alert-danger mt-2 d-none" role="alert"></div>
+                        <div id="repReturnInvoiceLoading" class="text-center py-3 d-none">
+                            <div class="spinner-border text-success" role="status"></div>
+                            <span class="ms-2">جاري التحقق من الفاتورة...</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- معلومات العميل والفاتورة (بعد التحميل) -->
+                <div class="card mb-3 d-none" id="repReturnInvoiceInfoCard">
                     <div class="card-body">
                         <div class="row">
                             <div class="col-md-4">
@@ -3617,51 +3611,48 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <div class="fs-5 fw-bold rep-return-customer-name">-</div>
                             </div>
                             <div class="col-md-4">
-                                <div class="text-muted small">الهاتف</div>
-                                <div class="rep-return-customer-phone">-</div>
+                                <div class="text-muted small">رقم الفاتورة</div>
+                                <div class="fw-bold" id="repReturnInvoiceNumberDisplay">-</div>
                             </div>
                             <div class="col-md-4">
-                                <div class="text-muted small">العنوان</div>
-                                <div class="rep-return-customer-address">-</div>
+                                <div class="text-muted small">المبلغ الإجمالي للمرتجع</div>
+                                <div class="fs-5 fw-bold text-danger" id="repReturnTotalAmountDisplay">0.00 ج.م</div>
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <div class="rep-return-loading text-center py-5">
-                    <div class="spinner-border text-success" role="status">
-                        <span class="visually-hidden">جاري التحميل...</span>
-                    </div>
-                    <p class="mt-3 text-muted">جاري تحميل بيانات المشتريات...</p>
+                <div class="rep-return-loading text-center py-5 d-none" id="repReturnLoadingEl">
+                    <div class="spinner-border text-success" role="status"></div>
+                    <p class="mt-3 text-muted">جاري التحقق من الفاتورة...</p>
                 </div>
-                <div class="rep-return-error alert alert-danger d-none" role="alert"></div>
-                <div class="rep-return-content d-none">
+                <div class="rep-return-error alert alert-danger d-none" role="alert" id="repReturnErrorEl"></div>
+                <div class="rep-return-content d-none" id="repReturnContentEl">
                     <div class="table-responsive">
                         <table class="table table-hover table-bordered rep-return-table">
                             <thead class="table-light">
                                 <tr>
-                                    <th style="width: 50px;">
-                                        <input type="checkbox" id="repSelectAllItems" onchange="repToggleAllItems()">
-                                    </th>
-                                    <th>رقم الفاتورة</th>
+                                    <th style="width: 50px;">إرجاع</th>
                                     <th>اسم المنتج</th>
-                                    <th>الكمية المشتراة</th>
-                                    <th>الكمية المرتجعة</th>
-                                    <th>المتاح للإرجاع</th>
-                                    <th>سعر الوحدة</th>
-                                    <th>السعر الإجمالي</th>
-                                    <th>تاريخ الشراء</th>
-                                    <th style="width: 100px;">إجراءات</th>
+                                    <th style="width: 120px;">المتاح للإرجاع</th>
+                                    <th style="width: 130px;">الكمية المراد إرجاعها</th>
+                                    <th style="width: 110px;">سعر الوحدة</th>
+                                    <th style="width: 110px;">الإجمالي</th>
                                 </tr>
                             </thead>
-                            <tbody></tbody>
+                            <tbody id="repReturnItemsTableBody"></tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <th colspan="5" class="text-end">المبلغ الإجمالي للمرتجع:</th>
+                                    <th class="text-danger fs-5" id="repReturnTotalAmount">0.00 ج.م</th>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
-                <button type="button" class="btn btn-success" id="repCreateReturnBtn" style="display: none;">
+                <button type="button" class="btn btn-success d-none" id="repCreateReturnBtn" onclick="submitRepReturn(false)">
                     <i class="bi bi-arrow-return-left me-1"></i>إنشاء مرتجع
                 </button>
             </div>
@@ -3674,56 +3665,58 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0">
             <i class="bi bi-arrow-return-left me-2"></i>
-            سجل مشتريات العميل - إنشاء مرتجع - <span class="rep-return-card-customer-name">-</span>
+            إنشاء مرتجع - <span class="rep-return-card-customer-name">-</span>
         </h5>
         <button type="button" class="btn btn-sm btn-light" onclick="closeRepCustomerReturnCard()">
             <i class="bi bi-x-lg"></i>
         </button>
     </div>
     <div class="card-body">
-        <!-- معلومات العميل -->
-        <div class="card mb-3">
+        <div class="card mb-3 border-success border-2" id="repReturnCardInvoiceNumberCard">
+            <div class="card-header bg-success bg-opacity-10">
+                <label class="form-label fw-bold mb-0 text-success"><i class="bi bi-receipt me-2"></i>رقم الفاتورة</label>
+            </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-12 mb-2">
-                        <div class="text-muted small">العميل</div>
-                        <div class="fs-5 fw-bold rep-return-card-customer-name">-</div>
-                    </div>
-                    <div class="col-6">
-                        <div class="text-muted small">الهاتف</div>
-                        <div class="rep-return-card-customer-phone">-</div>
-                    </div>
-                    <div class="col-6">
-                        <div class="text-muted small">العنوان</div>
-                        <div class="rep-return-card-customer-address">-</div>
-                    </div>
+                <input type="text" class="form-control form-control-lg mb-2" id="repReturnCardInvoiceNumber" placeholder="أدخل رقم الفاتورة" autocomplete="off">
+                <button type="button" class="btn btn-success w-100" id="repReturnCardLoadInvoiceBtn" onclick="loadRepReturnInvoiceByNumber(true)">
+                    <i class="bi bi-search me-1"></i>تحميل الفاتورة
+                </button>
+                <div id="repReturnCardInvoiceLoadError" class="alert alert-danger mt-2 d-none" role="alert"></div>
+                <div id="repReturnCardInvoiceLoading" class="text-center py-3 d-none">
+                    <div class="spinner-border text-success" role="status"></div>
+                    <span class="ms-2">جاري التحقق...</span>
                 </div>
             </div>
         </div>
-        
-        <div class="rep-return-card-loading text-center py-5">
-            <div class="spinner-border text-success" role="status">
-                <span class="visually-hidden">جاري التحميل...</span>
+        <div class="card mb-3 d-none" id="repReturnCardInvoiceInfoCard">
+            <div class="card-body py-2">
+                <div class="row small">
+                    <div class="col-6"><span class="text-muted">العميل:</span> <span class="rep-return-card-customer-name">-</span></div>
+                    <div class="col-6"><span class="text-muted">الفاتورة:</span> <span id="repReturnCardInvoiceNumberDisplay">-</span></div>
+                    <div class="col-12 mt-1"><span class="text-muted">المبلغ الإجمالي للمرتجع:</span> <strong class="text-danger" id="repReturnCardTotalAmountDisplay">0.00 ج.م</strong></div>
+                </div>
             </div>
-            <p class="mt-3 text-muted">جاري تحميل بيانات المشتريات...</p>
         </div>
-        <div class="rep-return-card-error alert alert-danger d-none" role="alert"></div>
-        <div class="rep-return-card-content d-none">
+        <div class="rep-return-card-content d-none" id="repReturnCardContentEl">
             <div class="table-responsive">
                 <table class="table table-hover table-bordered rep-return-card-table">
                     <thead class="table-light">
                         <tr>
-                            <th style="width: 50px;">
-                                <input type="checkbox" id="repSelectAllItemsCard" onchange="repToggleAllItemsCard()">
-                            </th>
-                            <th>رقم الفاتورة</th>
-                            <th>اسم المنتج</th>
-                            <th>المتاح للإرجاع</th>
-                            <th>سعر الوحدة</th>
-                            <th style="width: 100px;">إجراءات</th>
+                            <th style="width: 40px;">إرجاع</th>
+                            <th>المنتج</th>
+                            <th style="width: 80px;">المتاح</th>
+                            <th style="width: 90px;">الكمية</th>
+                            <th style="width: 70px;">السعر</th>
+                            <th style="width: 70px;">الإجمالي</th>
                         </tr>
                     </thead>
-                    <tbody></tbody>
+                    <tbody id="repReturnCardItemsTableBody"></tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="5" class="text-end">الإجمالي:</th>
+                            <th class="text-danger" id="repReturnCardTotalAmount">0.00 ج.م</th>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
@@ -3731,7 +3724,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="card-footer">
         <div class="d-flex gap-2">
             <button type="button" class="btn btn-secondary flex-fill" onclick="closeRepCustomerReturnCard()">إلغاء</button>
-            <button type="button" class="btn btn-success flex-fill" id="repCreateReturnCardBtn" style="display: none;">
+            <button type="button" class="btn btn-success flex-fill d-none" id="repCreateReturnCardBtn" onclick="submitRepReturn(true)">
                 <i class="bi bi-arrow-return-left me-1"></i>إنشاء مرتجع
             </button>
         </div>
@@ -3757,6 +3750,154 @@ function repToggleAllItemsCard() {
     const checkboxes = card.querySelectorAll('.rep-return-card-item-checkbox');
     checkboxes.forEach(cb => {
         cb.checked = selectAll.checked;
+    });
+}
+
+function loadRepReturnInvoiceByNumber(isCard) {
+    var customerId = window.repReturnCustomerId;
+    if (!customerId) { alert('لم يتم تحديد العميل'); return; }
+    var invoiceNumber = (isCard ? document.getElementById('repReturnCardInvoiceNumber') : document.getElementById('repReturnInvoiceNumber'))?.value?.trim();
+    if (!invoiceNumber) { alert('يرجى إدخال رقم الفاتورة'); return; }
+    var loadError = isCard ? document.getElementById('repReturnCardInvoiceLoadError') : document.getElementById('repReturnInvoiceLoadError');
+    var loadSpinner = isCard ? document.getElementById('repReturnCardInvoiceLoading') : document.getElementById('repReturnInvoiceLoading');
+    var loadBtn = isCard ? document.getElementById('repReturnCardLoadInvoiceBtn') : document.getElementById('repReturnLoadInvoiceBtn');
+    if (loadError) { loadError.classList.add('d-none'); loadError.textContent = ''; }
+    if (loadSpinner) loadSpinner.classList.remove('d-none');
+    if (loadBtn) loadBtn.disabled = true;
+    var basePath = '<?php echo getBasePath(); ?>';
+    var url = basePath + '/api/customer_purchase_history.php?action=get_invoice_by_number&customer_id=' + encodeURIComponent(customerId) + '&invoice_number=' + encodeURIComponent(invoiceNumber) + '&type=normal';
+    fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function(r) { if (!r.ok) throw new Error('خطأ في الطلب'); return r.json(); })
+        .then(function(data) {
+            if (loadSpinner) loadSpinner.classList.add('d-none');
+            if (loadBtn) loadBtn.disabled = false;
+            if (!data.success) {
+                if (loadError) { loadError.textContent = data.message || 'الفاتورة غير موجودة أو غير مرتبطة بهذا العميل'; loadError.classList.remove('d-none'); }
+                return;
+            }
+            window.repReturnLoadedData = data;
+            if (isCard) {
+                document.getElementById('repReturnCardInvoiceInfoCard').classList.remove('d-none');
+                document.getElementById('repReturnCardContentEl').classList.remove('d-none');
+                document.getElementById('repReturnCardInvoiceNumberDisplay').textContent = data.invoice.invoice_number || invoiceNumber;
+                document.querySelector('.rep-return-card-customer-name').textContent = window.repReturnCustomerName || '-';
+                renderRepReturnInvoiceItems(true);
+                document.getElementById('repCreateReturnCardBtn').classList.remove('d-none');
+            } else {
+                document.getElementById('repReturnInvoiceInfoCard').classList.remove('d-none');
+                document.getElementById('repReturnContentEl').classList.remove('d-none');
+                document.getElementById('repReturnInvoiceNumberDisplay').textContent = data.invoice.invoice_number || invoiceNumber;
+                document.querySelector('.rep-return-customer-name').textContent = window.repReturnCustomerName || '-';
+                renderRepReturnInvoiceItems(false);
+                document.getElementById('repCreateReturnBtn').classList.remove('d-none');
+            }
+        })
+        .catch(function(err) {
+            if (loadSpinner) loadSpinner.classList.add('d-none');
+            if (loadBtn) loadBtn.disabled = false;
+            if (loadError) { loadError.textContent = err.message || 'حدث خطأ أثناء التحقق من الفاتورة'; loadError.classList.remove('d-none'); }
+        });
+}
+
+function renderRepReturnInvoiceItems(isCard) {
+    var data = window.repReturnLoadedData;
+    if (!data || !data.items) return;
+    var tbody = isCard ? document.querySelector('#repReturnCardItemsTableBody') : document.getElementById('repReturnItemsTableBody');
+    if (!tbody) return;
+    var items = data.items.filter(function(it) { return it.can_return; });
+    if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">لا يوجد منتجات متاحة للإرجاع في هذه الفاتورة</td></tr>';
+        return;
+    }
+    tbody.innerHTML = '';
+    items.forEach(function(item, idx) {
+        var maxQty = item.available_to_return;
+        var row = document.createElement('tr');
+        row.className = 'align-middle';
+        row.innerHTML = '<td class="text-center"><input type="checkbox" class="form-check-input rep-return-row-cb" data-invoice-item-id="' + item.invoice_item_id + '"></td>' +
+            '<td><strong>' + (item.product_name || '-') + '</strong></td>' +
+            '<td class="text-center">' + maxQty.toFixed(2) + '</td>' +
+            '<td><input type="number" class="form-control form-control-sm rep-return-qty text-center" data-invoice-item-id="' + item.invoice_item_id + '" data-unit-price="' + item.unit_price + '" data-max="' + maxQty + '" value="0" min="0" max="' + maxQty + '" step="0.01" style="max-width:120px"></td>' +
+            '<td class="text-end">' + item.unit_price.toFixed(2) + ' ج.م</td>' +
+            '<td class="text-end rep-return-line-total">0.00 ج.م</td>';
+        tbody.appendChild(row);
+    });
+    var totalEl = isCard ? document.getElementById('repReturnCardTotalAmount') : document.getElementById('repReturnTotalAmount');
+    if (totalEl) totalEl.textContent = '0.00 ج.م';
+    tbody.querySelectorAll('.rep-return-qty').forEach(function(input) {
+        input.addEventListener('input', function() { repReturnRecalcTotal(isCard); });
+        input.addEventListener('change', function() { repReturnRecalcTotal(isCard); });
+    });
+    tbody.querySelectorAll('.rep-return-row-cb').forEach(function(cb) {
+        cb.addEventListener('change', function() { repReturnRecalcTotal(isCard); });
+    });
+}
+
+function repReturnRecalcTotal(isCard) {
+    var tbody = isCard ? document.querySelector('#repReturnCardItemsTableBody') : document.getElementById('repReturnItemsTableBody');
+    var totalEl = isCard ? document.getElementById('repReturnCardTotalAmount') : document.getElementById('repReturnTotalAmount');
+    var displayEl = isCard ? document.getElementById('repReturnCardTotalAmountDisplay') : document.getElementById('repReturnTotalAmountDisplay');
+    if (!tbody || !totalEl) return;
+    var total = 0;
+    tbody.querySelectorAll('tr').forEach(function(tr) {
+        var cb = tr.querySelector('.rep-return-row-cb');
+        var qtyInput = tr.querySelector('.rep-return-qty');
+        var lineTotal = tr.querySelector('.rep-return-line-total');
+        if (!cb || !qtyInput || !lineTotal) return;
+        var qty = parseFloat(qtyInput.value) || 0;
+        var unitPrice = parseFloat(qtyInput.getAttribute('data-unit-price')) || 0;
+        var maxQty = parseFloat(qtyInput.getAttribute('data-max')) || 0;
+        if (qty > maxQty) { qtyInput.value = maxQty; qty = maxQty; }
+        if (qty < 0) { qtyInput.value = 0; qty = 0; }
+        var line = qty * unitPrice;
+        lineTotal.textContent = line.toFixed(2) + ' ج.م';
+        if (cb.checked && qty > 0) total += line;
+    });
+    totalEl.textContent = total.toFixed(2) + ' ج.م';
+    if (displayEl) displayEl.textContent = total.toFixed(2) + ' ج.م';
+}
+
+function submitRepReturn(isCard) {
+    var customerId = window.repReturnCustomerId;
+    if (!customerId) { alert('لم يتم تحديد العميل'); return; }
+    var tbody = isCard ? document.querySelector('#repReturnCardItemsTableBody') : document.getElementById('repReturnItemsTableBody');
+    if (!tbody) return;
+    var items = [];
+    tbody.querySelectorAll('tr').forEach(function(tr) {
+        var cb = tr.querySelector('.rep-return-row-cb');
+        var qtyInput = tr.querySelector('.rep-return-qty');
+        if (!cb || !cb.checked || !qtyInput) return;
+        var qty = parseFloat(qtyInput.value) || 0;
+        var maxQty = parseFloat(qtyInput.getAttribute('data-max')) || 0;
+        if (qty <= 0) return;
+        if (qty > maxQty) { alert('الكمية المدخلة أكبر من المتاح للإرجاع'); return; }
+        items.push({ invoice_item_id: parseInt(qtyInput.getAttribute('data-invoice-item-id'), 10), quantity: qty });
+    });
+    if (items.length === 0) { alert('يرجى تحديد منتج واحد على الأقل وإدخال الكمية المراد إرجاعها'); return; }
+    var submitBtn = isCard ? document.getElementById('repCreateReturnCardBtn') : document.getElementById('repCreateReturnBtn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>جاري المعالجة...'; }
+    var basePath = '<?php echo getBasePath(); ?>';
+    var payload = { customer_id: parseInt(customerId, 10), items: items, notes: '' };
+    fetch(basePath + '/api/returns.php?action=create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-arrow-return-left me-1"></i>إنشاء مرتجع'; }
+        if (data.success) {
+            alert('تم تسجيل طلب المرتجع بنجاح.\nرقم المرتجع: ' + (data.return_number || '') + '\nالمبلغ: ' + (data.refund_amount != null ? data.refund_amount.toFixed(2) : '0') + ' ج.م');
+            if (isCard) closeRepCustomerReturnCard(); else { var m = document.getElementById('repCustomerReturnModal'); if (m) bootstrap.Modal.getInstance(m)?.hide(); }
+            if (typeof reloadWithCacheClear === 'function') reloadWithCacheClear(); else location.reload();
+        } else {
+            alert('حدث خطأ: ' + (data.message || 'خطأ غير معروف'));
+        }
+    })
+    .catch(function(err) {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="bi bi-arrow-return-left me-1"></i>إنشاء مرتجع'; }
+        alert('حدث خطأ في الاتصال بالخادم: ' + err.message);
     });
 }
 
@@ -4723,93 +4864,29 @@ document.addEventListener('DOMContentLoaded', function () {
         var isMobileDevice = typeof isMobile === 'function' ? isMobile() : window.innerWidth <= 768;
         
         if (isMobileDevice) {
-            // على الموبايل: استخدام Card مباشرة
+            window.repReturnCustomerId = customerId;
+            window.repReturnCustomerName = customerName;
+            window.repReturnLoadedData = null;
             const card = document.getElementById('repCustomerReturnCard');
             if (card) {
                 const nameElement = card.querySelector('.rep-return-card-customer-name');
-                const loadingElement = card.querySelector('.rep-return-card-loading');
-                const contentElement = card.querySelector('.rep-return-card-content');
-                const errorElement = card.querySelector('.rep-return-card-error');
-                const tableBody = card.querySelector('.rep-return-card-table tbody');
-                const customerPhoneEl = card.querySelector('.rep-return-card-customer-phone');
-                const customerAddressEl = card.querySelector('.rep-return-card-customer-address');
-                
                 if (nameElement) nameElement.textContent = customerName;
-                if (loadingElement) loadingElement.classList.remove('d-none');
-                if (contentElement) contentElement.classList.add('d-none');
-                if (errorElement) errorElement.classList.add('d-none');
-                if (tableBody) tableBody.innerHTML = '';
-                
+                var invInput = document.getElementById('repReturnCardInvoiceNumber');
+                if (invInput) invInput.value = '';
+                var loadErr = document.getElementById('repReturnCardInvoiceLoadError');
+                if (loadErr) { loadErr.classList.add('d-none'); loadErr.textContent = ''; }
+                var loadSpinner = document.getElementById('repReturnCardInvoiceLoading');
+                if (loadSpinner) loadSpinner.classList.add('d-none');
+                document.getElementById('repReturnCardInvoiceInfoCard').classList.add('d-none');
+                document.getElementById('repReturnCardContentEl').classList.add('d-none');
+                document.getElementById('repCreateReturnCardBtn').classList.add('d-none');
+                const tableBody = document.getElementById('repReturnCardItemsTableBody');
+                if (tableBody) tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">أدخل رقم الفاتورة واضغط «تحميل الفاتورة»</td></tr>';
                 card.style.display = 'block';
                 setTimeout(function() {
-                    if (typeof scrollToElement === 'function') {
-                        scrollToElement(card);
-                    } else {
-                        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
+                    if (typeof scrollToElement === 'function') scrollToElement(card);
+                    else card.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 50);
-                
-                // جلب بيانات سجل المشتريات للإرجاع من API
-                const basePath = '<?php echo getBasePath(); ?>';
-                const returnUrl = basePath + '/api/customer_purchase_history.php?action=get_history&customer_id=' + encodeURIComponent(customerId);
-                
-                console.log('Fetching return history from:', returnUrl);
-                
-                // التحقق من وجود fetchJson
-                if (typeof fetchJson !== 'function') {
-                    console.error('fetchJson is not defined');
-                    if (loadingElement) loadingElement.classList.add('d-none');
-                    if (errorElement) {
-                        errorElement.textContent = 'خطأ في تحميل البيانات: الدالة fetchJson غير معرفة';
-                        errorElement.classList.remove('d-none');
-                    }
-                    return;
-                }
-                
-                fetchJson(returnUrl)
-                .then(data => {
-                    console.log('Return history data received:', data);
-                    
-                    if (loadingElement) loadingElement.classList.add('d-none');
-                    
-                    if (data.success) {
-                        // تحديث معلومات العميل
-                        if (data.customer) {
-                            if (customerPhoneEl) customerPhoneEl.textContent = data.customer.phone || '-';
-                            if (customerAddressEl) customerAddressEl.textContent = data.customer.address || '-';
-                        }
-                        
-                        // عرض بيانات المشتريات
-                        const purchaseHistory = data.purchase_history || [];
-                        console.log('Purchase history:', purchaseHistory);
-                        
-                        if (tableBody && typeof displayRepReturnHistory === 'function') {
-                            displayRepReturnHistory(purchaseHistory, tableBody);
-                        } else {
-                            console.error('displayRepReturnHistory is not defined or tableBody is null');
-                            if (tableBody) {
-                                tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">خطأ في عرض البيانات</td></tr>';
-                            }
-                        }
-                        
-                        if (contentElement) {
-                            contentElement.classList.remove('d-none');
-                        }
-                    } else {
-                        if (errorElement) {
-                            errorElement.textContent = data.message || 'حدث خطأ أثناء تحميل بيانات الإرجاع';
-                            errorElement.classList.remove('d-none');
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading return data:', error);
-                    if (loadingElement) loadingElement.classList.add('d-none');
-                    if (errorElement) {
-                        errorElement.textContent = error.message || 'حدث خطأ أثناء تحميل بيانات الإرجاع';
-                        errorElement.classList.remove('d-none');
-                    }
-                });
             }
         } else {
             // على الكمبيوتر: استخدام Modal

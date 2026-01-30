@@ -1668,34 +1668,14 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
         if (nameEl) nameEl.textContent = customerName;
         if (nameCardEl) nameCardEl.textContent = customerName;
         
-        // إعادة تعيين قائمة المنتجات المحددة
-        if (typeof localSelectedItemsForReturn !== 'undefined') {
-            localSelectedItemsForReturn = [];
-        }
-        
-        // تحديث قائمة المنتجات المحددة (ستكون فارغة في البداية)
-        if (typeof updateLocalReturnItemsList === 'function') {
-            updateLocalReturnItemsList();
+        // إعادة تعيين نموذج المرتجع (إدخال رقم الفاتورة)
+        if (typeof resetLocalReturnModalForm === 'function') {
+            resetLocalReturnModalForm();
         }
         
         // فتح modal المرتجع
         const modalInstance = bootstrap.Modal.getOrCreateInstance(returnModal);
         modalInstance.show();
-        
-        // تحميل بيانات المشتريات في الخلفية بعد فتح modal
-        setTimeout(function() {
-            const loadHistory = typeof loadLocalCustomerPurchaseHistory === 'function' 
-                ? loadLocalCustomerPurchaseHistory 
-                : (typeof window.loadLocalCustomerPurchaseHistory === 'function' 
-                    ? window.loadLocalCustomerPurchaseHistory 
-                    : null);
-            
-            if (loadHistory) {
-                loadHistory();
-            } else {
-                console.warn('loadLocalCustomerPurchaseHistory function not found');
-            }
-        }, 300);
         
         return;
         
@@ -2656,24 +2636,55 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                 <button type="button" class="btn-close btn-close-dark" data-bs-dismiss="modal" aria-label="إغلاق"></button>
             </div>
             <div class="modal-body p-4">
-                <!-- معلومات العميل -->
-                <div class="card bg-light mb-4 border-0">
+                <!-- خطوة 1: إدخال رقم الفاتورة -->
+                <div class="card mb-4 border-primary border-2" id="localReturnInvoiceNumberCard">
+                    <div class="card-header bg-primary bg-opacity-10">
+                        <label class="form-label fw-bold mb-0 text-primary">
+                            <i class="bi bi-receipt me-2"></i>رقم الفاتورة
+                        </label>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-8">
+                                <input type="text" class="form-control form-control-lg" id="localReturnInvoiceNumber" placeholder="أدخل رقم الفاتورة (مثال: LOC-202501-0001)" autocomplete="off">
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" class="btn btn-primary btn-lg w-100" id="localReturnLoadInvoiceBtn" onclick="loadLocalReturnInvoiceByNumber()">
+                                    <i class="bi bi-search me-1"></i>تحميل الفاتورة
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-muted small">يتم التحقق من أن الفاتورة مرتبطة بهذا العميل ثم عرض المنتجات المتاحة للإرجاع.</div>
+                        <div id="localReturnInvoiceLoadError" class="alert alert-danger mt-2 d-none" role="alert"></div>
+                        <div id="localReturnInvoiceLoading" class="text-center py-3 d-none">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <span class="ms-2">جاري التحقق من الفاتورة...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- معلومات العميل والفاتورة (يظهر بعد تحميل الفاتورة) -->
+                <div class="card bg-light mb-4 border-0 d-none" id="localReturnInvoiceInfoCard">
                     <div class="card-body py-2">
                         <div class="row align-items-center">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <small class="text-muted d-block mb-1">العميل</small>
                                 <strong id="localReturnCustomerNameCard" class="text-dark">-</strong>
                             </div>
-                            <div class="col-md-6 text-md-end">
-                                <small class="text-muted d-block mb-1">المبلغ الإجمالي</small>
+                            <div class="col-md-4">
+                                <small class="text-muted d-block mb-1">رقم الفاتورة</small>
+                                <strong id="localReturnInvoiceNumberDisplay" class="text-dark">-</strong>
+                            </div>
+                            <div class="col-md-4 text-md-end">
+                                <small class="text-muted d-block mb-1">المبلغ الإجمالي للمرتجع</small>
                                 <strong id="localReturnTotalAmountCard" class="text-danger fs-5">0.00 ج.م</strong>
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- طريقة الاسترداد -->
-                <div class="card mb-4 border-0 shadow-sm">
+                <!-- طريقة الاسترداد (يظهر بعد تحميل الفاتورة) -->
+                <div class="card mb-4 border-0 shadow-sm d-none" id="localReturnRefundMethodCard">
                     <div class="card-header bg-white border-bottom">
                         <label class="form-label fw-bold mb-0">
                             <i class="bi bi-cash-coin me-2 text-primary"></i>طريقة الاسترداد <span class="text-danger">*</span>
@@ -2712,11 +2723,11 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                     </div>
                 </div>
                 
-                <!-- المنتجات المحددة -->
-                <div class="card mb-4 border-0 shadow-sm">
+                <!-- المنتجات المحددة (يظهر بعد تحميل الفاتورة) -->
+                <div class="card mb-4 border-0 shadow-sm d-none" id="localReturnProductsCard">
                     <div class="card-header bg-white border-bottom">
                         <label class="form-label fw-bold mb-0">
-                            <i class="bi bi-box-seam me-2 text-primary"></i>المنتجات المحددة للإرجاع
+                            <i class="bi bi-box-seam me-2 text-primary"></i>المنتجات المتاحة للإرجاع - حدد الكمية لكل منتج
                         </label>
                     </div>
                     <div class="card-body p-0">
@@ -2724,28 +2735,27 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                             <table class="table table-hover mb-0">
                                 <thead class="table-light">
                                     <tr>
-                                        <th style="width: 120px;">رقم الفاتورة</th>
+                                        <th style="width: 50px;">إرجاع</th>
                                         <th>اسم المنتج</th>
-                                        <th style="width: 150px;">الكمية</th>
-                                        <th style="width: 120px;">سعر الوحدة</th>
-                                        <th style="width: 120px;">الإجمالي</th>
-                                        <th style="width: 80px;" class="text-center">إجراءات</th>
+                                        <th style="width: 120px;">المتاح للإرجاع</th>
+                                        <th style="width: 130px;">الكمية المراد إرجاعها</th>
+                                        <th style="width: 110px;">سعر الوحدة</th>
+                                        <th style="width: 110px;">الإجمالي</th>
                                     </tr>
                                 </thead>
                                 <tbody id="localReturnItemsList">
                                     <tr>
                                         <td colspan="6" class="text-center text-muted py-4">
-                                            <i class="bi bi-inbox me-2"></i>لا توجد منتجات محددة
+                                            <i class="bi bi-receipt me-2"></i>أدخل رقم الفاتورة واضغط «تحميل الفاتورة»
                                         </td>
                                     </tr>
                                 </tbody>
                                 <tfoot class="table-light">
                                     <tr>
-                                        <th colspan="4" class="text-end align-middle">
-                                            <span class="fs-6">المبلغ الإجمالي:</span>
+                                        <th colspan="5" class="text-end align-middle">
+                                            <span class="fs-6">المبلغ الإجمالي للمرتجع:</span>
                                         </th>
                                         <th class="text-danger fs-5 align-middle" id="localReturnTotalAmount">0.00 ج.م</th>
-                                        <th></th>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -2753,8 +2763,8 @@ $summaryTotalCustomers = $customerStats['total_count'] ?? $totalCustomers;
                     </div>
                 </div>
                 
-                <!-- الملاحظات -->
-                <div class="card border-0 shadow-sm">
+                <!-- الملاحظات (يظهر بعد تحميل الفاتورة) -->
+                <div class="card border-0 shadow-sm d-none" id="localReturnNotesCard">
                     <div class="card-header bg-white border-bottom">
                         <label class="form-label fw-bold mb-0" for="localReturnNotes">
                             <i class="bi bi-sticky me-2 text-primary"></i>ملاحظات (اختياري)
@@ -4337,6 +4347,7 @@ var currentLocalCustomerId = null;
 var currentLocalCustomerName = null;
 var localPurchaseHistoryData = [];
 var localSelectedItemsForReturn = [];
+var localReturnLoadedData = null; // { invoice: {}, items: [] } بعد تحميل الفاتورة برقمها
 
 // دالة طباعة كشف حساب العميل المحلي
 function printLocalCustomerStatement() {
@@ -4373,6 +4384,139 @@ function openLocalCustomerReturnModal() {
     } else {
         alert('حدث خطأ: لم يتم العثور على نافذة إرجاع المنتجات');
     }
+}
+
+// إعادة تعيين نموذج المرتجع (إدخال رقم الفاتورة)
+function resetLocalReturnModalForm() {
+    localReturnLoadedData = null;
+    const invoiceInput = document.getElementById('localReturnInvoiceNumber');
+    if (invoiceInput) invoiceInput.value = '';
+    const loadError = document.getElementById('localReturnInvoiceLoadError');
+    if (loadError) { loadError.classList.add('d-none'); loadError.textContent = ''; }
+    const loadSpinner = document.getElementById('localReturnInvoiceLoading');
+    if (loadSpinner) loadSpinner.classList.add('d-none');
+    document.getElementById('localReturnInvoiceInfoCard')?.classList.add('d-none');
+    document.getElementById('localReturnRefundMethodCard')?.classList.add('d-none');
+    document.getElementById('localReturnProductsCard')?.classList.add('d-none');
+    document.getElementById('localReturnNotesCard')?.classList.add('d-none');
+    const tbody = document.getElementById('localReturnItemsList');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-receipt me-2"></i>أدخل رقم الفاتورة واضغط «تحميل الفاتورة»</td></tr>';
+    }
+    const totalEl = document.getElementById('localReturnTotalAmount');
+    if (totalEl) totalEl.textContent = '0.00 ج.م';
+}
+
+// تحميل الفاتورة برقمها والتحقق من ارتباطها بالعميل
+function loadLocalReturnInvoiceByNumber() {
+    const customerId = currentLocalCustomerId || window.currentLocalCustomerId;
+    if (!customerId) {
+        alert('لم يتم تحديد العميل');
+        return;
+    }
+    const invoiceNumber = (document.getElementById('localReturnInvoiceNumber')?.value || '').trim();
+    if (!invoiceNumber) {
+        alert('يرجى إدخال رقم الفاتورة');
+        return;
+    }
+    const loadError = document.getElementById('localReturnInvoiceLoadError');
+    const loadSpinner = document.getElementById('localReturnInvoiceLoading');
+    const loadBtn = document.getElementById('localReturnLoadInvoiceBtn');
+    if (loadError) { loadError.classList.add('d-none'); loadError.textContent = ''; }
+    if (loadSpinner) loadSpinner.classList.remove('d-none');
+    if (loadBtn) loadBtn.disabled = true;
+    const basePath = '<?php echo getBasePath(); ?>';
+    const url = basePath + '/api/customer_purchase_history.php?action=get_invoice_by_number&customer_id=' + encodeURIComponent(customerId) + '&invoice_number=' + encodeURIComponent(invoiceNumber) + '&type=local';
+    fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function(r) {
+            if (!r.ok) throw new Error('خطأ في الطلب');
+            return r.json();
+        })
+        .then(function(data) {
+            if (loadSpinner) loadSpinner.classList.add('d-none');
+            if (loadBtn) loadBtn.disabled = false;
+            if (!data.success) {
+                if (loadError) {
+                    loadError.textContent = data.message || 'الفاتورة غير موجودة أو غير مرتبطة بهذا العميل';
+                    loadError.classList.remove('d-none');
+                }
+                return;
+            }
+            localReturnLoadedData = data;
+            document.getElementById('localReturnInvoiceInfoCard')?.classList.remove('d-none');
+            document.getElementById('localReturnRefundMethodCard')?.classList.remove('d-none');
+            document.getElementById('localReturnProductsCard')?.classList.remove('d-none');
+            document.getElementById('localReturnNotesCard')?.classList.remove('d-none');
+            document.getElementById('localReturnInvoiceNumberDisplay').textContent = data.invoice.invoice_number || invoiceNumber;
+            document.getElementById('localReturnCustomerNameCard').textContent = currentLocalCustomerName || window.currentLocalCustomerName || '-';
+            renderLocalReturnInvoiceItems();
+        })
+        .catch(function(err) {
+            if (loadSpinner) loadSpinner.classList.add('d-none');
+            if (loadBtn) loadBtn.disabled = false;
+            if (loadError) {
+                loadError.textContent = err.message || 'حدث خطأ أثناء التحقق من الفاتورة';
+                loadError.classList.remove('d-none');
+            }
+        });
+}
+
+// عرض منتجات الفاتورة المحملة مع إمكانية اختيار الكمية للإرجاع
+function renderLocalReturnInvoiceItems() {
+    const tbody = document.getElementById('localReturnItemsList');
+    if (!tbody || !localReturnLoadedData || !localReturnLoadedData.items) return;
+    const items = localReturnLoadedData.items.filter(function(it) { return it.can_return; });
+    if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">لا يوجد منتجات متاحة للإرجاع في هذه الفاتورة (قد تكون الكميات مرتجعة بالكامل)</td></tr>';
+        document.getElementById('localReturnTotalAmount').textContent = '0.00 ج.م';
+        document.getElementById('localReturnTotalAmountCard').textContent = '0.00 ج.م';
+        return;
+    }
+    tbody.innerHTML = '';
+    items.forEach(function(item, idx) {
+        const maxQty = item.available_to_return;
+        const row = document.createElement('tr');
+        row.className = 'align-middle';
+        row.innerHTML = '<td class="text-center">' +
+            '<input type="checkbox" class="form-check-input local-return-row-cb" data-invoice-item-id="' + item.invoice_item_id + '" data-idx="' + idx + '">' +
+            '</td><td><strong>' + (item.product_name || '-') + '</strong></td>' +
+            '<td class="text-center">' + maxQty.toFixed(2) + '</td>' +
+            '<td><input type="number" class="form-control form-control-sm local-return-qty text-center" data-invoice-item-id="' + item.invoice_item_id + '" data-unit-price="' + item.unit_price + '" data-max="' + maxQty + '" value="0" min="0" max="' + maxQty + '" step="0.01" style="max-width:120px"></td>' +
+            '<td class="text-end">' + item.unit_price.toFixed(2) + ' ج.م</td>' +
+            '<td class="text-end local-return-line-total">0.00 ج.م</td>';
+        tbody.appendChild(row);
+    });
+    document.getElementById('localReturnTotalAmount').textContent = '0.00 ج.م';
+    document.getElementById('localReturnTotalAmountCard').textContent = '0.00 ج.م';
+    tbody.querySelectorAll('.local-return-qty').forEach(function(input) {
+        input.addEventListener('input', localReturnRecalcTotal);
+        input.addEventListener('change', localReturnRecalcTotal);
+    });
+    tbody.querySelectorAll('.local-return-row-cb').forEach(function(cb) {
+        cb.addEventListener('change', localReturnRecalcTotal);
+    });
+}
+
+function localReturnRecalcTotal() {
+    var total = 0;
+    document.querySelectorAll('#localReturnItemsList tr').forEach(function(tr) {
+        var cb = tr.querySelector('.local-return-row-cb');
+        var qtyInput = tr.querySelector('.local-return-qty');
+        var lineTotal = tr.querySelector('.local-return-line-total');
+        if (!cb || !qtyInput || !lineTotal) return;
+        var qty = parseFloat(qtyInput.value) || 0;
+        var unitPrice = parseFloat(qtyInput.getAttribute('data-unit-price')) || 0;
+        var maxQty = parseFloat(qtyInput.getAttribute('data-max')) || 0;
+        if (qty > maxQty) { qtyInput.value = maxQty; qty = maxQty; }
+        if (qty < 0) { qtyInput.value = 0; qty = 0; }
+        var line = qty * unitPrice;
+        lineTotal.textContent = line.toFixed(2) + ' ج.م';
+        if (cb.checked && qty > 0) total += line;
+    });
+    var totalEl = document.getElementById('localReturnTotalAmount');
+    var cardEl = document.getElementById('localReturnTotalAmountCard');
+    if (totalEl) totalEl.textContent = total.toFixed(2) + ' ج.م';
+    if (cardEl) cardEl.textContent = total.toFixed(2) + ' ج.م';
 }
 
 // دالة تحديث قائمة المنتجات المحددة للإرجاع
@@ -4530,38 +4674,55 @@ function localRemoveReturnItem(index) {
 
 // دالة إرسال طلب الإرجاع
 function submitLocalCustomerReturn() {
-    if (!currentLocalCustomerId) {
-        alert('يرجى فتح سجل مشتريات عميل أولاً');
+    const customerId = currentLocalCustomerId || window.currentLocalCustomerId;
+    if (!customerId) {
+        alert('لم يتم تحديد العميل');
         return;
     }
     
-    if (localSelectedItemsForReturn.length === 0) {
-        alert('يرجى تحديد منتج واحد على الأقل للإرجاع');
+    var items = [];
+    if (localReturnLoadedData) {
+        document.querySelectorAll('#localReturnItemsList tr').forEach(function(tr) {
+            var cb = tr.querySelector('.local-return-row-cb');
+            var qtyInput = tr.querySelector('.local-return-qty');
+            if (!cb || !cb.checked || !qtyInput) return;
+            var qty = parseFloat(qtyInput.value) || 0;
+            var maxQty = parseFloat(qtyInput.getAttribute('data-max')) || 0;
+            if (qty <= 0) return;
+            if (qty > maxQty) {
+                alert('الكمية المدخلة أكبر من المتاح للإرجاع');
+                return;
+            }
+            items.push({
+                invoice_item_id: parseInt(qtyInput.getAttribute('data-invoice-item-id'), 10),
+                quantity: qty
+            });
+        });
+    } else {
+        if (localSelectedItemsForReturn.length === 0) {
+            alert('يرجى تحديد منتج واحد على الأقل للإرجاع');
+            return;
+        }
+        for (var i = 0; i < localSelectedItemsForReturn.length; i++) {
+            var item = localSelectedItemsForReturn[i];
+            var quantityInput = document.querySelector('.local-return-quantity[data-index="' + i + '"]');
+            var quantity = quantityInput ? parseFloat(quantityInput.value) : item.available_to_return;
+            if (quantity <= 0 || quantity > item.available_to_return) {
+                alert('الكمية غير صحيحة للمنتج: ' + (item.product_name || ''));
+                return;
+            }
+            items.push({ invoice_item_id: item.invoice_item_id, quantity: quantity });
+        }
+    }
+    
+    if (items.length === 0) {
+        alert('يرجى تحديد منتج واحد على الأقل وإدخال الكمية المراد إرجاعها');
         return;
     }
     
     const refundMethod = document.querySelector('input[name="localRefundMethod"]:checked')?.value || 'credit';
     const notes = document.getElementById('localReturnNotes')?.value.trim() || '';
     
-    // التحقق من الكميات
-    const items = [];
-    for (let i = 0; i < localSelectedItemsForReturn.length; i++) {
-        const item = localSelectedItemsForReturn[i];
-        const quantityInput = document.querySelector(`.local-return-quantity[data-index="${i}"]`);
-        const quantity = quantityInput ? parseFloat(quantityInput.value) : item.available_to_return;
-        
-        if (quantity <= 0 || quantity > item.available_to_return) {
-            alert(`الكمية غير صحيحة للمنتج: ${item.product_name}`);
-            return;
-        }
-        
-        items.push({
-            invoice_item_id: item.invoice_item_id,
-            quantity: quantity
-        });
-    }
-    
-    // تعطيل زر الإرسال
     const submitBtn = document.getElementById('localReturnSubmitBtn');
     if (submitBtn) {
         submitBtn.disabled = true;
@@ -4570,7 +4731,7 @@ function submitLocalCustomerReturn() {
     
     const basePath = '<?php echo getBasePath(); ?>';
     const payload = {
-        customer_id: currentLocalCustomerId,
+        customer_id: customerId,
         items: items,
         refund_method: refundMethod,
         notes: notes
@@ -4702,38 +4863,55 @@ function localRemoveReturnItem(index) {
 
 // دالة إرسال طلب الإرجاع
 function submitLocalCustomerReturn() {
-    if (!currentLocalCustomerId) {
-        alert('يرجى فتح سجل مشتريات عميل أولاً');
+    const customerId = currentLocalCustomerId || window.currentLocalCustomerId;
+    if (!customerId) {
+        alert('لم يتم تحديد العميل');
         return;
     }
     
-    if (localSelectedItemsForReturn.length === 0) {
-        alert('يرجى تحديد منتج واحد على الأقل للإرجاع');
+    var items = [];
+    if (localReturnLoadedData) {
+        document.querySelectorAll('#localReturnItemsList tr').forEach(function(tr) {
+            var cb = tr.querySelector('.local-return-row-cb');
+            var qtyInput = tr.querySelector('.local-return-qty');
+            if (!cb || !cb.checked || !qtyInput) return;
+            var qty = parseFloat(qtyInput.value) || 0;
+            var maxQty = parseFloat(qtyInput.getAttribute('data-max')) || 0;
+            if (qty <= 0) return;
+            if (qty > maxQty) {
+                alert('الكمية المدخلة أكبر من المتاح للإرجاع');
+                return;
+            }
+            items.push({
+                invoice_item_id: parseInt(qtyInput.getAttribute('data-invoice-item-id'), 10),
+                quantity: qty
+            });
+        });
+    } else {
+        if (localSelectedItemsForReturn.length === 0) {
+            alert('يرجى تحديد منتج واحد على الأقل للإرجاع');
+            return;
+        }
+        for (var i = 0; i < localSelectedItemsForReturn.length; i++) {
+            var item = localSelectedItemsForReturn[i];
+            var quantityInput = document.querySelector('.local-return-quantity[data-index="' + i + '"]');
+            var quantity = quantityInput ? parseFloat(quantityInput.value) : item.available_to_return;
+            if (quantity <= 0 || quantity > item.available_to_return) {
+                alert('الكمية غير صحيحة للمنتج: ' + (item.product_name || ''));
+                return;
+            }
+            items.push({ invoice_item_id: item.invoice_item_id, quantity: quantity });
+        }
+    }
+    
+    if (items.length === 0) {
+        alert('يرجى تحديد منتج واحد على الأقل وإدخال الكمية المراد إرجاعها');
         return;
     }
     
     const refundMethod = document.querySelector('input[name="localRefundMethod"]:checked')?.value || 'credit';
     const notes = document.getElementById('localReturnNotes')?.value.trim() || '';
     
-    // التحقق من الكميات
-    const items = [];
-    for (let i = 0; i < localSelectedItemsForReturn.length; i++) {
-        const item = localSelectedItemsForReturn[i];
-        const quantityInput = document.querySelector(`.local-return-quantity[data-index="${i}"]`);
-        const quantity = quantityInput ? parseFloat(quantityInput.value) : item.available_to_return;
-        
-        if (quantity <= 0 || quantity > item.available_to_return) {
-            alert(`الكمية غير صحيحة للمنتج: ${item.product_name}`);
-            return;
-        }
-        
-        items.push({
-            invoice_item_id: item.invoice_item_id,
-            quantity: quantity
-        });
-    }
-    
-    // تعطيل زر الإرسال
     const submitBtn = document.getElementById('localReturnSubmitBtn');
     if (submitBtn) {
         submitBtn.disabled = true;
@@ -4742,7 +4920,7 @@ function submitLocalCustomerReturn() {
     
     const basePath = '<?php echo getBasePath(); ?>';
     const payload = {
-        customer_id: currentLocalCustomerId,
+        customer_id: customerId,
         items: items,
         refund_method: refundMethod,
         notes: notes

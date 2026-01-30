@@ -155,6 +155,13 @@ try {
             }
             handleSearch($currentUser);
             break;
+
+        case 'get_invoice_by_number':
+            if ($method !== 'GET') {
+                returnJsonResponse(['success' => false, 'message' => 'يجب استخدام طلب GET'], 405);
+            }
+            handleGetInvoiceByNumber($currentUser);
+            break;
             
         default:
             returnJsonResponse(['success' => false, 'message' => 'إجراء غير مدعوم'], 400);
@@ -523,6 +530,120 @@ function formatPurchaseHistory(array $purchaseHistory, array $returnedQuantities
     }
     
     return $result;
+}
+
+/**
+ * Get invoice by number for return form - validate invoice belongs to customer and return items with available_to_return
+ */
+function handleGetInvoiceByNumber($currentUser): void
+{
+    try {
+        $customerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
+        $invoiceNumber = isset($_GET['invoice_number']) ? trim($_GET['invoice_number']) : '';
+        $customerType = isset($_GET['type']) ? trim($_GET['type']) : 'local';
+        $isLocalCustomer = ($customerType === 'local');
+
+        if ($customerId <= 0) {
+            returnJsonResponse(['success' => false, 'message' => 'معرف العميل غير صالح'], 422);
+        }
+        if ($invoiceNumber === '') {
+            returnJsonResponse(['success' => false, 'message' => 'يرجى إدخال رقم الفاتورة'], 422);
+        }
+
+        $db = db();
+
+        if ($isLocalCustomer) {
+            $invoice = $db->queryOne(
+                "SELECT id, invoice_number, date, total_amount, customer_id FROM local_invoices WHERE invoice_number = ? AND customer_id = ? LIMIT 1",
+                [$invoiceNumber, $customerId]
+            );
+            if (!$invoice) {
+                returnJsonResponse(['success' => false, 'message' => 'الفاتورة غير موجودة أو غير مرتبطة بهذا العميل'], 404);
+            }
+            $returnedQuantities = getReturnedQuantities($db, $customerId, true);
+            $hasDescription = !empty($db->queryOne("SHOW COLUMNS FROM local_invoice_items LIKE 'description'"));
+            $productSelect = "COALESCE(NULLIF(TRIM(p.name), ''), 'غير محدد') as product_name";
+            if ($hasDescription) {
+                $productSelect = "COALESCE(
+                    CASE WHEN ii.description IS NOT NULL AND TRIM(ii.description) != '' AND ii.description NOT LIKE 'منتج رقم%' THEN TRIM(ii.description) ELSE NULL END,
+                    NULLIF(TRIM(p.name), ''),
+                    'غير محدد'
+                ) as product_name";
+            }
+            $rows = $db->query(
+                "SELECT ii.id as invoice_item_id, ii.product_id, $productSelect, ii.quantity, ii.unit_price, ii.total_price
+                 FROM local_invoice_items ii
+                 LEFT JOIN products p ON ii.product_id = p.id
+                 WHERE ii.invoice_id = ?
+                 ORDER BY ii.id ASC",
+                [$invoice['id']]
+            ) ?: [];
+        } else {
+            $customer = $db->queryOne("SELECT id, created_by FROM customers WHERE id = ?", [$customerId]);
+            if (!$customer) {
+                returnJsonResponse(['success' => false, 'message' => 'العميل غير موجود'], 404);
+            }
+            if ($currentUser['role'] === 'sales') {
+                $salesRepId = (int)$currentUser['id'];
+                if ((int)($customer['created_by'] ?? 0) !== $salesRepId) {
+                    returnJsonResponse(['success' => false, 'message' => 'هذا العميل غير مرتبط بك'], 403);
+                }
+            }
+            $invoice = $db->queryOne(
+                "SELECT id, invoice_number, date, total_amount, customer_id FROM invoices WHERE invoice_number = ? AND customer_id = ? LIMIT 1",
+                [$invoiceNumber, $customerId]
+            );
+            if (!$invoice) {
+                returnJsonResponse(['success' => false, 'message' => 'الفاتورة غير موجودة أو غير مرتبطة بهذا العميل'], 404);
+            }
+            $returnedQuantities = getReturnedQuantities($db, $customerId, false);
+            $rows = $db->query(
+                "SELECT ii.id as invoice_item_id, ii.product_id,
+                 COALESCE(NULLIF(TRIM(p.name), ''), CONCAT('منتج رقم ', p.id)) as product_name,
+                 ii.quantity, ii.unit_price, ii.total_price
+                 FROM invoice_items ii
+                 LEFT JOIN products p ON ii.product_id = p.id
+                 WHERE ii.invoice_id = ?
+                 ORDER BY ii.id ASC",
+                [$invoice['id']]
+            ) ?: [];
+        }
+
+        $items = [];
+        foreach ($rows as $row) {
+            $invoiceItemId = (int)$row['invoice_item_id'];
+            $quantity = (float)$row['quantity'];
+            $returnedQuantity = $returnedQuantities[$invoiceItemId] ?? 0.0;
+            $availableToReturn = max(0, $quantity - $returnedQuantity);
+            $unitPrice = (float)($row['unit_price'] ?? 0);
+            $totalPrice = (float)($row['total_price'] ?? 0);
+            $items[] = [
+                'invoice_item_id' => $invoiceItemId,
+                'product_id' => (int)($row['product_id'] ?? 0),
+                'product_name' => $row['product_name'] ?? 'غير معروف',
+                'quantity' => $quantity,
+                'returned_quantity' => $returnedQuantity,
+                'available_to_return' => $availableToReturn,
+                'unit_price' => $unitPrice,
+                'total_price' => $totalPrice,
+                'can_return' => $availableToReturn > 0
+            ];
+        }
+
+        returnJsonResponse([
+            'success' => true,
+            'invoice' => [
+                'id' => (int)$invoice['id'],
+                'invoice_number' => $invoice['invoice_number'],
+                'date' => $invoice['date'] ?? '',
+                'total_amount' => (float)($invoice['total_amount'] ?? 0)
+            ],
+            'items' => $items
+        ]);
+    } catch (Throwable $e) {
+        error_log('handleGetInvoiceByNumber error: ' . $e->getMessage());
+        returnJsonResponse(['success' => false, 'message' => 'حدث خطأ أثناء جلب بيانات الفاتورة'], 500);
+    }
 }
 
 /**

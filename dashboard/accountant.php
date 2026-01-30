@@ -1284,11 +1284,24 @@ if ($isAjaxNavigation) {
                 </div>
 
             <?php elseif ($page === 'financial'): ?>
-                <!-- صفحة الخزنة -->
+                <?php
+                // تحميل صفحة الخزنة من وحدة خزنة الشركة لتفادي ERR_FAILED عند غياب الجداول أو أخطاء الاستعلام
+                $financialUseModule = false;
+                $companyCashPath = __DIR__ . '/../modules/manager/company_cash.php';
+                if (file_exists($companyCashPath)) {
+                    include $companyCashPath;
+                    $financialUseModule = true;
+                } else {
+                ?>
+                <!-- صفحة الخزنة (احتياطي عند غياب الوحدة) -->
                 <div class="page-header mb-4">
                     <h2><i class="bi bi-safe me-2"></i><?php echo isset($lang['menu_financial']) ? $lang['menu_financial'] : 'الخزنة'; ?></h2>
                 </div>
-
+                <div class="alert alert-warning">صفحة الخزنة غير متاحة حالياً. <a href="<?php echo htmlspecialchars(getDashboardUrl() . 'accountant.php?page=accountant_cash'); ?>">خزنة المحاسب</a>.</div>
+                <?php
+                }
+                if (!$financialUseModule):
+                ?>
                 <?php if ($financialError): ?>
                     <div class="alert alert-danger alert-dismissible fade show">
                         <i class="bi bi-exclamation-triangle-fill me-2"></i>
@@ -1317,6 +1330,7 @@ if ($isAjaxNavigation) {
                 
                 
             <?php
+            if (!$financialUseModule) {
             // حساب ملخص الخزينة من financial_transactions و accountant_transactions
             $treasurySummary = $db->queryOne("
                 SELECT
@@ -1446,6 +1460,7 @@ if ($isAjaxNavigation) {
                 'transfer' => 'primary',
                 'payment' => 'warning'
             ];
+            }
             ?>
             
             <div class="row g-3 mt-4">
@@ -2127,6 +2142,7 @@ if ($isAjaxNavigation) {
                 }
             }
             </style>
+            <?php endif; ?>
                 
             <?php elseif ($page === 'accountant_cash'): ?>
                 <!-- صفحة خزنة المحاسب - نفس صفحة خزنة الشركة (company_cash) التي تسمح بدور المحاسب -->
