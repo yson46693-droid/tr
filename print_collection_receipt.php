@@ -268,7 +268,7 @@ $notes = $transaction['notes'] ?? '';
                 if ($userRole === 'manager') {
                     $backUrl = getRelativeUrl('dashboard/manager.php?page=company_cash');
                 } elseif ($userRole === 'accountant') {
-                    $backUrl = getRelativeUrl('dashboard/accountant.php?page=financial');
+                    $backUrl = getRelativeUrl('dashboard/accountant.php?page=accountant_cash');
                 } else {
                     $backUrl = getRelativeUrl('dashboard/sales.php?page=cash_register');
                 }

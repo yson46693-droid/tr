@@ -7593,6 +7593,18 @@ body.modal-open .modal-backdrop:not(:first-of-type) {
         z-index: 1051 !important;
     }
     
+    /* على الموبايل: عند فتح الشريط، منع المحتوى الرئيسي من استقبال اللمس حتى تصل اللمسة إلى التبويبات */
+    @media (max-width: 768px) {
+        .dashboard-wrapper.sidebar-open .dashboard-main,
+        .dashboard-wrapper.sidebar-open .dashboard-main * {
+            pointer-events: none !important;
+        }
+        .dashboard-wrapper.sidebar-open .homeline-sidebar,
+        .dashboard-wrapper.sidebar-open .homeline-sidebar * {
+            pointer-events: auto !important;
+        }
+    }
+    
     /* ضمان أن body قابل للتفاعل عندما لا توجد نماذج مفتوحة ولا sidebar مفتوح */
     body:not(.modal-open):not(.sidebar-open) {
         pointer-events: auto !important;

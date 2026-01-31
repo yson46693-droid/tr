@@ -90,6 +90,16 @@
         animation: fadeIn 0.2s ease;
     }
     
+    /* عند فتح الشريط: منع المحتوى الرئيسي من استقبال اللمس حتى تصل اللمسة إلى التبويبات */
+    .dashboard-wrapper.sidebar-open .dashboard-main,
+    .dashboard-wrapper.sidebar-open .dashboard-main * {
+        pointer-events: none !important;
+    }
+    .dashboard-wrapper.sidebar-open .homeline-sidebar,
+    .dashboard-wrapper.sidebar-open .homeline-sidebar * {
+        pointer-events: auto !important;
+    }
+    
     @keyframes fadeIn {
         from { opacity: 0; }
         to { opacity: 1; }
