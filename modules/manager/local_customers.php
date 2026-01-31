@@ -8252,7 +8252,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // ===== البحث المتقدم اللحظي - نتائج فورية فور التوقف عن الكتابة =====
-    var currentRole = '<?php echo htmlspecialchars($currentRole); ?>';
+    var currentRole = <?php echo json_encode($currentRole); ?>;
     var customerSearchInput = document.getElementById('customerSearch');
     var searchForm = document.getElementById('localCustomersSearchForm');
     var tableBody = document.getElementById('customersTableBody');
@@ -8756,6 +8756,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.warn('Customer search input not found');
     }
     
+    if (customerSearchInput) {
     customerSearchInput.addEventListener('keydown', function(e) {
         // إذا كان autocomplete مفتوحاً، معالجة مفاتيح التنقل
         if (autocompleteDropdown && autocompleteDropdown.classList.contains('show')) {
@@ -8833,6 +8834,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }, 200);
     });
+    }
     
     if (filterStatus) {
         filterStatus.addEventListener('change', function() {
