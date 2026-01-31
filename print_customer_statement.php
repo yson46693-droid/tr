@@ -87,35 +87,50 @@ $facebookPageUrl = 'https://www.facebook.com/share/1AHxSmFhEp/';
 $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' . urlencode($facebookPageUrl);
 
 /**
- * جلب بيانات statement للعميل
+ * جلب بيانات statement للعميل كسجل حركات مالية موحد (من الأقدم للأحدث مع الرصيد بعد كل معاملة)
  */
 function getCustomerStatementData($customerId) {
     $db = db();
+    $movements = [];
     
-    // جلب الفواتير
+    // الفواتير: مدين = إجمالي الفاتورة
     $invoices = $db->query(
-        "SELECT 
-            id, invoice_number, date, total_amount, paid_amount, status,
-            (total_amount - paid_amount) as remaining_amount
-         FROM invoices
-         WHERE customer_id = ?
-         ORDER BY date DESC, id DESC",
+        "SELECT id, invoice_number, date, total_amount
+         FROM invoices WHERE customer_id = ?",
         [$customerId]
     ) ?: [];
+    foreach ($invoices as $inv) {
+        $movements[] = [
+            'sort_date' => $inv['date'],
+            'sort_id' => (int)$inv['id'],
+            'type' => 'invoice',
+            'date' => $inv['date'],
+            'label' => 'فاتورة ' . ($inv['invoice_number'] ?? ''),
+            'debit' => (float)($inv['total_amount'] ?? 0),
+            'credit' => 0.0,
+        ];
+    }
     
-    // جلب المرتجعات
+    // المرتجعات: دائن
     $returns = $db->query(
-        "SELECT 
-            id, return_number, return_date, refund_amount, status, invoice_id,
+        "SELECT id, return_number, return_date, refund_amount,
             (SELECT invoice_number FROM invoices WHERE id = returns.invoice_id) as invoice_number
-         FROM returns
-         WHERE customer_id = ?
-         ORDER BY return_date DESC, id DESC",
+         FROM returns WHERE customer_id = ?",
         [$customerId]
     ) ?: [];
+    foreach ($returns as $ret) {
+        $movements[] = [
+            'sort_date' => $ret['return_date'],
+            'sort_id' => (int)$ret['id'],
+            'type' => 'return',
+            'date' => $ret['return_date'],
+            'label' => 'مرتجع ' . ($ret['return_number'] ?? '') . ($ret['invoice_number'] ? ' - فاتورة ' . $ret['invoice_number'] : ''),
+            'debit' => 0.0,
+            'credit' => (float)($ret['refund_amount'] ?? 0),
+        ];
+    }
     
-    // جلب التحصيلات
-    // التحقق من وجود عمود invoice_id في جدول collections
+    // التحصيلات: دائن
     $hasInvoiceIdColumn = false;
     try {
         $invoiceIdColumnCheck = $db->queryOne("SHOW COLUMNS FROM collections LIKE 'invoice_id'");
@@ -123,136 +138,146 @@ function getCustomerStatementData($customerId) {
     } catch (Throwable $e) {
         $hasInvoiceIdColumn = false;
     }
-    
-    if ($hasInvoiceIdColumn) {
-        $collections = $db->query(
-            "SELECT 
-                id, amount, date, payment_method, notes,
-                invoice_id,
+    $collections = $db->query(
+        $hasInvoiceIdColumn
+            ? "SELECT id, amount, date, payment_method,
                 (SELECT invoice_number FROM invoices WHERE id = collections.invoice_id) as invoice_number
-             FROM collections
-             WHERE customer_id = ?
-             ORDER BY date DESC, id DESC",
-            [$customerId]
-        ) ?: [];
-    } else {
-        $collections = $db->query(
-            "SELECT 
-                id, amount, date, payment_method, notes,
-                NULL as invoice_id,
-                NULL as invoice_number
-             FROM collections
-             WHERE customer_id = ?
-             ORDER BY date DESC, id DESC",
-            [$customerId]
-        ) ?: [];
-    }
-    
-    // حساب الإجماليات
-    $totalInvoiced = 0;
-    $totalPaid = 0;
-    $totalReturns = 0;
-    $totalCollections = 0;
-    
-    foreach ($invoices as $inv) {
-        $totalInvoiced += (float)($inv['total_amount'] ?? 0);
-        $totalPaid += (float)($inv['paid_amount'] ?? 0);
-    }
-    
-    foreach ($returns as $ret) {
-        $totalReturns += (float)($ret['refund_amount'] ?? 0);
-    }
-    
+               FROM collections WHERE customer_id = ?"
+            : "SELECT id, amount, date, payment_method, NULL as invoice_number
+               FROM collections WHERE customer_id = ?",
+        [$customerId]
+    ) ?: [];
     foreach ($collections as $col) {
-        $totalCollections += (float)($col['amount'] ?? 0);
+        $movements[] = [
+            'sort_date' => $col['date'],
+            'sort_id' => (int)$col['id'],
+            'type' => 'collection',
+            'date' => $col['date'],
+            'label' => 'تحصيل #' . $col['id'] . ($col['invoice_number'] ? ' - فاتورة ' . $col['invoice_number'] : ''),
+            'debit' => 0.0,
+            'credit' => (float)($col['amount'] ?? 0),
+        ];
+    }
+    
+    // ترتيب من الأقدم للأحدث
+    usort($movements, function ($a, $b) {
+        $c = strcmp($a['sort_date'], $b['sort_date']);
+        return $c !== 0 ? $c : ($a['sort_id'] - $b['sort_id']);
+    });
+    
+    // حساب الرصيد بعد كل معاملة
+    $balance = 0.0;
+    foreach ($movements as &$m) {
+        $balance += $m['debit'] - $m['credit'];
+        $m['balance_after'] = $balance;
+    }
+    unset($m);
+    
+    $totals = ['total_debit' => 0, 'total_credit' => 0, 'net_balance' => $balance];
+    foreach ($movements as $m) {
+        $totals['total_debit'] += $m['debit'];
+        $totals['total_credit'] += $m['credit'];
     }
     
     return [
-        'invoices' => $invoices,
-        'returns' => $returns,
-        'collections' => $collections,
-        'totals' => [
-            'total_invoiced' => $totalInvoiced,
-            'total_paid' => $totalPaid,
-            'total_returns' => $totalReturns,
-            'total_collections' => $totalCollections,
-            'net_balance' => $totalInvoiced - $totalPaid - $totalReturns
-        ]
+        'movements' => $movements,
+        'totals' => $totals,
     ];
 }
 
 /**
- * جلب بيانات statement للعميل المحلي
+ * جلب بيانات statement للعميل المحلي كسجل حركات مالية موحد (من الأقدم للأحدث مع الرصيد بعد كل معاملة)
  */
 function getLocalCustomerStatementData($customerId) {
     $db = db();
+    $movements = [];
     
-    // جلب الفواتير المحلية
+    // الفواتير المحلية: مدين
     $localInvoicesTableExists = $db->queryOne("SHOW TABLES LIKE 'local_invoices'");
-    $invoices = [];
-    
     if (!empty($localInvoicesTableExists)) {
         $invoices = $db->query(
-            "SELECT 
-                id, invoice_number, date, total_amount, paid_amount, status,
-                (total_amount - paid_amount) as remaining_amount
-             FROM local_invoices
-             WHERE customer_id = ?
-             ORDER BY date DESC, id DESC",
+            "SELECT id, invoice_number, date, total_amount
+             FROM local_invoices WHERE customer_id = ?",
             [$customerId]
         ) ?: [];
+        foreach ($invoices as $inv) {
+            $movements[] = [
+                'sort_date' => $inv['date'],
+                'sort_id' => (int)$inv['id'],
+                'type' => 'invoice',
+                'date' => $inv['date'],
+                'label' => 'فاتورة ' . ($inv['invoice_number'] ?? ''),
+                'debit' => (float)($inv['total_amount'] ?? 0),
+                'credit' => 0.0,
+            ];
+        }
     }
     
-    // جلب المرتجعات (يمكن إضافة دعم للعملاء المحليين لاحقاً)
-    $returns = [];
+    // المرتجعات المحلية: دائن
+    $localReturnsTableExists = $db->queryOne("SHOW TABLES LIKE 'local_returns'");
+    if (!empty($localReturnsTableExists)) {
+        $returns = $db->query(
+            "SELECT id, return_number, return_date, refund_amount
+             FROM local_returns WHERE customer_id = ?",
+            [$customerId]
+        ) ?: [];
+        foreach ($returns as $ret) {
+            $movements[] = [
+                'sort_date' => $ret['return_date'],
+                'sort_id' => (int)$ret['id'],
+                'type' => 'return',
+                'date' => $ret['return_date'],
+                'label' => 'مرتجع ' . ($ret['return_number'] ?? ''),
+                'debit' => 0.0,
+                'credit' => (float)($ret['refund_amount'] ?? 0),
+            ];
+        }
+    }
     
-    // جلب التحصيلات المحلية
+    // التحصيلات المحلية: دائن
     $localCollectionsTableExists = $db->queryOne("SHOW TABLES LIKE 'local_collections'");
-    $collections = [];
-    
     if (!empty($localCollectionsTableExists)) {
         $collections = $db->query(
-            "SELECT 
-                id, amount, date, payment_method, notes,
-                NULL as invoice_id,
-                NULL as invoice_number
-             FROM local_collections
-             WHERE customer_id = ?
-             ORDER BY date DESC, id DESC",
+            "SELECT id, amount, date, payment_method
+             FROM local_collections WHERE customer_id = ?",
             [$customerId]
         ) ?: [];
+        foreach ($collections as $col) {
+            $movements[] = [
+                'sort_date' => $col['date'],
+                'sort_id' => (int)$col['id'],
+                'type' => 'collection',
+                'date' => $col['date'],
+                'label' => 'تحصيل #' . $col['id'],
+                'debit' => 0.0,
+                'credit' => (float)($col['amount'] ?? 0),
+            ];
+        }
     }
     
-    // حساب الإجماليات
-    $totalInvoiced = 0;
-    $totalPaid = 0;
-    $totalReturns = 0;
-    $totalCollections = 0;
+    // ترتيب من الأقدم للأحدث
+    usort($movements, function ($a, $b) {
+        $c = strcmp($a['sort_date'], $b['sort_date']);
+        return $c !== 0 ? $c : ($a['sort_id'] - $b['sort_id']);
+    });
     
-    foreach ($invoices as $inv) {
-        $totalInvoiced += (float)($inv['total_amount'] ?? 0);
-        $totalPaid += (float)($inv['paid_amount'] ?? 0);
+    // حساب الرصيد بعد كل معاملة
+    $balance = 0.0;
+    foreach ($movements as &$m) {
+        $balance += $m['debit'] - $m['credit'];
+        $m['balance_after'] = $balance;
     }
+    unset($m);
     
-    foreach ($returns as $ret) {
-        $totalReturns += (float)($ret['refund_amount'] ?? 0);
-    }
-    
-    foreach ($collections as $col) {
-        $totalCollections += (float)($col['amount'] ?? 0);
+    $totals = ['total_debit' => 0, 'total_credit' => 0, 'net_balance' => $balance];
+    foreach ($movements as $m) {
+        $totals['total_debit'] += $m['debit'];
+        $totals['total_credit'] += $m['credit'];
     }
     
     return [
-        'invoices' => $invoices,
-        'returns' => $returns,
-        'collections' => $collections,
-        'totals' => [
-            'total_invoiced' => $totalInvoiced,
-            'total_paid' => $totalPaid,
-            'total_returns' => $totalReturns,
-            'total_collections' => $totalCollections,
-            'net_balance' => $totalInvoiced - $totalPaid - $totalReturns
-        ]
+        'movements' => $movements,
+        'totals' => $totals,
     ];
 }
 ?>
@@ -548,7 +573,7 @@ function getLocalCustomerStatementData($customerId) {
                 </div>
             </div>
             <div class="statement-meta">
-                <div class="statement-title">كشف حساب العميل</div>
+                <div class="statement-title">سجل الحركات المالية للعميل</div>
                 <div class="statement-date">تاريخ الطباعة: <?php echo $statementDate; ?></div>
             </div>
         </header>
@@ -594,128 +619,39 @@ function getLocalCustomerStatementData($customerId) {
             </div>
         </div>
         
-        <!-- الفواتير -->
-        <h2 class="section-title">الفواتير</h2>
+        <!-- سجل الحركات المالية (جدول واحد مرتب من الأقدم للأحدث مع الرصيد بعد كل معاملة) -->
+        <h2 class="section-title">سجل الحركات المالية للعميل</h2>
         <table class="transactions-table">
             <thead>
                 <tr>
-                    <th>رقم الفاتورة</th>
                     <th>التاريخ</th>
-                    <th>الإجمالي</th>
-                    <th>المدفوع</th>
-                    <th>المتبقي</th>
-                    <th>الحالة</th>
+                    <th>البيان</th>
+                    <th>مدين</th>
+                    <th>دائن</th>
+                    <th>الرصيد بعد المعاملة</th>
                 </tr>
             </thead>
             <tbody>
-                <?php if (empty($statementData['invoices'])): ?>
+                <?php 
+                $movements = $statementData['movements'] ?? [];
+                if (empty($movements)): ?>
                     <tr>
-                        <td colspan="6" class="text-center text-muted">لا توجد فواتير</td>
+                        <td colspan="5" class="text-center text-muted">لا توجد حركات مالية</td>
                     </tr>
                 <?php else: ?>
-                    <?php foreach ($statementData['invoices'] as $invoice): ?>
+                    <?php foreach ($movements as $m): ?>
                         <tr>
-                            <td><?php echo htmlspecialchars($invoice['invoice_number']); ?></td>
-                            <td><?php echo formatDate($invoice['date']); ?></td>
-                            <td class="amount-positive"><?php echo formatCurrency($invoice['total_amount']); ?></td>
-                            <td><?php echo formatCurrency($invoice['paid_amount']); ?></td>
-                            <td class="amount-negative"><?php echo formatCurrency($invoice['remaining_amount']); ?></td>
-                            <td>
-                                <span class="status-badge status-<?php echo $invoice['status']; ?>">
-                                    <?php 
-                                    $statusLabels = [
-                                        'paid' => 'مدفوعة',
-                                        'partial' => 'جزئي',
-                                        'pending' => 'معلق',
-                                        'sent' => 'مرسلة',
-                                        'draft' => 'مسودة'
-                                    ];
-                                    echo $statusLabels[$invoice['status']] ?? $invoice['status'];
-                                    ?>
-                                </span>
+                            <td><?php echo formatDate($m['date']); ?></td>
+                            <td><?php echo htmlspecialchars($m['label']); ?></td>
+                            <td class="<?php echo $m['debit'] > 0 ? 'amount-positive' : ''; ?>">
+                                <?php echo $m['debit'] > 0 ? formatCurrency($m['debit']) : '-'; ?>
                             </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
-        
-        <!-- المرتجعات -->
-        <h2 class="section-title">المرتجعات</h2>
-        <table class="transactions-table">
-            <thead>
-                <tr>
-                    <th>رقم المرتجع</th>
-                    <th>رقم الفاتورة</th>
-                    <th>التاريخ</th>
-                    <th>المبلغ المرتجع</th>
-                    <th>الحالة</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (empty($statementData['returns'])): ?>
-                    <tr>
-                        <td colspan="5" class="text-center text-muted">لا توجد مرتجعات</td>
-                    </tr>
-                <?php else: ?>
-                    <?php foreach ($statementData['returns'] as $return): ?>
-                        <tr>
-                            <td><?php echo htmlspecialchars($return['return_number']); ?></td>
-                            <td><?php echo htmlspecialchars($return['invoice_number'] ?: '-'); ?></td>
-                            <td><?php echo formatDate($return['return_date']); ?></td>
-                            <td class="amount-negative"><?php echo formatCurrency($return['refund_amount']); ?></td>
-                            <td>
-                                <span class="status-badge status-<?php echo $return['status']; ?>">
-                                    <?php 
-                                    $statusLabels = [
-                                        'processed' => 'معالج',
-                                        'pending' => 'معلق',
-                                        'approved' => 'معتمد',
-                                        'rejected' => 'مرفوض'
-                                    ];
-                                    echo $statusLabels[$return['status']] ?? $return['status'];
-                                    ?>
-                                </span>
+                            <td class="<?php echo $m['credit'] > 0 ? 'amount-negative' : ''; ?>">
+                                <?php echo $m['credit'] > 0 ? formatCurrency($m['credit']) : '-'; ?>
                             </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
-        
-        <!-- التحصيلات -->
-        <h2 class="section-title">التحصيلات</h2>
-        <table class="transactions-table">
-            <thead>
-                <tr>
-                    <th>رقم التحصيل</th>
-                    <th>رقم الفاتورة</th>
-                    <th>التاريخ</th>
-                    <th>المبلغ</th>
-                    <th>طريقة الدفع</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (empty($statementData['collections'])): ?>
-                    <tr>
-                        <td colspan="5" class="text-center text-muted">لا توجد تحصيلات</td>
-                    </tr>
-                <?php else: ?>
-                    <?php foreach ($statementData['collections'] as $collection): ?>
-                        <tr>
-                            <td>#<?php echo $collection['id']; ?></td>
-                            <td><?php echo htmlspecialchars($collection['invoice_number'] ?: '-'); ?></td>
-                            <td><?php echo formatDate($collection['date']); ?></td>
-                            <td class="amount-positive"><?php echo formatCurrency($collection['amount']); ?></td>
-                            <td>
-                                <?php 
-                                $methodLabels = [
-                                    'cash' => 'نقدي',
-                                    'bank_transfer' => 'تحويل بنكي',
-                                    'check' => 'شيك'
-                                ];
-                                echo $methodLabels[$collection['payment_method']] ?? $collection['payment_method'];
-                                ?>
+                            <td class="<?php echo $m['balance_after'] >= 0 ? 'amount-positive' : 'amount-negative'; ?>">
+                                <?php echo formatCurrency($m['balance_after']); ?>
+                                <?php echo $m['balance_after'] < 0 ? ' (دائن)' : ' (مدين)'; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -727,26 +663,18 @@ function getLocalCustomerStatementData($customerId) {
         <div class="summary-section">
             <h2 class="section-title" style="margin-top: 0;">ملخص الحساب</h2>
             <div class="summary-row">
-                <span class="summary-label">إجمالي الفواتير</span>
-                <span class="summary-value amount-positive"><?php echo formatCurrency($statementData['totals']['total_invoiced']); ?></span>
+                <span class="summary-label">إجمالي المدين</span>
+                <span class="summary-value amount-positive"><?php echo formatCurrency($statementData['totals']['total_debit'] ?? 0); ?></span>
             </div>
             <div class="summary-row">
-                <span class="summary-label">إجمالي المدفوع</span>
-                <span class="summary-value amount-positive"><?php echo formatCurrency($statementData['totals']['total_paid']); ?></span>
-            </div>
-            <div class="summary-row">
-                <span class="summary-label">إجمالي المرتجعات</span>
-                <span class="summary-value amount-negative"><?php echo formatCurrency($statementData['totals']['total_returns']); ?></span>
-            </div>
-            <div class="summary-row">
-                <span class="summary-label">إجمالي التحصيلات</span>
-                <span class="summary-value amount-positive"><?php echo formatCurrency($statementData['totals']['total_collections']); ?></span>
+                <span class="summary-label">إجمالي الدائن</span>
+                <span class="summary-value amount-negative"><?php echo formatCurrency($statementData['totals']['total_credit'] ?? 0); ?></span>
             </div>
             <div class="summary-row">
                 <span class="summary-label">الرصيد الصافي</span>
-                <span class="summary-value <?php echo $statementData['totals']['net_balance'] >= 0 ? 'amount-positive' : 'amount-negative'; ?>">
-                    <?php echo formatCurrency(abs($statementData['totals']['net_balance'])); ?>
-                    <?php echo $statementData['totals']['net_balance'] < 0 ? ' (دائن)' : ' (مدين)'; ?>
+                <span class="summary-value <?php echo ($statementData['totals']['net_balance'] ?? 0) >= 0 ? 'amount-positive' : 'amount-negative'; ?>">
+                    <?php echo formatCurrency(abs($statementData['totals']['net_balance'] ?? 0)); ?>
+                    <?php echo ($statementData['totals']['net_balance'] ?? 0) < 0 ? ' (دائن)' : ' (مدين)'; ?>
                 </span>
             </div>
         </div>
