@@ -8270,7 +8270,7 @@ function closeImportLocalCustomersCard() {
         if (p.length > 0 && p[p.length - 1] === 'dashboard') p.pop();
         window._localCustomersApiBase = (p.length > 0 ? '/' + p.join('/') : '');
     })();
-    var localCustomersApiBase = window._localCustomersApiBase || '<?php echo function_exists("getBasePath") ? addslashes(rtrim(getBasePath(), "/")) : ""; ?>';
+    var localCustomersApiBase = window._localCustomersApiBase || <?php echo json_encode(function_exists('getBasePath') ? rtrim(getBasePath(), '/') : ''); ?>;
     
     var searchTimeout = null;
     var currentAbortController = null;
@@ -9015,6 +9015,7 @@ function closeImportLocalCustomersCard() {
         });
     }
     
+    })(); // End runLocalCustomersDOMInit
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', doRun);
