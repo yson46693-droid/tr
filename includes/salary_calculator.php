@@ -2466,7 +2466,7 @@ function generateMonthlySalaryReport($month, $year) {
                 'user_id' => $user['id'],
                 'user_name' => $user['full_name'] ?? $user['username'],
                 'role' => $user['role'],
-                'hourly_rate' => $salary['hourly_rate'],
+                'hourly_rate' => (float)($user['hourly_rate'] ?? 0),
                 'total_hours' => $salary['total_hours'],
                 'base_amount' => $salary['base_amount'],
                 'collections_amount' => $collectionsAmount,

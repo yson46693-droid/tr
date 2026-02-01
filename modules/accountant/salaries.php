@@ -2279,8 +2279,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == '1' && $salaryId > 0) {
             }
         }
         
-        // حساب القيم المالية بنفس طريقة بطاقة الموظف
-        $hourlyRate = cleanFinancialValue($salary['hourly_rate'] ?? $salary['current_hourly_rate'] ?? 0);
+        // حساب القيم المالية بنفس طريقة بطاقة الموظف - استخدام سعر الساعة من جدول users
+        $hourlyRate = cleanFinancialValue($salary['current_hourly_rate'] ?? 0);
         $bonus = cleanFinancialValue($salary['bonus_standardized'] ?? ($salary['bonus'] ?? $salary['bonuses'] ?? 0));
         $deductions = cleanFinancialValue($salary['deductions'] ?? 0);
         
@@ -3712,8 +3712,8 @@ $pageTitle = ($view === 'advances') ? 'السلف' : (($view === 'pending') ? '�
                         $userId = intval($salary['user_id'] ?? 0);
                         $delaySummary = calculateMonthlyDelaySummary($userId, $salaryMonthForDetails, $salaryYearForDetails);
                         
-                        // الحصول على سعر الساعة
-                        $hourlyRate = cleanFinancialValue($salary['hourly_rate'] ?? $salary['current_hourly_rate'] ?? 0);
+                        // الحصول على سعر الساعة من جدول users (مطابق لصفحة مرتبي)
+                        $hourlyRate = cleanFinancialValue($salary['current_hourly_rate'] ?? 0);
                         $userRole = $salary['role'] ?? 'production';
                         
                         // استخدام القيم من جدول salaries وإعادة حساب الراتب الإجمالي من المكونات لضمان الدقة
