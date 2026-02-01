@@ -1538,6 +1538,24 @@
     color: var(--gray-900);
 }
 
+/* ===== Customer select search (دروب داون البحث عن عميل) ===== */
+[data-theme="dark"] .customer-select-search-dropdown {
+    background-color: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .customer-select-search-input {
+    background-color: var(--bg-input);
+    border-color: var(--border-color);
+    color: var(--gray-700);
+}
+
+[data-theme="dark"] .customer-select-search-option:hover,
+[data-theme="dark"] .customer-select-search-option.bg-light {
+    background-color: var(--gray-100) !important;
+    color: var(--gray-900);
+}
+
 /* ===== Input Groups ===== */
 [data-theme="dark"] .input-group-prepend .btn,
 [data-theme="dark"] .input-group-append .btn {

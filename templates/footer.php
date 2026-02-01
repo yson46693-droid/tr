@@ -696,6 +696,9 @@ if (!defined('ACCESS_ALLOWED')) {
     <!-- Modal Mobile Fix JS - إصلاح النماذج على الهواتف المحمولة -->
     <script src="<?php echo $assetsUrl; ?>js/modal-mobile-fix.js?v=<?php echo $cacheVersion; ?>" defer></script>
     
+    <!-- البحث عن عميل في قوائم العملاء (دروب داون) -->
+    <script src="<?php echo $assetsUrl; ?>js/customer-select-search.js?v=<?php echo $cacheVersion; ?>" defer></script>
+    
     <!-- معالجة زر مسح الكل - بدون تنبيهات -->
     <script>
     // دالة مساعدة لحساب المسار الصحيح لـ API (مثل getApiPath في notifications.js)
