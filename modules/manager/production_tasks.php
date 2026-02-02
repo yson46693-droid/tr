@@ -911,6 +911,59 @@ $statusStyles = [
     'cancelled' => ['class' => 'danger', 'label' => 'ملغاة']
 ];
 
+// طلب تفاصيل الأوردر لعرضها في المودال (إيصال الأوردر)
+if (!empty($_GET['get_order_receipt']) && isset($_GET['order_id'])) {
+    $orderId = (int) $_GET['order_id'];
+    if ($orderId > 0) {
+        $orderTableCheck = $db->queryOne("SHOW TABLES LIKE 'customer_orders'");
+        if (!empty($orderTableCheck)) {
+            $order = $db->queryOne(
+                "SELECT o.*, c.name AS customer_name, c.phone AS customer_phone, c.address AS customer_address
+                 FROM customer_orders o
+                 LEFT JOIN customers c ON o.customer_id = c.id
+                 WHERE o.id = ?",
+                [$orderId]
+            );
+            if ($order) {
+                $itemsTable = 'order_items';
+                $itemsCheck = $db->queryOne("SHOW TABLES LIKE 'customer_order_items'");
+                if (!empty($itemsCheck)) {
+                    $itemsTable = 'customer_order_items';
+                }
+                $items = $db->query(
+                    "SELECT oi.*, COALESCE(oi.product_name, p.name) AS display_name FROM {$itemsTable} oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ? ORDER BY oi.id",
+                    [$orderId]
+                );
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'success' => true,
+                    'order' => [
+                        'order_number' => $order['order_number'] ?? '',
+                        'customer_name' => $order['customer_name'] ?? '-',
+                        'customer_phone' => $order['customer_phone'] ?? '',
+                        'customer_address' => $order['customer_address'] ?? '',
+                        'order_date' => $order['order_date'] ?? '',
+                        'delivery_date' => $order['delivery_date'] ?? '',
+                        'total_amount' => $order['total_amount'] ?? 0,
+                        'notes' => $order['notes'] ?? '',
+                    ],
+                    'items' => array_map(function ($row) {
+                        return [
+                            'product_name' => $row['display_name'] ?? $row['product_name'] ?? '-',
+                            'quantity' => $row['quantity'] ?? 0,
+                            'unit' => $row['unit'] ?? 'قطعة',
+                        ];
+                    }, $items),
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+        }
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['success' => false, 'message' => 'الطلب غير موجود']);
+    exit;
+}
+
 // Pagination لجدول آخر المهام
 $tasksPageNum = isset($_GET['p']) ? max(1, (int)$_GET['p']) : 1;
 $tasksPerPage = 15;
@@ -963,7 +1016,8 @@ try {
             $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
             $recentTasks = $db->query("
                 SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
-                       t.quantity, t.unit, t.customer_name, t.notes, t.product_id, u.full_name AS assigned_name, t.assigned_to,
+                       t.quantity, t.unit, t.customer_name, t.notes, t.product_id, t.related_type, t.related_id,
+                       u.full_name AS assigned_name, t.assigned_to,
                        uCreator.full_name AS creator_name, t.created_by
                 FROM tasks t
                 LEFT JOIN users u ON t.assigned_to = u.id
@@ -980,7 +1034,8 @@ try {
         // للمستخدمين الآخرين، عرض المهام التي أنشأوها فقط
         $recentTasks = $db->query("
             SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
-                   t.quantity, t.unit, t.customer_name, t.notes, t.product_id, u.full_name AS assigned_name, t.assigned_to
+                   t.quantity, t.unit, t.customer_name, t.notes, t.product_id, t.related_type, t.related_id,
+                   u.full_name AS assigned_name, t.assigned_to
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to = u.id
             WHERE t.created_by = ?
@@ -1353,6 +1408,7 @@ try {
                     <thead class="table-light">
                         <tr>
                             <th>رقم الطلب</th>
+                            <th>اسم العميل</th>
                             <th>الاوردر</th>
                             <th>الحاله</th>
                             <th>تاريخ التسليم</th>
@@ -1362,12 +1418,16 @@ try {
                     <tbody>
                         <?php if (empty($recentTasks)): ?>
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-4">لم يتم إنشاء مهام بعد.</td>
+                                <td colspan="6" class="text-center text-muted py-4">لم يتم إنشاء مهام بعد.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($recentTasks as $index => $task): ?>
                                 <tr>
                                     <td><strong>#<?php echo (int)$task['id']; ?></strong></td>
+                                    <td><?php 
+                                        $custName = isset($task['customer_name']) ? trim((string)$task['customer_name']) : '';
+                                        echo $custName !== '' ? htmlspecialchars($custName, ENT_QUOTES, 'UTF-8') : '<span class="text-muted">-</span>';
+                                    ?></td>
                                     <td>                                        <?php 
                                         // عرض منشئ المهمة إذا كان المحاسب أو المدير
                                         if (isset($task['creator_name']) && ($isAccountant || $isManager)) {
@@ -1394,6 +1454,15 @@ try {
                                             $unit = !empty($task['unit']) ? $task['unit'] : 'قطعة';
                                             ?>
                                             <div class="text-muted small">الكمية: <?php echo number_format((float)$task['quantity'], 2) . ' ' . htmlspecialchars($unit); ?></div>
+                                        <?php endif; ?>
+                                        <?php
+                                        $hasOrder = !empty($task['related_type']) && (string)$task['related_type'] === 'customer_order' && !empty($task['related_id']);
+                                        $orderIdForBtn = $hasOrder ? (int)$task['related_id'] : 0;
+                                        if ($orderIdForBtn > 0):
+                                        ?>
+                                            <button type="button" class="btn btn-outline-primary btn-sm mt-1" onclick="openOrderReceiptModal(<?php echo $orderIdForBtn; ?>)" title="عرض تفاصيل الأوردر">
+                                                <i class="bi bi-receipt me-1"></i>عرض الأوردر
+                                            </button>
                                         <?php endif; ?>
                                     </td>
                                     <td>
@@ -1582,7 +1651,81 @@ try {
     </div>
 </div>
 
+<!-- مودال إيصال الأوردر -->
+<div class="modal fade" id="orderReceiptModal" tabindex="-1" aria-labelledby="orderReceiptModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-light border-bottom">
+                <h5 class="modal-title" id="orderReceiptModalLabel"><i class="bi bi-receipt me-2"></i>إيصال الأوردر</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+            </div>
+            <div class="modal-body p-4" id="orderReceiptContent">
+                <div class="text-center py-4 text-muted" id="orderReceiptLoading">
+                    <div class="spinner-border" role="status"></div>
+                    <p class="mt-2 mb-0">جاري تحميل تفاصيل الأوردر...</p>
+                </div>
+                <div id="orderReceiptBody" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+window.openOrderReceiptModal = function(orderId) {
+    var modalEl = document.getElementById('orderReceiptModal');
+    var loadingEl = document.getElementById('orderReceiptLoading');
+    var bodyEl = document.getElementById('orderReceiptBody');
+    if (!modalEl || !loadingEl || !bodyEl) return;
+    loadingEl.style.display = 'block';
+    bodyEl.style.display = 'none';
+    bodyEl.innerHTML = '';
+    var modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modalInstance.show();
+    var params = new URLSearchParams(window.location.search);
+    params.set('get_order_receipt', '1');
+    params.set('order_id', String(orderId));
+    fetch('?' + params.toString())
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            loadingEl.style.display = 'none';
+            if (data.success && data.order) {
+                var o = data.order;
+                var items = data.items || [];
+                var total = typeof o.total_amount === 'number' ? o.total_amount : parseFloat(o.total_amount) || 0;
+                var rows = items.map(function(it) {
+                    var qty = typeof it.quantity === 'number' ? it.quantity : parseFloat(it.quantity) || 0;
+                    var un = (it.unit || 'قطعة').trim();
+                    return '<tr><td>' + (it.product_name || '-') + '</td><td class="text-end">' + qty + ' ' + un + '</td></tr>';
+                }).join('');
+                bodyEl.innerHTML =
+                    '<div class="border rounded p-3 mb-3 bg-light"><h6 class="mb-2">بيانات الطلب</h6>' +
+                    '<p class="mb-1"><strong>رقم الأوردر:</strong> ' + (o.order_number || '-') + '</p>' +
+                    '<p class="mb-1"><strong>العميل:</strong> ' + (o.customer_name || '-') + '</p>' +
+                    (o.customer_phone ? '<p class="mb-1"><strong>الهاتف:</strong> ' + o.customer_phone + '</p>' : '') +
+                    (o.customer_address ? '<p class="mb-1"><strong>العنوان:</strong> ' + o.customer_address + '</p>' : '') +
+                    '<p class="mb-1"><strong>تاريخ الطلب:</strong> ' + (o.order_date || '-') + '</p>' +
+                    (o.delivery_date ? '<p class="mb-1"><strong>تاريخ التسليم:</strong> ' + o.delivery_date + '</p>' : '') +
+                    '</div>' +
+                    '<h6 class="mb-2">تفاصيل المنتجات</h6>' +
+                    '<table class="table table-sm table-bordered"><thead><tr><th>المنتج</th><th class="text-end">الكمية</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+                    '<p class="mb-0 mt-2"><strong>الإجمالي:</strong> ' + total.toFixed(2) + ' ر.س</p>' +
+                    (o.notes ? '<p class="mt-2 text-muted small mb-0"><strong>ملاحظات:</strong> ' + o.notes + '</p>' : '');
+                bodyEl.style.display = 'block';
+            } else {
+                bodyEl.innerHTML = '<p class="text-muted mb-0">الطلب غير موجود أو لا يمكن تحميل التفاصيل.</p>';
+                bodyEl.style.display = 'block';
+            }
+        })
+        .catch(function() {
+            loadingEl.style.display = 'none';
+            bodyEl.innerHTML = '<p class="text-danger mb-0">حدث خطأ أثناء تحميل تفاصيل الأوردر.</p>';
+            bodyEl.style.display = 'block';
+        });
+};
+
 document.addEventListener('DOMContentLoaded', function () {
     const taskTypeSelect = document.getElementById('taskTypeSelect');
     const titleInput = document.querySelector('input[name="title"]');
