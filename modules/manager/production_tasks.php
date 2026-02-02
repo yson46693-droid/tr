@@ -911,63 +911,54 @@ $statusStyles = [
     'cancelled' => ['class' => 'danger', 'label' => 'ملغاة']
 ];
 
-// Pagination وفلتر الرصيد لجدول آخر المهام
+// Pagination لجدول آخر المهام
 $tasksPageNum = isset($_GET['p']) ? max(1, (int)$_GET['p']) : 1;
 $tasksPerPage = 15;
-$tasksBalanceFrom = isset($_GET['balance_from']) && $_GET['balance_from'] !== '' ? (float)$_GET['balance_from'] : null;
-$tasksBalanceTo = isset($_GET['balance_to']) && $_GET['balance_to'] !== '' ? (float)$_GET['balance_to'] : null;
-$tasksSortBalance = $_GET['sort_balance'] ?? '';
-if (!in_array($tasksSortBalance, ['asc', 'desc'], true)) {
-    $tasksSortBalance = '';
-}
 $totalRecentTasks = 0;
 $totalRecentPages = 1;
-$customerOrdersExistsTasks = !empty($db->queryOne("SHOW TABLES LIKE 'customer_orders'"));
-$tasksBalanceJoin = $customerOrdersExistsTasks ? " LEFT JOIN customer_orders co ON t.related_type = 'customer_order' AND t.related_id = co.id LEFT JOIN customers cust ON co.customer_id = cust.id" : '';
 
 try {
-    $adminUsers = ($isAccountant || $isManager) ? $db->query("SELECT id FROM users WHERE role IN ('manager', 'accountant') AND status = 'active'") : [];
-    $adminIds = !empty($adminUsers) ? array_map(function($u) { return (int)$u['id']; }, $adminUsers) : [];
-    $baseWhere = $isAccountant || $isManager ? "t.created_by IN (" . (!empty($adminIds) ? implode(',', array_fill(0, count($adminIds), '?')) : '0') . ") AND t.status != 'cancelled'" : "t.created_by = ? AND t.status != 'cancelled'";
-    $baseParams = ($isAccountant || $isManager) ? $adminIds : [$currentUser['id']];
-    $balanceWhere = '';
-    $balanceParams = [];
-    if (($tasksBalanceFrom !== null || $tasksBalanceTo !== null) && $customerOrdersExistsTasks) {
-        if ($tasksBalanceFrom !== null) {
-            $balanceWhere .= ' AND COALESCE(cust.balance, 0) >= ?';
-            $balanceParams[] = $tasksBalanceFrom;
-        }
-        if ($tasksBalanceTo !== null) {
-            $balanceWhere .= ' AND COALESCE(cust.balance, 0) <= ?';
-            $balanceParams[] = $tasksBalanceTo;
-        }
-    }
-    $countWhere = $baseWhere . $balanceWhere;
-    $countJoin = (($tasksBalanceFrom !== null || $tasksBalanceTo !== null) && $customerOrdersExistsTasks) ? $tasksBalanceJoin : '';
-    $countParams = array_merge($baseParams, $balanceParams);
-
+    // جلب عدد المهام الإجمالي (للتقسيم)
     if ($isAccountant || $isManager) {
+        $adminUsers = $db->query("
+            SELECT id FROM users 
+            WHERE role IN ('manager', 'accountant') AND status = 'active'
+        ");
+        $adminIds = array_map(function($user) {
+            return (int)$user['id'];
+        }, $adminUsers);
+        
         if (!empty($adminIds)) {
-            $totalRow = $db->queryOne("SELECT COUNT(*) AS total FROM tasks t " . $countJoin . " WHERE " . $countWhere, $countParams);
+            $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
+            $totalRow = $db->queryOne("
+                SELECT COUNT(*) AS total FROM tasks t
+                WHERE t.created_by IN ($placeholders) AND t.status != 'cancelled'
+            ", $adminIds);
             $totalRecentTasks = isset($totalRow['total']) ? (int)$totalRow['total'] : 0;
         }
     } else {
-        $totalRow = $db->queryOne("SELECT COUNT(*) AS total FROM tasks t " . $countJoin . " WHERE " . $countWhere, $countParams);
+        $totalRow = $db->queryOne("
+            SELECT COUNT(*) AS total FROM tasks t
+            WHERE t.created_by = ? AND t.status != 'cancelled'
+        ", [$currentUser['id']]);
         $totalRecentTasks = isset($totalRow['total']) ? (int)$totalRow['total'] : 0;
     }
-
+    
     $totalRecentPages = max(1, (int)ceil($totalRecentTasks / $tasksPerPage));
     $tasksPageNum = min($tasksPageNum, $totalRecentPages);
     $tasksOffset = ($tasksPageNum - 1) * $tasksPerPage;
 
-    $orderBy = 't.created_at DESC, t.id DESC';
-    if ($customerOrdersExistsTasks && $tasksSortBalance === 'asc') {
-        $orderBy = 'COALESCE(cust.balance, 0) ASC, t.created_at DESC, t.id DESC';
-    } elseif ($customerOrdersExistsTasks && $tasksSortBalance === 'desc') {
-        $orderBy = 'COALESCE(cust.balance, 0) DESC, t.created_at DESC, t.id DESC';
-    }
-
+    // جلب المهام المحدثة مع التقسيم - المحاسب والمدير يرون جميع المهام التي أنشأها أي منهما
     if ($isAccountant || $isManager) {
+        // جلب معرفات جميع المديرين والمحاسبين
+        $adminUsers = $db->query("
+            SELECT id FROM users 
+            WHERE role IN ('manager', 'accountant') AND status = 'active'
+        ");
+        $adminIds = array_map(function($user) {
+            return (int)$user['id'];
+        }, $adminUsers);
+        
         if (!empty($adminIds)) {
             $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
             $recentTasks = $db->query("
@@ -977,25 +968,26 @@ try {
                 FROM tasks t
                 LEFT JOIN users u ON t.assigned_to = u.id
                 LEFT JOIN users uCreator ON t.created_by = uCreator.id
-                " . $tasksBalanceJoin . "
-                WHERE t.created_by IN ($placeholders) AND t.status != 'cancelled' " . $balanceWhere . "
-                ORDER BY $orderBy
+                WHERE t.created_by IN ($placeholders)
+                AND t.status != 'cancelled'
+                ORDER BY t.created_at DESC, t.id DESC
                 LIMIT ? OFFSET ?
-            ", array_merge($adminIds, $balanceParams, [$tasksPerPage, $tasksOffset]));
+            ", array_merge($adminIds, [$tasksPerPage, $tasksOffset]));
         } else {
             $recentTasks = [];
         }
     } else {
+        // للمستخدمين الآخرين، عرض المهام التي أنشأوها فقط
         $recentTasks = $db->query("
             SELECT t.id, t.title, t.status, t.priority, t.due_date, t.created_at,
                    t.quantity, t.unit, t.customer_name, t.notes, t.product_id, u.full_name AS assigned_name, t.assigned_to
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to = u.id
-            " . $tasksBalanceJoin . "
-            WHERE t.created_by = ? AND t.status != 'cancelled' " . $balanceWhere . "
-            ORDER BY $orderBy
+            WHERE t.created_by = ?
+            AND t.status != 'cancelled'
+            ORDER BY t.created_at DESC, t.id DESC
             LIMIT ? OFFSET ?
-        ", array_merge([$currentUser['id']], $balanceParams, [$tasksPerPage, $tasksOffset]));
+        ", [$currentUser['id'], $tasksPerPage, $tasksOffset]);
     }
     
     // استخراج جميع العمال من notes لكل مهمة واستخراج اسم المنتج
@@ -1355,35 +1347,6 @@ try {
             <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>آخر المهام التي تم إرسالها</h5>
             <span class="text-muted small"><?php echo $totalRecentTasks; ?> <?php echo $totalRecentTasks === 1 ? 'مهمة' : 'مهام'; ?> · صفحة <?php echo $tasksPageNum; ?> من <?php echo $totalRecentPages; ?></span>
         </div>
-        <div class="card-body border-bottom">
-            <form method="GET" action="" class="row g-2 align-items-end">
-                <input type="hidden" name="page" value="production_tasks">
-                <div class="col-auto">
-                    <label class="form-label small mb-0">رصيد العميل من</label>
-                    <input type="number" step="any" class="form-control form-control-sm" name="balance_from" placeholder="من" value="<?php echo $tasksBalanceFrom !== null ? htmlspecialchars((string)$tasksBalanceFrom) : ''; ?>">
-                </div>
-                <div class="col-auto">
-                    <label class="form-label small mb-0">إلى</label>
-                    <input type="number" step="any" class="form-control form-control-sm" name="balance_to" placeholder="إلى" value="<?php echo $tasksBalanceTo !== null ? htmlspecialchars((string)$tasksBalanceTo) : ''; ?>">
-                </div>
-                <div class="col-auto">
-                    <label class="form-label small mb-0">ترتيب حسب الرصيد المدين</label>
-                    <select class="form-select form-select-sm" name="sort_balance">
-                        <option value="" <?php echo $tasksSortBalance === '' ? 'selected' : ''; ?>>ترتيب عادي</option>
-                        <option value="asc" <?php echo $tasksSortBalance === 'asc' ? 'selected' : ''; ?>>تصاعدي</option>
-                        <option value="desc" <?php echo $tasksSortBalance === 'desc' ? 'selected' : ''; ?>>تنازلي</option>
-                    </select>
-                </div>
-                <div class="col-auto">
-                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>تطبيق</button>
-                </div>
-                <?php if ($tasksBalanceFrom !== null || $tasksBalanceTo !== null || $tasksSortBalance !== ''): ?>
-                <div class="col-auto">
-                    <a href="?page=production_tasks" class="btn btn-outline-secondary btn-sm">مسح الفلتر</a>
-                </div>
-                <?php endif; ?>
-            </form>
-        </div>
         <div class="card-body p-0">
             <div class="table-responsive dashboard-table-wrapper">
                 <table class="table dashboard-table dashboard-table--no-hover align-middle mb-0">
@@ -1488,16 +1451,10 @@ try {
                 </table>
             </div>
             <?php if ($totalRecentPages > 1): ?>
-                <?php
-                $tasksFilterQs = 'page=production_tasks';
-                if ($tasksBalanceFrom !== null) $tasksFilterQs .= '&balance_from=' . urlencode((string)$tasksBalanceFrom);
-                if ($tasksBalanceTo !== null) $tasksFilterQs .= '&balance_to=' . urlencode((string)$tasksBalanceTo);
-                if ($tasksSortBalance !== '') $tasksFilterQs .= '&sort_balance=' . urlencode($tasksSortBalance);
-                ?>
                 <nav aria-label="تنقل صفحات المهام" class="p-3 pt-0">
                     <ul class="pagination justify-content-center mb-0">
                         <li class="page-item <?php echo $tasksPageNum <= 1 ? 'disabled' : ''; ?>">
-                            <a class="page-link" href="?<?php echo $tasksFilterQs; ?>&p=<?php echo max(1, $tasksPageNum - 1); ?>" aria-label="السابق">
+                            <a class="page-link" href="?page=production_tasks&p=<?php echo max(1, $tasksPageNum - 1); ?>" aria-label="السابق">
                                 <i class="bi bi-chevron-right"></i>
                             </a>
                         </li>
@@ -1505,24 +1462,24 @@ try {
                         $startPage = max(1, $tasksPageNum - 2);
                         $endPage = min($totalRecentPages, $tasksPageNum + 2);
                         if ($startPage > 1): ?>
-                            <li class="page-item"><a class="page-link" href="?<?php echo $tasksFilterQs; ?>&p=1">1</a></li>
+                            <li class="page-item"><a class="page-link" href="?page=production_tasks&p=1">1</a></li>
                             <?php if ($startPage > 2): ?>
                                 <li class="page-item disabled"><span class="page-link">...</span></li>
                             <?php endif; ?>
                         <?php endif; ?>
                         <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
                             <li class="page-item <?php echo $i == $tasksPageNum ? 'active' : ''; ?>">
-                                <a class="page-link" href="?<?php echo $tasksFilterQs; ?>&p=<?php echo $i; ?>"><?php echo $i; ?></a>
+                                <a class="page-link" href="?page=production_tasks&p=<?php echo $i; ?>"><?php echo $i; ?></a>
                             </li>
                         <?php endfor; ?>
                         <?php if ($endPage < $totalRecentPages): ?>
                             <?php if ($endPage < $totalRecentPages - 1): ?>
                                 <li class="page-item disabled"><span class="page-link">...</span></li>
                             <?php endif; ?>
-                            <li class="page-item"><a class="page-link" href="?<?php echo $tasksFilterQs; ?>&p=<?php echo $totalRecentPages; ?>"><?php echo $totalRecentPages; ?></a></li>
+                            <li class="page-item"><a class="page-link" href="?page=production_tasks&p=<?php echo $totalRecentPages; ?>"><?php echo $totalRecentPages; ?></a></li>
                         <?php endif; ?>
                         <li class="page-item <?php echo $tasksPageNum >= $totalRecentPages ? 'disabled' : ''; ?>">
-                            <a class="page-link" href="?<?php echo $tasksFilterQs; ?>&p=<?php echo min($totalRecentPages, $tasksPageNum + 1); ?>" aria-label="التالي">
+                            <a class="page-link" href="?page=production_tasks&p=<?php echo min($totalRecentPages, $tasksPageNum + 1); ?>" aria-label="التالي">
                                 <i class="bi bi-chevron-left"></i>
                             </a>
                         </li>
