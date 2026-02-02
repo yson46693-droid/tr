@@ -169,6 +169,8 @@ try {
         'received' => 0,
         'in_progress' => 0,
         'completed' => 0,
+        'delivered' => 0,
+        'returned' => 0,
         'cancelled' => 0
     ];
     

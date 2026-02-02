@@ -686,7 +686,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
 
                 $taskId = isset($input['task_id']) ? (int) $input['task_id'] : 0;
                 $status = $input['status'] ?? 'pending';
-                $validStatuses = ['pending', 'received', 'in_progress', 'completed', 'cancelled'];
+                $validStatuses = ['pending', 'received', 'in_progress', 'completed', 'delivered', 'returned', 'cancelled'];
 
                 if ($taskId <= 0 || !in_array($status, $validStatuses, true)) {
                     throw new RuntimeException('بيانات غير صحيحة لتحديث المهمة');
@@ -695,7 +695,7 @@ function tasksHandleAction(string $action, array $input, array $context): array
                 $setParts = ['status = ?'];
                 $values = [$status];
 
-                $setParts[] = $status === 'completed' ? 'completed_at = NOW()' : 'completed_at = NULL';
+                $setParts[] = in_array($status, ['completed', 'delivered', 'returned'], true) ? 'completed_at = NOW()' : 'completed_at = NULL';
                 $setParts[] = $status === 'received' ? 'received_at = NOW()' : 'received_at = NULL';
                 $setParts[] = $status === 'in_progress' ? 'started_at = NOW()' : 'started_at = NULL';
 
@@ -1214,7 +1214,9 @@ $stats = [
     'received' => $buildStatsQuery("status = 'received'"),
     'in_progress' => $buildStatsQuery("status = 'in_progress'"),
     'completed' => $buildStatsQuery("status = 'completed'"),
-    'overdue' => $buildStatsQuery("status != 'completed' AND due_date < CURDATE()")
+    'delivered' => $buildStatsQuery("status = 'delivered'"),
+    'returned' => $buildStatsQuery("status = 'returned'"),
+    'overdue' => $buildStatsQuery("status NOT IN ('completed','delivered','returned') AND due_date < CURDATE()")
 ];
 
 $tasksJson = tasksSafeJsonEncode($tasks);
@@ -1291,6 +1293,22 @@ function tasksHtml(string $value): string
             </div>
         </div>
         <div class="col-6 col-md-2">
+            <div class="card border-success text-center h-100">
+                <div class="card-body p-2">
+                    <h5 class="text-success mb-0"><?php echo $stats['delivered']; ?></h5>
+                    <small class="text-muted">تم التوصيل</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card border-secondary text-center h-100">
+                <div class="card-body p-2">
+                    <h5 class="text-secondary mb-0"><?php echo $stats['returned']; ?></h5>
+                    <small class="text-muted">تم الارجاع</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
             <div class="card border-danger text-center h-100">
                 <div class="card-body p-2">
                     <h5 class="text-danger mb-0"><?php echo $stats['overdue']; ?></h5>
@@ -1316,6 +1334,8 @@ function tasksHtml(string $value): string
                         <option value="received" <?php echo $statusFilter === 'received' ? 'selected' : ''; ?>>مستلمة</option>
                         <option value="in_progress" <?php echo $statusFilter === 'in_progress' ? 'selected' : ''; ?>>قيد التنفيذ</option>
                         <option value="completed" <?php echo $statusFilter === 'completed' ? 'selected' : ''; ?>>مكتملة</option>
+                        <option value="delivered" <?php echo $statusFilter === 'delivered' ? 'selected' : ''; ?>>تم التوصيل</option>
+                        <option value="returned" <?php echo $statusFilter === 'returned' ? 'selected' : ''; ?>>تم الارجاع</option>
                         <option value="cancelled" <?php echo $statusFilter === 'cancelled' ? 'selected' : ''; ?>>ملغاة</option>
                     </select>
                 </div>
@@ -1412,7 +1432,7 @@ function tasksHtml(string $value): string
                                     'low' => 'منخفضة'
                                 ][$task['priority']] ?? tasksSafeString($task['priority']);
 
-                                $overdue = !in_array($task['status'], ['completed', 'cancelled'], true)
+                                $overdue = !in_array($task['status'], ['completed', 'delivered', 'returned', 'cancelled'], true)
                                     && !empty($task['due_date'])
                                     && strtotime((string) $task['due_date']) < time();
                                 ?>
@@ -2095,6 +2115,8 @@ function tasksHtml(string $value): string
             'received': 'مستلمة',
             'in_progress': 'قيد التنفيذ',
             'completed': 'مكتملة',
+            'delivered': 'تم التوصيل',
+            'returned': 'تم الارجاع',
             'cancelled': 'ملغاة'
         };
 
@@ -2117,6 +2139,8 @@ function tasksHtml(string $value): string
             : task.status === 'received' ? 'info'
             : task.status === 'in_progress' ? 'primary'
             : task.status === 'completed' ? 'success'
+            : task.status === 'delivered' ? 'success'
+            : task.status === 'returned' ? 'secondary'
             : 'secondary';
 
         const content = `

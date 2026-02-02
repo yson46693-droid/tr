@@ -169,7 +169,7 @@ try {
               `assigned_to` int(11) DEFAULT NULL,
               `created_by` int(11) NOT NULL,
               `priority` enum('low','normal','high','urgent') DEFAULT 'normal',
-              `status` enum('pending','received','in_progress','completed','cancelled') DEFAULT 'pending',
+              `status` enum('pending','received','in_progress','completed','delivered','returned','cancelled') DEFAULT 'pending',
               `due_date` date DEFAULT NULL,
               `completed_at` timestamp NULL DEFAULT NULL,
               `received_at` timestamp NULL DEFAULT NULL,
@@ -697,7 +697,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($taskId <= 0) {
             $error = 'معرف المهمة غير صحيح.';
-        } elseif (!in_array($newStatus, ['pending', 'in_progress', 'completed', 'cancelled'], true)) {
+        } elseif (!in_array($newStatus, ['pending', 'received', 'in_progress', 'completed', 'delivered', 'returned', 'cancelled'], true)) {
             $error = 'حالة المهمة غير صحيحة.';
         } else {
             try {
@@ -726,10 +726,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $updateValues = [$newStatus];
                 
                 // إضافة timestamps حسب الحالة
-                if ($newStatus === 'completed') {
+                if (in_array($newStatus, ['completed', 'delivered', 'returned'], true)) {
                     $updateFields[] = 'completed_at = NOW()';
                 } elseif ($newStatus === 'in_progress') {
                     $updateFields[] = 'started_at = NOW()';
+                } elseif ($newStatus === 'received') {
+                    $updateFields[] = 'received_at = NOW()';
                 }
                 
                 $updateFields[] = 'updated_at = NOW()';
@@ -846,6 +848,8 @@ $statsTemplate = [
     'received' => 0,
     'in_progress' => 0,
     'completed' => 0,
+    'delivered' => 0,
+    'returned' => 0,
     'cancelled' => 0
 ];
 
@@ -902,6 +906,8 @@ $statusStyles = [
     'received' => ['class' => 'info', 'label' => 'مستلمة'],
     'in_progress' => ['class' => 'primary', 'label' => 'قيد التنفيذ'],
     'completed' => ['class' => 'success', 'label' => 'مكتملة'],
+    'delivered' => ['class' => 'success', 'label' => 'تم التوصيل'],
+    'returned' => ['class' => 'secondary', 'label' => 'تم الارجاع'],
     'cancelled' => ['class' => 'danger', 'label' => 'ملغاة']
 ];
 
@@ -1167,6 +1173,22 @@ try {
             </div>
         </div>
         <div class="col-4 col-sm-4 col-md-2">
+            <div class="card border-success h-100">
+                <div class="card-body text-center py-2 px-2">
+                    <div class="text-muted small mb-1">تم التوصيل</div>
+                    <div class="fs-5 text-success fw-semibold"><?php echo $stats['delivered']; ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-4 col-sm-4 col-md-2">
+            <div class="card border-secondary h-100">
+                <div class="card-body text-center py-2 px-2">
+                    <div class="text-muted small mb-1">تم الارجاع</div>
+                    <div class="fs-5 text-secondary fw-semibold"><?php echo $stats['returned']; ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-4 col-sm-4 col-md-2">
             <div class="card border-danger h-100">
                 <div class="card-body text-center py-2 px-2">
                     <div class="text-muted small mb-1">ملغاة</div>
@@ -1373,7 +1395,7 @@ try {
                                                     <i class="bi bi-gear"></i>
                                                 </button>
                                             <?php endif; ?>
-                                            <?php if ($task['status'] === 'completed'): ?>
+                                            <?php if (in_array($task['status'] ?? '', ['completed', 'delivered', 'returned'], true)): ?>
                                                 <span class="text-muted small">—</span>
                                             <?php else: ?>
                                                 <form method="post" class="d-inline" onsubmit="return confirm('هل أنت متأكد من حذف هذه المهمة؟ سيتم حذفها نهائياً ولن تظهر في الجدول.');">
@@ -1423,6 +1445,8 @@ try {
                             <option value="pending">معلقة</option>
                             <option value="in_progress">قيد التنفيذ</option>
                             <option value="completed">مكتملة</option>
+                            <option value="delivered">تم التوصيل</option>
+                            <option value="returned">تم الارجاع</option>
                             <option value="cancelled">ملغاة</option>
                         </select>
                         <div class="form-text">سيتم تحديث حالة الطلب فوراً بعد الحفظ.</div>
@@ -1466,6 +1490,8 @@ try {
                             <option value="pending">معلقة</option>
                             <option value="in_progress">قيد التنفيذ</option>
                             <option value="completed">مكتملة</option>
+                            <option value="delivered">تم التوصيل</option>
+                            <option value="returned">تم الارجاع</option>
                             <option value="cancelled">ملغاة</option>
                         </select>
                         <div class="form-text">سيتم تحديث حالة الطلب فوراً بعد الحفظ.</div>
@@ -1756,6 +1782,8 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
                                     <option value="pending">معلقة</option>
                                     <option value="in_progress">قيد التنفيذ</option>
                                     <option value="completed">مكتملة</option>
+                                    <option value="delivered">تم التوصيل</option>
+                                    <option value="returned">تم الارجاع</option>
                                     <option value="cancelled">ملغاة</option>
                                 </select>
                                 <div class="form-text">سيتم تحديث حالة الطلب فوراً بعد الحفظ.</div>
@@ -1818,6 +1846,8 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
             'received': 'مستلمة',
             'in_progress': 'قيد التنفيذ',
             'completed': 'مكتملة',
+            'delivered': 'تم التوصيل',
+            'returned': 'تم الارجاع',
             'cancelled': 'ملغاة'
         };
 
@@ -1826,6 +1856,8 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
             'received': 'info',
             'in_progress': 'primary',
             'completed': 'success',
+            'delivered': 'success',
+            'returned': 'secondary',
             'cancelled': 'danger'
         };
 
@@ -1887,6 +1919,8 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
         'received': 'مستلمة',
         'in_progress': 'قيد التنفيذ',
         'completed': 'مكتملة',
+        'delivered': 'تم التوصيل',
+        'returned': 'تم الارجاع',
         'cancelled': 'ملغاة'
     };
     
@@ -1895,6 +1929,8 @@ window.openChangeStatusModal = function(taskId, currentStatus) {
         'received': 'info',
         'in_progress': 'primary',
         'completed': 'success',
+        'delivered': 'success',
+        'returned': 'secondary',
         'cancelled': 'danger'
     };
     
