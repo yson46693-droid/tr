@@ -798,6 +798,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_GET['assigned']) && (int)$_GET['assigned'] > 0) {
             $queryParams['assigned'] = (int)$_GET['assigned'];
         }
+        if (isset($_GET['balance_from']) && $_GET['balance_from'] !== '') {
+            $queryParams['balance_from'] = $_GET['balance_from'];
+        }
+        if (isset($_GET['balance_to']) && $_GET['balance_to'] !== '') {
+            $queryParams['balance_to'] = $_GET['balance_to'];
+        }
+        if (isset($_GET['sort_balance']) && $_GET['sort_balance'] !== '') {
+            $queryParams['sort_balance'] = $_GET['sort_balance'];
+        }
         
         // استخدام preventDuplicateSubmission لإعادة التوجيه
         // تحديد role بناءً على المستخدم الحالي
@@ -896,6 +905,12 @@ $search = tasksSafeString($_GET['search'] ?? '');
 $statusFilter = tasksSafeString($_GET['status'] ?? '');
 $priorityFilter = tasksSafeString($_GET['priority'] ?? '');
 $assignedFilter = isset($_GET['assigned']) ? (int) $_GET['assigned'] : 0;
+$balanceFrom = isset($_GET['balance_from']) && $_GET['balance_from'] !== '' ? (float) $_GET['balance_from'] : null;
+$balanceTo = isset($_GET['balance_to']) && $_GET['balance_to'] !== '' ? (float) $_GET['balance_to'] : null;
+$sortBalance = $_GET['sort_balance'] ?? '';
+if (!in_array($sortBalance, ['asc', 'desc'], true)) {
+    $sortBalance = '';
+}
 
 $whereConditions = [];
 $params = [];
@@ -924,12 +939,30 @@ if ($assignedFilter > 0) {
     $params[] = $assignedFilter;
 }
 
+// التحقق من وجود جدول طلبات العملاء للفلترة/الترتيب برصيد العميل
+$customerOrdersExists = !empty($db->queryOne("SHOW TABLES LIKE 'customer_orders'"));
+$orderCustomerJoin = '';
+$customerDisplaySelect = ", t.customer_name, COALESCE(NULLIF(TRIM(IFNULL(t.customer_name,'')), ''), '') AS customer_display";
+if ($customerOrdersExists) {
+    $orderCustomerJoin = " LEFT JOIN customer_orders co ON t.related_type = 'customer_order' AND t.related_id = co.id LEFT JOIN customers cust ON co.customer_id = cust.id";
+    $customerDisplaySelect = ", t.customer_name, COALESCE(NULLIF(TRIM(t.customer_name), ''), cust.name) AS customer_display";
+    if ($balanceFrom !== null) {
+        $whereConditions[] = 'COALESCE(cust.balance, 0) >= ?';
+        $params[] = $balanceFrom;
+    }
+    if ($balanceTo !== null) {
+        $whereConditions[] = 'COALESCE(cust.balance, 0) <= ?';
+        $params[] = $balanceTo;
+    }
+}
+
 // السماح لجميع عمال الإنتاج برؤية جميع المهام المخصصة لأي عامل إنتاج
 // لا حاجة للفلترة - جميع عمال الإنتاج يرون جميع المهام
 
 $whereClause = $whereConditions ? 'WHERE ' . implode(' AND ', $whereConditions) : '';
 
-$totalRow = $db->queryOne('SELECT COUNT(*) AS total FROM tasks t ' . $whereClause, $params);
+$countJoin = (($balanceFrom !== null || $balanceTo !== null) && $customerOrdersExists) ? $orderCustomerJoin : '';
+$totalRow = $db->queryOne('SELECT COUNT(*) AS total FROM tasks t ' . $countJoin . ' ' . $whereClause, $params);
 $totalTasks = isset($totalRow['total']) ? (int) $totalRow['total'] : 0;
 $totalPages = max(1, (int) ceil($totalTasks / $perPage));
 
@@ -979,14 +1012,6 @@ if ($unifiedTemplatesExists && $productTemplatesExists) {
     $templateJoins = 'LEFT JOIN product_templates pt ON t.template_id = pt.id AND pt.status = \'active\' ';
 }
 
-$customerOrdersExists = !empty($db->queryOne("SHOW TABLES LIKE 'customer_orders'"));
-$orderCustomerJoin = '';
-$customerDisplaySelect = ", t.customer_name, COALESCE(NULLIF(TRIM(IFNULL(t.customer_name,'')), ''), '') AS customer_display";
-if ($customerOrdersExists) {
-    $orderCustomerJoin = " LEFT JOIN customer_orders co ON t.related_type = 'customer_order' AND t.related_id = co.id LEFT JOIN customers cust ON co.customer_id = cust.id";
-    $customerDisplaySelect = ", t.customer_name, COALESCE(NULLIF(TRIM(t.customer_name), ''), cust.name) AS customer_display";
-}
-
 $taskSql = "SELECT t.id, t.title, t.description, t.assigned_to, t.created_by, t.priority, t.status,
     t.due_date, t.completed_at, t.received_at, t.started_at, t.related_type, t.related_id,
     t.product_id, t.template_id, t.quantity, t.unit, t.notes, t.created_at, t.updated_at,
@@ -1002,7 +1027,7 @@ LEFT JOIN products p ON t.product_id = p.id
 " . $orderCustomerJoin . "
 " . $templateJoins . "
 $whereClause
-ORDER BY t.created_at DESC, t.id DESC
+ORDER BY " . ($customerOrdersExists && $sortBalance === 'asc' ? 'COALESCE(cust.balance, 0) ASC, t.created_at DESC, t.id DESC' : ($customerOrdersExists && $sortBalance === 'desc' ? 'COALESCE(cust.balance, 0) DESC, t.created_at DESC, t.id DESC' : 't.created_at DESC, t.id DESC')) . "
 LIMIT ? OFFSET ?";
 
 $queryParams = array_merge($params, [$perPage, $offset]);
@@ -1450,6 +1475,22 @@ function tasksHtml(string $value): string
                         </select>
                     </div>
                 <?php endif; ?>
+                <div class="col-md-2 col-sm-6">
+                    <label class="form-label mb-1">رصيد العميل من</label>
+                    <input type="number" step="any" class="form-control form-control-sm" name="balance_from" placeholder="من" value="<?php echo $balanceFrom !== null ? tasksHtml((string) $balanceFrom) : ''; ?>">
+                </div>
+                <div class="col-md-2 col-sm-6">
+                    <label class="form-label mb-1">رصيد العميل إلى</label>
+                    <input type="number" step="any" class="form-control form-control-sm" name="balance_to" placeholder="إلى" value="<?php echo $balanceTo !== null ? tasksHtml((string) $balanceTo) : ''; ?>">
+                </div>
+                <div class="col-md-2 col-sm-6">
+                    <label class="form-label mb-1">ترتيب حسب الرصيد المدين</label>
+                    <select class="form-select form-select-sm" name="sort_balance">
+                        <option value="" <?php echo $sortBalance === '' ? 'selected' : ''; ?>>ترتيب عادي</option>
+                        <option value="asc" <?php echo $sortBalance === 'asc' ? 'selected' : ''; ?>>تصاعدي</option>
+                        <option value="desc" <?php echo $sortBalance === 'desc' ? 'selected' : ''; ?>>تنازلي</option>
+                    </select>
+                </div>
                 <div class="col-md-2 col-sm-6">
                     <button type="submit" class="btn btn-primary btn-sm w-100">
                         <i class="bi bi-search me-1"></i>بحث
