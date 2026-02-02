@@ -1151,6 +1151,12 @@ if (!in_array($debtStatus, $allowedDebtStatuses, true)) {
 
 // البحث والفلترة
 $regionFilter = isset($_GET['region_id']) && $_GET['region_id'] !== '' ? (int)$_GET['region_id'] : null;
+$balanceFrom = isset($_GET['balance_from']) && $_GET['balance_from'] !== '' ? (float)$_GET['balance_from'] : null;
+$balanceTo = isset($_GET['balance_to']) && $_GET['balance_to'] !== '' ? (float)$_GET['balance_to'] : null;
+$sortBalance = $_GET['sort_balance'] ?? '';
+if (!in_array($sortBalance, ['asc', 'desc'], true)) {
+    $sortBalance = '';
+}
 
 // بناء استعلام SQL
 $sql = "SELECT c.*, u.full_name as created_by_name, r.name as region_name
@@ -1215,6 +1221,24 @@ if ($regionFilter !== null) {
     $statsParams[] = $regionFilter;
 }
 
+// فلتر الرصيد من / إلى
+if ($balanceFrom !== null) {
+    $sql .= " AND COALESCE(c.balance, 0) >= ?";
+    $countSql .= " AND COALESCE(balance, 0) >= ?";
+    $statsSql .= " AND COALESCE(balance, 0) >= ?";
+    $params[] = $balanceFrom;
+    $countParams[] = $balanceFrom;
+    $statsParams[] = $balanceFrom;
+}
+if ($balanceTo !== null) {
+    $sql .= " AND COALESCE(c.balance, 0) <= ?";
+    $countSql .= " AND COALESCE(balance, 0) <= ?";
+    $statsSql .= " AND COALESCE(balance, 0) <= ?";
+    $params[] = $balanceTo;
+    $countParams[] = $balanceTo;
+    $statsParams[] = $balanceTo;
+}
+
 // التحقق النهائي من وجود الجدول قبل تنفيذ الاستعلامات
 $tableCheck = $db->queryOne("SHOW TABLES LIKE 'local_customers'");
 if (empty($tableCheck)) {
@@ -1258,7 +1282,14 @@ try {
     }
 }
 
-$sql .= " ORDER BY c.name ASC LIMIT ? OFFSET ?";
+// ترتيب حسب الرصيد المدين أو الاسم
+if ($sortBalance === 'asc') {
+    $sql .= " ORDER BY COALESCE(c.balance, 0) ASC, c.name ASC LIMIT ? OFFSET ?";
+} elseif ($sortBalance === 'desc') {
+    $sql .= " ORDER BY COALESCE(c.balance, 0) DESC, c.name ASC LIMIT ? OFFSET ?";
+} else {
+    $sql .= " ORDER BY c.name ASC LIMIT ? OFFSET ?";
+}
 $params[] = $perPage;
 $params[] = $offset;
 
@@ -1846,6 +1877,22 @@ var dashboardWrapper = null;
                                     <?php echo htmlspecialchars($region['name']); ?>
                                 </option>
                             <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="local-filter-group">
+                        <label for="balanceFromLocal" class="visually-hidden">رصيد من</label>
+                        <input type="number" step="any" class="form-control form-control-sm local-filter-select" id="balanceFromLocal" name="balance_from" placeholder="رصيد من" value="<?php echo $balanceFrom !== null ? htmlspecialchars((string)$balanceFrom) : ''; ?>">
+                    </div>
+                    <div class="local-filter-group">
+                        <label for="balanceToLocal" class="visually-hidden">رصيد إلى</label>
+                        <input type="number" step="any" class="form-control form-control-sm local-filter-select" id="balanceToLocal" name="balance_to" placeholder="رصيد إلى" value="<?php echo $balanceTo !== null ? htmlspecialchars((string)$balanceTo) : ''; ?>">
+                    </div>
+                    <div class="local-filter-group">
+                        <label for="sortBalanceFilterLocal" class="visually-hidden">ترتيب حسب الرصيد المدين</label>
+                        <select class="form-select form-select-sm local-filter-select" id="sortBalanceFilterLocal" name="sort_balance">
+                            <option value="" <?php echo $sortBalance === '' ? 'selected' : ''; ?>>ترتيب عادي</option>
+                            <option value="asc" <?php echo $sortBalance === 'asc' ? 'selected' : ''; ?>>تصاعدي حسب الرصيد المدين</option>
+                            <option value="desc" <?php echo $sortBalance === 'desc' ? 'selected' : ''; ?>>تنازلي حسب الرصيد المدين</option>
                         </select>
                     </div>
                     <button type="button" class="btn btn-outline-secondary btn-sm" id="localSearchResetBtn">

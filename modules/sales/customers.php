@@ -1560,6 +1560,12 @@ $offset = ($pageNum - 1) * $perPage;
 $search = trim($_GET['search'] ?? '');
 $debtStatus = $_GET['debt_status'] ?? 'all';
 $regionFilter = isset($_GET['region_id']) && $_GET['region_id'] !== '' ? (int)$_GET['region_id'] : null;
+$balanceFrom = isset($_GET['balance_from']) && $_GET['balance_from'] !== '' ? (float)$_GET['balance_from'] : null;
+$balanceTo = isset($_GET['balance_to']) && $_GET['balance_to'] !== '' ? (float)$_GET['balance_to'] : null;
+$sortBalance = $_GET['sort_balance'] ?? '';
+if (!in_array($sortBalance, ['asc', 'desc'], true)) {
+    $sortBalance = '';
+}
 $allowedDebtStatuses = ['all', 'debtor', 'clear'];
 if (!in_array($debtStatus, $allowedDebtStatuses, true)) {
     $debtStatus = 'all';
@@ -1638,7 +1644,14 @@ $totalResult = $db->queryOne($countSql, $countParams);
 $totalCustomers = $totalResult['total'] ?? 0;
 $totalPages = ceil($totalCustomers / $perPage);
 
-$sql .= " ORDER BY c.name ASC LIMIT ? OFFSET ?";
+// ترتيب حسب الرصيد المدين أو الاسم
+if ($sortBalance === 'asc') {
+    $sql .= " ORDER BY COALESCE(c.balance, 0) ASC, c.name ASC LIMIT ? OFFSET ?";
+} elseif ($sortBalance === 'desc') {
+    $sql .= " ORDER BY COALESCE(c.balance, 0) DESC, c.name ASC LIMIT ? OFFSET ?";
+} else {
+    $sql .= " ORDER BY c.name ASC LIMIT ? OFFSET ?";
+}
 $params[] = $perPage;
 $params[] = $offset;
 
@@ -1683,6 +1696,15 @@ try {
         $collectionsParams[] = '%' . $search . '%';
         $collectionsParams[] = '%' . $search . '%';
         $collectionsParams[] = '%' . $search . '%';
+    }
+
+    if ($balanceFrom !== null) {
+        $collectionsSql .= " AND COALESCE(c.balance, 0) >= ?";
+        $collectionsParams[] = $balanceFrom;
+    }
+    if ($balanceTo !== null) {
+        $collectionsSql .= " AND COALESCE(c.balance, 0) <= ?";
+        $collectionsParams[] = $balanceTo;
     }
 
     $collectionsResult = $db->queryOne($collectionsSql, $collectionsParams);
@@ -6809,6 +6831,9 @@ function printDebtorCustomers() {
     const btnClearFilters = document.getElementById('btnClearFilters');
     const filterStatus = document.getElementById('debtStatusFilter');
     const filterRegion = document.getElementById('regionFilter');
+    const balanceFromInput = document.getElementById('balanceFrom');
+    const balanceToInput = document.getElementById('balanceTo');
+    const sortBalanceFilter = document.getElementById('sortBalanceFilter');
     
     let searchTimeout = null;
     let currentAbortController = null;
@@ -6824,6 +6849,9 @@ function printDebtorCustomers() {
         o.search = (searchInput && searchInput.value.trim()) || '';
         o.debt_status = (filterStatus && filterStatus.value) || 'all';
         o.region_id = (filterRegion && filterRegion.value) || '';
+        o.balance_from = (balanceFromInput && balanceFromInput.value.trim()) || '';
+        o.balance_to = (balanceToInput && balanceToInput.value.trim()) || '';
+        o.sort_balance = (sortBalanceFilter && sortBalanceFilter.value) || '';
         return o;
     }
     
@@ -6847,6 +6875,9 @@ function printDebtorCustomers() {
         if (fp.search) params.append('search', fp.search);
         if (fp.debt_status && fp.debt_status !== 'all') params.append('debt_status', fp.debt_status);
         if (fp.region_id) params.append('region_id', fp.region_id);
+        if (fp.balance_from) params.append('balance_from', fp.balance_from);
+        if (fp.balance_to) params.append('balance_to', fp.balance_to);
+        if (fp.sort_balance) params.append('sort_balance', fp.sort_balance);
         
         // إرسال الطلب
         fetch('<?php echo getRelativeUrl("api/search_customers.php"); ?>?' + params.toString(), {
@@ -6876,6 +6907,12 @@ function printDebtorCustomers() {
                 else url.searchParams.delete('debt_status');
                 if (fp.region_id) url.searchParams.set('region_id', fp.region_id);
                 else url.searchParams.delete('region_id');
+                if (fp.balance_from) url.searchParams.set('balance_from', fp.balance_from);
+                else url.searchParams.delete('balance_from');
+                if (fp.balance_to) url.searchParams.set('balance_to', fp.balance_to);
+                else url.searchParams.delete('balance_to');
+                if (fp.sort_balance) url.searchParams.set('sort_balance', fp.sort_balance);
+                else url.searchParams.delete('sort_balance');
                 window.history.pushState({}, '', url);
             } else {
                 tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">' + (data.message || 'حدث خطأ في البحث') + '</td></tr>';
@@ -7197,6 +7234,27 @@ function printDebtorCustomers() {
             loadCustomers(1);
         });
     }
+    if (balanceFromInput) {
+        balanceFromInput.addEventListener('change', function() {
+            if (searchTimeout) clearTimeout(searchTimeout);
+            if (currentAbortController) currentAbortController.abort();
+            loadCustomers(1);
+        });
+    }
+    if (balanceToInput) {
+        balanceToInput.addEventListener('change', function() {
+            if (searchTimeout) clearTimeout(searchTimeout);
+            if (currentAbortController) currentAbortController.abort();
+            loadCustomers(1);
+        });
+    }
+    if (sortBalanceFilter) {
+        sortBalanceFilter.addEventListener('change', function() {
+            if (searchTimeout) clearTimeout(searchTimeout);
+            if (currentAbortController) currentAbortController.abort();
+            loadCustomers(1);
+        });
+    }
     
     // زر مسح الفلاتر
     if (btnClearFilters) {
@@ -7204,6 +7262,9 @@ function printDebtorCustomers() {
             searchInput.value = '';
             if (filterStatus) filterStatus.value = 'all';
             if (filterRegion) filterRegion.value = '';
+            if (balanceFromInput) balanceFromInput.value = '';
+            if (balanceToInput) balanceToInput.value = '';
+            if (sortBalanceFilter) sortBalanceFilter.value = '';
             if (searchTimeout) clearTimeout(searchTimeout);
             if (currentAbortController) currentAbortController.abort();
             loadCustomers(1);

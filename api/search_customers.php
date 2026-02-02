@@ -96,6 +96,16 @@ try {
     
     $regionFilter = isset($_GET['region_id']) && $_GET['region_id'] !== '' ? (int)$_GET['region_id'] : null;
     
+    // فلتر الرصيد: من / إلى
+    $balanceFrom = isset($_GET['balance_from']) && $_GET['balance_from'] !== '' ? (float)$_GET['balance_from'] : null;
+    $balanceTo = isset($_GET['balance_to']) && $_GET['balance_to'] !== '' ? (float)$_GET['balance_to'] : null;
+    // ترتيب حسب الرصيد المدين: تصاعدي أو تنازلي
+    $sortBalance = $_GET['sort_balance'] ?? '';
+    $allowedSortBalance = ['asc', 'desc'];
+    if (!in_array($sortBalance, $allowedSortBalance, true)) {
+        $sortBalance = '';
+    }
+    
     // معاملات pagination
     $pageNum = isset($_GET['p']) ? max(1, (int)$_GET['p']) : 1;
     $isMobile = isset($_SERVER['HTTP_USER_AGENT']) && preg_match('/(android|iphone|ipad|mobile)/i', $_SERVER['HTTP_USER_AGENT']);
@@ -152,6 +162,20 @@ try {
         $countParams[] = $regionFilter;
     }
     
+    // فلتر الرصيد من / إلى
+    if ($balanceFrom !== null) {
+        $sql .= " AND COALESCE(c.balance, 0) >= ?";
+        $countSql .= " AND COALESCE(balance, 0) >= ?";
+        $params[] = $balanceFrom;
+        $countParams[] = $balanceFrom;
+    }
+    if ($balanceTo !== null) {
+        $sql .= " AND COALESCE(c.balance, 0) <= ?";
+        $countSql .= " AND COALESCE(balance, 0) <= ?";
+        $params[] = $balanceTo;
+        $countParams[] = $balanceTo;
+    }
+    
     // جلب العدد الإجمالي
     try {
         $totalResult = $db->queryOne($countSql, $countParams);
@@ -163,8 +187,14 @@ try {
         $totalPages = 0;
     }
     
-    // جلب العملاء
-    $sql .= " ORDER BY c.name ASC LIMIT ? OFFSET ?";
+    // جلب العملاء — ترتيب حسب الرصيد المدين أو الاسم
+    if ($sortBalance === 'asc') {
+        $sql .= " ORDER BY COALESCE(c.balance, 0) ASC, c.name ASC LIMIT ? OFFSET ?";
+    } elseif ($sortBalance === 'desc') {
+        $sql .= " ORDER BY COALESCE(c.balance, 0) DESC, c.name ASC LIMIT ? OFFSET ?";
+    } else {
+        $sql .= " ORDER BY c.name ASC LIMIT ? OFFSET ?";
+    }
     $params[] = $perPage;
     $params[] = $offset;
     

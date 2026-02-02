@@ -54,6 +54,15 @@ try {
         $db->execute("ALTER TABLE tasks ADD COLUMN customer_name VARCHAR(255) NULL DEFAULT NULL AFTER unit");
         error_log('Added customer_name column to tasks table in production/tasks.php');
     }
+    // توسيع عمود status ليشمل "تم التوصيل" و "تم الارجاع" (ضروري لعرض واحتساب الحالات)
+    $statusColumn = $db->queryOne("SHOW COLUMNS FROM tasks LIKE 'status'");
+    if (!empty($statusColumn['Type'])) {
+        $typeStr = (string) $statusColumn['Type'];
+        if (stripos($typeStr, 'delivered') === false || stripos($typeStr, 'returned') === false) {
+            $db->execute("ALTER TABLE tasks MODIFY COLUMN status ENUM('pending','received','in_progress','completed','delivered','returned','cancelled') DEFAULT 'pending'");
+            error_log('Extended tasks.status ENUM with delivered, returned in production/tasks.php');
+        }
+    }
 } catch (Exception $e) {
     error_log('Error checking/adding columns in production/tasks.php: ' . $e->getMessage());
 }
@@ -1496,6 +1505,8 @@ function tasksHtml(string $value): string
                                     'received' => 'info',
                                     'in_progress' => 'primary',
                                     'completed' => 'success',
+                                    'delivered' => 'success',
+                                    'returned' => 'secondary',
                                     'cancelled' => 'secondary',
                                 ][$task['status']] ?? 'secondary';
 
@@ -1504,6 +1515,8 @@ function tasksHtml(string $value): string
                                     'received' => 'مستلمة',
                                     'in_progress' => 'قيد التنفيذ',
                                     'completed' => 'مكتملة',
+                                    'delivered' => 'تم التوصيل',
+                                    'returned' => 'تم الارجاع',
                                     'cancelled' => 'ملغاة'
                                 ][$task['status']] ?? tasksSafeString($task['status']);
 

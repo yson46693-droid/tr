@@ -110,6 +110,8 @@ $statusLabels = [
     'received' => 'مستلمة',
     'in_progress' => 'قيد التنفيذ',
     'completed' => 'مكتملة',
+    'delivered' => 'تم التوصيل',
+    'returned' => 'تم الارجاع',
     'cancelled' => 'ملغاة'
 ];
 

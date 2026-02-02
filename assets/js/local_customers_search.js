@@ -29,6 +29,9 @@
         var localSearchResetBtn = document.getElementById('localSearchResetBtn');
         var filterStatus = document.getElementById('debtStatusFilter');
         var filterRegion = document.getElementById('regionFilter');
+        var balanceFromInput = document.getElementById('balanceFromLocal');
+        var balanceToInput = document.getElementById('balanceToLocal');
+        var sortBalanceFilter = document.getElementById('sortBalanceFilterLocal');
         var autocompleteDropdown = document.getElementById('autocompleteDropdown');
 
         var searchTimeout = null;
@@ -61,7 +64,10 @@
             return {
                 search: (customerSearchInput && customerSearchInput.value.trim()) || '',
                 debt_status: (filterStatus && filterStatus.value) || 'all',
-                region_id: (filterRegion && filterRegion.value) || ''
+                region_id: (filterRegion && filterRegion.value) || '',
+                balance_from: (balanceFromInput && balanceFromInput.value.trim()) || '',
+                balance_to: (balanceToInput && balanceToInput.value.trim()) || '',
+                sort_balance: (sortBalanceFilter && sortBalanceFilter.value) || ''
             };
         }
 
@@ -83,6 +89,9 @@
             if (fp.search) params.append('search', fp.search);
             if (fp.debt_status && fp.debt_status !== 'all') params.append('debt_status', fp.debt_status);
             if (fp.region_id) params.append('region_id', fp.region_id);
+            if (fp.balance_from) params.append('balance_from', fp.balance_from);
+            if (fp.balance_to) params.append('balance_to', fp.balance_to);
+            if (fp.sort_balance) params.append('sort_balance', fp.sort_balance);
 
             fetch(apiUrl + '?' + params.toString(), {
                 method: 'GET',
@@ -432,6 +441,27 @@
                 fetchCustomers(1);
             });
         }
+        if (balanceFromInput) {
+            balanceFromInput.addEventListener('change', function() {
+                if (searchTimeout) clearTimeout(searchTimeout);
+                if (currentAbortController) currentAbortController.abort();
+                fetchCustomers(1);
+            });
+        }
+        if (balanceToInput) {
+            balanceToInput.addEventListener('change', function() {
+                if (searchTimeout) clearTimeout(searchTimeout);
+                if (currentAbortController) currentAbortController.abort();
+                fetchCustomers(1);
+            });
+        }
+        if (sortBalanceFilter) {
+            sortBalanceFilter.addEventListener('change', function() {
+                if (searchTimeout) clearTimeout(searchTimeout);
+                if (currentAbortController) currentAbortController.abort();
+                fetchCustomers(1);
+            });
+        }
         if (localSearchClearBtn) {
             localSearchClearBtn.addEventListener('click', function() {
                 if (customerSearchInput) { customerSearchInput.value = ''; customerSearchInput.focus(); }
@@ -449,6 +479,9 @@
                 if (customerSearchInput) customerSearchInput.value = '';
                 if (filterStatus) filterStatus.value = 'all';
                 if (filterRegion) filterRegion.value = '';
+                if (balanceFromInput) balanceFromInput.value = '';
+                if (balanceToInput) balanceToInput.value = '';
+                if (sortBalanceFilter) sortBalanceFilter.value = '';
                 toggleLocalSearchClearBtn();
                 if (searchTimeout) clearTimeout(searchTimeout);
                 if (currentAbortController) currentAbortController.abort();
@@ -459,6 +492,9 @@
                 u.searchParams.delete('p');
                 u.searchParams.delete('debt_status');
                 u.searchParams.delete('region_id');
+                u.searchParams.delete('balance_from');
+                u.searchParams.delete('balance_to');
+                u.searchParams.delete('sort_balance');
                 window.history.replaceState({}, '', u.toString());
             });
         }

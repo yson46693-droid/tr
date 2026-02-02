@@ -34,6 +34,12 @@ $offset = ($page - 1) * $perPage;
 $search = trim($_GET['cs'] ?? '');
 $debtStatus = $_GET['cds'] ?? 'all';
 $repFilter = isset($_GET['rep_filter']) ? (int)$_GET['rep_filter'] : 0;
+$balanceFrom = isset($_GET['balance_from']) && $_GET['balance_from'] !== '' ? (float)$_GET['balance_from'] : null;
+$balanceTo = isset($_GET['balance_to']) && $_GET['balance_to'] !== '' ? (float)$_GET['balance_to'] : null;
+$sortBalance = $_GET['sort_balance'] ?? '';
+if (!in_array($sortBalance, ['asc', 'desc'], true)) {
+    $sortBalance = '';
+}
 
 $allowedDebtStatuses = ['all', 'debtor', 'clear'];
 if (!in_array($debtStatus, $allowedDebtStatuses, true)) {
@@ -92,6 +98,19 @@ try {
         $countSql .= " AND (c.balance IS NULL OR c.balance <= 0)";
     }
     
+    if ($balanceFrom !== null) {
+        $sql .= " AND COALESCE(c.balance, 0) >= ?";
+        $countSql .= " AND COALESCE(c.balance, 0) >= ?";
+        $params[] = $balanceFrom;
+        $countParams[] = $balanceFrom;
+    }
+    if ($balanceTo !== null) {
+        $sql .= " AND COALESCE(c.balance, 0) <= ?";
+        $countSql .= " AND COALESCE(c.balance, 0) <= ?";
+        $params[] = $balanceTo;
+        $countParams[] = $balanceTo;
+    }
+    
     if ($search) {
         $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR rep1.full_name LIKE ? OR rep2.full_name LIKE ? OR CAST(COALESCE(c.balance, 0) AS CHAR) LIKE ?)";
         $countSql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.address LIKE ? OR r.name LIKE ? OR rep1.full_name LIKE ? OR rep2.full_name LIKE ? OR CAST(COALESCE(c.balance, 0) AS CHAR) LIKE ?)";
@@ -117,8 +136,14 @@ try {
     $totalCustomers = $totalResult['total'] ?? 0;
     $totalPages = ceil($totalCustomers / $perPage);
     
-    // جلب العملاء
-    $sql .= " ORDER BY c.name ASC LIMIT ? OFFSET ?";
+    // جلب العملاء — ترتيب حسب الرصيد المدين أو الاسم
+    if ($sortBalance === 'asc') {
+        $sql .= " ORDER BY COALESCE(c.balance, 0) ASC, c.name ASC LIMIT ? OFFSET ?";
+    } elseif ($sortBalance === 'desc') {
+        $sql .= " ORDER BY COALESCE(c.balance, 0) DESC, c.name ASC LIMIT ? OFFSET ?";
+    } else {
+        $sql .= " ORDER BY c.name ASC LIMIT ? OFFSET ?";
+    }
     $params[] = $perPage;
     $params[] = $offset;
     
