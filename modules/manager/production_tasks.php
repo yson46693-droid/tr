@@ -911,8 +911,44 @@ $statusStyles = [
     'cancelled' => ['class' => 'danger', 'label' => 'ملغاة']
 ];
 
+// Pagination لجدول آخر المهام
+$tasksPageNum = isset($_GET['p']) ? max(1, (int)$_GET['p']) : 1;
+$tasksPerPage = 15;
+$totalRecentTasks = 0;
+$totalRecentPages = 1;
+
 try {
-    // جلب المهام المحدثة مباشرة - المحاسب والمدير يرون جميع المهام التي أنشأها أي منهما
+    // جلب عدد المهام الإجمالي (للتقسيم)
+    if ($isAccountant || $isManager) {
+        $adminUsers = $db->query("
+            SELECT id FROM users 
+            WHERE role IN ('manager', 'accountant') AND status = 'active'
+        ");
+        $adminIds = array_map(function($user) {
+            return (int)$user['id'];
+        }, $adminUsers);
+        
+        if (!empty($adminIds)) {
+            $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
+            $totalRow = $db->queryOne("
+                SELECT COUNT(*) AS total FROM tasks t
+                WHERE t.created_by IN ($placeholders) AND t.status != 'cancelled'
+            ", $adminIds);
+            $totalRecentTasks = isset($totalRow['total']) ? (int)$totalRow['total'] : 0;
+        }
+    } else {
+        $totalRow = $db->queryOne("
+            SELECT COUNT(*) AS total FROM tasks t
+            WHERE t.created_by = ? AND t.status != 'cancelled'
+        ", [$currentUser['id']]);
+        $totalRecentTasks = isset($totalRow['total']) ? (int)$totalRow['total'] : 0;
+    }
+    
+    $totalRecentPages = max(1, (int)ceil($totalRecentTasks / $tasksPerPage));
+    $tasksPageNum = min($tasksPageNum, $totalRecentPages);
+    $tasksOffset = ($tasksPageNum - 1) * $tasksPerPage;
+
+    // جلب المهام المحدثة مع التقسيم - المحاسب والمدير يرون جميع المهام التي أنشأها أي منهما
     if ($isAccountant || $isManager) {
         // جلب معرفات جميع المديرين والمحاسبين
         $adminUsers = $db->query("
@@ -935,8 +971,8 @@ try {
                 WHERE t.created_by IN ($placeholders)
                 AND t.status != 'cancelled'
                 ORDER BY t.created_at DESC, t.id DESC
-                LIMIT 10
-            ", $adminIds);
+                LIMIT ? OFFSET ?
+            ", array_merge($adminIds, [$tasksPerPage, $tasksOffset]));
         } else {
             $recentTasks = [];
         }
@@ -950,8 +986,8 @@ try {
             WHERE t.created_by = ?
             AND t.status != 'cancelled'
             ORDER BY t.created_at DESC, t.id DESC
-            LIMIT 10
-        ", [$currentUser['id']]);
+            LIMIT ? OFFSET ?
+        ", [$currentUser['id'], $tasksPerPage, $tasksOffset]);
     }
     
     // استخراج جميع العمال من notes لكل مهمة واستخراج اسم المنتج
@@ -1307,9 +1343,9 @@ try {
     </div>
 
     <div class="card shadow-sm mt-4">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
             <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>آخر المهام التي تم إرسالها</h5>
-            <span class="text-muted small">آخر 10 مهام</span>
+            <span class="text-muted small"><?php echo $totalRecentTasks; ?> <?php echo $totalRecentTasks === 1 ? 'مهمة' : 'مهام'; ?> · صفحة <?php echo $tasksPageNum; ?> من <?php echo $totalRecentPages; ?></span>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive dashboard-table-wrapper">
@@ -1414,6 +1450,42 @@ try {
                     </tbody>
                 </table>
             </div>
+            <?php if ($totalRecentPages > 1): ?>
+                <nav aria-label="تنقل صفحات المهام" class="p-3 pt-0">
+                    <ul class="pagination justify-content-center mb-0">
+                        <li class="page-item <?php echo $tasksPageNum <= 1 ? 'disabled' : ''; ?>">
+                            <a class="page-link" href="?page=production_tasks&p=<?php echo max(1, $tasksPageNum - 1); ?>" aria-label="السابق">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                        <?php
+                        $startPage = max(1, $tasksPageNum - 2);
+                        $endPage = min($totalRecentPages, $tasksPageNum + 2);
+                        if ($startPage > 1): ?>
+                            <li class="page-item"><a class="page-link" href="?page=production_tasks&p=1">1</a></li>
+                            <?php if ($startPage > 2): ?>
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                        <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                            <li class="page-item <?php echo $i == $tasksPageNum ? 'active' : ''; ?>">
+                                <a class="page-link" href="?page=production_tasks&p=<?php echo $i; ?>"><?php echo $i; ?></a>
+                            </li>
+                        <?php endfor; ?>
+                        <?php if ($endPage < $totalRecentPages): ?>
+                            <?php if ($endPage < $totalRecentPages - 1): ?>
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            <?php endif; ?>
+                            <li class="page-item"><a class="page-link" href="?page=production_tasks&p=<?php echo $totalRecentPages; ?>"><?php echo $totalRecentPages; ?></a></li>
+                        <?php endif; ?>
+                        <li class="page-item <?php echo $tasksPageNum >= $totalRecentPages ? 'disabled' : ''; ?>">
+                            <a class="page-link" href="?page=production_tasks&p=<?php echo min($totalRecentPages, $tasksPageNum + 1); ?>" aria-label="التالي">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            <?php endif; ?>
         </div>
     </div>
 </div>
