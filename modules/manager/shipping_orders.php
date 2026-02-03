@@ -65,38 +65,47 @@ try {
     error_log('shipping_orders: failed ensuring shipping_companies table -> ' . $tableError->getMessage());
 }
 
-try {
-    $db->execute(
-        "CREATE TABLE IF NOT EXISTS `shipping_company_orders` (
-            `id` int(11) NOT NULL AUTO_INCREMENT,
-            `order_number` varchar(50) NOT NULL,
-            `shipping_company_id` int(11) NOT NULL,
-            `customer_id` int(11) NOT NULL,
-            `invoice_id` int(11) DEFAULT NULL,
-            `total_amount` decimal(15,2) NOT NULL DEFAULT 0.00,
-            `status` enum('assigned','in_transit','delivered','cancelled') NOT NULL DEFAULT 'assigned',
-            `handed_over_at` timestamp NULL DEFAULT NULL,
-            `delivered_at` timestamp NULL DEFAULT NULL,
-            `notes` text DEFAULT NULL,
-            `created_by` int(11) DEFAULT NULL,
-            `updated_by` int(11) DEFAULT NULL,
-            `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY (`id`),
-            UNIQUE KEY `order_number` (`order_number`),
-            KEY `shipping_company_id` (`shipping_company_id`),
-            KEY `customer_id` (`customer_id`),
-            KEY `invoice_id` (`invoice_id`),
-            KEY `status` (`status`),
-            CONSTRAINT `shipping_company_orders_company_fk` FOREIGN KEY (`shipping_company_id`) REFERENCES `shipping_companies` (`id`) ON DELETE CASCADE,
-            CONSTRAINT `shipping_company_orders_invoice_fk` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE SET NULL,
-            CONSTRAINT `shipping_company_orders_created_fk` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
-            CONSTRAINT `shipping_company_orders_updated_fk` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
-    );
-} catch (Throwable $tableError) {
-    error_log('shipping_orders: failed ensuring shipping_company_orders table -> ' . $tableError->getMessage());
-}
+    try {
+        $db->execute(
+            "CREATE TABLE IF NOT EXISTS `shipping_company_orders` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `order_number` varchar(50) NOT NULL,
+                `tg_number` varchar(50) DEFAULT NULL COMMENT 'رقم التليجراف',
+                `shipping_company_id` int(11) NOT NULL,
+                `customer_id` int(11) NOT NULL,
+                `invoice_id` int(11) DEFAULT NULL,
+                `total_amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+                `status` enum('assigned','in_transit','delivered','cancelled') NOT NULL DEFAULT 'assigned',
+                `handed_over_at` timestamp NULL DEFAULT NULL,
+                `delivered_at` timestamp NULL DEFAULT NULL,
+                `notes` text DEFAULT NULL,
+                `created_by` int(11) DEFAULT NULL,
+                `updated_by` int(11) DEFAULT NULL,
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `order_number` (`order_number`),
+                KEY `tg_number` (`tg_number`),
+                KEY `shipping_company_id` (`shipping_company_id`),
+                KEY `customer_id` (`customer_id`),
+                KEY `invoice_id` (`invoice_id`),
+                KEY `status` (`status`),
+                CONSTRAINT `shipping_company_orders_company_fk` FOREIGN KEY (`shipping_company_id`) REFERENCES `shipping_companies` (`id`) ON DELETE CASCADE,
+                CONSTRAINT `shipping_company_orders_invoice_fk` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE SET NULL,
+                CONSTRAINT `shipping_company_orders_created_fk` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+                CONSTRAINT `shipping_company_orders_updated_fk` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
+        
+        // Ensure tg_number column exists if table already exists
+        $hasTgColumn = !empty($db->queryOne("SHOW COLUMNS FROM shipping_company_orders LIKE 'tg_number'"));
+        if (!$hasTgColumn) {
+            $db->execute("ALTER TABLE shipping_company_orders ADD COLUMN tg_number varchar(50) DEFAULT NULL COMMENT 'رقم التليجراف' AFTER order_number");
+            $db->execute("ALTER TABLE shipping_company_orders ADD INDEX tg_number (tg_number)");
+        }
+    } catch (Throwable $tableError) {
+        error_log('shipping_orders: failed ensuring shipping_company_orders table -> ' . $tableError->getMessage());
+    }
 
 try {
     $db->execute(
@@ -526,6 +535,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $shippingCompanyId = isset($_POST['shipping_company_id']) ? (int)$_POST['shipping_company_id'] : 0;
         $customerId = isset($_POST['customer_id']) ? (int)$_POST['customer_id'] : 0;
         $notes = trim($_POST['order_notes'] ?? '');
+        $tgNumber = trim($_POST['tg_number'] ?? '');
+        $customTotalAmount = isset($_POST['custom_total_amount']) ? (float)$_POST['custom_total_amount'] : null;
         $itemsInput = $_POST['items'] ?? [];
 
         if ($shippingCompanyId <= 0) {
@@ -540,43 +551,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        if (!is_array($itemsInput) || empty($itemsInput)) {
-            $_SESSION[$sessionErrorKey] = 'يرجى إضافة منتجات إلى الطلب.';
+        // إذا تم تحديد مبلغ يدوي، يمكن تجاوز التحقق من المنتجات
+        $hasCustomAmount = ($customTotalAmount !== null && $customTotalAmount >= 0);
+        
+        if ((!is_array($itemsInput) || empty($itemsInput)) && !$hasCustomAmount) {
+            $_SESSION[$sessionErrorKey] = 'يرجى إضافة منتجات إلى الطلب أو تحديد قيمة إجمالية للطلب.';
             redirectAfterPost('shipping_orders', [], [], 'manager');
             exit;
         }
 
-            $normalizedItems = [];
-            $totalAmount = 0.0;
-            $productIds = [];
+        $normalizedItems = [];
+        $totalAmountFromItems = 0.0;
+        $productIds = [];
 
+        if (is_array($itemsInput) && !empty($itemsInput)) {
             error_log("shipping_orders: Processing create_shipping_order - itemsInput count: " . count($itemsInput));
             foreach ($itemsInput as $index => $itemRow) {
-                error_log("shipping_orders: Processing itemsInput[$index]: " . json_encode($itemRow));
-                if (!is_array($itemRow)) {
-                    continue;
-                }
+                // ... existing processing logic ...
+                if (!is_array($itemRow)) continue;
 
                 $productId = isset($itemRow['product_id']) ? (int)$itemRow['product_id'] : 0;
-                // قراءة الكمية بشكل صحيح - التأكد من أنها قيمة رقمية صحيحة
                 $rawQuantity = $itemRow['quantity'] ?? 0.0;
                 $quantity = (float)$rawQuantity;
-                error_log("shipping_orders: RAW quantity from form: " . var_export($rawQuantity, true) . " -> parsed: $quantity for product_id: $productId");
-                // التحقق من أن الكمية قيمة صحيحة وموجبة
-                if ($quantity <= 0 || $quantity > 100000) {
-                    error_log("shipping_orders: Invalid quantity detected: " . var_export($itemRow['quantity'], true) . " for product_id: " . $productId);
-                    continue;
-                }
+                
+                if ($quantity <= 0 || $quantity > 100000) continue;
+                
                 $unitPrice = isset($itemRow['unit_price']) ? (float)$itemRow['unit_price'] : 0.0;
-                // إصلاح: استخدام !empty() لضمان أن batch_id يكون null إذا كان فارغ أو 0 أو غير موجود
                 $batchId = !empty($itemRow['batch_id']) && (int)$itemRow['batch_id'] > 0 ? (int)$itemRow['batch_id'] : null;
                 $productType = isset($itemRow['product_type']) ? trim($itemRow['product_type']) : '';
 
-                if ($productId <= 0 || $unitPrice < 0) {
-                    continue;
-                }
+                if ($productId <= 0 || $unitPrice < 0) continue;
 
-                // للمنتجات من المصنع، استخدم product_id الأصلي (طرح 1000000)
                 $originalProductId = $productId;
                 if ($productId > 1000000 && $productType === 'factory') {
                     $originalProductId = $productId - 1000000;
@@ -584,7 +589,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $productIds[] = $originalProductId;
                 $lineTotal = round($quantity * $unitPrice, 2);
-                $totalAmount += $lineTotal;
+                $totalAmountFromItems += $lineTotal;
 
                 $normalizedItems[] = [
                     'product_id' => $originalProductId,
@@ -595,51 +600,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'product_type' => $productType,
                 ];
             }
+        }
 
-        if (empty($normalizedItems)) {
-            $_SESSION[$sessionErrorKey] = 'يرجى التأكد من إدخال بيانات صحيحة للمنتجات.';
+        // السماح بإنشاء طلب بدون منتجات إذا كان هناك مبلغ يدوي
+        if (empty($normalizedItems) && !$hasCustomAmount) {
+            $_SESSION[$sessionErrorKey] = 'يرجى التأكد من إدخال بيانات صحيحة للممنتجات.';
             redirectAfterPost('shipping_orders', [], [], 'manager');
             exit;
         }
 
-        // تجميع العناصر المكررة لمنع الخصم المتكرر
-        // إذا كان نفس المنتج مع نفس batch_id موجود أكثر من مرة، نجمع الكميات
-        error_log("shipping_orders: BEFORE grouping - normalizedItems count: " . count($normalizedItems) . ", items: " . json_encode($normalizedItems));
+        // تجميع العناصر المكررة
         $groupedItems = [];
         foreach ($normalizedItems as $index => $item) {
-            $batchIdForKey = $item['batch_id'] ?? null;
+             $batchIdForKey = $item['batch_id'] ?? null;
             $key = $item['product_id'] . '_' . ($batchIdForKey ?? 'null') . '_' . $item['product_type'];
-            error_log("shipping_orders: Grouping item[$index]: key='$key', product_id={$item['product_id']}, batch_id=" . ($batchIdForKey ?? 'NULL') . ", quantity={$item['quantity']}, product_type={$item['product_type']}");
             
             if (!isset($groupedItems[$key])) {
                 $groupedItems[$key] = $item;
-                error_log("shipping_orders: NEW grouped item with key '$key', quantity: {$item['quantity']}");
             } else {
-                // جمع الكميات للعناصر المكررة
-                $oldQuantity = $groupedItems[$key]['quantity'];
-                $newQuantity = $item['quantity'];
-                $groupedItems[$key]['quantity'] = $oldQuantity + $newQuantity;
-                error_log("shipping_orders: MERGED grouped item with key '$key': old_quantity=$oldQuantity, new_quantity=$newQuantity, total_quantity={$groupedItems[$key]['quantity']}");
-                // استخدام أعلى سعر وحدة عند التجميع
+                $groupedItems[$key]['quantity'] += $item['quantity'];
                 if ($item['unit_price'] > $groupedItems[$key]['unit_price']) {
                     $groupedItems[$key]['unit_price'] = $item['unit_price'];
                 }
-                // إعادة حساب السعر الإجمالي بناءً على الكمية المجمعة والسعر
                 $groupedItems[$key]['total_price'] = round($groupedItems[$key]['quantity'] * $groupedItems[$key]['unit_price'], 2);
             }
         }
         
-        // إعادة حساب المبلغ الإجمالي بناءً على العناصر المجمعة
-        $totalAmount = 0.0;
-        foreach ($groupedItems as $key => $item) {
-            $totalAmount += $item['total_price'];
-            error_log("shipping_orders: Final grouped item '$key': quantity={$item['quantity']}, total_price={$item['total_price']}");
+        // إعادة حساب المجموع من العناصر (للتحقق)
+        $totalAmountFromItems = 0.0;
+        foreach ($groupedItems as $item) {
+            $totalAmountFromItems += $item['total_price'];
         }
-        
-        // تحويل المصفوفة المجمعة إلى مصفوفة عادية
         $normalizedItems = array_values($groupedItems);
-        error_log("shipping_orders: AFTER grouping - items count: " . count($normalizedItems) . ", normalizedItems: " . json_encode($normalizedItems));
-        $totalAmount = round($totalAmount, 2);
+        
+        // تحديد المبلغ النهائي للطلب
+        // إذا تم إدخال مبلغ يدوي نستخدمه، وإلا نستخدم مجموع المنتجات
+        $finalTotalAmount = $hasCustomAmount ? $customTotalAmount : round($totalAmountFromItems, 2);
 
         $transactionStarted = false;
 
@@ -780,6 +776,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            $invoiceId = null;
+            if (!empty($normalizedItems)) {
             // ===== إعداد عناصر الفاتورة مع اسم المنتج الصحيح =====
             $invoiceItems = [];
             foreach ($normalizedItems as $normalizedItem) {
@@ -1111,17 +1109,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     error_log("shipping_orders: WARNING - Could not find matching invoice_item for normalized item - product_id=$productId, quantity=$quantity, unit_price=$unitPrice, batch_id=$batchId");
                 }
             }
+            } // End if (!empty($normalizedItems))
 
             $orderNumber = generateShippingOrderNumber($db);
 
             $db->execute(
-                "INSERT INTO shipping_company_orders (order_number, shipping_company_id, customer_id, invoice_id, total_amount, status, handed_over_at, notes, created_by) VALUES (?, ?, ?, ?, ?, 'in_transit', NOW(), ?, ?)",
+                "INSERT INTO shipping_company_orders (order_number, tg_number, shipping_company_id, customer_id, invoice_id, total_amount, status, handed_over_at, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, 'in_transit', NOW(), ?, ?)",
                 [
                     $orderNumber,
+                    $tgNumber !== '' ? $tgNumber : null,
                     $shippingCompanyId,
                     $customerId,
-                    $invoiceId,
-                    $totalAmount,
+                    $invoiceId, // Can be NULL
+                    $finalTotalAmount, // Use Custom Total or Calc Total
                     $notes !== '' ? $notes : null,
                     $currentUser['id'] ?? null,
                 ]
@@ -1129,210 +1129,212 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $orderId = (int)$db->getLastInsertId();
 
-            // حفظ عناصر الطلب
-            foreach ($normalizedItems as $normalizedItem) {
-                $db->execute(
-                    "INSERT INTO shipping_company_order_items (order_id, product_id, batch_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?, ?)",
-                    [
+            if (!empty($normalizedItems)) {
+                // حفظ عناصر الطلب
+                foreach ($normalizedItems as $normalizedItem) {
+                    $db->execute(
+                        "INSERT INTO shipping_company_order_items (order_id, product_id, batch_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?, ?)",
+                        [
+                            $orderId,
+                            $normalizedItem['product_id'],
+                            $normalizedItem['batch_id'] ?? null,
+                            $normalizedItem['quantity'],
+                            $normalizedItem['unit_price'],
+                            $normalizedItem['total_price'],
+                        ]
+                    );
+                }
+
+                // خصم الكميات من المخزون عند إنشاء الطلب
+                // ملاحظة: نستخدم recordInventoryMovement فقط لتجنب الخصم المزدوج
+                $movementNote = 'تسليم طلب شحن #' . $orderNumber . ' لشركة الشحن';
+                foreach ($normalizedItems as $normalizedItem) {
+                    $productId = $normalizedItem['product_id'];
+                    $batchId = $normalizedItem['batch_id'] ?? null;
+                    $productType = $normalizedItem['product_type'] ?? '';
+                    $quantity = (float)$normalizedItem['quantity'];
+
+                    // للمنتجات التي لها رقم تشغيلة: قراءة products.quantity قبل recordInventoryMovement
+                    $productsQuantityBeforeMovement = null;
+                    $actualProductIdForTracking = null;
+                    if ($productType === 'factory' && $batchId) {
+                        try {
+                            // جلب product_id الصحيح من finished_products
+                            $fpDataForTracking = $db->queryOne("
+                                SELECT 
+                                    fp.product_id,
+                                    bn.product_id AS batch_product_id,
+                                    COALESCE(fp.product_id, bn.product_id) AS actual_product_id
+                                FROM finished_products fp
+                                LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                                WHERE fp.id = ?
+                            ", [$batchId]);
+                            
+                            if ($fpDataForTracking) {
+                                $actualProductIdForTracking = (int)($fpDataForTracking['actual_product_id'] ?? $productId);
+                                $productBeforeMovement = $db->queryOne(
+                                    "SELECT quantity FROM products WHERE id = ?",
+                                    [$actualProductIdForTracking]
+                                );
+                                if ($productBeforeMovement) {
+                                    $productsQuantityBeforeMovement = (float)($productBeforeMovement['quantity'] ?? 0);
+                                    error_log(sprintf(
+                                        "shipping_orders: BEFORE recordInventoryMovement - Order: %s, Product ID: %d, Batch ID: %d, products.quantity: %.2f",
+                                        $orderNumber,
+                                        $actualProductIdForTracking,
+                                        $batchId,
+                                        $productsQuantityBeforeMovement
+                                    ));
+                                }
+                            }
+                        } catch (Throwable $trackingError) {
+                            error_log(sprintf(
+                                "shipping_orders: ERROR reading products.quantity before recordInventoryMovement - Order: %s, Error: %s",
+                                $orderNumber,
+                                $trackingError->getMessage()
+                            ));
+                        }
+                    }
+
+                    // تسجيل حركة المخزون (تقوم الدالة بالخصم تلقائياً)
+                    recordInventoryMovement(
+                        $productId,
+                        $mainWarehouse['id'] ?? null,
+                        'out',
+                        $quantity,
+                        'shipping_order',
                         $orderId,
-                        $normalizedItem['product_id'],
-                        $normalizedItem['batch_id'] ?? null,
-                        $normalizedItem['quantity'],
-                        $normalizedItem['unit_price'],
-                        $normalizedItem['total_price'],
-                    ]
-                );
-            }
+                        $movementNote,
+                        $currentUser['id'] ?? null,
+                        ($productType === 'factory' && $batchId) ? $batchId : null
+                    );
 
-            // خصم الكميات من المخزون عند إنشاء الطلب
-            // ملاحظة: نستخدم recordInventoryMovement فقط لتجنب الخصم المزدوج
-            $movementNote = 'تسليم طلب شحن #' . $orderNumber . ' لشركة الشحن';
-            foreach ($normalizedItems as $normalizedItem) {
-                $productId = $normalizedItem['product_id'];
-                $batchId = $normalizedItem['batch_id'] ?? null;
-                $productType = $normalizedItem['product_type'] ?? '';
-                $quantity = (float)$normalizedItem['quantity'];
-
-                // للمنتجات التي لها رقم تشغيلة: قراءة products.quantity قبل recordInventoryMovement
-                $productsQuantityBeforeMovement = null;
-                $actualProductIdForTracking = null;
-                if ($productType === 'factory' && $batchId) {
-                    try {
-                        // جلب product_id الصحيح من finished_products
-                        $fpDataForTracking = $db->queryOne("
-                            SELECT 
-                                fp.product_id,
-                                bn.product_id AS batch_product_id,
-                                COALESCE(fp.product_id, bn.product_id) AS actual_product_id
-                            FROM finished_products fp
-                            LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
-                            WHERE fp.id = ?
-                        ", [$batchId]);
-                        
-                        if ($fpDataForTracking) {
-                            $actualProductIdForTracking = (int)($fpDataForTracking['actual_product_id'] ?? $productId);
-                            $productBeforeMovement = $db->queryOne(
+                    // للمنتجات التي لها رقم تشغيلة: قراءة products.quantity بعد recordInventoryMovement
+                    if ($productType === 'factory' && $batchId && $actualProductIdForTracking) {
+                        try {
+                            $productAfterMovement = $db->queryOne(
                                 "SELECT quantity FROM products WHERE id = ?",
                                 [$actualProductIdForTracking]
                             );
-                            if ($productBeforeMovement) {
-                                $productsQuantityBeforeMovement = (float)($productBeforeMovement['quantity'] ?? 0);
+                            if ($productAfterMovement) {
+                                $productsQuantityAfterMovement = (float)($productAfterMovement['quantity'] ?? 0);
+                                $difference = $productsQuantityBeforeMovement !== null 
+                                    ? ($productsQuantityAfterMovement - $productsQuantityBeforeMovement) 
+                                    : null;
                                 error_log(sprintf(
-                                    "shipping_orders: BEFORE recordInventoryMovement - Order: %s, Product ID: %d, Batch ID: %d, products.quantity: %.2f",
+                                    "shipping_orders: AFTER recordInventoryMovement - Order: %s, Product ID: %d, Batch ID: %d, products.quantity: %.2f, Difference: %s",
                                     $orderNumber,
                                     $actualProductIdForTracking,
                                     $batchId,
-                                    $productsQuantityBeforeMovement
+                                    $productsQuantityAfterMovement,
+                                    $difference !== null ? sprintf("%.2f", $difference) : 'N/A'
                                 ));
                             }
-                        }
-                    } catch (Throwable $trackingError) {
-                        error_log(sprintf(
-                            "shipping_orders: ERROR reading products.quantity before recordInventoryMovement - Order: %s, Error: %s",
-                            $orderNumber,
-                            $trackingError->getMessage()
-                        ));
-                    }
-                }
-
-                // تسجيل حركة المخزون (تقوم الدالة بالخصم تلقائياً)
-                recordInventoryMovement(
-                    $productId,
-                    $mainWarehouse['id'] ?? null,
-                    'out',
-                    $quantity,
-                    'shipping_order',
-                    $orderId,
-                    $movementNote,
-                    $currentUser['id'] ?? null,
-                    ($productType === 'factory' && $batchId) ? $batchId : null
-                );
-
-                // للمنتجات التي لها رقم تشغيلة: قراءة products.quantity بعد recordInventoryMovement
-                if ($productType === 'factory' && $batchId && $actualProductIdForTracking) {
-                    try {
-                        $productAfterMovement = $db->queryOne(
-                            "SELECT quantity FROM products WHERE id = ?",
-                            [$actualProductIdForTracking]
-                        );
-                        if ($productAfterMovement) {
-                            $productsQuantityAfterMovement = (float)($productAfterMovement['quantity'] ?? 0);
-                            $difference = $productsQuantityBeforeMovement !== null 
-                                ? ($productsQuantityAfterMovement - $productsQuantityBeforeMovement) 
-                                : null;
+                        } catch (Throwable $trackingError) {
                             error_log(sprintf(
-                                "shipping_orders: AFTER recordInventoryMovement - Order: %s, Product ID: %d, Batch ID: %d, products.quantity: %.2f, Difference: %s",
+                                "shipping_orders: ERROR reading products.quantity after recordInventoryMovement - Order: %s, Error: %s",
                                 $orderNumber,
-                                $actualProductIdForTracking,
-                                $batchId,
-                                $productsQuantityAfterMovement,
-                                $difference !== null ? sprintf("%.2f", $difference) : 'N/A'
+                                $trackingError->getMessage()
                             ));
                         }
-                    } catch (Throwable $trackingError) {
-                        error_log(sprintf(
-                            "shipping_orders: ERROR reading products.quantity after recordInventoryMovement - Order: %s, Error: %s",
-                            $orderNumber,
-                            $trackingError->getMessage()
-                        ));
                     }
-                }
 
-                // للمنتجات التي لها رقم تشغيلة: إضافة الكمية إلى products.quantity
-                if ($productType === 'factory' && $batchId) {
-                    try {
-                        // جلب product_id الصحيح من finished_products (لأن batch_id هو finished_products.id وليس products.id)
-                        $fpData = $db->queryOne("
-                            SELECT 
-                                fp.product_id,
-                                bn.product_id AS batch_product_id,
-                                COALESCE(fp.product_id, bn.product_id) AS actual_product_id
-                            FROM finished_products fp
-                            LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
-                            WHERE fp.id = ?
-                        ", [$batchId]);
-                        
-                        if (!$fpData) {
+                    // للمنتجات التي لها رقم تشغيلة: إضافة الكمية إلى products.quantity
+                    if ($productType === 'factory' && $batchId) {
+                        try {
+                            // جلب product_id الصحيح من finished_products (لأن batch_id هو finished_products.id وليس products.id)
+                            $fpData = $db->queryOne("
+                                SELECT 
+                                    fp.product_id,
+                                    bn.product_id AS batch_product_id,
+                                    COALESCE(fp.product_id, bn.product_id) AS actual_product_id
+                                FROM finished_products fp
+                                LEFT JOIN batch_numbers bn ON fp.batch_number = bn.batch_number
+                                WHERE fp.id = ?
+                            ", [$batchId]);
+                            
+                            if (!$fpData) {
+                                error_log(sprintf(
+                                    "shipping_orders: WARNING - finished_products not found for batch_id: %d, Order: %s",
+                                    $batchId,
+                                    $orderNumber
+                                ));
+                                continue;
+                            }
+                            
+                            // استخدام product_id الصحيح من finished_products أو batch_numbers
+                            $actualProductId = (int)($fpData['actual_product_id'] ?? $productId);
+                            
+                            // جلب الكمية الحالية من products قبل الإضافة
+                            $currentProduct = $db->queryOne(
+                                "SELECT quantity FROM products WHERE id = ?",
+                                [$actualProductId]
+                            );
+                            
+                            if (!$currentProduct) {
+                                error_log(sprintf(
+                                    "shipping_orders: WARNING - products not found for product_id: %d (from batch_id: %d), Order: %s",
+                                    $actualProductId,
+                                    $batchId,
+                                    $orderNumber
+                                ));
+                                continue;
+                            }
+                            
+                            $currentQuantity = (float)($currentProduct['quantity'] ?? 0);
+                            
                             error_log(sprintf(
-                                "shipping_orders: WARNING - finished_products not found for batch_id: %d, Order: %s",
-                                $batchId,
-                                $orderNumber
-                            ));
-                            continue;
-                        }
-                        
-                        // استخدام product_id الصحيح من finished_products أو batch_numbers
-                        $actualProductId = (int)($fpData['actual_product_id'] ?? $productId);
-                        
-                        // جلب الكمية الحالية من products قبل الإضافة
-                        $currentProduct = $db->queryOne(
-                            "SELECT quantity FROM products WHERE id = ?",
-                            [$actualProductId]
-                        );
-                        
-                        if (!$currentProduct) {
-                            error_log(sprintf(
-                                "shipping_orders: WARNING - products not found for product_id: %d (from batch_id: %d), Order: %s",
+                                "shipping_orders: BEFORE adding quantity - Order: %s, Product ID: %d, Batch ID: %d, products.quantity: %.2f, Quantity to add: %.2f",
+                                $orderNumber,
                                 $actualProductId,
                                 $batchId,
-                                $orderNumber
+                                $currentQuantity,
+                                $quantity
                             ));
-                            continue;
+                            
+                            // إضافة الكمية المدخلة إلى products.quantity
+                            $newQuantity = $currentQuantity + $quantity;
+                            $db->execute(
+                                "UPDATE products SET quantity = ? WHERE id = ?",
+                                [$newQuantity, $actualProductId]
+                            );
+                            
+                            // قراءة الكمية بعد الإضافة للتحقق
+                            $productAfterAdd = $db->queryOne(
+                                "SELECT quantity FROM products WHERE id = ?",
+                                [$actualProductId]
+                            );
+                            $verifiedQuantity = $productAfterAdd ? (float)($productAfterAdd['quantity'] ?? 0) : $newQuantity;
+                            
+                            // تسجيل العملية في سجل الأخطاء
+                            error_log(sprintf(
+                                "shipping_orders: AFTER adding quantity - Order: %s, Finished Product ID (batch_id): %d, Actual Product ID: %d, Quantity Added: %.2f, Previous Quantity: %.2f, Calculated New Quantity: %.2f, Verified Quantity: %.2f",
+                                $orderNumber,
+                                $batchId,
+                                $actualProductId,
+                                $quantity,
+                                $currentQuantity,
+                                $newQuantity,
+                                $verifiedQuantity
+                            ));
+                        } catch (Throwable $addQuantityError) {
+                            // في حالة حدوث خطأ، نسجله فقط ولا نوقف العملية
+                            error_log(sprintf(
+                                "shipping_orders: ERROR adding quantity to products.quantity for product with batch_id - Order: %s, Batch ID: %d, Product ID: %d, Quantity: %.2f, Error: %s",
+                                $orderNumber,
+                                $batchId,
+                                $productId,
+                                $quantity,
+                                $addQuantityError->getMessage()
+                            ));
                         }
-                        
-                        $currentQuantity = (float)($currentProduct['quantity'] ?? 0);
-                        
-                        error_log(sprintf(
-                            "shipping_orders: BEFORE adding quantity - Order: %s, Product ID: %d, Batch ID: %d, products.quantity: %.2f, Quantity to add: %.2f",
-                            $orderNumber,
-                            $actualProductId,
-                            $batchId,
-                            $currentQuantity,
-                            $quantity
-                        ));
-                        
-                        // إضافة الكمية المدخلة إلى products.quantity
-                        $newQuantity = $currentQuantity + $quantity;
-                        $db->execute(
-                            "UPDATE products SET quantity = ? WHERE id = ?",
-                            [$newQuantity, $actualProductId]
-                        );
-                        
-                        // قراءة الكمية بعد الإضافة للتحقق
-                        $productAfterAdd = $db->queryOne(
-                            "SELECT quantity FROM products WHERE id = ?",
-                            [$actualProductId]
-                        );
-                        $verifiedQuantity = $productAfterAdd ? (float)($productAfterAdd['quantity'] ?? 0) : $newQuantity;
-                        
-                        // تسجيل العملية في سجل الأخطاء
-                        error_log(sprintf(
-                            "shipping_orders: AFTER adding quantity - Order: %s, Finished Product ID (batch_id): %d, Actual Product ID: %d, Quantity Added: %.2f, Previous Quantity: %.2f, Calculated New Quantity: %.2f, Verified Quantity: %.2f",
-                            $orderNumber,
-                            $batchId,
-                            $actualProductId,
-                            $quantity,
-                            $currentQuantity,
-                            $newQuantity,
-                            $verifiedQuantity
-                        ));
-                    } catch (Throwable $addQuantityError) {
-                        // في حالة حدوث خطأ، نسجله فقط ولا نوقف العملية
-                        error_log(sprintf(
-                            "shipping_orders: ERROR adding quantity to products.quantity for product with batch_id - Order: %s, Batch ID: %d, Product ID: %d, Quantity: %.2f, Error: %s",
-                            $orderNumber,
-                            $batchId,
-                            $productId,
-                            $quantity,
-                            $addQuantityError->getMessage()
-                        ));
                     }
                 }
             }
 
             $db->execute(
                 "UPDATE shipping_companies SET balance = balance + ?, updated_by = ?, updated_at = NOW() WHERE id = ?",
-                [$totalAmount, $currentUser['id'] ?? null, $shippingCompanyId]
+                [$finalTotalAmount, $currentUser['id'] ?? null, $shippingCompanyId]
             );
 
             logAudit(
@@ -3041,7 +3043,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
             <form method="POST" id="shippingOrderForm" class="needs-validation" novalidate>
                 <input type="hidden" name="action" value="create_shipping_order">
                 <div class="row g-3 mb-3">
-                    <div class="col-lg-4 col-md-6">
+                    <div class="col-lg-3 col-md-6">
                         <label class="form-label">شركة الشحن <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <select class="form-select" name="shipping_company_id" required>
@@ -3060,7 +3062,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
                             </button>
                         </div>
                     </div>
-                    <div class="col-lg-4 col-md-6">
+                    <div class="col-lg-3 col-md-6">
                         <label class="form-label">العميل <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <select class="form-select" name="customer_id" id="customerSelect" required>
@@ -3079,7 +3081,11 @@ $hasShippingCompanies = !empty($shippingCompanies);
                             </button>
                         </div>
                     </div>
-                    <div class="col-lg-4">
+                    <div class="col-lg-3">
+                         <label class="form-label">رقم التليجراف (TG)</label>
+                         <input type="text" class="form-control" name="tg_number" placeholder="أدخل رقم TG">
+                    </div>
+                    <div class="col-lg-3">
                         <label class="form-label">المخزن المصدر</label>
                         <div class="form-control bg-light">
                             <i class="bi bi-building me-1"></i>
@@ -3114,13 +3120,42 @@ $hasShippingCompanies = !empty($shippingCompanies);
                                 <div class="small text-muted">إجمالي عدد المنتجات</div>
                                 <div class="fw-semibold" id="shippingItemsCount">0</div>
                             </div>
-                            <div>
-                                <div class="small text-muted">إجمالي الطلب</div>
+                            <div class="border-start ps-3">
+                                <label for="customTotalAmount" class="small text-muted d-block mb-1">إجمالي الطلب (تحكم يدوي)</label>
+                                <div class="input-group input-group-sm" style="width: 150px;">
+                                    <input type="number" class="form-control fw-bold text-success" id="customTotalAmount" name="custom_total_amount" step="0.01" min="0" placeholder="0.00">
+                                    <span class="input-group-text">ج.م</span>
+                                </div>
+                            </div>
+                            <!-- Hidden visual total as backup or reference -->
+                            <div class="d-none">
+                                <div class="small text-muted">إجمالي محسوب</div>
                                 <div class="fw-bold text-success" id="shippingOrderTotal"><?php echo formatCurrency(0); ?></div>
                             </div>
                         </div>
                     </div>
                 </div>
+                
+                <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const customTotalInput = document.getElementById('customTotalAmount');
+                    const shippingItemsBody = document.getElementById('shippingItemsBody');
+                    
+                    // تحديث الإجمالي اليدوي تلقائياً عند إضافة منتجات إذا لم يكن المستخدم قد عدله يدوياً
+                    // (يمكن تنفيذ منطق أكثر تعقيداً هنا إذا لزم الأمر، لكن للتبسيط سنتركه للمستخدم)
+                    
+                    // منع إرسال النموذج إذا لم يكن هناك منتجات ولا إجمالي يدوي
+                    document.getElementById('shippingOrderForm').addEventListener('submit', function(e) {
+                         const itemsCount = shippingItemsBody.children.length;
+                         const customTotal = parseFloat(customTotalInput.value || 0);
+                         
+                         if (itemsCount === 0 && customTotal <= 0) {
+                             e.preventDefault();
+                             alert('يرجى إضافة منتجات أو تحديد قيمة إجمالية للطلب.');
+                         }
+                    });
+                });
+                </script>
 
                 <div class="mb-3">
                     <label class="form-label">ملاحظات إضافية</label>
