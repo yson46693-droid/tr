@@ -1212,6 +1212,8 @@ $historyTypeLabels = [
                             <option value="beeswax">شمع عسل</option>
                             <option value="date">مورد بلح</option>
                             <option value="soap">مورد صابون</option>
+                            <option value="turbines">مورد تلبينات</option>
+                            <option value="herbal">مورد عطاره</option>
                         </select>
                         <small class="text-muted">سيتم توليد كود المورد تلقائياً بناءً على النوع المختار</small>
                     </div>
