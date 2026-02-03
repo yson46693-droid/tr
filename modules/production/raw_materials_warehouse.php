@@ -9547,15 +9547,19 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
             }, 50);
         } else {
             // على الكمبيوتر: استخدام Modal
-            if (categoryInput) categoryInput.value = category;
-            if (stockIdInput) stockIdInput.value = id;
-            if (typeInput) typeInput.value = materialType;
-            if (supplierInput) supplierInput.value = supplier;
-            
+            const categoryInput = document.getElementById('damage_material_category');
+            const stockIdInput = document.getElementById('damage_stock_id');
+            const typeInput = document.getElementById('damage_material_type');
+            const supplierInput = document.getElementById('damage_supplier');
             const availableInput = document.getElementById('damage_available');
             const qtyInput = document.getElementById('damage_quantity');
             const reasonInput = document.getElementById('damage_reason');
             const submitBtn = document.getElementById('damage_submit');
+            
+            if (categoryInput) categoryInput.value = category;
+            if (stockIdInput) stockIdInput.value = id;
+            if (typeInput) typeInput.value = materialType;
+            if (supplierInput) supplierInput.value = supplier;
             
             if (availableInput) availableInput.value = qty.toFixed(3) + ' كجم';
             if (qtyInput) {
