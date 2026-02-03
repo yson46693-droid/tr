@@ -179,23 +179,23 @@ try {
 
 function generateShippingOrderNumber(Database $db): string
 {
-    $year = date('Y');
-    $month = date('m');
-    $prefix = "SHIP-{$year}{$month}-";
-
-    $lastOrder = $db->queryOne(
-        "SELECT order_number FROM shipping_company_orders WHERE order_number LIKE ? ORDER BY order_number DESC LIMIT 1",
-        [$prefix . '%']
-    );
-
-    if ($lastOrder && isset($lastOrder['order_number'])) {
-        $parts = explode('-', $lastOrder['order_number']);
-        $serial = (int)($parts[2] ?? 0) + 1;
-    } else {
-        $serial = 1;
+    $maxAttempts = 10;
+    for ($i = 0; $i < $maxAttempts; $i++) {
+        $randomNumber = str_pad(mt_rand(1, 99999), 5, '0', STR_PAD_LEFT);
+        
+        // التحقق من التفرد
+        $exists = $db->queryOne(
+            "SELECT id FROM shipping_company_orders WHERE order_number = ?",
+            [$randomNumber]
+        );
+        
+        if (!$exists) {
+            return $randomNumber;
+        }
     }
-
-    return sprintf('%s%04d', $prefix, $serial);
+    
+    // في حال عدم العثور على رقم فريد (نادر جداً)، نستخدم الوقت
+    return substr(time(), -5);
 }
 
 $mainWarehouse = $db->queryOne("SELECT id, name FROM warehouses WHERE warehouse_type = 'main' AND status = 'active' LIMIT 1");
@@ -209,6 +209,154 @@ if (!$mainWarehouse) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+
+    if ($action === 'search_orders') {
+        $query = trim($_POST['query'] ?? '');
+
+        if ($query === '') {
+            echo json_encode(['html' => '']);
+            exit;
+        }
+
+        try {
+            $searchTerm = "%{$query}%";
+            $orders = $db->query(
+                "SELECT 
+                    sco.*, 
+                    sc.name AS shipping_company_name,
+                    sc.balance AS company_balance,
+                    COALESCE(lc.name, c.name) AS customer_name,
+                    COALESCE(lc.phone, c.phone) AS customer_phone,
+                    COALESCE(lc.balance, c.balance, 0) AS customer_balance,
+                    i.invoice_number
+                FROM shipping_company_orders sco
+                LEFT JOIN shipping_companies sc ON sco.shipping_company_id = sc.id
+                LEFT JOIN local_customers lc ON sco.customer_id = lc.id
+                LEFT JOIN customers c ON sco.customer_id = c.id AND lc.id IS NULL
+                LEFT JOIN invoices i ON sco.invoice_id = i.id
+                WHERE 
+                    sco.order_number LIKE ? OR 
+                    sco.tg_number LIKE ? OR
+                    sc.name LIKE ? OR 
+                    lc.name LIKE ? OR 
+                    c.name LIKE ? OR 
+                    lc.phone LIKE ? OR
+                    c.phone LIKE ? OR
+                    sco.notes LIKE ?
+                ORDER BY sco.created_at DESC
+                LIMIT 50",
+                [$searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm]
+            );
+
+            $html = '';
+            $statusLabels = [
+                'assigned' => ['label' => 'تم التسليم لشركة الشحن', 'class' => 'bg-primary'],
+                'in_transit' => ['label' => 'جاري الشحن', 'class' => 'bg-warning text-dark'],
+                'delivered' => ['label' => 'تم التسليم للعميل', 'class' => 'bg-success'],
+                'cancelled' => ['label' => 'ملغي', 'class' => 'bg-secondary'],
+            ];
+
+            foreach ($orders as $order) {
+                $statusInfo = $statusLabels[$order['status']] ?? ['label' => $order['status'], 'class' => 'bg-secondary'];
+                $invoiceLink = '';
+                if (!empty($order['invoice_id'])) {
+                    $invoiceUrl = getRelativeUrl('print_invoice.php?id=' . (int)$order['invoice_id']);
+                    $invoiceLink = '<a href="' . htmlspecialchars($invoiceUrl) . '" target="_blank" class="btn btn-outline-primary btn-sm"><i class="bi bi-file-earmark-text me-1"></i>عرض الفاتورة</a>';
+                }
+
+                $html .= '<tr>';
+                
+                // Column 1: Order Number
+                $html .= '<td>';
+                $html .= '<div class="fw-semibold">#' . htmlspecialchars($order['order_number']) . '</div>';
+                $html .= '<div class="text-muted small">' . formatDateTime($order['created_at']) . '</div>';
+                if (!empty($order['tg_number'])) {
+                    $html .= '<div class="text-info small"><i class="bi bi-hash"></i> TG: ' . htmlspecialchars($order['tg_number']) . '</div>';
+                }
+                $html .= '</td>';
+
+                // Column 2: Shipping Company
+                $html .= '<td>';
+                $html .= '<div class="fw-semibold">' . htmlspecialchars($order['shipping_company_name'] ?? 'غير معروف') . '</div>';
+                $html .= '</td>';
+
+                // Column 3: Customer
+                $html .= '<td>';
+                $html .= '<div class="fw-semibold">' . htmlspecialchars($order['customer_name'] ?? 'غير محدد') . '</div>';
+                if (!empty($order['customer_phone'])) {
+                    $html .= '<div class="text-muted small"><i class="bi bi-telephone"></i> ' . htmlspecialchars($order['customer_phone']) . '</div>';
+                }
+                $html .= '</td>';
+
+                // Column 4: Amount
+                $html .= '<td class="fw-semibold">' . formatCurrency((float)$order['total_amount']) . '</td>';
+
+                // Column 5: Status
+                $html .= '<td>';
+                $html .= '<span class="badge ' . $statusInfo['class'] . '">' . htmlspecialchars($statusInfo['label']) . '</span>';
+                if (!empty($order['handed_over_at'])) {
+                    $html .= '<div class="text-muted small mt-1">سُلِّم: ' . formatDateTime($order['handed_over_at']) . '</div>';
+                }
+                $html .= '</td>';
+
+                // Column 6: Invoice
+                $html .= '<td>';
+                if (!empty($invoiceLink)) {
+                    $html .= $invoiceLink;
+                } else {
+                    $html .= '<span class="text-muted">لا توجد فاتورة</span>';
+                }
+                $html .= '</td>';
+
+                // Column 7: Actions
+                $html .= '<td>';
+                $html .= '<div class="d-flex flex-wrap gap-2">';
+                
+                // Cancel Button (Only if not delivered/cancelled)
+                if ($order['status'] !== 'cancelled' && $order['status'] !== 'delivered') {
+                    $html .= '<form method="POST" class="d-inline cancel-order-form" onsubmit="return handleCancelOrder(event, this);" ';
+                    $html .= 'data-order-number="' . htmlspecialchars($order['order_number'] ?? '') . '" ';
+                    $html .= 'data-total-amount="' . (float)($order['total_amount'] ?? 0) . '">';
+                    $html .= '<input type="hidden" name="action" value="cancel_shipping_order">';
+                    $html .= '<input type="hidden" name="order_id" value="' . (int)$order['id'] . '">';
+                    $html .= '<button type="submit" class="btn btn-outline-danger btn-sm cancel-order-btn">';
+                    $html .= '<i class="bi bi-x-circle me-1"></i>إلغاء';
+                    $html .= '</button>';
+                    $html .= '</form>';
+                }
+
+                // Delivery Button (Only if in_transit or assigned)
+                if ($order['status'] === 'in_transit' || $order['status'] === 'assigned') {
+                    $html .= '<button type="button" class="btn btn-success btn-sm delivery-btn" onclick="showDeliveryModal(this)" ';
+                    $html .= 'data-order-id="' . (int)$order['id'] . '" ';
+                    $html .= 'data-order-number="' . htmlspecialchars($order['order_number'] ?? '') . '" ';
+                    $html .= 'data-customer-id="' . (int)($order['customer_id'] ?? 0) . '" ';
+                    $html .= 'data-customer-name="' . htmlspecialchars($order['customer_name'] ?? 'غير محدد') . '" ';
+                    $html .= 'data-customer-balance="' . (float)($order['customer_balance'] ?? 0) . '" ';
+                    $html .= 'data-total-amount="' . (float)$order['total_amount'] . '" ';
+                    $html .= 'data-shipping-company-name="' . htmlspecialchars($order['shipping_company_name'] ?? 'غير معروف') . '" ';
+                    $html .= 'data-company-balance="' . (float)($order['company_balance'] ?? 0) . '">';
+                    $html .= '<i class="bi bi-check-circle me-1"></i>تسليم';
+                    $html .= '</button>';
+                }
+                
+                $html .= '</div>';
+                $html .= '</td>';
+
+                $html .= '</tr>';
+            }
+            
+            if ($html === '') {
+                 $html = '<tr><td colspan="7" class="text-center p-4 text-muted">لا توجد نتائج مطابقة لـ "' . htmlspecialchars($query) . '"</td></tr>';
+            }
+
+            echo json_encode(['html' => $html]);
+        } catch (Throwable $e) {
+            error_log('search_orders error: ' . $e->getMessage());
+            echo json_encode(['html' => '<tr><td colspan="7" class="text-center text-danger">حدث خطأ أثناء البحث</td></tr>']);
+        }
+        exit;
+    }
 
     if ($action === 'add_shipping_company') {
         $name = trim($_POST['company_name'] ?? '');
@@ -3205,10 +3353,35 @@ $hasShippingCompanies = !empty($shippingCompanies);
 </div>
 
 <div class="card shadow-sm">
-    <div class="card-header">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
         <h5 class="mb-0">طلبات الشحن</h5>
+        <div class="input-group input-group-sm w-auto" style="min-width: 280px;">
+             <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+             <input type="text" class="form-control border-start-0 ps-0" id="orderSearchInput" placeholder="بحث شامل (رقم الطلب، TG، العميل...)">
+        </div>
     </div>
     <div class="card-body p-0">
+        <!-- Search Results Container -->
+        <div id="searchResultsContainer" style="display:none;">
+            <div class="table-responsive">
+                <table class="table table-hover table-nowrap mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>رقم الطلب</th>
+                            <th>شركة الشحن</th>
+                            <th>العميل</th>
+                            <th>المبلغ</th>
+                            <th>الحالة</th>
+                            <th>الفاتورة</th>
+                            <th style="width: 150px;">الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="searchResultsBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="ordersTabsContainer">
         <?php
         // تقسيم الطلبات حسب الحالة
         $activeOrders = array_filter($orders, function($order) {
@@ -3222,7 +3395,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
         });
         ?>
         
-        <ul class="nav nav-tabs card-header-tabs border-0" role="tablist">
+        <ul class="nav nav-tabs card-header-tabs border-0 mx-0 mt-0" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="active-orders-tab" data-bs-toggle="tab" data-bs-target="#active-orders" type="button" role="tab">
                     جاري الشحن <span class="badge bg-warning text-dark ms-1"><?php echo count($activeOrders); ?></span>
@@ -3468,6 +3641,7 @@ $hasShippingCompanies = !empty($shippingCompanies);
                     </div>
                 <?php endif; ?>
             </div>
+        </div>
         </div>
     </div>
 </div>
@@ -4677,5 +4851,54 @@ function confirmCancelOrderWithDeductedAmount() {
             addLocalCustomerForm.reset();
         });
     }
+    }
+    
+    // Real-time Search functionality
+    const searchInput = document.getElementById('orderSearchInput');
+    const searchResultsContainer = document.getElementById('searchResultsContainer');
+    const ordersTabsContainer = document.getElementById('ordersTabsContainer');
+    const searchResultsBody = document.getElementById('searchResultsBody');
+    let searchTimeout = null;
+
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const query = this.value.trim();
+            
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+
+            if (query.length === 0) {
+                searchResultsContainer.style.display = 'none';
+                ordersTabsContainer.style.display = 'block';
+                return;
+            }
+
+            searchTimeout = setTimeout(function() {
+                // Show loading state if needed
+                
+                const formData = new FormData();
+                formData.append('action', 'search_orders');
+                formData.append('query', query);
+
+                fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.html) {
+                        searchResultsBody.innerHTML = data.html;
+                        ordersTabsContainer.style.display = 'none';
+                        searchResultsContainer.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error searching orders:', error);
+                });
+            }, 300); // Debounce delay
+        });
+    }
+
 })();
 </script>
