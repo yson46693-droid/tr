@@ -5021,6 +5021,16 @@ if ($isApiMode) {
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     padding: 15px;
     margin-bottom: 25px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+.section-tabs .nav {
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.section-tabs .nav-item {
+    flex-shrink: 0;
 }
 
 .section-tabs .nav-link {
