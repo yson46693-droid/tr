@@ -1147,6 +1147,9 @@ if (!function_exists('ensureSesameStockTable')) {
     }
 }
 
+// أنواع البلح المعتمدة في المخزن
+$dateStockTypes = ['مفتل', 'رطب قصيمي', 'عجوة مدينه', 'مجدول'];
+
 // تعريف دالة إنشاء جدول البلح
 if (!function_exists('ensureDateStockTable')) {
     function ensureDateStockTable(bool $forceRetry = false): bool
@@ -1175,6 +1178,15 @@ if (!function_exists('ensureDateStockTable')) {
             // التحقق من وجود الجدول
             $dateStockCheck = $db->queryOne("SHOW TABLES LIKE 'date_stock'");
             if (!empty($dateStockCheck)) {
+                // إضافة عمود نوع البلح إن لم يكن موجوداً (ترقية الجداول القديمة)
+                $colCheck = $db->queryOne("SHOW COLUMNS FROM date_stock LIKE 'date_type'");
+                if (empty($colCheck)) {
+                    try {
+                        $db->execute("ALTER TABLE date_stock ADD COLUMN date_type VARCHAR(50) DEFAULT NULL COMMENT 'نوع البلح: مفتل، رطب قصيمي، عجوة مدينه، مجدول' AFTER supplier_id");
+                    } catch (Exception $e) {
+                        error_log("ensureDateStockTable: Failed to add date_type column: " . $e->getMessage());
+                    }
+                }
                 $ready = true;
                 return $ready;
             }
@@ -1193,12 +1205,14 @@ if (!function_exists('ensureDateStockTable')) {
                     CREATE TABLE IF NOT EXISTS `date_stock` (
                       `id` int(11) NOT NULL AUTO_INCREMENT,
                       `supplier_id` int(11) NOT NULL,
+                      `date_type` varchar(50) DEFAULT NULL COMMENT 'نوع البلح: مفتل، رطب قصيمي، عجوة مدينه، مجدول',
                       `quantity` decimal(10,3) NOT NULL DEFAULT 0.000 COMMENT 'الكمية بالكيلوجرام',
                       `notes` text DEFAULT NULL,
                       `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
                       `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
                       PRIMARY KEY (`id`),
                       KEY `supplier_id_idx` (`supplier_id`),
+                      KEY `date_type_idx` (`date_type`),
                       CONSTRAINT `date_stock_ibfk_1` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`) ON DELETE CASCADE
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 ");
@@ -1210,12 +1224,14 @@ if (!function_exists('ensureDateStockTable')) {
                         CREATE TABLE IF NOT EXISTS `date_stock` (
                           `id` int(11) NOT NULL AUTO_INCREMENT,
                           `supplier_id` int(11) NOT NULL,
+                          `date_type` varchar(50) DEFAULT NULL COMMENT 'نوع البلح: مفتل، رطب قصيمي، عجوة مدينه، مجدول',
                           `quantity` decimal(10,3) NOT NULL DEFAULT 0.000 COMMENT 'الكمية بالكيلوجرام',
                           `notes` text DEFAULT NULL,
                           `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
                           `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
                           PRIMARY KEY (`id`),
-                          KEY `supplier_id_idx` (`supplier_id`)
+                          KEY `supplier_id_idx` (`supplier_id`),
+                          KEY `date_type_idx` (`date_type`)
                         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                     ");
                     error_log("ensureDateStockTable: Created table without FK constraint");
@@ -1933,7 +1949,8 @@ if ($dateSummary) {
             SELECT 
                 s.name AS supplier_name,
                 ds.quantity,
-                ds.notes
+                ds.notes,
+                ds.date_type
             FROM date_stock ds
             LEFT JOIN suppliers s ON ds.supplier_id = s.id
             WHERE ds.quantity > 0
@@ -1941,8 +1958,12 @@ if ($dateSummary) {
             LIMIT 10
         ");
         foreach ($topDateQuery as $item) {
+            $label = $item['supplier_name'] ?? 'مورد غير محدد';
+            if (!empty($item['date_type'])) {
+                $label .= ' - ' . $item['date_type'];
+            }
             $topDateItems[] = [
-                'label' => ($item['supplier_name'] ?? 'مورد غير محدد'),
+                'label' => $label,
                 'value' => (float)($item['quantity'] ?? 0),
                 'unit' => 'كجم',
                 'decimals' => 3
@@ -3925,36 +3946,40 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             $supplierId = intval($_POST['supplier_id'] ?? 0);
+            $dateType = trim($_POST['date_type'] ?? '');
             $quantity = floatval($_POST['quantity'] ?? 0);
             $notes = trim($_POST['notes'] ?? '');
             $supplyStockId = null;
+            $allowedTypes = ['مفتل', 'رطب قصيمي', 'عجوة مدينه', 'مجدول'];
             
             if (!empty($error)) {
                 // keep $error as is
             } elseif ($supplierId <= 0) {
                 $error = 'يجب اختيار المورد';
+            } elseif (!in_array($dateType, $allowedTypes, true)) {
+                $error = 'يجب اختيار نوع البلح (مفتل، رطب قصيمي، عجوة مدينه، مجدول)';
             } elseif ($quantity <= 0) {
                 $error = 'يجب إدخال كمية صحيحة';
             } else {
-                $existing = $db->queryOne("SELECT * FROM date_stock WHERE supplier_id = ?", [$supplierId]);
+                $existing = $db->queryOne("SELECT * FROM date_stock WHERE supplier_id = ? AND (date_type <=> ?)", [$supplierId, $dateType ?: null]);
                 
                 if ($existing) {
-                    $db->execute("UPDATE date_stock SET quantity = quantity + ?, notes = ?, updated_at = NOW() WHERE supplier_id = ?", [$quantity, $notes ?: $existing['notes'], $supplierId]);
+                    $db->execute("UPDATE date_stock SET quantity = quantity + ?, notes = ?, updated_at = NOW() WHERE supplier_id = ? AND (date_type <=> ?)", [$quantity, $notes ?: $existing['notes'], $supplierId, $dateType ?: null]);
                     if (isset($existing['id'])) {
                         $supplyStockId = (int)$existing['id'];
                     }
                 } else {
-                    $insertResult = $db->execute("INSERT INTO date_stock (supplier_id, quantity, notes) VALUES (?, ?, ?)", [$supplierId, $quantity, $notes ?: null]);
+                    $insertResult = $db->execute("INSERT INTO date_stock (supplier_id, date_type, quantity, notes) VALUES (?, ?, ?, ?)", [$supplierId, $dateType ?: null, $quantity, $notes ?: null]);
                     if (!empty($insertResult['insert_id'])) {
                         $supplyStockId = (int)$insertResult['insert_id'];
                     }
                 }
                 
-                logAudit($currentUser['id'], 'add_single_date', 'date_stock', $supplierId, null, ['quantity' => $quantity]);
+                logAudit($currentUser['id'], 'add_single_date', 'date_stock', $supplierId, null, ['date_type' => $dateType, 'quantity' => $quantity]);
 
                 $supplierRow = $db->queryOne("SELECT name FROM suppliers WHERE id = ? LIMIT 1", [$supplierId]);
                 $supplierName = $supplierRow['name'] ?? null;
-                $detailsParts = ['إضافة بلح'];
+                $detailsParts = ['إضافة بلح' . ($dateType ? ' - ' . $dateType : '')];
                 if ($notes !== '') {
                     $detailsParts[] = 'ملاحظات: ' . mb_substr($notes, 0, 120, 'UTF-8');
                 }
@@ -9658,7 +9683,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                 FROM date_stock ds
                 INNER JOIN suppliers s ON ds.supplier_id = s.id
                 WHERE ds.quantity > 0
-                ORDER BY s.name
+                ORDER BY COALESCE(ds.date_type,'') ASC, s.name
             ");
         } catch (Exception $e) {
             error_log('Failed to load date stock: ' . $e->getMessage());
@@ -9749,6 +9774,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                                 <thead>
                                     <tr>
                                         <th>المورد</th>
+                                        <th class="text-center">نوع البلح</th>
                                         <th class="text-center">الكمية (كجم)</th>
                                         <th class="text-center">الإجراءات</th>
                                     </tr>
@@ -9762,6 +9788,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                                                     <br><small class="text-muted"><?php echo htmlspecialchars($stock['supplier_phone']); ?></small>
                                                 <?php endif; ?>
                                             </td>
+                                            <td class="text-center"><?php echo htmlspecialchars($stock['date_type'] ?? '—'); ?></td>
                                             <td class="text-center"><strong style="color: #8B4513;"><?php echo number_format($stock['quantity'], 3); ?></strong></td>
                                             <td class="text-center">
                                                 <div class="btn-group" role="group">
@@ -9810,6 +9837,15 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                             </select>
                         </div>
                         <div class="mb-3">
+                            <label class="form-label">نوع البلح <span class="text-danger">*</span></label>
+                            <select name="date_type" class="form-select" required>
+                                <option value="">اختر النوع</option>
+                                <?php foreach ($dateStockTypes as $dt): ?>
+                                    <option value="<?php echo htmlspecialchars($dt, ENT_QUOTES); ?>"><?php echo htmlspecialchars($dt); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label">الكمية (كجم) <span class="text-danger">*</span></label>
                             <input type="number" step="0.001" min="0.001" name="quantity" class="form-control" required>
                         </div>
@@ -9849,6 +9885,15 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                         <option value="">اختر المورد</option>
                         <?php foreach ($dateSuppliers as $supplier): ?>
                             <option value="<?php echo $supplier['id']; ?>"><?php echo htmlspecialchars($supplier['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">نوع البلح <span class="text-danger">*</span></label>
+                    <select name="date_type" class="form-select" required>
+                        <option value="">اختر النوع</option>
+                        <?php foreach ($dateStockTypes as $dt): ?>
+                            <option value="<?php echo htmlspecialchars($dt, ENT_QUOTES); ?>"><?php echo htmlspecialchars($dt); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
