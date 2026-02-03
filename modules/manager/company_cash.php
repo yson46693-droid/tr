@@ -607,6 +607,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'external_collection') {
+        $amount = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;
+        $description = trim($_POST['description'] ?? '');
+
+        if ($amount <= 0) {
+            $_SESSION['financial_error'] = 'يرجى إدخال مبلغ صحيح أكبر من الصفر.';
+        } elseif (empty($description)) {
+            $_SESSION['financial_error'] = 'يرجى إدخال وصف للعملية.';
+        } else {
+            try {
+                $referenceNumber = generateUniqueReferenceNumber($db);
+                
+                $db->execute(
+                    "INSERT INTO financial_transactions (type, amount, description, reference_number, status, approved_by, created_by, approved_at)
+                     VALUES (?, ?, ?, ?, 'approved', ?, ?, NOW())",
+                    [
+                        'income',
+                        $amount,
+                        $description,
+                        $referenceNumber,
+                        $currentUser['id'],
+                        $currentUser['id']
+                    ]
+                );
+
+                $transactionId = $db->getLastInsertId();
+
+                logAudit(
+                    $currentUser['id'],
+                    'external_collection',
+                    'financial_transaction',
+                    $transactionId,
+                    null,
+                    [
+                        'amount' => $amount,
+                        'description' => $description,
+                        'reference_number' => $referenceNumber
+                    ]
+                );
+
+                $_SESSION['financial_success'] = 'تم تسجيل التحصيل الخارجي بنجاح.';
+            } catch (Throwable $e) {
+                error_log('External collection failed: ' . $e->getMessage());
+                $_SESSION['financial_error'] = 'حدث خطأ أثناء تسجيل التحصيل: ' . $e->getMessage();
+            }
+        }
+        
+        $redirectTarget = $_SERVER['REQUEST_URI'] ?? '';
+        if (!headers_sent()) {
+            header('Location: ' . $redirectTarget);
+        } else {
+            echo '<script>window.location.href = ' . json_encode($redirectTarget) . ';</script>';
+        }
+        exit;
+    }
+
     if ($action === 'add_quick_expense') {
         $amount = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;
         $description = trim($_POST['description'] ?? '');
@@ -1130,6 +1186,37 @@ $typeColorMap = [
                                 <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
                                 <button type="submit" class="btn btn-primary" id="collectFromRepCardSubmitBtn">
                                     <i class="bi bi-check-circle me-1"></i>تحصيل
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- تحصيل خارجي -->
+            <div class="col-12 col-lg-12 col-xxl-12">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-light fw-bold">
+                        <i class="bi bi-cash-stack me-2 text-success"></i>تحصيل خارجي
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" class="row g-3">
+                            <input type="hidden" name="action" value="external_collection">
+                            <div class="col-12">
+                                <label for="externalCollectionAmount" class="form-label">مبلغ التحصيل <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">ج.م</span>
+                                    <input type="number" step="0.01" min="0.01" class="form-control" id="externalCollectionAmount" name="amount" required placeholder="0.00">
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label for="externalCollectionDescription" class="form-label">الوصف <span class="text-danger">*</span></label>
+                                <textarea class="form-control" id="externalCollectionDescription" name="description" rows="3" required placeholder="تفاصيل التحصيل..."></textarea>
+                            </div>
+                            <div class="col-12 d-flex justify-content-end gap-2">
+                                <button type="reset" class="btn btn-outline-secondary">تفريغ الحقول</button>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="bi bi-save me-1"></i>حفظ التحصيل
                                 </button>
                             </div>
                         </form>
