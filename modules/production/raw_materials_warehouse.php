@@ -9690,7 +9690,7 @@ $nutsSuppliers = $db->query("SELECT id, name, phone FROM suppliers WHERE status 
                             <i class="bi bi-check-circle me-1"></i>تحويل
                         </button>
                     </div>
-                </form>
+                </form> 
             </div>
         </div>
     </div>
