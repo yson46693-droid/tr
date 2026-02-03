@@ -5733,6 +5733,18 @@ function openBeeswaxDamageModal(id, supplier, quantity) {
 <div class="section-tabs">
     <ul class="nav nav-pills justify-content-center">
         <li class="nav-item">
+            <a class="nav-link <?php echo $section === 'turbines' ? 'active' : ''; ?>" 
+               href="?page=raw_materials_warehouse&section=turbines">
+                <i class="bi bi-cup-hot-fill"></i>التلبينات
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?php echo $section === 'herbal' ? 'active' : ''; ?>" 
+               href="?page=raw_materials_warehouse&section=herbal">
+                <i class="bi bi-flower2"></i>العطاره
+            </a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link <?php echo $section === 'honey' ? 'active' : ''; ?>" 
                href="?page=raw_materials_warehouse&section=honey">
                 <i class="bi bi-droplet-fill"></i>العسل
@@ -5772,18 +5784,6 @@ function openBeeswaxDamageModal(id, supplier, quantity) {
             <a class="nav-link <?php echo $section === 'date' ? 'active' : ''; ?>" 
                href="?page=raw_materials_warehouse&section=date">
                 <i class="bi bi-tree-fill"></i>البلح
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link <?php echo $section === 'turbines' ? 'active' : ''; ?>" 
-               href="?page=raw_materials_warehouse&section=turbines">
-                <i class="bi bi-cup-hot-fill"></i>التلبينات
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link <?php echo $section === 'herbal' ? 'active' : ''; ?>" 
-               href="?page=raw_materials_warehouse&section=herbal">
-                <i class="bi bi-flower2"></i>العطاره
             </a>
         </li>
     </ul>
