@@ -1156,20 +1156,7 @@ $dateStockTypes = ['مفتل', 'رطب قصيمي', 'عجوة مدينه', 'مج
 $turbineStockTypes = ['تلبينه ساده', 'تلبينه محوج قرفه', 'تلبينه محوج كركم'];
 
 // أنواع العطاره المعتمدة في المخزن
-$herbalStockTypes = [
-    'حبة البركه',
-    'بذر اليقطين',
-    'جنسنج',
-    'بروبلس',
-    'قسط هندي',
-    'طلع',
-    'ميكس جنسنج و طلع',
-    'غذاء ملكات صيني',
-    'قراصيا',
-    'تين',
-    'مشمشيه',
-    'بلوط'
-];
+$herbalStockTypes = ['حبة البركه', 'بذر اليقطين'];
 
 // تعريف دالة إنشاء جدول البلح
 if (!function_exists('ensureDateStockTable')) {
@@ -4462,7 +4449,20 @@ if (!$isApiMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $herbalType = trim($_POST['herbal_type'] ?? '');
                 $quantity = floatval($_POST['quantity'] ?? 0);
                 $notes = trim($_POST['notes'] ?? '');
-                $allowedTypes = ['حبة البركه', 'بذر اليقطين'];
+                $allowedTypes = [
+                    'حبة البركه',
+                    'بذر اليقطين',
+                    'جنسنج',
+                    'بروبلس',
+                    'قسط هندي',
+                    'طلع',
+                    'ميكس جنسنج و طلع',
+                    'غذاء ملكات صيني',
+                    'قراصيا',
+                    'تين',
+                    'مشمشيه',
+                    'بلوط'
+                ];
                 if ($supplierId <= 0) {
                     $error = 'يجب اختيار المورد';
                 } elseif (!in_array($herbalType, $allowedTypes, true)) {
