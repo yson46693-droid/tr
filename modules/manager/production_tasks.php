@@ -259,15 +259,15 @@ try {
     error_log('Manager task page users query error: ' . $e->getMessage());
 }
 
-$allowedTypes = ['general', 'production', 'quality', 'maintenance'];
+$allowedTypes = ['shop_order', 'cash_customer', 'telegraph'];
 $allowedPriorities = ['low', 'normal', 'high', 'urgent'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'create_production_task') {
-        $taskType = $_POST['task_type'] ?? 'general';
-        $taskType = in_array($taskType, $allowedTypes, true) ? $taskType : 'general';
+        $taskType = $_POST['task_type'] ?? 'shop_order';
+        $taskType = in_array($taskType, $allowedTypes, true) ? $taskType : 'shop_order';
 
         $title = trim($_POST['title'] ?? '');
         $details = trim($_POST['details'] ?? '');
@@ -402,7 +402,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $relatedTypeValue = 'manager_' . $taskType;
 
                 if ($title === '') {
-                    $title = $taskType === 'production' ? 'مهمة إنتاج جديدة' : 'مهمة جديدة';
+                    $typeLabels = [
+                        'shop_order' => 'اوردر محل',
+                        'cash_customer' => 'عميل نقدي',
+                        'telegraph' => 'تليجراف'
+                    ];
+                    $title = $typeLabels[$taskType] ?? 'مهمة جديدة';
                 }
 
                 // الحصول على أسماء العمال المختارين
@@ -1303,12 +1308,11 @@ try {
                     <input type="hidden" name="action" value="create_production_task">
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label">نوع المهمة</label>
+                            <label class="form-label">نوع الاوردر</label>
                             <select class="form-select" name="task_type" id="taskTypeSelect" required>
-                                <option value="general">مهمة عامة</option>
-                                <option value="production">إنتاج منتج</option>
-                                <option value="quality">مهمة جودة</option>
-                                <option value="maintenance">صيانة</option>
+                                <option value="shop_order">اوردر محل</option>
+                                <option value="cash_customer">عميل نقدي</option>
+                                <option value="telegraph">تليجراف</option>
                             </select>
                         </div>
                         <div class="col-md-4">
@@ -1388,9 +1392,7 @@ try {
                             </div>
                         </div>
                     </div>
-                    <div class="d-flex justify-content-end mt-4 gap-2">
-                        <button type="reset" class="btn btn-secondary"><i class="bi bi-arrow-counterclockwise me-1"></i>إعادة تعيين</button>
-                        <button type="submit" class="btn btn-primary"><i class="bi bi-send-check me-1"></i>إرسال المهمة</button>
+                    <div class="d-flex justify-content-end mt-4 gap-2">                        <button type="submit" class="btn btn-primary"><i class="bi bi-send-check me-1"></i>إرسال المهمة</button>
                     </div>
                 </form>
             </div>

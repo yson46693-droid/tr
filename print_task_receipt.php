@@ -54,7 +54,24 @@ $assignedTo = $task['assigned_to_name'] ?? 'غير محدد';
 $createdBy = $task['created_by_name'] ?? 'غير محدد';
 $createdAt = $task['created_at'] ?? date('Y-m-d H:i:s');
 $dueDate = $task['due_date'] ?? null;
+$relatedType = $task['related_type'] ?? '';
 $taskType = $task['task_type'] ?? 'general';
+
+// استخراج نوع المهمة من related_type إذا كانت تبدأ بـ manager_
+if (strpos($relatedType, 'manager_') === 0) {
+    $taskType = substr($relatedType, 8);
+}
+
+$taskTypeLabels = [
+    'shop_order' => 'اوردر محل',
+    'cash_customer' => 'عميل نقدي',
+    'telegraph' => 'تليجراف',
+    'general' => 'مهمة عامة',
+    'production' => 'إنتاج منتج',
+    'quality' => 'مهمة جودة',
+    'maintenance' => 'صيانة'
+];
+$taskTypeLabel = $taskTypeLabels[$taskType] ?? $taskType;
 
 // استخراج المنتجات المتعددة من notes
 $products = [];
@@ -427,6 +444,10 @@ $priorityLabel = $priorityLabels[$priority] ?? $priority;
                 <td><?php echo date('m-d', strtotime($createdAt)) . ' | ' . date('h:i A', strtotime($createdAt)); ?></td>
                 <td>تسليم:</td>
                 <td><?php echo $dueDate ? date('m-d', strtotime($dueDate)) : '-'; ?></td>
+            </tr>
+            <tr>
+                <td>نوع الاوردر:</td>
+                <td colspan="3" style="font-weight: 700;"><?php echo htmlspecialchars($taskTypeLabel); ?></td>
             </tr>
         </table>
         
